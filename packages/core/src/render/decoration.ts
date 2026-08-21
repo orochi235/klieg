@@ -29,6 +29,12 @@ export interface ChunkSpec {
   cluster: number;
   /** How far a chunk sits proud of the surface, 0..1. */
   proud: number;
+  /** How far below `proud` a chunk may sink, in chunk edges. 0 gives every chunk one stand-off. */
+  sink?: number;
+  /** How far below `size` a chunk may shrink, 0..1. 0 gives every chunk one size. */
+  sizeVary?: number;
+  /** How hard sampling favours the caps over the extrusion band. 0 is pure area weighting. */
+  faceBias?: number;
   look: MaterialSpec;
 }
 
@@ -48,6 +54,19 @@ const POOL = 512;
 const POOL_SEED = 0x5eed;
 /** How wide a clustered draw reaches around its anchor, in pool samples. */
 const CLUSTER_NEIGHBOURS = 12;
+/** Pool samples per chunk. Below about 4 a dense look draws most of the pool and stops scattering. */
+const POOL_PER_CHUNK = 4;
+/**
+ * Shrinks a chunk toward `1 - sizeVary` of its nominal edge. Cubing the draw keeps most chunks at
+ * full size and sends a minority small, which fills between crystals instead of thinning the bed —
+ * an even spread, or the same law inverted, costs enough coverage to read as a sprinkle again.
+ */
+const SIZE_POWER = 3;
+
+/** Distinct positions a spec's chunks are drawn from. Never below POOL, so a sparse look holds still. */
+export function poolFor(spec: ChunkSpec): number {
+  return Math.max(POOL, spec.count * POOL_PER_CHUNK);
+}
 
 function rng(seed: number): () => number {
   let a = seed >>> 0;
@@ -59,7 +78,11 @@ function rng(seed: number): () => number {
   };
 }
 
-export function buildChunkBlueprint(geometry: THREE.BufferGeometry, pool = POOL): ChunkBlueprint {
+export function buildChunkBlueprint(
+  geometry: THREE.BufferGeometry,
+  pool = POOL,
+  faceBias = 0,
+): ChunkBlueprint {
   const positions = geometry.getAttribute('position');
   const normals = geometry.getAttribute('normal');
   const index = geometry.getIndex();
@@ -67,6 +90,8 @@ export function buildChunkBlueprint(geometry: THREE.BufferGeometry, pool = POOL)
   const triangles = (index ? index.count : positions.count) / 3;
 
   // Area-weighted, so the bevel band's many small triangles do not out-vote the large faces.
+  // Area alone puts 60% of a glyph's chunks on the extrusion band and 13% on the face a reader
+  // is looking at, which is why `faceBias` can lift the two caps against the band.
   const cumulative = new Float32Array(triangles);
   const a = new THREE.Vector3();
   const b = new THREE.Vector3();
@@ -76,7 +101,10 @@ export function buildChunkBlueprint(geometry: THREE.BufferGeometry, pool = POOL)
     a.fromBufferAttribute(positions, vertexAt(t * 3));
     b.fromBufferAttribute(positions, vertexAt(t * 3 + 1));
     c.fromBufferAttribute(positions, vertexAt(t * 3 + 2));
-    total += b.sub(a).cross(c.sub(a)).length() / 2;
+    const cross = b.sub(a).cross(c.sub(a));
+    const area = cross.length() / 2;
+    const facing = area > 0 ? Math.abs(cross.z) / (area * 2) : 0;
+    total += area * (1 + faceBias * facing);
     cumulative[t] = total;
   }
 
@@ -142,6 +170,138 @@ function randomQuaternion(random: () => number): THREE.Quaternion {
   );
 }
 
+/**
+ * A uniform grid over the pool, so a clustered draw can look at the samples around its anchor
+ * instead of all of them. The linear scan it replaces is O(pool) per chunk, which at the densities
+ * `pyrite` wants (900 chunks over a 3600-sample pool) costs a third of a second per word.
+ */
+interface PoolGrid {
+  cell: number;
+  min: THREE.Vector3;
+  dims: [number, number, number];
+  /** First sample in each cell, or -1; `next` chains the rest. */
+  heads: Int32Array;
+  next: Int32Array;
+}
+
+/** About 3 samples a cell: enough that the first ring usually settles the k nearest. */
+const GRID_OCCUPANCY = 3;
+
+function buildPoolGrid(position: Float32Array, pool: number): PoolGrid {
+  const min = new THREE.Vector3(Infinity, Infinity, Infinity);
+  const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+  const p = new THREE.Vector3();
+  for (let i = 0; i < pool; i++) {
+    p.set(position[i * 3] as number, position[i * 3 + 1] as number, position[i * 3 + 2] as number);
+    min.min(p);
+    max.max(p);
+  }
+
+  const span = Math.max(max.x - min.x, max.y - min.y, max.z - min.z, 1e-6);
+  const cell = span / Math.max(1, Math.ceil(Math.cbrt(pool / GRID_OCCUPANCY)));
+  const dims: [number, number, number] = [
+    Math.max(1, Math.ceil((max.x - min.x) / cell) + 1),
+    Math.max(1, Math.ceil((max.y - min.y) / cell) + 1),
+    Math.max(1, Math.ceil((max.z - min.z) / cell) + 1),
+  ];
+
+  const heads = new Int32Array(dims[0] * dims[1] * dims[2]).fill(-1);
+  const next = new Int32Array(pool).fill(-1);
+  for (let i = 0; i < pool; i++) {
+    const x = Math.min(dims[0] - 1, Math.floor(((position[i * 3] as number) - min.x) / cell));
+    const y = Math.min(dims[1] - 1, Math.floor(((position[i * 3 + 1] as number) - min.y) / cell));
+    const z = Math.min(dims[2] - 1, Math.floor(((position[i * 3 + 2] as number) - min.z) / cell));
+    const c = (z * dims[1] + y) * dims[0] + x;
+    next[i] = heads[c] as number;
+    heads[c] = i;
+  }
+  return { cell, min, dims, heads, next };
+}
+
+/**
+ * The k nearest untaken samples to `at`, nearest first. Rings widen until the box searched is
+ * further away on every side than the worst hit kept, which is what makes this the same answer a
+ * full scan gives — ordering included, so a look that does not need the grid does not move.
+ */
+function nearestInGrid(
+  grid: PoolGrid,
+  position: Float32Array,
+  at: THREE.Vector3,
+  taken: Set<number>,
+  k: number,
+): number[] {
+  const cx = Math.min(grid.dims[0] - 1, Math.max(0, Math.floor((at.x - grid.min.x) / grid.cell)));
+  const cy = Math.min(grid.dims[1] - 1, Math.max(0, Math.floor((at.y - grid.min.y) / grid.cell)));
+  const cz = Math.min(grid.dims[2] - 1, Math.max(0, Math.floor((at.z - grid.min.z) / grid.cell)));
+  const reach = Math.max(grid.dims[0], grid.dims[1], grid.dims[2]);
+
+  const candidates: number[] = [];
+  const near: number[] = [];
+  const far: number[] = [];
+  const other = new THREE.Vector3();
+
+  for (let ring = 0; ring <= reach; ring++) {
+    candidates.length = 0;
+    for (let z = cz - ring; z <= cz + ring; z++) {
+      if (z < 0 || z >= grid.dims[2]) continue;
+      for (let y = cy - ring; y <= cy + ring; y++) {
+        if (y < 0 || y >= grid.dims[1]) continue;
+        for (let x = cx - ring; x <= cx + ring; x++) {
+          if (x < 0 || x >= grid.dims[0]) continue;
+          // Only the shell: the inside of the box was collected on an earlier ring.
+          const shell =
+            ring === 0 ||
+            x === cx - ring ||
+            x === cx + ring ||
+            y === cy - ring ||
+            y === cy + ring ||
+            z === cz - ring ||
+            z === cz + ring;
+          if (!shell) continue;
+          const c = (z * grid.dims[1] + y) * grid.dims[0] + x;
+          for (let i = grid.heads[c] as number; i >= 0; i = grid.next[i] as number) {
+            if (!taken.has(i)) candidates.push(i);
+          }
+        }
+      }
+    }
+
+    // Ascending, so samples at equal distance keep the order a full scan would have seen them in.
+    candidates.sort((l, r) => l - r);
+    for (const p of candidates) {
+      other.set(
+        position[p * 3] as number,
+        position[p * 3 + 1] as number,
+        position[p * 3 + 2] as number,
+      );
+      const d = other.distanceToSquared(at);
+      let slot = near.length;
+      while (slot > 0 && (far[slot - 1] as number) > d) slot--;
+      if (slot < k) {
+        near.splice(slot, 0, p);
+        far.splice(slot, 0, d);
+        if (near.length > k) {
+          near.pop();
+          far.pop();
+        }
+      }
+    }
+
+    if (near.length < k) continue;
+    // Nearest point that could still be outside the box searched so far.
+    const edge = Math.min(
+      at.x - (grid.min.x + (cx - ring) * grid.cell),
+      grid.min.x + (cx + ring + 1) * grid.cell - at.x,
+      at.y - (grid.min.y + (cy - ring) * grid.cell),
+      grid.min.y + (cy + ring + 1) * grid.cell - at.y,
+      at.z - (grid.min.z + (cz - ring) * grid.cell),
+      grid.min.z + (cz + ring + 1) * grid.cell - at.z,
+    );
+    if (edge > 0 && edge * edge >= (far[far.length - 1] as number)) break;
+  }
+  return near;
+}
+
 export function chunkMatrices(
   blueprint: ChunkBlueprint,
   spec: ChunkSpec,
@@ -154,7 +314,7 @@ export function chunkMatrices(
   const chosen: number[] = [];
   const taken = new Set<number>();
   const sample = new THREE.Vector3();
-  const other = new THREE.Vector3();
+  const grid = spec.cluster > 0 ? buildPoolGrid(blueprint.position, pool) : null;
 
   for (let n = 0; n < spec.count; n++) {
     let index = Math.min(pool - 1, Math.floor(random() * pool));
@@ -162,34 +322,20 @@ export function chunkMatrices(
     // bare matrix between clumps rather than an even sprinkle. Taking the single nearest sample
     // instead of one of the k nearest collapses the clump: that map is symmetric, so the draw
     // ping-pongs between one pair of samples forever.
-    if (chosen.length > 0 && random() < spec.cluster) {
+    if (grid && chosen.length > 0 && random() < spec.cluster) {
       const anchor = chosen[Math.floor(random() * chosen.length)] as number;
       sample.set(
         blueprint.position[anchor * 3] as number,
         blueprint.position[anchor * 3 + 1] as number,
         blueprint.position[anchor * 3 + 2] as number,
       );
-      const near: number[] = [];
-      const far: number[] = [];
-      for (let p = 0; p < pool; p++) {
-        if (taken.has(p)) continue;
-        other.set(
-          blueprint.position[p * 3] as number,
-          blueprint.position[p * 3 + 1] as number,
-          blueprint.position[p * 3 + 2] as number,
-        );
-        const d = other.distanceToSquared(sample);
-        let slot = near.length;
-        while (slot > 0 && (far[slot - 1] as number) > d) slot--;
-        if (slot < CLUSTER_NEIGHBOURS) {
-          near.splice(slot, 0, p);
-          far.splice(slot, 0, d);
-          if (near.length > CLUSTER_NEIGHBOURS) {
-            near.pop();
-            far.pop();
-          }
-        }
-      }
+      const near = nearestInGrid(
+        grid,
+        blueprint.position,
+        sample,
+        taken,
+        Math.min(CLUSTER_NEIGHBOURS, pool),
+      );
       index = near[Math.floor(random() * near.length)] ?? index;
     }
     // Probing rather than redrawing: an exhausted pool then degrades to a repeat instead of
@@ -201,6 +347,8 @@ export function chunkMatrices(
 
   const matrices: THREE.Matrix4[] = [];
   const scale = new THREE.Vector3(spec.size, spec.size, spec.size);
+  const sizeVary = spec.sizeVary ?? 0;
+  const sink = spec.sink ?? 0;
 
   for (const index of chosen) {
     const position = new THREE.Vector3(
@@ -213,7 +361,14 @@ export function chunkMatrices(
       blueprint.normal[index * 3 + 1] as number,
       blueprint.normal[index * 3 + 2] as number,
     );
-    position.addScaledVector(normal, spec.size * spec.proud);
+    // Both draws are skipped when the look asks for neither: an unused knob must not consume a
+    // random number, or turning it on for one look reseeds every other look's scatter.
+    if (sizeVary > 0) {
+      const edge = spec.size * (1 - sizeVary * random() ** SIZE_POWER);
+      scale.set(edge, edge, edge);
+    }
+    const proud = sink > 0 ? spec.proud - sink * random() : spec.proud;
+    position.addScaledVector(normal, scale.x * proud);
 
     const rotation = randomQuaternion(random).slerp(lattice, spec.align);
     matrices.push(new THREE.Matrix4().compose(position, rotation, scale));

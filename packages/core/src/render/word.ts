@@ -22,6 +22,7 @@ import {
   chunkGeometrySide,
   chunkMatrices,
   type DecorationSpec,
+  poolFor,
   type TubeBlueprint,
 } from './decoration.js';
 import type { FlakeUniforms } from './flake.js';
@@ -151,9 +152,13 @@ export class Word {
     // A tube's runs need a per-letter seed, so two letters of the same char don't repeat the
     // same partial-lit pattern — that can't go through a cache keyed on (char, depth) alone.
     this.decorCache =
-      decoration && decoration.kind !== 'tube'
+      decoration && decoration.kind === 'chunks'
         ? new GlyphCache<Blueprint>((char, depth) =>
-            buildChunkBlueprint(this.cache.get(char, depth)),
+            buildChunkBlueprint(
+              this.cache.get(char, depth),
+              poolFor(decoration),
+              decoration.faceBias ?? 0,
+            ),
           )
         : null;
 

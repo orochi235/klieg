@@ -5,7 +5,9 @@ import {
   type ChunkSpec,
   chunkGeometrySide,
   chunkMatrices,
+  poolFor,
 } from '../../src/render/decoration.js';
+import { specOf } from '../../src/render/looks.js';
 
 const CHUNKS: ChunkSpec = {
   kind: 'chunks',
@@ -20,6 +22,49 @@ const CHUNKS: ChunkSpec = {
 
 function box(): THREE.BufferGeometry {
   return new THREE.BoxGeometry(1, 1, 0.3);
+}
+
+/** Chunk edge, which is what the matrix carries the per-chunk size in. */
+function edgeOf(m: THREE.Matrix4): number {
+  return new THREE.Vector3().setFromMatrixScale(m).x;
+}
+
+/** How far a chunk sits off its sample point, in chunk edges; negative is sunk into the surface. */
+function standoff(m: THREE.Matrix4, blueprint: { position: Float32Array; normal: Float32Array }) {
+  const at = new THREE.Vector3().setFromMatrixPosition(m);
+  let best = Infinity;
+  let along = 0;
+  const p = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  for (let i = 0; i < blueprint.position.length / 3; i++) {
+    p.set(
+      blueprint.position[i * 3] as number,
+      blueprint.position[i * 3 + 1] as number,
+      blueprint.position[i * 3 + 2] as number,
+    );
+    const d = at.distanceToSquared(p);
+    if (d >= best) continue;
+    best = d;
+    n.set(
+      blueprint.normal[i * 3] as number,
+      blueprint.normal[i * 3 + 1] as number,
+      blueprint.normal[i * 3 + 2] as number,
+    );
+    along = at.clone().sub(p).dot(n);
+  }
+  return along / edgeOf(m);
+}
+
+/** Share of chunks that landed on a cap rather than the extrusion band. */
+function capShare(spec: ChunkSpec): number {
+  const blueprint = buildChunkBlueprint(box(), poolFor(spec), spec.faceBias ?? 0);
+  const matrices = chunkMatrices(blueprint, spec, 3);
+  let caps = 0;
+  for (const m of matrices) {
+    const at = new THREE.Vector3().setFromMatrixPosition(m);
+    if (Math.abs(at.z) > 0.15 - 1e-3) caps++;
+  }
+  return caps / matrices.length;
 }
 
 /** Rotation only, so two matrices can be compared for shared orientation. */
@@ -138,6 +183,98 @@ describe('chunkMatrices', () => {
 
     const at = (m: THREE.Matrix4) => new THREE.Vector3().setFromMatrixPosition(m).length();
     expect(at(raised[0] as THREE.Matrix4)).toBeGreaterThan(at(flush[0] as THREE.Matrix4));
+  });
+});
+
+describe('per-chunk size and stand-off', () => {
+  it('keeps one size and one stand-off when neither is asked for', () => {
+    const blueprint = buildChunkBlueprint(box());
+    const matrices = chunkMatrices(blueprint, CHUNKS, 3);
+
+    for (const m of matrices) {
+      expect(edgeOf(m)).toBeCloseTo(CHUNKS.size, 10);
+      expect(standoff(m, blueprint)).toBeCloseTo(CHUNKS.proud, 6);
+    }
+  });
+
+  it('grades chunks below the nominal size, never above it', () => {
+    const spec = { ...CHUNKS, count: 120, sizeVary: 0.6 };
+    const edges = chunkMatrices(buildChunkBlueprint(box(), poolFor(spec)), spec, 3).map(edgeOf);
+
+    expect(Math.max(...edges)).toBeLessThanOrEqual(spec.size + 1e-9);
+    expect(Math.min(...edges)).toBeGreaterThanOrEqual(spec.size * (1 - spec.sizeVary) - 1e-9);
+    expect(Math.min(...edges)).toBeLessThan(spec.size * 0.7);
+  });
+
+  // The point of cubing the draw: a fine minority filling between full-size crystals, not an
+  // even spread that thins the whole bed.
+  it('leaves most chunks near full size', () => {
+    const spec = { ...CHUNKS, count: 200, sizeVary: 0.6 };
+    const edges = chunkMatrices(buildChunkBlueprint(box(), poolFor(spec)), spec, 3).map(edgeOf);
+    const full = edges.filter((e) => e > spec.size * 0.9).length;
+
+    expect(full / edges.length).toBeGreaterThan(0.5);
+  });
+
+  it('sinks some chunks into the surface and leaves others proud', () => {
+    const spec = { ...CHUNKS, count: 120, proud: 0.1, sink: 0.45 };
+    const blueprint = buildChunkBlueprint(box(), poolFor(spec));
+    const out = chunkMatrices(blueprint, spec, 3).map((m) => standoff(m, blueprint));
+
+    expect(Math.max(...out)).toBeLessThanOrEqual(spec.proud + 1e-6);
+    expect(Math.min(...out)).toBeLessThan(spec.proud - spec.sink + 0.05);
+    expect(out.some((o) => o < 0)).toBe(true);
+  });
+});
+
+describe('faceBias', () => {
+  it('leaves the split to area alone at 0', () => {
+    const spec = { ...CHUNKS, count: 200 };
+
+    expect(capShare({ ...spec, faceBias: 0 })).toBeCloseTo(capShare(spec), 10);
+  });
+
+  it('moves chunks off the extrusion band and onto the caps', () => {
+    const spec = { ...CHUNKS, count: 200 };
+    const plain = capShare(spec);
+
+    expect(capShare({ ...spec, faceBias: 2 })).toBeGreaterThan(plain + 0.05);
+    expect(capShare({ ...spec, faceBias: 4 })).toBeGreaterThan(capShare({ ...spec, faceBias: 2 }));
+  });
+});
+
+describe('poolFor', () => {
+  it('holds the shared pool for a sparse look', () => {
+    expect(poolFor({ ...CHUNKS, count: 90 })).toBe(512);
+  });
+
+  it('grows the pool with a dense one, so chunks still have room to scatter', () => {
+    expect(poolFor({ ...CHUNKS, count: 700 })).toBeGreaterThanOrEqual(700 * 4);
+  });
+});
+
+/**
+ * `sequin` shares this machinery with `pyrite` and has no business moving when `pyrite` is
+ * retuned. Recorded before the respec; a change here means a new field stopped defaulting to the
+ * behaviour it replaced, or the clustering draw started answering differently.
+ */
+describe('sequin', () => {
+  it('draws the same chunks it always has', () => {
+    const spec = specOf('sequin').decoration as ChunkSpec;
+    const blueprint = buildChunkBlueprint(box());
+    let hash = 0x811c9dc5;
+    const view = new DataView(new ArrayBuffer(8));
+    for (let letter = 0; letter < 6; letter++) {
+      for (const m of chunkMatrices(blueprint, spec, letter)) {
+        for (const value of m.elements) {
+          view.setFloat64(0, value);
+          hash = Math.imul(hash ^ view.getUint32(0), 0x01000193);
+          hash = Math.imul(hash ^ view.getUint32(4), 0x01000193);
+        }
+      }
+    }
+
+    expect(hash >>> 0).toBe(3226201452);
   });
 });
 

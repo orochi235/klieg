@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import {
+  type BeddingSpec,
   buildChunkBlueprint,
   type ChunkSpec,
   chunkGeometrySide,
@@ -57,7 +58,7 @@ function standoff(m: THREE.Matrix4, blueprint: { position: Float32Array; normal:
 
 /** Share of chunks that landed on a cap rather than the extrusion band. */
 function capShare(spec: ChunkSpec): number {
-  const blueprint = buildChunkBlueprint(box(), poolFor(spec), spec.faceBias ?? 0);
+  const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec), faceBias: spec.faceBias });
   const matrices = chunkMatrices(blueprint, spec, 3);
   let caps = 0;
   for (const m of matrices) {
@@ -199,7 +200,9 @@ describe('per-chunk size and stand-off', () => {
 
   it('grades chunks below the nominal size, never above it', () => {
     const spec = { ...CHUNKS, count: 120, sizeVary: 0.6 };
-    const edges = chunkMatrices(buildChunkBlueprint(box(), poolFor(spec)), spec, 3).map(edgeOf);
+    const edges = chunkMatrices(buildChunkBlueprint(box(), { pool: poolFor(spec) }), spec, 3).map(
+      edgeOf,
+    );
 
     expect(Math.max(...edges)).toBeLessThanOrEqual(spec.size + 1e-9);
     expect(Math.min(...edges)).toBeGreaterThanOrEqual(spec.size * (1 - spec.sizeVary) - 1e-9);
@@ -210,7 +213,9 @@ describe('per-chunk size and stand-off', () => {
   // even spread that thins the whole bed.
   it('leaves most chunks near full size', () => {
     const spec = { ...CHUNKS, count: 200, sizeVary: 0.6 };
-    const edges = chunkMatrices(buildChunkBlueprint(box(), poolFor(spec)), spec, 3).map(edgeOf);
+    const edges = chunkMatrices(buildChunkBlueprint(box(), { pool: poolFor(spec) }), spec, 3).map(
+      edgeOf,
+    );
     const full = edges.filter((e) => e > spec.size * 0.9).length;
 
     expect(full / edges.length).toBeGreaterThan(0.5);
@@ -218,7 +223,7 @@ describe('per-chunk size and stand-off', () => {
 
   it('sinks some chunks into the surface and leaves others proud', () => {
     const spec = { ...CHUNKS, count: 120, proud: 0.1, sink: 0.45 };
-    const blueprint = buildChunkBlueprint(box(), poolFor(spec));
+    const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec) });
     const out = chunkMatrices(blueprint, spec, 3).map((m) => standoff(m, blueprint));
 
     expect(Math.max(...out)).toBeLessThanOrEqual(spec.proud + 1e-6);
@@ -240,6 +245,55 @@ describe('faceBias', () => {
 
     expect(capShare({ ...spec, faceBias: 2 })).toBeGreaterThan(plain + 0.05);
     expect(capShare({ ...spec, faceBias: 4 })).toBeGreaterThan(capShare({ ...spec, faceBias: 2 }));
+  });
+});
+
+describe('bedding', () => {
+  /** Widest run of the axis with no chunk on it — the barren rock between two beds. */
+  function widestGap(spec: ChunkSpec, axis: 'x' | 'y'): number {
+    const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec), bedding: spec.bedding });
+    const at = chunkMatrices(blueprint, spec, 3)
+      .map((m) => new THREE.Vector3().setFromMatrixPosition(m)[axis])
+      .sort((l, r) => l - r);
+    let widest = 0;
+    for (let i = 1; i < at.length; i++) {
+      widest = Math.max(widest, (at[i] as number) - (at[i - 1] as number));
+    }
+    return widest;
+  }
+
+  const BEDDED: ChunkSpec = {
+    ...CHUNKS,
+    count: 200,
+    bedding: { angle: 0, spacing: 0.5, thickness: 0.08, scatter: 0 },
+  };
+
+  it('leaves barren rock between the beds', () => {
+    expect(widestGap(BEDDED, 'y')).toBeGreaterThan(0.2);
+    expect(widestGap({ ...BEDDED, bedding: undefined }, 'y')).toBeLessThan(0.1);
+  });
+
+  it('turns the beds with the angle', () => {
+    const turned = { ...BEDDED, bedding: { ...BEDDED.bedding, angle: 90 } as BeddingSpec };
+
+    expect(widestGap(turned, 'x')).toBeGreaterThan(0.2);
+    expect(widestGap(turned, 'y')).toBeLessThan(0.1);
+  });
+
+  it('fills the barren rock as scatter rises', () => {
+    const seeded = { ...BEDDED, bedding: { ...BEDDED.bedding, scatter: 0.6 } as BeddingSpec };
+
+    expect(widestGap(seeded, 'y')).toBeLessThan(widestGap(BEDDED, 'y') / 2);
+  });
+
+  // Two letters of one char share a pool when the chunks are scattered, and must not when they
+  // are bedded: the bed a glyph shows depends on where the glyph sits in the word.
+  it('moves the beds with the glyph origin', () => {
+    const options = { pool: poolFor(BEDDED), bedding: BEDDED.bedding };
+    const here = buildChunkBlueprint(box(), options);
+    const along = buildChunkBlueprint(box(), { ...options, originY: 0.25 });
+
+    expect(Array.from(along.position)).not.toEqual(Array.from(here.position));
   });
 });
 

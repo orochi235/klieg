@@ -16,6 +16,21 @@ export type MaterialSpec = Omit<LookSpec, 'decoration' | 'bloom'> & {
 export type { CornerStrategy, CornerWeights, TubeBlueprint, TubeSpec } from './tube/index.js';
 export { ALL_BREAK, ALL_CONNECT, buildTubeBlueprint } from './tube/index.js';
 
+/**
+ * Ore does not sit evenly in rock. It runs in beds: bands of dense crystal separated by barren
+ * matrix, dipping across the letter rather than lying square to it. Omit for an even scatter.
+ */
+export interface BeddingSpec {
+  /** Angle of the beds from horizontal, in degrees. */
+  angle: number;
+  /** Distance from one bed to the next, in em. */
+  spacing: number;
+  /** Width of the ore band across a bed, in em. Beds vary either side of it. */
+  thickness: number;
+  /** How much ore lies in the barren rock between beds, 0..1. */
+  scatter: number;
+}
+
 export interface ChunkSpec {
   kind: 'chunks';
   /** Chunks per letter. */
@@ -35,6 +50,8 @@ export interface ChunkSpec {
   sizeVary?: number;
   /** How hard sampling favours the caps over the extrusion band. 0 is pure area weighting. */
   faceBias?: number;
+  /** Bands the chunks run in. Omit to scatter them evenly over the surface. */
+  bedding?: BeddingSpec;
   look: MaterialSpec;
 }
 
@@ -63,6 +80,42 @@ const POOL_PER_CHUNK = 4;
  */
 const SIZE_POWER = 3;
 
+/** How far a bed strays from a straight line, in bed spacings. */
+const BED_WANDER = 0.14;
+/**
+ * Draws before a sample is taken wherever it landed, so a bedding that rejects nearly everything
+ * still terminates. High enough that a `scatter` of 0 really does leave the rock between beds
+ * bare: at 24, one sample in twelve exhausted its draws and settled in barren rock.
+ */
+const BED_ATTEMPTS = 64;
+
+/** Repeatable per-bed variation, so beds differ in thickness rather than reading as a ruled grid. */
+function bedHash(bed: number): number {
+  const x = Math.sin(bed * 127.1 + 11.3) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+/**
+ * How much ore a point carries, 0..1 — 1 at the middle of a bed, `scatter` in the barren rock
+ * between. Measured in the letter's own em space.
+ */
+function oreAt(x: number, y: number, bedding: BeddingSpec): number {
+  const radians = (bedding.angle * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const along = (x * cos + y * sin) / bedding.spacing;
+  let across = (y * cos - x * sin) / bedding.spacing;
+  // Beds pinch and wander rather than running dead straight; two frequencies so the wander does
+  // not read as one sine wave.
+  across += BED_WANDER * (Math.sin(along * 2.3) + 0.6 * Math.sin(along * 5.1 + 1.7));
+
+  const bed = Math.round(across);
+  const half = ((bedding.thickness / bedding.spacing) * (0.55 + 0.9 * bedHash(bed))) / 2;
+  const distance = Math.abs(across - bed);
+  const core = half > 0 ? Math.max(0, 1 - (distance / half) ** 2) : 0;
+  return bedding.scatter + (1 - bedding.scatter) * core;
+}
+
 /** Distinct positions a spec's chunks are drawn from. Never below POOL, so a sparse look holds still. */
 export function poolFor(spec: ChunkSpec): number {
   return Math.max(POOL, spec.count * POOL_PER_CHUNK);
@@ -78,10 +131,20 @@ function rng(seed: number): () => number {
   };
 }
 
+export interface ChunkPoolOptions {
+  /** Distinct positions to sample. */
+  pool?: number;
+  /** How hard to favour the caps over the extrusion band. */
+  faceBias?: number;
+  bedding?: BeddingSpec;
+  /** Where this glyph sits in the word, so beds run on across letters rather than restarting. */
+  originX?: number;
+  originY?: number;
+}
+
 export function buildChunkBlueprint(
   geometry: THREE.BufferGeometry,
-  pool = POOL,
-  faceBias = 0,
+  { pool = POOL, faceBias = 0, bedding, originX = 0, originY = 0 }: ChunkPoolOptions = {},
 ): ChunkBlueprint {
   const positions = geometry.getAttribute('position');
   const normals = geometry.getAttribute('normal');
@@ -127,25 +190,42 @@ export function buildChunkBlueprint(
   const nc = new THREE.Vector3();
 
   for (let s = 0; s < pool; s++) {
-    const t = pick(random() * total);
-    let u = random();
-    let v = random();
-    if (u + v > 1) {
-      u = 1 - u;
-      v = 1 - v;
-    }
-    const w = 1 - u - v;
+    let t = 0;
+    let u = 0;
+    let v = 0;
+    let w = 0;
+    let x = 0;
+    let y = 0;
+    let z = 0;
+    // Bedding is a rejection on top of the area weighting: draw a point, keep it in proportion to
+    // the ore there. Sampling into the beds rather than filtering a built pool afterwards is what
+    // lets a dense seam come out of a pool no larger than an even scatter needs.
+    for (let attempt = 0; attempt < BED_ATTEMPTS; attempt++) {
+      t = pick(random() * total);
+      u = random();
+      v = random();
+      if (u + v > 1) {
+        u = 1 - u;
+        v = 1 - v;
+      }
+      w = 1 - u - v;
 
-    a.fromBufferAttribute(positions, vertexAt(t * 3));
-    b.fromBufferAttribute(positions, vertexAt(t * 3 + 1));
-    c.fromBufferAttribute(positions, vertexAt(t * 3 + 2));
+      a.fromBufferAttribute(positions, vertexAt(t * 3));
+      b.fromBufferAttribute(positions, vertexAt(t * 3 + 1));
+      c.fromBufferAttribute(positions, vertexAt(t * 3 + 2));
+      x = a.x * w + b.x * u + c.x * v;
+      y = a.y * w + b.y * u + c.y * v;
+      z = a.z * w + b.z * u + c.z * v;
+      if (!bedding || random() < oreAt(x + originX, y + originY, bedding)) break;
+    }
+
     na.fromBufferAttribute(normals, vertexAt(t * 3));
     nb.fromBufferAttribute(normals, vertexAt(t * 3 + 1));
     nc.fromBufferAttribute(normals, vertexAt(t * 3 + 2));
 
-    position[s * 3] = a.x * w + b.x * u + c.x * v;
-    position[s * 3 + 1] = a.y * w + b.y * u + c.y * v;
-    position[s * 3 + 2] = a.z * w + b.z * u + c.z * v;
+    position[s * 3] = x;
+    position[s * 3 + 1] = y;
+    position[s * 3 + 2] = z;
     na.multiplyScalar(w).addScaledVector(nb, u).addScaledVector(nc, v).normalize();
     normal[s * 3] = na.x;
     normal[s * 3 + 1] = na.y;

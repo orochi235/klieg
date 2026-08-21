@@ -18,6 +18,7 @@ import {
   type Blueprint,
   buildChunkBlueprint,
   buildTubeBlueprint,
+  type ChunkSpec,
   chunkGeometry,
   chunkGeometrySide,
   chunkMatrices,
@@ -151,14 +152,15 @@ export class Word {
         : null;
     // A tube's runs need a per-letter seed, so two letters of the same char don't repeat the
     // same partial-lit pattern — that can't go through a cache keyed on (char, depth) alone.
+    // Bedding places a glyph's chunks by where the glyph sits in the word, so its pool cannot be
+    // shared between two letters the way a plain scatter's can.
     this.decorCache =
-      decoration && decoration.kind === 'chunks'
+      decoration && decoration.kind === 'chunks' && !decoration.bedding
         ? new GlyphCache<Blueprint>((char, depth) =>
-            buildChunkBlueprint(
-              this.cache.get(char, depth),
-              poolFor(decoration),
-              decoration.faceBias ?? 0,
-            ),
+            buildChunkBlueprint(this.cache.get(char, depth), {
+              pool: poolFor(decoration),
+              faceBias: decoration.faceBias,
+            }),
           )
         : null;
 
@@ -240,6 +242,18 @@ export class Word {
   /** A glyph draws ink when its geometry has vertices — the same test the cell build uses. */
   private drawsInk(char: string): boolean {
     return !!this.cache.get(char, DEFAULT_GLYPH_OPTIONS.depth).attributes.position?.count;
+  }
+
+  private chunkBlueprintFor(char: string, i: number, spec: ChunkSpec): Blueprint {
+    const depth = DEFAULT_GLYPH_OPTIONS.depth;
+    if (this.decorCache) return this.decorCache.get(char, depth);
+    return buildChunkBlueprint(this.cache.get(char, depth), {
+      pool: poolFor(spec),
+      faceBias: spec.faceBias,
+      bedding: spec.bedding,
+      originX: this.baseX[i] as number,
+      originY: this.baseY[i] as number,
+    });
   }
 
   private applyFit(fit: Fit): void {
@@ -336,7 +350,7 @@ export class Word {
       this.tubeBounds.push(box.isEmpty() ? null : box);
       for (const geo of blueprint.lit) cell.add(new THREE.Mesh(geo, decorMaterial));
       for (const geo of blueprint.dark) cell.add(new THREE.Mesh(geo, darkMaterial));
-    } else if (decoration && this.decorCache) {
+    } else if (decoration && decoration.kind === 'chunks') {
       const decorMaterial = createMaterial();
       applyLook(
         decorMaterial,
@@ -350,8 +364,8 @@ export class Word {
       this.darkMaterials.push(null);
       this.tubeBounds.push(null);
 
-      const blueprint = this.decorCache.get(char, DEFAULT_GLYPH_OPTIONS.depth);
-      if (decoration.kind === 'chunks' && blueprint.kind === 'chunks' && this.chunkGeo) {
+      const blueprint = this.chunkBlueprintFor(char, i, decoration);
+      if (blueprint.kind === 'chunks' && this.chunkGeo) {
         const matrices = chunkMatrices(blueprint, decoration, i);
         const instanced = new THREE.InstancedMesh(this.chunkGeo, decorMaterial, matrices.length);
         for (let m = 0; m < matrices.length; m++) {

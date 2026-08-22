@@ -57,6 +57,19 @@ vite config: `fs.allow` and the react/react-dom aliases existed only because a l
 resolves React out of its own tree, which is an "invalid hook call" from inside labkit. `npm
 install` here no longer needs a weasel checkout.
 
+**A second lab, `npm run dev:corner-lab -w klieg`, is where corner work happens now.** It is a
+labkit instrument: pick a letter, look and path source, step through that letter's hard corners, and
+switch what the corner draws — `built` (what ships), `merge` (leave the path alone), `relax` (push
+the vertices out until they clear), `biarc`, `cut`. It reports the glyph's own bend, how far under
+the floor it is, the junction chord and radius, and a radius profile either side, all against the
+floor circle at true scale. Two static spikes are frozen versions of it and can go once it grows:
+`junction-repair.mjs` and `fillet-view.mjs`.
+
+Three labkit gaps are written up in `~/src/weasel/packages/labkit/docs/IDEAS.md`, uncommitted: an
+instrument that declares a canvas never gets its `render()` called, so the readout is painted onto a
+canvas layer as text; a canvas layer is handed `zoom` but not `pan`, so panning is inert; and a
+typed instrument needs a cast to satisfy `LabProps`.
+
 Run it with `npm run dev:tube-lab -w klieg` — sixteen panels on one WebGL context, one letter
 each, `beauty` / `skeleton` / `ramp`, with a rail that tunes the whole `TubeSpec`. Every control
 carries a hover hint saying what it does and what it interacts with badly, which is the fastest way

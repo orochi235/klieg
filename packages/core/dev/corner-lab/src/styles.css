@@ -1,0 +1,58 @@
+.junction {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  font:
+    13px / 1.4 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+.junction__measures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1.4rem;
+  margin: 0;
+}
+
+.measure {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.measure dt {
+  opacity: 0.6;
+}
+
+.measure dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.measure--bad dd {
+  color: #ff6b60;
+}
+
+.junction__profile {
+  display: flex;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tick {
+  flex: 1;
+  text-align: center;
+  padding: 0.15rem 0;
+  border-radius: 3px;
+  background: rgba(127, 127, 127, 0.14);
+  font-size: 11px;
+}
+
+.tick--under {
+  background: rgba(255, 107, 96, 0.3);
+  color: #ff6b60;
+}

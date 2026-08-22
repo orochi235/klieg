@@ -43,7 +43,8 @@
     "build": "rm -rf dist && tsc -b tsconfig.json --force",
     "dev:tube-lab": "vite dev/tube-lab",
     "prepack": "npm run build && cp ../../README.md README.md",
-    "prepublishOnly": "npm --prefix ../.. run check"
+    "prepublishOnly": "npm --prefix ../.. run check",
+    "dev:corner-lab": "vite dev/corner-lab"
   },
   "dependencies": {
     "opentype.js": "^2.0.0"

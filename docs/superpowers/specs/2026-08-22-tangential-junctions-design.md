@@ -40,6 +40,20 @@ straight. Both local repairs fail, and a reader who proposes either should see t
 Each fixes one corner and breaks another, which is the signature of a wrong model rather than a bad
 parameter.
 
+## Two populations, one treatment
+
+Detection has no notion of margin: a vertex is hard when its radius is below the floor, whether by
+3% or by 74%. On `B` those are different worlds. Seven of its eight hard corners sit **53 to 74
+percent under** — true spikes at 0.53r to 0.87r, with straight path either side, where the tube has
+no choice but to leave the letterform. The eighth, on the right of the lower counter, is at
+**1.94r, a 3.2% margin**, inside a stretch curving at 2.2r to 2.9r.
+
+That last one has no straight legs to be tangent to, and fitting an arc to two straight leg lines
+there is what produces the 53 degree kink. It does not need replacing. Nudging its few vertices
+outward by three percent would clear the floor and keep the path. Sorting corners by how far under
+they are, and relaxing the shallow ones in place rather than replacing them, is the treatment the
+measurements point at — and it is untried.
+
 ## The long chord is the design, not an accident
 
 `resumeAt` does not produce a long chord only where the fillet is wrong. It produces one at nearly

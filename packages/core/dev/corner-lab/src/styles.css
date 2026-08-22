@@ -1,3 +1,11 @@
+/* `Lab` sizes itself to 100vh, which only lands right when the host has zeroed the body margin. */
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
 .junction {
   display: flex;
   flex-direction: column;

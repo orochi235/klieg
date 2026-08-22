@@ -2,11 +2,14 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import {
   BEND_FLOOR,
+  biarcBlend,
   ClearanceGrid,
   cornersByBend,
   DEFAULT_BEND,
   type Fillet,
   filletAt,
+  isAuthored,
+  junctionRadius,
   minBendRadius,
   vertexBends,
 } from '../../../src/render/tube/bend.js';
@@ -194,5 +197,138 @@ describe('ClearanceGrid', () => {
     const grid = new ClearanceGrid(0.05);
     grid.add(line(20, 0), 0);
     expect(grid.nearest(new THREE.Vector3(0, 5, 0), 1, 0.1)).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+describe('junctionRadius', () => {
+  // The junction of a fillet meets a leg step and an arc step of different lengths, and the
+  // circumradius of that triple is set by the longer one — which is what lets a step back inflate it.
+  it('agrees with the circumradius when both steps are equal', () => {
+    const turn = Math.PI / 4;
+    const [, prev, mid, next] = elbow(turn, 0.02) as [
+      THREE.Vector3,
+      THREE.Vector3,
+      THREE.Vector3,
+      THREE.Vector3,
+    ];
+    expect(junctionRadius(prev, mid, next)).toBeCloseTo(
+      minCurvatureRadius3([prev, mid, next].map((p) => ({ x: p.x, y: p.y, z: p.z }))),
+      6,
+    );
+  });
+
+  it('reads the shorter step, so lengthening the far chord cannot raise it', () => {
+    const turn = Math.PI / 4;
+    const mid = new THREE.Vector3(0, 0, 0);
+    const prev = new THREE.Vector3(-0.02, 0, 0);
+    const near = new THREE.Vector3(Math.cos(turn) * 0.02, Math.sin(turn) * 0.02, 0);
+    const far = new THREE.Vector3(Math.cos(turn) * 0.08, Math.sin(turn) * 0.08, 0);
+
+    const short = junctionRadius(prev, mid, near);
+    expect(junctionRadius(prev, mid, far)).toBeCloseTo(short, 9);
+    // The measurement it replaces does inflate, which is the defect this exists to catch.
+    const circum = (end: THREE.Vector3) =>
+      minCurvatureRadius3([prev, mid, end].map((p) => ({ x: p.x, y: p.y, z: p.z })));
+    expect(circum(far)).toBeGreaterThan(circum(near) * 1.5);
+  });
+
+  it('is infinite where the path does not turn', () => {
+    expect(
+      junctionRadius(
+        new THREE.Vector3(-0.02, 0, 0),
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0.08, 0, 0),
+      ),
+    ).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+describe('biarcBlend', () => {
+  const RHO = 0.06;
+  const SPACING = 0.02;
+
+  /** Two directed points a quarter turn apart, far enough that a blend has room. */
+  const quarter = () => ({
+    p0: new THREE.Vector3(-0.2, 0, 0),
+    t0: new THREE.Vector3(1, 0, 0),
+    p1: new THREE.Vector3(0, 0.2, 0),
+    t1: new THREE.Vector3(0, 1, 0),
+  });
+
+  it('leaves and arrives along the tangents it was given', () => {
+    const { p0, t0, p1, t1 } = quarter();
+    const pts = biarcBlend(p0, t0, p1, t1, RHO, SPACING) as THREE.Vector3[];
+    expect(pts).not.toBeNull();
+    // Sampled at half spacing, a chord sits half a step's turn off the true tangent.
+    const slack = SPACING / RHO;
+    const first = (pts[1] as THREE.Vector3)
+      .clone()
+      .sub(pts[0] as THREE.Vector3)
+      .normalize();
+    const last = (pts[pts.length - 1] as THREE.Vector3)
+      .clone()
+      .sub(pts[pts.length - 2] as THREE.Vector3)
+      .normalize();
+    expect(first.angleTo(t0)).toBeLessThan(slack);
+    expect(last.angleTo(t1)).toBeLessThan(slack);
+  });
+
+  it('starts and ends exactly on its endpoints', () => {
+    const { p0, t0, p1, t1 } = quarter();
+    const pts = biarcBlend(p0, t0, p1, t1, RHO, SPACING) as THREE.Vector3[];
+    expect((pts[0] as THREE.Vector3).distanceTo(p0)).toBeLessThan(1e-9);
+    expect((pts[pts.length - 1] as THREE.Vector3).distanceTo(p1)).toBeLessThan(1e-9);
+  });
+
+  it('never bends tighter than the minimum it was given', () => {
+    const { p0, t0, p1, t1 } = quarter();
+    const pts = biarcBlend(p0, t0, p1, t1, RHO, SPACING) as THREE.Vector3[];
+    const rho = minCurvatureRadius3(pts.map((p) => ({ x: p.x, y: p.y, z: p.z })));
+    expect(rho).toBeGreaterThanOrEqual(RHO * 0.98);
+  });
+
+  // Two points a tube's width apart with opposed tangents need a hairpin no glass could take.
+  it('returns null rather than a blend under the minimum', () => {
+    expect(
+      biarcBlend(
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(1, 0, 0),
+        new THREE.Vector3(0.01, 0.01, 0),
+        new THREE.Vector3(-1, 0, 0),
+        RHO,
+        SPACING,
+      ),
+    ).toBeNull();
+  });
+
+  // An arc leaving its tangent by more than a right angle is the major arc through those points,
+  // and sampling the minor one instead kinks the blend at its own joint — inside geometry the
+  // sweep holds fixed, so nothing downstream can round it off.
+  it('never returns a blend that bends tighter than its own minimum', () => {
+    const p0 = new THREE.Vector3(0, 0, 0);
+    const t0 = new THREE.Vector3(1, 0, 0);
+    let checked = 0;
+    for (let a = 0; a < 24; a++) {
+      const arrive = (a / 24) * Math.PI * 2;
+      const t1 = new THREE.Vector3(Math.cos(arrive), Math.sin(arrive), 0);
+      for (let b = 0; b < 24; b++) {
+        const where = (b / 24) * Math.PI * 2;
+        for (const reach of [0.15, 0.3, 0.6]) {
+          const p1 = new THREE.Vector3(Math.cos(where) * reach, Math.sin(where) * reach, 0);
+          const pts = biarcBlend(p0, t0, p1, t1, RHO, SPACING);
+          if (!pts) continue;
+          checked++;
+          const rho = minCurvatureRadius3(pts.map((q) => ({ x: q.x, y: q.y, z: q.z })));
+          expect(rho).toBeGreaterThanOrEqual(RHO * 0.98);
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(50);
+  });
+
+  it('marks its points authored, so the sweep holds them through smoothing', () => {
+    const { p0, t0, p1, t1 } = quarter();
+    const pts = biarcBlend(p0, t0, p1, t1, RHO, SPACING) as THREE.Vector3[];
+    expect(pts.every((p) => isAuthored(p))).toBe(true);
   });
 });

@@ -82,15 +82,17 @@ how the source changes the cut. The spec lists the rest.
 
 Roughly in order of value; the items are independent of each other.
 
-- **Group filleting is what the last bend-minimum failures need.** Four distinct runs still measure
-  under the floor: `tubing`/`direct` `R` at 1.996r, `piping`/`exact` `B` at 1.978r,
-  `piping`/`field` `S` at 1.961r and `piping`/`direct` `B` at 1.704r. The first three sit within 2%
-  of a floor that `tightestBend`'s own smoothing moves by more than that, and are not worth
-  chasing. The fourth is real, and it is the multi-vertex corner: the fillet is tangent to a
-  straight-line fit of a leg that is still turning through its shoulder, so the trim steps back
-  until the junction clears the floor and buys a chord 4.1x spacing carrying the residual turn.
-  `spikes/junction-split.mjs` is the census, `join-geometry.mjs <look> <letter> <source>` the
-  per-vertex dump.
+- **The last bend-minimum failure is a junction defect, and it is wider than three corners.** See
+  [tangential junctions](specs/2026-08-22-tangential-junctions-design.md), which has the mechanism,
+  the five things tried and what each cost. In short: `resumeAt` clears the invariant by lengthening
+  the chord between the leg and the arc, which raises circumradius without touching the direction
+  mismatch — filling that chord drops `piping`'s `B` from 2.00r to 0.93r. Admitting only tangential
+  junctions fixes every failure and refuses four fillets in five, so it redraws the alphabet;
+  everything narrower fixes one corner and opens another. `junctionRadius` and `biarcBlend` are
+  built and tested in `bend.ts` but deliberately not wired, and the doc says why.
+- **Only `piping`/`direct` `B` fails in a shipped configuration.** The `exact` and `field` failures
+  need a lab-only path source, and `tubing`'s `R` at 1.996r is wander — it vanishes at
+  `amplitude: 0`.
 - **`pyrite` is built on the wrong model and should be respecced before it is tuned.** See below.
 - **The back-cap chunk waste is not worth fixing — measured, and struck from this list.** The
   ~30% is real (27.9% `pyrite`, 25.1% `sequin`), but it costs nothing: real-GPU median frame time is

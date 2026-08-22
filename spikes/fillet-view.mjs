@@ -1,7 +1,9 @@
 /**
  * Draw what the corner stage did, corner by corner, as an SVG page.
  *
- *   npm run build -w klieg && node spikes/fillet-view.mjs [letters] > out.html
+ *   npm run build -w klieg && node spikes/fillet-view.mjs [look] [letters] > out.html
+ *
+ * `PATH_SOURCE` overrides the look's own source, matching where-under-bend.mjs.
  *
  * Each panel zooms one detected corner. Grey is the path the field extracted; red dots are the
  * vertices bending tighter than rho_min — the stretch, which is routinely more than one. Blue is
@@ -24,9 +26,11 @@ import { glyphToShapes } from '../packages/core/dist/text/glyphs.js';
 
 const buf = readFileSync(new URL('../apps/lab/public/font.ttf', import.meta.url));
 const font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
-const spec = specOf('tubing').decoration;
+const LOOK = process.argv[2] ?? 'tubing';
+const spec = specOf(LOOK).decoration;
+const SOURCE = process.env.PATH_SOURCE ?? spec.pathSource ?? 'direct';
 const rhoMin = minBendRadius(spec.radius, spec.bend);
-const LETTERS = process.argv[2] ?? 'MWSB';
+const LETTERS = process.argv[3] ?? 'MWSB';
 const SPAN = 0.16; // em across a panel
 const PX = 300;
 
@@ -46,6 +50,7 @@ for (const ch of LETTERS) {
     wallDepth: 0.5,
     resolution: 256,
     pad: 0.35,
+    source: SOURCE,
   });
   const { runs } = cutIntoRuns(paths, {
     runs: spec.runs,
@@ -141,8 +146,9 @@ console.log(`<title>Group filleting</title>
   .sw-built { background:var(--built); }
 </style>
 <h1>Group filleting, corner by corner</h1>
-<p class="lede">Each panel zooms one detected corner of the tubing look at its shipped spec. The
-dashed circle is the minimum bend radius at true scale &mdash; the tightest turn the glass takes.</p>
+<p class="lede">Each panel zooms one detected corner of the ${LOOK} look at its shipped spec, traced
+${SOURCE}. The dashed circle is the minimum bend radius at true scale &mdash; the tightest turn the
+glass takes.</p>
 <p class="key">
   <span><i class="sw sw-raw"></i>extracted path</span>
   <span><i class="sw sw-tight"></i>bends tighter than rho_min</span>

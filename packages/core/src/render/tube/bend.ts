@@ -190,6 +190,110 @@ export function filletAt(
   return { points: markAuthored(arc), setback, index, corner: cur.clone() };
 }
 
+/**
+ * The bend a junction really carries, measured with its shorter step. Circumradius through a triple
+ * is set by its longer side, so a leg stepped back from a fillet reads as straighter the further it
+ * retreats — the invariant can be satisfied by walking away from the corner instead of fixing it.
+ */
+export function junctionRadius(
+  prev: THREE.Vector3,
+  mid: THREE.Vector3,
+  next: THREE.Vector3,
+): number {
+  const into = mid.clone().sub(prev);
+  const outOf = next.clone().sub(mid);
+  if (into.lengthSq() < 1e-18 || outOf.lengthSq() < 1e-18) return Number.POSITIVE_INFINITY;
+  const turn = into.clone().normalize().angleTo(outOf.clone().normalize());
+  if (turn < 1e-9) return Number.POSITIVE_INFINITY;
+  return Math.min(into.length(), outOf.length()) / (2 * Math.sin(turn / 2));
+}
+
+/** Samples the arc leaving `from` along `tangent` and ending at `to`, at `step`. */
+function arcThrough(
+  from: THREE.Vector3,
+  tangent: THREE.Vector3,
+  to: THREE.Vector3,
+  step: number,
+): { points: THREE.Vector3[]; radius: number } {
+  const chord = to.clone().sub(from);
+  const straight = { points: [from.clone(), to.clone()], radius: Number.POSITIVE_INFINITY };
+  if (chord.lengthSq() < 1e-18) return straight;
+  const perp = chord.clone().addScaledVector(tangent, -chord.dot(tangent));
+  if (perp.lengthSq() < 1e-18) return straight;
+  const phi = tangent.angleTo(chord);
+  if (phi < 1e-9) return straight;
+
+  const radius = chord.length() / (2 * Math.sin(phi));
+  const centre = from.clone().addScaledVector(perp.normalize(), radius);
+  const radial = from.clone().sub(centre);
+  const axis = radial.clone().cross(to.clone().sub(centre));
+  if (axis.lengthSq() < 1e-18) return straight;
+  axis.normalize();
+
+  const sweep = radial.angleTo(to.clone().sub(centre));
+  const steps = Math.max(2, Math.ceil((sweep * radius) / step));
+  const points: THREE.Vector3[] = [];
+  for (let i = 0; i <= steps; i++) {
+    points.push(centre.clone().add(radial.clone().applyAxisAngle(axis, (i / steps) * sweep)));
+  }
+  return { points, radius };
+}
+
+/**
+ * Two arcs meeting at a common tangent, leaving `p0` along `t0` and arriving at `p1` along `t1`.
+ * Null when either arc would bend tighter than `rhoMin`.
+ *
+ * A blend between two directed points always exists, so the path meets it tangentially by
+ * construction rather than by a fit that can be wrong. Equal tangent lengths pick one member of the
+ * one-parameter family. Feasibility is not monotone in the room available: giving the blend more
+ * path can lower its tightest radius as well as raise it, so a caller searching outward has to test
+ * every candidate rather than stopping at the first failure.
+ */
+export function biarcBlend(
+  p0: THREE.Vector3,
+  t0: THREE.Vector3,
+  p1: THREE.Vector3,
+  t1: THREE.Vector3,
+  rhoMin: number,
+  spacing: number,
+): THREE.Vector3[] | null {
+  const u = t0.clone().normalize();
+  const v = t1.clone().normalize();
+  const d = p1.clone().sub(p0);
+  if (d.lengthSq() < 1e-18) return null;
+
+  const sum = u.clone().add(v);
+  const a = 2 * u.dot(v) - 2;
+  const b = -2 * d.dot(sum);
+  const c = d.lengthSq();
+  let alpha: number;
+  if (Math.abs(a) < 1e-12) {
+    if (Math.abs(b) < 1e-12) return null;
+    alpha = -c / b;
+  } else {
+    const disc = b * b - 4 * a * c;
+    if (disc < 0) return null;
+    const root = Math.sqrt(disc);
+    alpha = Math.max((-b + root) / (2 * a), (-b - root) / (2 * a));
+  }
+  if (!(alpha > 0)) return null;
+
+  const joint = p0
+    .clone()
+    .addScaledVector(u, alpha)
+    .add(p1.clone().addScaledVector(v, -alpha))
+    .multiplyScalar(0.5);
+
+  // Half `spacing`, as filletAt samples, so the sweep's smoothing cannot shave the built radius.
+  const step = spacing / 2;
+  const first = arcThrough(p0, u, joint, step);
+  const second = arcThrough(p1, v.clone().negate(), joint, step);
+  if (Math.min(first.radius, second.radius) < rhoMin) return null;
+
+  second.points.reverse();
+  return markAuthored(first.points.concat(second.points.slice(1)));
+}
+
 interface GridEntry {
   point: THREE.Vector3;
   path: number;

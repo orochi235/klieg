@@ -51,10 +51,11 @@ draggable seams and drag-to-reorder, and klieg's own split tree and direct winde
 gone. The renderer is unchanged — sixteen panels, one WebGL context, a scissor rect each — but the
 rects are measured from the tiles rather than read from placements.
 
-**`@weasel-js/labkit` is a `file:` dependency on `~/src/weasel/packages/labkit`**, because the
-windease tiling is not published yet. `npm install` here needs that checkout present and built
-(`npm run build -w @weasel-js/labkit` in weasel). Swap the dependency to a registry version once it
-ships.
+**`@weasel-js/labkit` comes from the registry at `^1.0.4`**, which is where the windease tiling
+shipped. The `file:` dependency on `~/src/weasel/packages/labkit` is gone, and with it the lab's
+vite config: `fs.allow` and the react/react-dom aliases existed only because a linked package
+resolves React out of its own tree, which is an "invalid hook call" from inside labkit. `npm
+install` here no longer needs a weasel checkout.
 
 Run it with `npm run dev:tube-lab -w klieg` — sixteen panels on one WebGL context, one letter
 each, `beauty` / `skeleton` / `ramp`, with a rail that tunes the whole `TubeSpec`. Every control

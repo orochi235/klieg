@@ -1,4 +1,4 @@
-# Handoff — klieg, 2026-08-20
+# Handoff — klieg, 2026-08-22
 
 **For:** the next session picking this up. **Answers:** what is on `main`, and what is worth doing
 next.
@@ -40,6 +40,12 @@ sealed, a corner can carry the tube past the light unlit rather than cutting it,
 strategy is gone. One run of 225 on `tubing` and one of 49 on `piping` still bend tighter than
 their look's minimum, against every `piping` run clamped before.
 
+**A limb rim ships.** `rim`, 0..1 on a tube decoration's material spec, scales the emissive by
+`1 - rim * ndv` over that profile's own mean `1 - rim * pi/4`, so a run reads as a cylinder rather
+than a flat ribbon while the tube's width still averages to the emissive the look asked for. Without
+the mean the rim sinks all of `tubing` under the bloom threshold. No shipped look sets it; absent or
+0 emits the GLSL that shipped byte for byte. The tube lab's rail has the knob.
+
 **The lab runs on labkit now**, which owns the tiling: `WorkspaceGrid` gives it a windease grid with
 draggable seams and drag-to-reorder, and klieg's own split tree and direct windease dependency are
 gone. The renderer is unchanged — sixteen panels, one WebGL context, a scissor rect each — but the
@@ -73,8 +79,7 @@ how the source changes the cut. The spec lists the rest.
 
 ## What is worth doing next
 
-Roughly in order of value. Only the first two are entangled — the bend-minimum defect gates path
-fidelity, and the spec covers both; the rest are independent.
+Roughly in order of value; the items are independent of each other.
 
 - **Group filleting is what the last bend-minimum failures need.** Four distinct runs still measure
   under the floor: `tubing`/`direct` `R` at 1.996r, `piping`/`exact` `B` at 1.978r,
@@ -85,8 +90,6 @@ fidelity, and the spec covers both; the rest are independent.
   until the junction clears the floor and buys a chord 4.1x spacing carrying the residual turn.
   `spikes/junction-split.mjs` is the census, `join-geometry.mjs <look> <letter> <source>` the
   per-vertex dump.
-- **A limb-brightening rim** on the tube material. Flat emissive renders a cylinder as a ribbon. The
-  last unbuilt look item from tubing, and the owner rated it a bonus rather than the point.
 - **`pyrite` is built on the wrong model and should be respecced before it is tuned.** See below.
 - **The back-cap chunk waste is not worth fixing — measured, and struck from this list.** The
   ~30% is real (27.9% `pyrite`, 25.1% `sequin`), but it costs nothing: real-GPU median frame time is
@@ -204,17 +207,6 @@ highest-yield instruction was "verify this by mutation". It has held on everythi
   a fidelity problem, and the contour offset's first fix broke the outer contour instead of the
   counter it was aimed at. A number that agrees with the hypothesis is not evidence until the code
   under it has been deleted and the number moved.
-
-## windease: the workaround has an expiry date
-
-`packages/core/dev/tube-lab/src/tree.ts` exists because `splitStrategy` in windease 0.8 cannot tile —
-`initialState` builds a right-leaning spine, and at sixteen panels nine panes land at zero-or-negative
-width. It also silently drops a panel its tree does not know about.
-
-**Upstream has since replaced `splitStrategy` entirely**: `stripStrategy` plus a `store.split(id,
-input)` verb, with resize writing to `membership.placement.size`. That fixes both bugs and the missing
-drag-to-rearrange. We are pinned at `windease@^0.8.0`, so nothing breaks today, but upgrading deletes
-`tree.ts` and rewrites the seeding — do it deliberately.
 
 ## `pyrite` is built on the wrong model
 

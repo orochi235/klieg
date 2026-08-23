@@ -5,14 +5,18 @@ import { rampAt } from '../../../src/render/tube/gradient.js';
 import type { Run } from '../../../src/render/tube/runs.js';
 
 function runs(n: number): Run[] {
-  return Array.from({ length: n }, (_, i) => ({
-    points: [new THREE.Vector3(0, 0, 0), new THREE.Vector3(i + 1, 0, 0)],
-    surface: 'front' as const,
-    length: i + 1,
-    index: i,
-    lit: true,
-    color: 0,
-  }));
+  return Array.from({ length: n }, (_, i) => {
+    const points = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(i + 1, 0, 0)];
+    return {
+      points,
+      from: points.map((_, j) => ({ path: 0, index: j })),
+      surface: 'front' as const,
+      length: i + 1,
+      index: i,
+      lit: true,
+      color: 0,
+    };
+  });
 }
 
 const COLORS = [0xff0000, 0x00ff00, 0x0000ff];

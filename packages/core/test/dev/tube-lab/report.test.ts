@@ -10,7 +10,15 @@ function arcRun(radius: number, index: number): Run {
     const t = (i / 12) * (Math.PI / 2);
     points.push(new THREE.Vector3(radius * Math.cos(t), radius * Math.sin(t), 0));
   }
-  return { points, surface: 'front', length: (radius * Math.PI) / 2, index, lit: true, color: 0 };
+  return {
+    points,
+    from: points.map((_, i) => ({ path: 0, index: i })),
+    surface: 'front',
+    length: (radius * Math.PI) / 2,
+    index,
+    lit: true,
+    color: 0,
+  };
 }
 
 function blueprint(runs: Run[]) {
@@ -45,6 +53,7 @@ describe('reportOf', () => {
   it('counts a run that vanished rather than leaving it silently absent', () => {
     const dot: Run = {
       points: [new THREE.Vector3()],
+      from: [{ path: 0, index: 0 }],
       surface: 'front',
       length: 0,
       index: 0,

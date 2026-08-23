@@ -11,8 +11,21 @@ import type { GeneratedPath } from './generators.js';
 import { minCurvatureRadius3 } from './resample.js';
 import type { SurfaceKind } from './surfaces.js';
 
+/** Where a run vertex came from, before the cut rewrote the path. */
+export interface VertexSource {
+  /** Index into the path array handed to `cutIntoRuns`. */
+  path: number;
+  /** Index of the vertex within that path's own `points`. */
+  index: number;
+}
+
 export interface Run {
   points: THREE.Vector3[];
+  /**
+   * Index-parallel to `points`: the contour vertex each one came from, or null where the corner
+   * stage built it. A null is what `sweepRun` holds fixed through smoothing.
+   */
+  from: (VertexSource | null)[];
   /**
    * A stretch of tube that carries the run past a corner without lighting it — a bender's blockout
    * over a return bend. Never lit, whatever `select` picks.
@@ -705,6 +718,15 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
   let cornerCounter = 0;
   const draw = () => rng(cornerSeed(seed, cornerCounter++))();
 
+  // Identity, not value: two vertices can share coordinates, and only the object the stitch
+  // primitives passed through identifies which one a run point actually is.
+  const origin = new Map<THREE.Vector3, VertexSource>();
+  paths.forEach((path, p) => {
+    path.points.forEach((point, index) => {
+      if (!origin.has(point)) origin.set(point, { path: p, index });
+    });
+  });
+
   const cornerRecords: CornerRecord[] = [];
   const spans: { points: THREE.Vector3[]; surface: SurfaceKind; dark?: boolean }[] = [];
   for (const path of paths) {
@@ -755,6 +777,7 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
       if (length < opts.minRun && !span.dark) continue;
       out.push({
         points: piece,
+        from: piece.map((p) => origin.get(p) ?? null),
         surface: span.surface,
         length,
         index: out.length,

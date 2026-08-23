@@ -532,3 +532,59 @@ describe('a closed contour with no break anywhere', () => {
     }
   });
 });
+
+describe('vertex provenance', () => {
+  it('resolves a run point to the identical vertex of the path it came from', () => {
+    const points = squarePath();
+    const paths = [{ points, surface: 'front' as const, closed: true }];
+    const { runs } = cutIntoRuns(paths, {
+      runs: 4,
+      minRun: 0.01,
+      spacing: 0.02,
+      radius: 0.022,
+      bend: 2,
+    });
+
+    let checked = 0;
+    for (const run of runs) {
+      expect(run.from).toHaveLength(run.points.length);
+      run.from.forEach((source, i) => {
+        if (source === null) return;
+        expect(source.path).toBe(0);
+        // Identical object, not merely equal coordinates: that is what makes the
+        // resolution meaningful and what a stray clone would break.
+        expect(run.points[i]).toBe(points[source.index]);
+        checked++;
+      });
+    }
+    expect(checked).toBeGreaterThan(50);
+  });
+
+  it('leaves a circle with no null sources — nothing is built where nothing corners', () => {
+    const points = circlePath();
+    const { runs } = cutIntoRuns([{ points, surface: 'front' as const, closed: true }], {
+      runs: 2,
+      minRun: 0.01,
+      spacing: 0.02,
+      radius: 0.022,
+      bend: 2,
+    });
+    expect(runs.length).toBeGreaterThan(0);
+    for (const run of runs) expect(run.from.every((f) => f !== null)).toBe(true);
+  });
+
+  it("marks a fillet's own points as having no source", () => {
+    const points = squarePath();
+    const { runs } = cutIntoRuns([{ points, surface: 'front' as const, closed: true }], {
+      runs: 1,
+      minRun: 0.01,
+      spacing: 0.02,
+      radius: 0.022,
+      bend: 2,
+      corners: ALL_CONNECT,
+    });
+    const nulls = runs.reduce((n, r) => n + r.from.filter((f) => f === null).length, 0);
+    // Four corners, each filleted into an arc of at least five samples.
+    expect(nulls).toBeGreaterThanOrEqual(20);
+  });
+});

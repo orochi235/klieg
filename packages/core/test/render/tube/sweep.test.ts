@@ -13,7 +13,15 @@ function arcRun(radius: number, sweep: number): Run {
   for (let i = 1; i < points.length; i++) {
     length += (points[i] as THREE.Vector3).distanceTo(points[i - 1] as THREE.Vector3);
   }
-  return { points, surface: 'front', length, index: 0, lit: true, color: 0xffffff };
+  return {
+    points,
+    from: points.map((_, i) => ({ path: 0, index: i })),
+    surface: 'front',
+    length,
+    index: 0,
+    lit: true,
+    color: 0xffffff,
+  };
 }
 
 /** An arc of the given radius swept in the x/z plane instead of x/y: straight when flattened to x/y. */
@@ -26,7 +34,15 @@ function depthArcRun(radius: number, sweep: number): Run {
   for (let i = 1; i < points.length; i++) {
     length += (points[i] as THREE.Vector3).distanceTo(points[i - 1] as THREE.Vector3);
   }
-  return { points, surface: 'front', length, index: 0, lit: true, color: 0xffffff };
+  return {
+    points,
+    from: points.map((_, i) => ({ path: 0, index: i })),
+    surface: 'front',
+    length,
+    index: 0,
+    lit: true,
+    color: 0xffffff,
+  };
 }
 
 /**
@@ -39,7 +55,15 @@ function unevenRun(length: number, n: number): Run {
     const u = i / (n - 1);
     return new THREE.Vector3(u * u * length, 0, 0);
   });
-  return { points, surface: 'front', length, index: 0, lit: true, color: 0xffffff };
+  return {
+    points,
+    from: points.map((_, i) => ({ path: 0, index: i })),
+    surface: 'front',
+    length,
+    index: 0,
+    lit: true,
+    color: 0xffffff,
+  };
 }
 
 describe('tightestBend', () => {
@@ -113,7 +137,15 @@ describe('sweepRun', () => {
         Math.sin(t * Math.PI) * 0.1,
       );
     });
-    const run: Run = { points, surface: 'front', length: 4, index: 0, lit: true, color: 0xffffff };
+    const run: Run = {
+      points,
+      from: points.map((_, i) => ({ path: 0, index: i })),
+      surface: 'front',
+      length: 4,
+      index: 0,
+      lit: true,
+      color: 0xffffff,
+    };
     const geo = sweepRun(run, 0.02, 10);
     const position = geo?.getAttribute('position');
     expect(position).toBeDefined();
@@ -213,7 +245,15 @@ describe('sweepRun gradientT attribute', () => {
     // never yields an exactly-zero tangent, so the guard's literal branch isn't reachable through
     // this public API — this instead confirms nothing goes non-finite as the input degenerates.
     const points = Array.from({ length: 5 }, () => new THREE.Vector3(0, 0, 0));
-    const run: Run = { points, surface: 'front', length: 0, index: 0, lit: true, color: 0xffffff };
+    const run: Run = {
+      points,
+      from: points.map((_, i) => ({ path: 0, index: i })),
+      surface: 'front',
+      length: 0,
+      index: 0,
+      lit: true,
+      color: 0xffffff,
+    };
     const geo = sweepRun(run, 0.02, 6, { domain: { of: 'run' }, place: { start: 0, span: 1 } });
     const attr = geo?.getAttribute(GRADIENT_T_ATTRIBUTE);
     expect(attr).toBeDefined();

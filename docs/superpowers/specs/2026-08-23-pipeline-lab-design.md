@@ -75,6 +75,10 @@ the registry, not a pure one; switching it off is setting amplitude to zero.
 
 ## What the lab becomes
 
+It is called **kliegsminister**. `dev/corner-lab` is renamed to `dev/kliegsminister` when it grows
+past one corner, along with the `dev:corner-lab` script in `packages/core/package.json`; the
+instrument inside it keeps the name `junction`, which still describes what one tile shows.
+
 Extend the existing `junction` instrument rather than adding a third lab. labkit's `Lab` already
 renders one trial per record in a grid with clone, reset, snapshot and reorder, so varying samples
 needs no design: clone a trial and change the letter. What varies across tiles is whatever is being

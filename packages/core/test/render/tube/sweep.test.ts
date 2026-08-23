@@ -4,6 +4,7 @@ import { GRADIENT_T_ATTRIBUTE } from '../../../src/render/tube/gradient.js';
 import type { Run } from '../../../src/render/tube/runs.js';
 import { sweepRun, tightestBend } from '../../../src/render/tube/sweep.js';
 
+/** No contour source: an analytic arc is what the corner stage builds, and smoothing must not move it. */
 function arcRun(radius: number, sweep: number): Run {
   const points = Array.from({ length: 40 }, (_, i) => {
     const t = (i / 39) * sweep;
@@ -15,7 +16,7 @@ function arcRun(radius: number, sweep: number): Run {
   }
   return {
     points,
-    from: points.map((_, i) => ({ path: 0, index: i })),
+    from: points.map(() => null),
     surface: 'front',
     length,
     index: 0,
@@ -36,7 +37,7 @@ function depthArcRun(radius: number, sweep: number): Run {
   }
   return {
     points,
-    from: points.map((_, i) => ({ path: 0, index: i })),
+    from: points.map(() => null),
     surface: 'front',
     length,
     index: 0,
@@ -108,6 +109,7 @@ describe('sweepRun', () => {
   it('returns null for a run too short to sweep', () => {
     const run = arcRun(1, Math.PI / 2);
     run.points = run.points.slice(0, 1);
+    run.from = run.from.slice(0, 1);
     expect(sweepRun(run, 0.05, 8)).toBeNull();
   });
 
@@ -247,7 +249,7 @@ describe('sweepRun gradientT attribute', () => {
     const points = Array.from({ length: 5 }, () => new THREE.Vector3(0, 0, 0));
     const run: Run = {
       points,
-      from: points.map((_, i) => ({ path: 0, index: i })),
+      from: points.map(() => null),
       surface: 'front',
       length: 0,
       index: 0,

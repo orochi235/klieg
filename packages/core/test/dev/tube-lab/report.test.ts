@@ -12,7 +12,7 @@ function arcRun(radius: number, index: number): Run {
   }
   return {
     points,
-    from: points.map((_, i) => ({ path: 0, index: i })),
+    from: points.map(() => null),
     surface: 'front',
     length: (radius * Math.PI) / 2,
     index,

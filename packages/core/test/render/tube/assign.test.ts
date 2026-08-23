@@ -9,7 +9,7 @@ function runs(n: number): Run[] {
     const points = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(i + 1, 0, 0)];
     return {
       points,
-      from: points.map((_, j) => ({ path: 0, index: j })),
+      from: points.map(() => null),
       surface: 'front' as const,
       length: i + 1,
       index: i,

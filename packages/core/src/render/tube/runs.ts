@@ -23,7 +23,7 @@ export interface Run {
   points: THREE.Vector3[];
   /**
    * Index-parallel to `points`: the contour vertex each one came from, or null where the corner
-   * stage built it. A null is what `sweepRun` holds fixed through smoothing.
+   * stage built it.
    */
   from: (VertexSource | null)[];
   /**
@@ -718,8 +718,8 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
   let cornerCounter = 0;
   const draw = () => rng(cornerSeed(seed, cornerCounter++))();
 
-  // Identity, not value: two vertices can share coordinates, and only the object the stitch
-  // primitives passed through identifies which one a run point actually is.
+  // Resolvable in one pass because no stitch primitive clones: a span slices the input's own
+  // objects or pushes geometry the corner stage built, so identity survives the whole cut.
   const origin = new Map<THREE.Vector3, VertexSource>();
   paths.forEach((path, p) => {
     path.points.forEach((point, index) => {

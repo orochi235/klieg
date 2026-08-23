@@ -568,6 +568,7 @@ describe('vertex provenance', () => {
       spacing: 0.02,
       radius: 0.022,
       bend: 2,
+      corners: ALL_CONNECT,
     });
     expect(runs.length).toBeGreaterThan(0);
     for (const run of runs) expect(run.from.every((f) => f !== null)).toBe(true);

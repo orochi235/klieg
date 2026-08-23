@@ -110,8 +110,11 @@ entry.
 
 **A stray clone in the stitch path reads as authored geometry.** Provenance goes null, the vertex
 looks like a fillet built it, and `smoothedPoints` stops smoothing it — a subtly wrong mesh, nothing
-thrown. Assert the invariant instead: the count of null entries equals the count of points the
-fillets and biarcs contributed.
+thrown. Assert coincidence instead: a clone is bit-identical to the vertex it copied, so a
+sourceless run vertex must sit where no contour vertex already sits. Counting nulls against what the
+fillets contributed needs plumbing that does not exist, and a null-block-length threshold does not
+work — a clone inside a loop nulls every point that loop touches, giving a long block rather than an
+isolated one.
 
 **`slice` shares boundary points.** `cur = [span[i]]` reuses the object, so one source vertex maps
 to the end of one run and the start of the next. Vertex to source is unambiguous; source to vertex

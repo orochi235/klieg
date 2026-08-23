@@ -228,30 +228,16 @@ git commit -m "resolve each run vertex to the contour vertex it came from"
 
 A future edit that clones a leg point inside the stitch path would give that point no source. It would then read as fillet geometry, `sweepRun` would stop smoothing it, and the mesh would be subtly wrong with nothing thrown. This test converts that into a failure.
 
-The canary is block length. `filletAt` samples with `steps = Math.max(4, ...)`, so a fillet arc is at least 5 points; `biarcBlend` concatenates two arcs of at least 3 and drops one shared point, so it is at least 5 too. A cloned leg vertex, by contrast, is a null of length 1 sitting between two sourced points. Only interior blocks are checked: `slice` can cut a run through the middle of an arc, leaving a short block legitimately touching either end.
+The canary is coincidence. A clone is bit-identical to the vertex it copied; an arc the corner stage drew is not. So a sourceless run vertex must sit where no contour vertex already sits. This also catches a resolution bug that drops a source, because that null lands exactly on top of the vertex it came from.
 
-- [ ] **Step 1: Write the failing test**
+Two things this replaced, both wrong, recorded because the second is easy to re-propose: a null-block-length threshold cannot work, since a clone inside a loop nulls every point that loop touches and so produces a long block rather than an isolated one. And a mutation planted in `mergeArc`'s no-fillet branch proves nothing on a square — every 90 degree corner is hard, takes a fillet, and never reaches that branch.
+
+- [ ] **Step 1: Write the test**
 
 Add to the `describe('vertex provenance', ...)` block in `packages/core/test/render/tube/runs.test.ts`:
 
 ```ts
-  /** Start and length of each maximal stretch of null sources. */
-  function nullBlocks(from: readonly (VertexSource | null)[]): { at: number; length: number }[] {
-    const blocks: { at: number; length: number }[] = [];
-    let at = -1;
-    from.forEach((source, i) => {
-      if (source === null) {
-        if (at < 0) at = i;
-      } else if (at >= 0) {
-        blocks.push({ at, length: i - at });
-        at = -1;
-      }
-    });
-    if (at >= 0) blocks.push({ at, length: from.length - at });
-    return blocks;
-  }
-
-  it('never leaves an isolated sourceless vertex inside a run', () => {
+  it('gives a sourceless vertex geometry no contour vertex already holds', () => {
     const points = squarePath();
     const { runs } = cutIntoRuns([{ points, surface: 'front' as const, closed: true }], {
       runs: 6,
@@ -262,53 +248,60 @@ Add to the `describe('vertex provenance', ...)` block in `packages/core/test/ren
       corners: ALL_CONNECT,
     });
 
+    let checked = 0;
     for (const run of runs) {
-      for (const block of nullBlocks(run.from)) {
-        // A block touching either end may have been cut short by `slice`.
-        if (block.at === 0 || block.at + block.length === run.from.length) continue;
-        expect(block.length).toBeGreaterThanOrEqual(3);
-      }
+      run.from.forEach((source, i) => {
+        if (source !== null) return;
+        const p = run.points[i] as THREE.Vector3;
+        // A clone is bit-identical to the vertex it copied; an arc the corner stage drew is not.
+        expect(Math.min(...points.map((q) => p.distanceToSquared(q)))).toBeGreaterThan(0);
+        checked++;
+      });
     }
+    expect(checked).toBeGreaterThan(0);
   });
 ```
 
-Import `VertexSource` by adding it to the existing `runs.js` import in that file:
-
-```ts
-import { ALL_BREAK, ALL_CONNECT, cutIntoRuns, type VertexSource } from '../../../src/render/tube/runs.js';
-```
+The `checked` counter is not decoration: without it the test passes vacuously whenever no fillet is built.
 
 - [ ] **Step 2: Run it and confirm it passes against the current code**
 
 ```bash
-npx vitest run packages/core/test/render/tube/runs.test.ts -t "isolated sourceless"
+npx vitest run packages/core/test/render/tube/runs.test.ts -t "sourceless vertex geometry"
 ```
 
-Expected: PASS. This test guards an invariant that already holds — it is a regression canary, not a driver, so it is green on arrival. That is the whole point of writing it now rather than after something breaks.
+Expected: PASS. This guards an invariant that already holds — a regression canary, not a driver, so it is green on arrival.
 
 - [ ] **Step 3: Confirm it actually catches the failure it exists for**
 
-Temporarily break the invariant to prove the test is not vacuous. In `packages/core/src/render/tube/runs.ts`, inside `mergeArc`, change the final non-fillet loop:
+A canary that cannot fail is worse than none, because it reads as coverage. Break the invariant deliberately, at a line this test's geometry actually reaches — `mergeArc`'s `if (fillet)` branch, since every 90 degree corner on a square is hard and takes a fillet. The trailing leg loop inside that branch reads:
 
 ```ts
-  for (let i = 1; i < next.length; i++) target.push((next[i] as THREE.Vector3).clone());
+    for (let i = from; i < next.length; i++) {
+      target.push(next[i] as THREE.Vector3);
+    }
 ```
+
+Change the push to `target.push((next[i] as THREE.Vector3).clone());` and re-run:
 
 ```bash
-npx vitest run packages/core/test/render/tube/runs.test.ts -t "isolated sourceless"
+npx vitest run packages/core/test/render/tube/runs.test.ts -t "sourceless vertex geometry"
 ```
 
-Expected: FAIL. Now revert that one-line change:
+Expected: FAIL. Confirm the line executed rather than assuming it — put a temporary `console.error` beside the push, check it fires, and remove it. Then revert and verify the revert:
 
 ```bash
 git checkout packages/core/src/render/tube/runs.ts
+git diff --stat packages/core/src/render/tube/runs.ts
 ```
+
+The second command must print nothing.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add packages/core/test/render/tube/runs.test.ts
-git commit -m "fail when a run carries a vertex no fillet built and no contour explains"
+git commit -m "fail when a run carries a vertex that copies a contour it claims no source from"
 ```
 
 ---

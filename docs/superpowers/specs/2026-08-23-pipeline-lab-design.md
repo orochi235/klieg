@@ -21,7 +21,7 @@ Both attach at `WordDebugHooks` (`render/word.ts`), which already exists, is cov
 `test/render/word.test.ts`, and has no consumer. Its docstring refers to a `debug.ts` that is not in
 the tree; fix the reference while connecting it.
 
-## Fix authoredness first
+## Give every vertex a source first
 
 `markAuthored` adds analytically built points to a module-level `WeakSet` keyed on `Vector3`
 identity, and `smoothedPoints` reads it to hold fillet and biarc arcs fixed through smoothing. A
@@ -29,10 +29,22 @@ registry whose steps return fresh spans churns that identity, and the flag vanis
 thrown: the sweep smooths an arc built at exactly the bend floor and the run ships under minimum.
 The corner lab already works around it by reading `isAuthored` before it clones.
 
-Authoredness becomes data. `Run` gains `authored: boolean[]`, parallel to `points`; `smoothedPoints`
-reads that instead of the set; `markAuthored` and `isAuthored` are deleted. The mask does not need
-threading through the primitives — `mergeArc` already knows which points came from the fillet
-because it pushes them, so it is built where the span is assembled.
+Replace it with provenance, which answers the same question and one more. `Run` gains `from:
+(VertexSource | null)[]`, parallel to `points`: the path and index a vertex came from, or null where
+a fillet or biarc built it. `smoothedPoints` holds a vertex fixed when its entry is null;
+`markAuthored` and `isAuthored` are deleted.
+
+Nothing needs threading through the stitch primitives, because vertex identity already survives the
+whole cut. `arc` pushes the input's own objects rather than copying; `dropHead`, `dropTail`,
+`splitReturn` and `slice` slice; `mergeArc` and `closeLoop` push existing objects; `wanderPaths`
+mutates in place. The only clones that reach a span are the virtual corner at `runs.ts:305`, which
+feeds `filletAt` and is authored by definition. So `cutIntoRuns` builds a `Map<Vector3,
+VertexSource>` from its input paths, and resolves every run's points against it in one pass at the
+end.
+
+That map is keyed on object identity, like the `WeakSet` it replaces, and the difference matters:
+it is built and consumed inside a single `cutIntoRuns` call and never escapes. Ambient state that
+outlives the call is the defect; a local index is not.
 
 Do this on its own, with the look snapshots as the guard, before any registry work.
 
@@ -74,6 +86,11 @@ The config gains:
 - **six repair toggles** — with ghost geometry for the ones switched off.
 - **subject** — one hard corner, or the whole letter.
 
+Provenance also retires the workaround in `scene.ts`, which finds the built run by nearest point
+because no index survives the cut. It can now ask which run carries a given contour vertex, and a
+stage view can draw what each step did to a particular vertex rather than only what it did to the
+path.
+
 `scene.ts` should come out thinner, not fatter. It currently both finds corners and hand-rolls
 repairs; `blendAcross` and `relaxAcross` move into core as registry entries, and the lab stops
 owning geometry.
@@ -87,10 +104,14 @@ off, but the tile has to survive drawing it rather than throw.
 sees the earlier snapshot change under it. It has to return new spans before it can be a registry
 entry.
 
-**No index survives the cut.** The corner stage rewrites the path, which is why the corner lab finds
-a built run by nearest point. A per-vertex diff across that boundary needs provenance on `Run` —
-source path and source index range — or it cannot exist. Out of scope here; do not let a stage
-stepper imply it works.
+**A stray clone in the stitch path reads as authored geometry.** Provenance goes null, the vertex
+looks like a fillet built it, and `smoothedPoints` stops smoothing it — a subtly wrong mesh, nothing
+thrown. Assert the invariant instead: the count of null entries equals the count of points the
+fillets and biarcs contributed.
+
+**`slice` shares boundary points.** `cur = [span[i]]` reuses the object, so one source vertex maps
+to the end of one run and the start of the next. Vertex to source is unambiguous; source to vertex
+is one-to-many, and a reverse lookup that ignores this silently picks one of them.
 
 **The sweep returns GPU resources.** A tile that rebuilds on every knob turn leaks without a
 teardown. The corner lab's `blueprint.dispose()` is the pattern.
@@ -106,6 +127,10 @@ lab already reaches `@core/render/tube/*`.
   and after the lab work — checked at each, not only at the end.
 - With `enabled` and `onStage` both absent, `buildTubeBlueprint` produces the same runs and the same
   geometry as before the refactor — assert on run count, per-run point counts and tightest bend.
+- Every run vertex resolves to a source or to null, and the null count equals what the fillets and
+  biarcs contributed — asserted in a unit test, over every letter of the alphabet at both tube looks.
+- `scene.ts` finds its built run through provenance, and picks the same run the nearest-point search
+  picked, for every hard corner of the alphabet.
 - Switching a repair off and back on returns the tile to the built path exactly.
 - A repair switched off draws its ghost at the site `applies` reported.
 - `npm run check` and `npx playwright test` stay green.

@@ -23,16 +23,6 @@ const INK = {
   bad: '#d1453b',
 };
 
-/** The lab's own text colour, so the readout is legible in either theme. */
-function inkOf(): { text: string; dim: string; panel: string } {
-  const style = getComputedStyle(document.body);
-  return {
-    text: style.color || '#1a1a19',
-    dim: '#8a8c93',
-    panel: style.backgroundColor || '#fff',
-  };
-}
-
 function requestOf(config: Config) {
   return {
     letter: config.letter.slice(0, 1) || 'B',
@@ -51,14 +41,14 @@ export function provideFont(loaded: LoadedFont): void {
 }
 
 /**
- * Centres the drawing and scales em to pixels. labkit hands a layer the view's zoom but not its
- * pan, and leaves the context in CSS pixels, so a layer has to place itself.
+ * Puts world origin at the middle of the view. `initialView.pan` is in screen pixels, which an
+ * instrument cannot know when it is written, so centring has to happen where the size is known.
+ * The offset is in world units so the camera's own scale is not applied twice.
  */
-function frame(ctx: CanvasRenderingContext2D, zoom: number, paint: () => void): void {
+function centred(ctx: CanvasRenderingContext2D, zoom: number, paint: () => void): void {
   const dpr = window.devicePixelRatio || 1;
   ctx.save();
-  ctx.translate(ctx.canvas.width / dpr / 2, ctx.canvas.height / dpr / 2);
-  ctx.scale(zoom, zoom);
+  ctx.translate(ctx.canvas.width / dpr / 2 / zoom, ctx.canvas.height / dpr / 2 / zoom);
   paint();
   ctx.restore();
 }
@@ -151,7 +141,7 @@ export const junction = defineInstrument<CornerScene, Config>({
       {
         id: 'floor',
         draw: (ctx, { state, zoom }) =>
-          frame(ctx, zoom, () => {
+          centred(ctx, zoom, () => {
             ctx.beginPath();
             ctx.arc(0, 0, state.rhoMin, 0, Math.PI * 2);
             ctx.strokeStyle = INK.floor;
@@ -164,7 +154,7 @@ export const junction = defineInstrument<CornerScene, Config>({
       {
         id: 'contour',
         draw: (ctx, { state, zoom }) =>
-          frame(ctx, zoom, () => {
+          centred(ctx, zoom, () => {
             stroke(ctx, state.contour, state.centre, INK.contour, 1.2 / zoom);
             stroke(ctx, state.replaced, state.centre, INK.replaced, 8 / zoom);
           }),
@@ -172,7 +162,7 @@ export const junction = defineInstrument<CornerScene, Config>({
       {
         id: 'built',
         draw: (ctx, { state, zoom }) =>
-          frame(ctx, zoom, () => {
+          centred(ctx, zoom, () => {
             stroke(ctx, state.built, state.centre, INK.built, 2.6 / zoom);
             state.built.forEach((p, i) => {
               if (state.authored[i]) dot(ctx, p, state.centre, INK.authored, 2.2 / zoom);
@@ -180,48 +170,16 @@ export const junction = defineInstrument<CornerScene, Config>({
           }),
       },
       {
-        id: 'readout',
-        draw: (ctx, { state }) => {
-          const ink = inkOf();
-          const rows = state.measures.length;
-          ctx.save();
-          ctx.globalAlpha = 0.88;
-          ctx.fillStyle = ink.panel;
-          ctx.fillRect(0, 0, 640, rows * 18 + 66);
-          ctx.globalAlpha = 1;
-          ctx.font = '13px ui-monospace, SFMono-Regular, Menlo, monospace';
-          ctx.textBaseline = 'top';
-          let y = 12;
-          for (const m of state.measures) {
-            ctx.fillStyle = m.bad ? INK.bad : ink.dim;
-            ctx.fillText(m.label, 14, y);
-            ctx.fillStyle = m.bad ? INK.bad : ink.text;
-            ctx.fillText(m.value, 210, y);
-            y += 18;
-          }
-          y += 8;
-          ctx.fillStyle = ink.dim;
-          ctx.fillText('bend radius around the corner, in tube radii', 14, y);
-          y += 18;
-          state.profile.forEach((p, i) => {
-            const under = p.rho < state.rhoMin / state.radius - 1e-6;
-            ctx.fillStyle = under ? INK.bad : ink.text;
-            ctx.fillText(Number.isFinite(p.rho) ? p.rho.toFixed(1) : '-', 14 + i * 36, y);
-          });
-          ctx.restore();
-        },
-      },
-      {
         id: 'repair',
         draw: (ctx, { state, zoom }) =>
-          frame(ctx, zoom, () => {
+          centred(ctx, zoom, () => {
             if (state.drawn) stroke(ctx, state.drawn, state.centre, INK.drawn, 3 / zoom);
           }),
       },
     ],
   },
 
-  layers: { ids: ['floor', 'contour', 'built', 'repair', 'readout'] },
+  layers: { ids: ['floor', 'contour', 'built', 'repair'] },
 
   render: ({ state }) => (
     <div className="junction">

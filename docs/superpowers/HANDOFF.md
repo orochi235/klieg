@@ -65,10 +65,13 @@ the floor it is, the junction chord and radius, and a radius profile either side
 floor circle at true scale. Two static spikes are frozen versions of it and can go once it grows:
 `junction-repair.mjs` and `fillet-view.mjs`.
 
-Three labkit gaps are written up in `~/src/weasel/packages/labkit/docs/IDEAS.md`, uncommitted: an
-instrument that declares a canvas never gets its `render()` called, so the readout is painted onto a
-canvas layer as text; a canvas layer is handed `zoom` but not `pan`, so panning is inert; and a
-typed instrument needs a cast to satisfy `LabProps`.
+**labkit 1.1 fixed every gap the corner lab reported**, so the workarounds are gone: `render()` is
+now an overlay beside the canvas rather than an alternative to it, layers draw in world coordinates
+with the camera already applied, a typed instrument no longer needs a cast, and `styles.css` carries
+the host reset its own sizing assumes. 1.1 also renames a lab's tile from workspace to trial, which
+is why the tube lab draws `<Workspace>` and styles `.lk-trial-tile`. Two gaps remain open in
+`~/src/weasel/packages/labkit/docs/IDEAS.md`, uncommitted: `initialView.pan` is a screen offset an
+instrument cannot know, so centring leaks back into the layer.
 
 Run it with `npm run dev:tube-lab -w klieg` — sixteen panels on one WebGL context, one letter
 each, `beauty` / `skeleton` / `ramp`, with a rail that tunes the whole `TubeSpec`. Every control

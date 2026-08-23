@@ -1,16 +1,16 @@
-/* `Lab` sizes itself to 100vh, which only lands right when the host has zeroed the body margin. */
-html,
-body,
-#root {
-  margin: 0;
-  height: 100%;
-}
-
+/* Sits in the canvas stack's overlay, so it stays put while the camera moves under it. */
 .junction {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: max-content;
+  max-width: min(46rem, 100%);
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
   padding: 0.6rem 0.8rem;
+  border-bottom-right-radius: 8px;
+  background: color-mix(in srgb, var(--wzl-surface) 88%, transparent);
+  color: var(--wzl-fg);
   font:
     13px / 1.4 ui-monospace,
     SFMono-Regular,
@@ -39,8 +39,9 @@ body,
   font-weight: 600;
 }
 
+.measure--bad dt,
 .measure--bad dd {
-  color: #ff6b60;
+  color: #d1453b;
 }
 
 .junction__profile {
@@ -52,7 +53,7 @@ body,
 }
 
 .tick {
-  flex: 1;
+  min-width: 2.4rem;
   text-align: center;
   padding: 0.15rem 0;
   border-radius: 3px;
@@ -61,6 +62,6 @@ body,
 }
 
 .tick--under {
-  background: rgba(255, 107, 96, 0.3);
-  color: #ff6b60;
+  background: rgba(209, 69, 59, 0.22);
+  color: #d1453b;
 }

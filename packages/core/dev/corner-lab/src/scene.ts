@@ -176,10 +176,10 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
   const hi = corner.index + corner.groupAfter;
   const centre = at(points, corner.index).clone();
 
-  const profile: number[] = [];
+  const profile: { at: number; rho: number }[] = [];
   for (let k = -8; k <= 8; k++) {
     const i = (((corner.index + k) % points.length) + points.length) % points.length;
-    profile.push((bends.get(i)?.rho ?? Number.POSITIVE_INFINITY) / radius);
+    profile.push({ at: k, rho: (bends.get(i)?.rho ?? Number.POSITIVE_INFINITY) / radius });
   }
 
   const replaced: THREE.Vector3[] = [];

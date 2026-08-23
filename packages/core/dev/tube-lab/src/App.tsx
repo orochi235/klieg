@@ -1,4 +1,4 @@
-import { WorkspaceGrid } from '@weasel-js/labkit';
+import { Workspace } from '@weasel-js/labkit';
 import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
@@ -559,7 +559,7 @@ export function App({
     <div className="lab">
       <div className="stage" ref={stageRef}>
         <canvas ref={canvasRef} />
-        <WorkspaceGrid
+        <Workspace
           ids={ids}
           resizable
           reorderable
@@ -579,7 +579,7 @@ export function App({
               onMount={mountTile}
             />
           ))}
-        </WorkspaceGrid>
+        </Workspace>
       </div>
       <Rail
         spec={spec}

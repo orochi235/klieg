@@ -1,5 +1,5 @@
 import '@weasel-js/labkit/styles.css';
-import { type Instrument, Lab } from '@weasel-js/labkit';
+import { Lab } from '@weasel-js/labkit';
 import { createRoot } from 'react-dom/client';
 import { labFont } from './font.js';
 import { junction, provideFont } from './instrument.js';
@@ -12,9 +12,5 @@ if (!host) throw new Error('corner lab: the page has no #root');
 provideFont(await labFont());
 
 createRoot(host).render(
-  <Lab
-    instruments={[junction as unknown as Instrument]}
-    defaultInstrument="junction"
-    title="corner lab"
-  />,
+  <Lab instruments={[junction]} defaultInstrument="junction" title="corner lab" />,
 );

@@ -1,11 +1,11 @@
-import type { WorkspaceGrid } from '@weasel-js/labkit';
+import type { Workspace } from '@weasel-js/labkit';
 import type { ComponentProps } from 'react';
 import type { TubeSpec } from '../../../src/render/tube/index.js';
 import type { PanelRecord } from './panels.js';
 import { isTubeLook, type TubeLook } from './spec.js';
 
 /** labkit declares this type but does not export it, so it is read off the component's own props. */
-export type WorkspaceLayout = NonNullable<ComponentProps<typeof WorkspaceGrid>['layout']>;
+export type WorkspaceLayout = NonNullable<ComponentProps<typeof Workspace>['layout']>;
 
 const KEY = 'tube-lab/v2';
 /** Written when the layout was a serialized windease store, which v2 cannot read. */

@@ -57,7 +57,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@types/three": "^0.185.4",
-    "@weasel-js/labkit": "^1.0.4",
+    "@weasel-js/labkit": "^1.1.0",
     "@weasel-js/ui": "^1.0.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

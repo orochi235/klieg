@@ -32,17 +32,17 @@ body {
 .stage {
   --panel-bar: 22px;
 }
-.stage .lk-workspace-grid {
+.stage .lk-workspace {
   position: absolute;
   inset: 0;
 }
 
 /* labkit gives the drag grip a strip of its own above the tile. The panel already has a bar, so
    the grip rides the middle of it — narrow enough to leave the ramp select clickable. */
-.stage .lk-workspace-tile {
+.stage .lk-trial-tile {
   position: relative;
 }
-.stage .lk-workspace-tile__grip {
+.stage .lk-trial-tile__grip {
   position: absolute;
   top: 0;
   left: 50%;
@@ -53,7 +53,7 @@ body {
   background: transparent;
   border-radius: 0;
 }
-.stage .lk-workspace-tile__body {
+.stage .lk-trial-tile__body {
   height: 100%;
 }
 

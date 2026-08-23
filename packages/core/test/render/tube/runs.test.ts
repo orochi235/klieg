@@ -588,4 +588,28 @@ describe('vertex provenance', () => {
     // Four corners, each filleted into an arc of at least five samples.
     expect(nulls).toBeGreaterThanOrEqual(20);
   });
+
+  it('gives a sourceless vertex geometry no contour vertex already holds', () => {
+    const points = squarePath();
+    const { runs } = cutIntoRuns([{ points, surface: 'front' as const, closed: true }], {
+      runs: 6,
+      minRun: 0.01,
+      spacing: 0.02,
+      radius: 0.022,
+      bend: 2,
+      corners: ALL_CONNECT,
+    });
+
+    let checked = 0;
+    for (const run of runs) {
+      run.from.forEach((source, i) => {
+        if (source !== null) return;
+        const p = run.points[i] as THREE.Vector3;
+        // A clone is bit-identical to the vertex it copied; an arc the corner stage drew is not.
+        expect(Math.min(...points.map((q) => p.distanceToSquared(q)))).toBeGreaterThan(0);
+        checked++;
+      });
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
 });

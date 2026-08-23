@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### A run vertex knows where it came from
+
+Every point in a tube run now records the contour vertex it was extracted from, or null where the
+corner stage built it analytically. `Run.from` is index-parallel to `Run.points`, and its entries
+are `VertexSource` (`{ path, index }`) or null.
+
+This replaces a `WeakSet` that tracked only the second of those. Keyed on object identity, it was
+lost by anything that copied a point — and losing it is silent: the sweep smooths an arc built at
+the minimum bend radius, and the run ships under minimum with nothing thrown.
+
+Internal to the tube pipeline. `Run` and `VertexSource` are exported, but no existing published API
+changed shape.
+
 ### Paths are traced, not rasterized
 
 `TubeSpec.pathSource` now defaults to `direct`, which traces the glyph's own contour instead of

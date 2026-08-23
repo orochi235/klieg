@@ -90,10 +90,18 @@ The config gains:
 - **six repair toggles** — with ghost geometry for the ones switched off.
 - **subject** — one hard corner, or the whole letter.
 
-Provenance also retires the workaround in `scene.ts`, which finds the built run by nearest point
-because no index survives the cut. It can now ask which run carries a given contour vertex, and a
-stage view can draw what each step did to a particular vertex rather than only what it did to the
-path.
+`scene.ts` keeps finding its built run by nearest point. Provenance does not retire that search, and
+the reason is worth stating because it looks like it should: a hard corner's own vertex is never
+carried by any run — being acted on by the cut is what makes a corner hard, so break deletes that
+vertex and fillet replaces its whole group with analytic points. Measured across `ABDEGMNQRSW8` at
+both looks and all three path sources, 0 of 203 hard corners are carried. Asking which run holds a
+corner returns nothing, every time.
+
+What provenance does give the lab is the vertices either side of the corner, which are carried, and
+which resolve to the same run proximity picks in all 203 cases. Going by those instead needs a
+tiebreak — 52 of the 203 have carried vertices on both sides belonging to different runs, which is
+what a cut at that corner means — and choosing one is a question about what the lab shows at a
+corner that became two runs. That belongs with the lab's own design, not here.
 
 `scene.ts` should come out thinner, not fatter. It currently both finds corners and hand-rolls
 repairs; `blendAcross` and `relaxAcross` move into core as registry entries, and the lab stops

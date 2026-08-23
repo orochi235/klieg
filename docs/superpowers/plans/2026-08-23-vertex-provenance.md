@@ -582,65 +582,70 @@ git commit -m "read a spike's authored markers off each run's vertex sources"
 
 ---
 
-## Task 5: Retire the corner lab's nearest-point search
+## Task 5: Draw both runs where the cut split the corner
 
 **Files:**
-- Modify: `packages/core/dev/corner-lab/src/scene.ts`
+- Modify: `packages/core/dev/corner-lab/src/scene.ts`, `packages/core/dev/corner-lab/src/instrument.tsx`
 
-`buildScene` currently finds the run that carries a corner by walking every run and keeping the one with a point nearest the corner centre, because no index survived the cut. Provenance answers it directly.
+**This task was rewritten mid-execution. The original — swap the proximity search for `run.from.some((s) => s?.index === corner.index)` — is wrong, and the measurements that killed it are worth keeping, because it is the obvious thing to re-propose.**
 
-- [ ] **Step 1: Replace the search**
+A hard corner's own vertex is never carried by any run: 0 of 203 across `ABDEGMNQRSW8` at both looks and all three path sources. Being acted on by the cut is what makes a corner hard — `break` deletes the vertex, `fillet` replaces its whole group with analytic points. The predicate returns nothing at every corner the lab can display, so `built` and `authored` would be empty always and the lab would draw no run at all. That predicate also drops `source.path`, which on multi-contour glyphs matches a same-numbered vertex on the wrong contour — the only 24 non-empty results it produces are all wrong.
 
-In `packages/core/dev/corner-lab/src/scene.ts`, the block beginning with the comment `// What the tube actually builds here, found by proximity rather than by index` currently reads:
+Two things that did hold up. The index spaces agree: for all 3427 sourced vertices, `labPaths[source.path].points[source.index]` sits at exactly zero distance from the run point, so `hardCorners`' own `generatePaths` call and the blueprint's internal one can be matched against each other. And the vertices either side of a corner are carried — within 1 to 13 steps for all 203 corners — resolving to the run proximity picks, 203/203. Proximity was never producing wrong answers; it is a working heuristic, not a workaround.
 
-```ts
-  let built: THREE.Vector3[] = [];
-  let authored: boolean[] = [];
-  let shipped = Number.POSITIVE_INFINITY;
-  let nearest = Number.POSITIVE_INFINITY;
-  for (const run of blueprint.runs) {
-    for (const p of run.points) {
-      const d = p.distanceTo(centre);
-      if (d < nearest) {
-        nearest = d;
-        built = run.points.map((q) => q.clone());
-        authored = run.points.map(isAuthored);
-        shipped = tightestBend(run) / radius;
-      }
-    }
-  }
-```
+So the search goes outward from the corner rather than at it, matching on `path` and `index` both. That surfaces something proximity hid: **52 of the 203 corners have carried vertices either side belonging to different runs**, because the cut split the path there into two runs. Proximity resolved that implicitly by distance and showed one of them. The lab shows both, in different inks, which is the point of the change.
 
-Replace it with:
+- [ ] **Step 1: Track the path index in `hardCorners`**
+
+It pushes `{ path, corner, bends }` per corner; add the path's index, because matching on `source.index` alone matches any contour.
+
+- [ ] **Step 2: Search outward for the carrying runs**
+
+A run carries contour vertex `v` on path `p` when `run.from.some((s) => s?.path === p && s.index === v)`. Walk backward from `corner.index` up to 16 steps, wrapping, for the **before** run; forward for the **after** run. Same run from both sides means the corner did not split — one record. Different runs means it did — two, ordered before then after. Nothing within 16 steps on a side means no record for it.
+
+- [ ] **Step 3: Replace `built`/`authored` on the scene with a list**
 
 ```ts
-  let built: THREE.Vector3[] = [];
-  let authored: boolean[] = [];
-  let shipped = Number.POSITIVE_INFINITY;
-  for (const run of blueprint.runs) {
-    if (!run.from.some((source) => source?.index === corner.index)) continue;
-    built = run.points.map((q) => q.clone());
-    authored = run.from.map((source) => source === null);
-    shipped = tightestBend(run) / radius;
-    break;
-  }
+export interface CarriedRun {
+  points: THREE.Vector3[];
+  /** Index-parallel to `points`: true where the corner stage built the vertex rather than extracting it. */
+  authored: boolean[];
+  /** Tightest bend the run ships at, in tube radii. */
+  shipped: number;
+  /** Which side of the corner this run reaches it from. */
+  side: 'before' | 'after' | 'both';
+}
 ```
 
-Delete `isAuthored` from the `bend.js` import block at the top of the file.
+`CornerScene.carried: CarriedRun[]` replaces both fields; the `if (!pick)` early return yields `carried: []`.
 
-The `centre` variable is still used by the drawing code below, so leave it. Note that cloning is now safe: the authored mask is read off `run.from` rather than off the points being cloned, which is the workaround this change removes.
+- [ ] **Step 4: One `ships at` measure per carried run**
 
-- [ ] **Step 2: Handle the corner the cut removed**
-
-A `break` corner deletes its vertex, so no run will carry that index and `built` stays empty — which is a true and useful answer, not a bug, but the readout should say so rather than showing a blank panel. Add to the `measures` array, immediately after the `run ships at` entry:
+Labelled `run ships at` for one, `run before ships at` / `run after ships at` for two, each keeping the existing `bad` condition. Then one measure stating the split, so it reads as well as draws:
 
 ```ts
     {
       label: 'carried by',
-      value: built.length > 0 ? `${built.length} vertices` : 'no run — the cut removed it',
-      bad: false,
+      value:
+        carried.length === 0
+          ? 'no run reaches it'
+          : carried.length === 1
+            ? 'one run'
+            : 'two runs — the cut split here',
     },
 ```
+
+- [ ] **Step 5: Junction measurements run over every carried run**
+
+Maximum `junctionStep` and minimum `junctionRho` across them; thresholds and labels unchanged.
+
+- [ ] **Step 6: Draw both**
+
+`instrument.tsx`'s `built` layer iterates `state.carried`. One new ink for the after-run alongside `INK.built`; authored dots stay `INK.authored` on both.
+
+- [ ] **Step 7: Verify the tallies**
+
+A throwaway script over every hard corner of `ABDEGMNQRSW8` at both looks, reporting how many corners yield 0, 1 and 2 runs, and confirming the single-run cases match what proximity picked. Expect roughly 151 single and 52 split of 203 — an expectation from a different code path, not a specification.
 
 - [ ] **Step 3: Verify against the search it replaces**
 

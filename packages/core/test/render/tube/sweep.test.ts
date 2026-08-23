@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { GRADIENT_T_ATTRIBUTE } from '../../../src/render/tube/gradient.js';
 import type { Run } from '../../../src/render/tube/runs.js';
-import { sweepRun, tightestBend } from '../../../src/render/tube/sweep.js';
+import { smoothedPoints, sweepRun, tightestBend } from '../../../src/render/tube/sweep.js';
 
 /** No contour source: an analytic arc is what the corner stage builds, and smoothing must not move it. */
 function arcRun(radius: number, sweep: number): Run {
@@ -95,6 +95,38 @@ describe('tightestBend', () => {
     const first = new THREE.Vector3(pos.getX(0), pos.getY(0), pos.getZ(0));
     expect(first.distanceTo(centre)).toBeCloseTo(0.05, 6);
     geo?.dispose();
+  });
+});
+
+describe('smoothedPoints', () => {
+  it('holds a sourceless vertex exactly where the run put it', () => {
+    const run = {
+      points: [
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0.02, 0.01, 0),
+        new THREE.Vector3(0.04, 0, 0),
+        new THREE.Vector3(0.06, 0.01, 0),
+        new THREE.Vector3(0.08, 0, 0),
+      ],
+      from: [
+        { path: 0, index: 0 },
+        null,
+        { path: 0, index: 2 },
+        { path: 0, index: 3 },
+        { path: 0, index: 4 },
+      ],
+      surface: 'front' as const,
+      length: 0.08,
+      index: 0,
+      lit: true,
+      color: 0xffffff,
+    };
+
+    const out = smoothedPoints(run);
+    // The sourceless vertex is untouched; a sourced neighbour is pulled toward its own neighbours.
+    expect(out[1]?.x).toBeCloseTo(0.02, 12);
+    expect(out[1]?.y).toBeCloseTo(0.01, 12);
+    expect(out[3]?.y).toBeLessThan(0.01);
   });
 });
 

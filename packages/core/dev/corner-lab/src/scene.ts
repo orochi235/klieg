@@ -1,7 +1,6 @@
 import {
   biarcBlend,
   cornersByBend,
-  isAuthored,
   junctionRadius,
   minBendRadius,
   STYLE_FACTOR,
@@ -203,7 +202,7 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
       if (d < nearest) {
         nearest = d;
         built = run.points.map((q) => q.clone());
-        authored = run.points.map(isAuthored);
+        authored = run.from.map((source) => source === null);
         shipped = tightestBend(run) / radius;
       }
     }

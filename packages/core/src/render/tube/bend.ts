@@ -110,22 +110,6 @@ export function cornersByBend(
   });
 }
 
-/**
- * Points built analytically rather than extracted from the field. The sweep smooths a run to see
- * past the field's staircase, and that filter shaves a few percent off an arc built at exactly
- * `rhoMin` — so authored geometry is held fixed through it instead of being denoised.
- */
-const AUTHORED = new WeakSet<THREE.Vector3>();
-
-export function markAuthored(points: THREE.Vector3[]): THREE.Vector3[] {
-  for (const p of points) AUTHORED.add(p);
-  return points;
-}
-
-export function isAuthored(point: THREE.Vector3): boolean {
-  return AUTHORED.has(point);
-}
-
 export interface Fillet {
   /** Replacement points from the incoming tangent point to the outgoing one, inclusive. */
   points: THREE.Vector3[];
@@ -187,7 +171,7 @@ export function filletAt(
   for (let i = 0; i <= steps; i++) {
     arc.push(centre.clone().add(radial.clone().applyAxisAngle(axis, (i / steps) * sweep)));
   }
-  return { points: markAuthored(arc), setback, index, corner: cur.clone() };
+  return { points: arc, setback, index, corner: cur.clone() };
 }
 
 /**
@@ -291,7 +275,7 @@ export function biarcBlend(
   if (Math.min(first.radius, second.radius) < rhoMin) return null;
 
   second.points.reverse();
-  return markAuthored(first.points.concat(second.points.slice(1)));
+  return first.points.concat(second.points.slice(1));
 }
 
 interface GridEntry {

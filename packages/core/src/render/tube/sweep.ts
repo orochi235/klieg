@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { isAuthored } from './bend.js';
 import type { Point2 } from './field.js';
 import { type Frame, rotationMinimizingFrames } from './frames.js';
 import { GRADIENT_T_ATTRIBUTE, type GradientDomain, perVertexT, type RunSpan } from './gradient.js';
@@ -20,7 +19,7 @@ export function smoothedPoints(run: Run): THREE.Vector3[] {
     run.points.map((p) => ({ x: p.x, y: p.y })),
     SMOOTH_PASSES,
     'open',
-    run.points.map(isAuthored),
+    run.from.map((source) => source === null),
   );
   return run.points.map((p, i) => {
     const f = flat[i] as Point2;

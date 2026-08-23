@@ -8,7 +8,6 @@ import {
   DEFAULT_BEND,
   type Fillet,
   filletAt,
-  isAuthored,
   junctionRadius,
   minBendRadius,
   vertexBends,
@@ -324,11 +323,5 @@ describe('biarcBlend', () => {
       }
     }
     expect(checked).toBeGreaterThan(50);
-  });
-
-  it('marks its points authored, so the sweep holds them through smoothing', () => {
-    const { p0, t0, p1, t1 } = quarter();
-    const pts = biarcBlend(p0, t0, p1, t1, RHO, SPACING) as THREE.Vector3[];
-    expect(pts.every((p) => isAuthored(p))).toBe(true);
   });
 });

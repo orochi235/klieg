@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs';
 import opentype from 'opentype.js';
 import { specOf } from '../packages/core/dist/render/looks.js';
-import { isAuthored, minBendRadius } from '../packages/core/dist/render/tube/bend.js';
+import { minBendRadius } from '../packages/core/dist/render/tube/bend.js';
 import { generatePaths } from '../packages/core/dist/render/tube/generators.js';
 import { minCurvatureRadius3 } from '../packages/core/dist/render/tube/resample.js';
 import { cutIntoRuns } from '../packages/core/dist/render/tube/runs.js';
@@ -77,7 +77,7 @@ for (const ch of process.argv[3] ?? 'MWNSRE') {
     // Which of the three points forming the tightest triple were built rather than extracted: an
     // all-authored triple is a fillet bending wrong, a mixed one is a join, none is plain path.
     const mark = [i - 1, i, i + 1]
-      .map((k) => (run.points[k] && isAuthored(run.points[k]) ? 'A' : '.'))
+      .map((k) => (run.points[k] && run.from[k] === null ? 'A' : '.'))
       .join('');
     const kind = mark === 'AAA' ? 'in fillet' : mark === '...' ? 'plain    ' : 'join     ';
     console.log(

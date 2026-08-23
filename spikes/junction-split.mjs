@@ -11,7 +11,7 @@
 import { readFileSync } from 'node:fs';
 import opentype from 'opentype.js';
 import { specOf } from '../packages/core/dist/render/looks.js';
-import { isAuthored, minBendRadius } from '../packages/core/dist/render/tube/bend.js';
+import { minBendRadius } from '../packages/core/dist/render/tube/bend.js';
 import { buildTubeBlueprint } from '../packages/core/dist/render/tube/index.js';
 import { minCurvatureRadius3 } from '../packages/core/dist/render/tube/resample.js';
 import { smoothedPoints, tightestBend } from '../packages/core/dist/render/tube/sweep.js';
@@ -50,7 +50,7 @@ for (const [look, base] of CASES) {
           const r = minCurvatureRadius3([sm[i - 1], sm[i], sm[i + 1]].map((q) => ({ x: q.x, y: q.y, z: q.z })));
           if (r < best) { best = r; at = i; }
         }
-        const authored = raw.map(isAuthored);
+        const authored = run.from.map((source) => source === null);
         // Interior to one arc: three arc points at one constant step. Two abutting fillets are
         // all-authored too, and their shared vertex is a junction like any other.
         const s1 = raw[at].distanceTo(raw[at - 1]);

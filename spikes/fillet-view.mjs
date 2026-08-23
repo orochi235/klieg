@@ -14,7 +14,6 @@ import opentype from 'opentype.js';
 import { specOf } from '../packages/core/dist/render/looks.js';
 import {
   cornersByBend,
-  isAuthored,
   minBendRadius,
   STYLE_FACTOR,
   vertexBends,
@@ -88,9 +87,9 @@ for (const ch of LETTERS) {
         .map((pts) => `<polyline class="drawn" points="${poly(pts, c)}"/>`)
         .join('');
       const built = runs
-        .flatMap((r) => r.points)
-        .filter((p) => near(p, c) && isAuthored(p))
-        .map((p) => {
+        .flatMap((r) => r.points.map((p, i) => ({ p, source: r.from[i] })))
+        .filter(({ p, source }) => near(p, c) && source === null)
+        .map(({ p }) => {
           const [x, y] = scale(p, c);
           return `<circle class="built" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2"/>`;
         })

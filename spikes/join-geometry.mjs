@@ -11,7 +11,7 @@
 import { readFileSync } from 'node:fs';
 import opentype from 'opentype.js';
 import { specOf } from '../packages/core/dist/render/looks.js';
-import { isAuthored, minBendRadius } from '../packages/core/dist/render/tube/bend.js';
+import { minBendRadius } from '../packages/core/dist/render/tube/bend.js';
 import { buildTubeBlueprint } from '../packages/core/dist/render/tube/index.js';
 import { minCurvatureRadius3 } from '../packages/core/dist/render/tube/resample.js';
 import { smoothedPoints, tightestBend } from '../packages/core/dist/render/tube/sweep.js';
@@ -36,7 +36,7 @@ for (const run of bp.runs) {
       rho = minCurvatureRadius3([p[i - 1], p[i], p[i + 1]].map((q) => ({ x: q.x, y: q.y, z: q.z })));
     }
     const flag = rho < rhoMin ? '  <-- under' : '';
-    console.log(`  ${String(i).padStart(2)}  ${isAuthored(p[i]) ? 'authored' : '   .    '}   ${step.toFixed(5)}` +
+    console.log(`  ${String(i).padStart(2)}  ${run.from[i] === null ? 'authored' : '   .    '}   ${step.toFixed(5)}` +
       `        ${turn.toFixed(1).padStart(6)}     ${(rho / r).toFixed(2).padStart(7)}r${flag}`);
   }
 }

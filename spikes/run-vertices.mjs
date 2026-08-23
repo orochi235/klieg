@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs';
 import opentype from 'opentype.js';
 import { specOf } from '../packages/core/dist/render/looks.js';
-import { isAuthored, minBendRadius } from '../packages/core/dist/render/tube/bend.js';
+import { minBendRadius } from '../packages/core/dist/render/tube/bend.js';
 import { generatePaths } from '../packages/core/dist/render/tube/generators.js';
 import { cutIntoRuns } from '../packages/core/dist/render/tube/runs.js';
 import { surfacesOf } from '../packages/core/dist/render/tube/surfaces.js';
@@ -53,7 +53,7 @@ for (let i = lo; i <= hi; i++) {
   const turn = a.angleTo(b);
   const rho = turn < 1e-9 ? Number.POSITIVE_INFINITY : ((a.length() + b.length()) / 2) / (2 * Math.sin(turn / 2));
   console.log(
-    `  ${String(i).padStart(3)} ${isAuthored(run.points[i]) ? 'A' : '.'}` +
+    `  ${String(i).padStart(3)} ${run.from[i] === null ? 'A' : '.'}` +
       `  step ${b.length().toFixed(4)}  turn ${((turn * 180) / Math.PI).toFixed(1).padStart(5)}deg` +
       `  rho ${(rho / spec.radius).toFixed(2).padStart(6)}r` +
       `  (${run.points[i].x.toFixed(4)}, ${run.points[i].y.toFixed(4)})`,

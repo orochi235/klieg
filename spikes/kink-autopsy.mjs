@@ -11,7 +11,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import opentype from 'opentype.js';
 import { specOf } from '../packages/core/dist/render/looks.js';
-import { isAuthored, minBendRadius } from '../packages/core/dist/render/tube/bend.js';
+import { minBendRadius } from '../packages/core/dist/render/tube/bend.js';
 import { buildTubeBlueprint } from '../packages/core/dist/render/tube/index.js';
 import { minCurvatureRadius3 } from '../packages/core/dist/render/tube/resample.js';
 import { smoothedPoints, tightestBend } from '../packages/core/dist/render/tube/sweep.js';
@@ -47,7 +47,7 @@ for (const [source, label] of SOURCES) {
       const t = tightestAt(sm);
       const i = t.at;
       const mark = [i - 1, i, i + 1]
-        .map((k) => (run.points[k] && isAuthored(run.points[k]) ? 'A' : '.')).join('');
+        .map((k) => (run.points[k] && run.from[k] === null ? 'A' : '.')).join('');
       const kind = mark === 'AAA' ? 'in fillet' : mark === '...' ? 'plain    ' : 'join     ';
       const step = i > 0 && i + 1 < run.points.length
         ? (run.points[i].distanceTo(run.points[i - 1]) + run.points[i + 1].distanceTo(run.points[i])) / 2 : 0;
@@ -81,7 +81,7 @@ if (cards.length) {
     parts.push(`<path d="${d}" fill="none" stroke="#334155" stroke-width="${(r * 2 * S).toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>`);
     parts.push(`<path d="${d}" fill="none" stroke="#7dd3fc" stroke-width="1.6"/>`);
     c.pts.forEach((p, i) => {
-      const authored = c.run.points[i] && isAuthored(c.run.points[i]);
+      const authored = c.run.points[i] && c.run.from[i] === null;
       parts.push(`<circle cx="${X(p).toFixed(1)}" cy="${Y(p).toFixed(1)}" r="${i === c.at ? 7 : 2.6}" fill="${i === c.at ? '#ef4444' : authored ? '#fbbf24' : '#7dd3fc'}"/>`);
     });
   });

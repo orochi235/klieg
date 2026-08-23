@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import opentype from 'opentype.js';
 import * as THREE from 'three';
 import { specOf } from '../packages/core/dist/render/looks.js';
-import { isAuthored, minBendRadius } from '../packages/core/dist/render/tube/bend.js';
+import { minBendRadius } from '../packages/core/dist/render/tube/bend.js';
 import { buildTubeBlueprint } from '../packages/core/dist/render/tube/index.js';
 import { minCurvatureRadius3, smooth } from '../packages/core/dist/render/tube/resample.js';
 import { tightestBend } from '../packages/core/dist/render/tube/sweep.js';
@@ -64,7 +64,7 @@ for (const [look, source] of CASES) {
     const bp = buildTubeBlueprint(glyphToShapes(font, ch, 1), spec, 0.3, 0);
     for (const run of bp.runs) {
       if (tightestBend(run) >= rhoMin * (1 - 1e-6)) continue;
-      const held = run.points.map(isAuthored);
+      const held = run.from.map((source) => source === null);
       const filled = fillChords(run.points, held, spec.spacing);
       const longest = Math.max(
         ...run.points.map((p, i) => (i ? p.distanceTo(run.points[i - 1]) : 0)),

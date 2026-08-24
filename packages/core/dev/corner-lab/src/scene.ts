@@ -166,6 +166,9 @@ function relaxAcross(points: THREE.Vector3[], lo: number, hi: number, rhoMin: nu
   return { span, moved };
 }
 
+/** Samples to search either side of a corner. Measured worst case is 13; a step is one `spacing`. */
+const SEARCH_SPAN = 16;
+
 /**
  * The run carrying the nearest contour vertex to the corner in one direction. A hard corner's own
  * vertex is never carried — the cut deletes or replaces it — so the search starts one step out.
@@ -177,7 +180,7 @@ function carrierNear(
   count: number,
   step: -1 | 1,
 ): Run | null {
-  for (let out = 1; out <= 16; out++) {
+  for (let out = 1; out <= SEARCH_SPAN; out++) {
     const v = (((index + step * out) % count) + count) % count;
     const run = runs.find((r) => r.from.some((s) => s?.path === pathIndex && s.index === v));
     if (run) return run;

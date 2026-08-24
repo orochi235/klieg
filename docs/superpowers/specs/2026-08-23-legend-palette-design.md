@@ -48,9 +48,13 @@ strategy; `configSpec` is the union.
 
 No existing strategy changes. A container needing no tiling wraps nothing.
 
-**State**, per item: `{ anchor: Corner } | { x: number; y: number }`. This union is the reason
-snapping is worth building — the anchor form survives any resize with no recomputation, while a free
-position must be re-clamped on mount and on resize.
+**State**, per item: `{ anchor: Corner } | { x: number; y: number }`, where `Corner` is
+`'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'`. This union is the reason snapping is
+worth building — the anchor form survives any resize with no recomputation, while a free position
+must be re-clamped on mount and on resize.
+
+windease owns this state and its snapshot shape. It does not choose where the snapshot is written;
+that is the host's, and is what labkit's `storageKey` names.
 
 **Snapping.** Nearest eligible corner within **12px, measured per-axis** (`dx <= 12 && dy <= 12`),
 resting at **12px inset**. Per-axis is not a stylistic choice: with a 12px inset the resting position
@@ -77,17 +81,18 @@ item renders above a tiled one; that falls to the host's render order. Recorded 
 A thin React shell binding the strategy to DOM. Consumer-facing config only:
 
 ```tsx
-type Corner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
-
 interface FloatingPanelProps {
   children: ReactNode;
   anchor?: Corner;          // resting corner before first drag; default 'bottom-left'
   snapCorners?: Corner[];   // eligible corners; default all four
   inset?: number;           // default 12
-  storageKey?: string;      // omit for ephemeral
+  storageKey?: string;      // slot for windease's snapshot; omit for ephemeral
   className?: string;
 }
 ```
+
+`storageKey` is where the panel writes the strategy's snapshot, through labkit's existing
+`localStorageAdapter`. The snapshot's *shape* is windease's; only its location is labkit's.
 
 There is no header, so a pointerdown anywhere starts a drag. Pointerdowns on `input`, `button`, `a`
 or `[data-no-drag]` are ignored so later tenants can hold controls.
@@ -156,7 +161,7 @@ labkit:
 
 - `FloatingPanel` renders at the anchored corner before any drag
 - a pointerdown on a `[data-no-drag]` child does not start a drag
-- `storageKey` round-trips both arms of the union
+- `storageKey` writes and restores the strategy's snapshot for both arms of the union
 - `Legend` renders one row per entry with the mark class matching `mark`
 
 klieg:

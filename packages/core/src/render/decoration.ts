@@ -29,6 +29,17 @@ export interface BeddingSpec {
   thickness: number;
   /** How much ore lies in the barren rock between beds, 0..1. */
   scatter: number;
+  /**
+   * Distance from one chunk to the next along a bed, in em. Omit to place chunks freely along it.
+   * Alternate beds are offset by half of this, so the rows stagger the way sewn rows do.
+   */
+  pitch?: number;
+  /**
+   * How far a chunk strays from its site, as a fraction of `pitch`. Small values reject most of what
+   * sampling draws and degrade toward free placement; 0.25 is a field that reads regular but not
+   * printed.
+   */
+  jitter?: number;
 }
 
 export interface ChunkSpec {
@@ -86,6 +97,12 @@ const POOL_PER_CHUNK = 4;
  */
 const SIZE_POWER = 3;
 
+/**
+ * How squarely a triangle must face the viewer to count as a cap rather than extrusion band. The
+ * two are near 1 and near 0; the bevel between them is the only thing this has to cut.
+ */
+const CAP_FACING = 0.5;
+
 /** How far a bed strays from a straight line, in bed spacings. */
 const BED_WANDER = 0.14;
 /**
@@ -105,6 +122,30 @@ function bedHash(bed: number): number {
  * How much ore a point carries, 0..1 — 1 at the middle of a bed, `scatter` in the barren rock
  * between. Measured in the letter's own em space.
  */
+/** Default stray, as a fraction of `pitch`. */
+const BED_JITTER = 0.25;
+
+/**
+ * Whether a point is close enough to a lattice site to be kept. Rejecting rather than snapping is
+ * what keeps a chunk on the surface it was sampled from: a snap of up to half a pitch can carry one
+ * over the edge of a letter, and off a glyph is not a place a sequin can be sewn.
+ */
+function onSite(x: number, y: number, bedding: BeddingSpec): boolean {
+  const pitch = bedding.pitch ?? 0;
+  if (pitch <= 0) return true;
+  const radians = (bedding.angle * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const along = x * cos + y * sin;
+  const across = y * cos - x * sin;
+  const row = Math.round(across / bedding.spacing);
+  const offset = row % 2 === 0 ? 0 : pitch / 2;
+  const dAcross = across - row * bedding.spacing;
+  const dAlong = along - offset - Math.round((along - offset) / pitch) * pitch;
+  const stray = (bedding.jitter ?? BED_JITTER) * pitch;
+  return Math.hypot(dAlong, dAcross) <= stray;
+}
+
 function oreAt(x: number, y: number, bedding: BeddingSpec): number {
   const radians = (bedding.angle * Math.PI) / 180;
   const cos = Math.cos(radians);
@@ -162,6 +203,7 @@ export function buildChunkBlueprint(
   // Area alone puts 60% of a glyph's chunks on the extrusion band and 13% on the face a reader
   // is looking at, which is why `faceBias` can lift the two caps against the band.
   const cumulative = new Float32Array(triangles);
+  const facings = new Float32Array(triangles);
   const a = new THREE.Vector3();
   const b = new THREE.Vector3();
   const c = new THREE.Vector3();
@@ -173,6 +215,7 @@ export function buildChunkBlueprint(
     const cross = b.sub(a).cross(c.sub(a));
     const area = cross.length() / 2;
     const facing = area > 0 ? Math.abs(cross.z) / (area * 2) : 0;
+    facings[t] = facing;
     total += area * (1 + faceBias * facing);
     cumulative[t] = total;
   }
@@ -222,7 +265,13 @@ export function buildChunkBlueprint(
       x = a.x * w + b.x * u + c.x * v;
       y = a.y * w + b.y * u + c.y * v;
       z = a.z * w + b.z * u + c.z * v;
-      if (!bedding || random() < oreAt(x + originX, y + originY, bedding)) break;
+      if (!bedding) break;
+      if (random() >= oreAt(x + originX, y + originY, bedding)) continue;
+      // A bed is measured in word space, which is a plane the caps lie in and the extrusion band
+      // stands perpendicular to, so a lattice projected onto the band smears along the extrusion.
+      // The band keeps free placement along the bed.
+      if ((facings[t] as number) < CAP_FACING) break;
+      if (onSite(x + originX, y + originY, bedding)) break;
     }
 
     na.fromBufferAttribute(normals, vertexAt(t * 3));

@@ -104,6 +104,32 @@ function quaternionOf(m: THREE.Matrix4): THREE.Quaternion {
   return q;
 }
 
+/**
+ * Nearest-neighbour distance for every cap chunk in a placed field, sorted. A lattice puts a floor
+ * under this that free placement has no reason to respect.
+ */
+function capSpacings(spec: ChunkSpec, bedding: BeddingSpec): number[] {
+  const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec), bedding });
+  const at = chunkMatrices(blueprint, { ...spec, bedding }, 3)
+    .map((m) => new THREE.Vector3().setFromMatrixPosition(m))
+    .filter((v) => Math.abs(v.z) > 0.15 - 1e-3);
+
+  const out: number[] = [];
+  for (let i = 0; i < at.length; i++) {
+    let best = Infinity;
+    for (let j = 0; j < at.length; j++) {
+      if (i === j) continue;
+      const a = at[i] as THREE.Vector3;
+      const b = at[j] as THREE.Vector3;
+      // In the cap plane, which is where the lattice is defined; the two caps are separate fields.
+      if (Math.sign(a.z) !== Math.sign(b.z)) continue;
+      best = Math.min(best, Math.hypot(a.x - b.x, a.y - b.y));
+    }
+    if (Number.isFinite(best)) out.push(best);
+  }
+  return out.sort((x, y) => x - y);
+}
+
 describe('buildChunkBlueprint', () => {
   it('samples positions and normals in step', () => {
     const blueprint = buildChunkBlueprint(box());
@@ -378,6 +404,93 @@ describe('lie', () => {
     );
     const spins = new Set(onCap.map((m) => quaternionOf(m).x.toFixed(6)));
     expect(spins.size).toBeGreaterThan(1);
+  });
+});
+
+describe('bedding pitch', () => {
+  const spec: ChunkSpec = { ...CHUNKS, shape: 'disc', count: 120, proud: 0, lie: 1, faceBias: 8 };
+  const bed: BeddingSpec = { angle: 12, spacing: 0.12, thickness: 0.12, scatter: 1 };
+
+  it('holds chunks apart on a cap, where free placement lets them touch', () => {
+    const free = capSpacings(spec, bed);
+    const laid = capSpacings(spec, { ...bed, pitch: 0.12 });
+
+    // The tightest pair is the whole point: a random field always has one almost coincident.
+    expect(free[0] as number).toBeLessThan(0.02);
+    expect(laid[0] as number).toBeGreaterThan(free[0] as number);
+  });
+
+  it('leaves placement alone when no pitch is asked for', () => {
+    const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec), bedding: bed });
+    const pitched = buildChunkBlueprint(box(), {
+      pool: poolFor(spec),
+      bedding: { ...bed, pitch: undefined },
+    });
+
+    expect(Array.from(pitched.position)).toEqual(Array.from(blueprint.position));
+  });
+
+  it('keeps every chunk on the surface it was sampled from', () => {
+    const blueprint = buildChunkBlueprint(box(), {
+      pool: poolFor(spec),
+      bedding: { ...bed, pitch: 0.12 },
+    });
+
+    // Rejecting rather than snapping is what guarantees this: the box is 1 x 1 x 0.3, so anything
+    // outside it is a point the lattice moved off the letter.
+    for (let i = 0; i < blueprint.position.length / 3; i++) {
+      expect(Math.abs(blueprint.position[i * 3] as number)).toBeLessThanOrEqual(0.5 + 1e-6);
+      expect(Math.abs(blueprint.position[i * 3 + 1] as number)).toBeLessThanOrEqual(0.5 + 1e-6);
+      expect(Math.abs(blueprint.position[i * 3 + 2] as number)).toBeLessThanOrEqual(0.15 + 1e-6);
+    }
+  });
+
+  it('leaves the extrusion band free, where a word-space lattice has no meaning', () => {
+    const bedding: BeddingSpec = { ...bed, pitch: 0.12, jitter: 0.25 };
+    const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec), bedding });
+
+    // Worked out here rather than read from the source, so this measures the field and not the
+    // implementation that produced it.
+    const radians = (bedding.angle * Math.PI) / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    const pitch = bedding.pitch as number;
+    const stray = (bedding.jitter as number) * pitch;
+    const sits = (x: number, y: number) => {
+      const along = x * cos + y * sin;
+      const across = y * cos - x * sin;
+      const row = Math.round(across / bedding.spacing);
+      const offset = row % 2 === 0 ? 0 : pitch / 2;
+      return (
+        Math.hypot(
+          along - offset - Math.round((along - offset) / pitch) * pitch,
+          across - row * bedding.spacing,
+        ) <= stray
+      );
+    };
+
+    let band = 0;
+    let onSites = 0;
+    let caps = 0;
+    let capsOnSites = 0;
+    for (let i = 0; i < blueprint.position.length / 3; i++) {
+      const x = blueprint.position[i * 3] as number;
+      const y = blueprint.position[i * 3 + 1] as number;
+      const z = blueprint.position[i * 3 + 2] as number;
+      if (Math.abs(z) > 0.15 - 1e-3) {
+        caps++;
+        if (sits(x, y)) capsOnSites++;
+      } else {
+        band++;
+        if (sits(x, y)) onSites++;
+      }
+    }
+
+    // The caps are held to the lattice; the band is not, so its points land on a site only at the
+    // rate the site discs cover the plane -- about a fifth here.
+    expect(capsOnSites / caps).toBeGreaterThan(0.9);
+    expect(band).toBeGreaterThan(20);
+    expect(onSites / band).toBeLessThan(0.45);
   });
 });
 

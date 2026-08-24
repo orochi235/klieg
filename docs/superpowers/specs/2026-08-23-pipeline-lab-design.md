@@ -90,18 +90,21 @@ The config gains:
 - **six repair toggles** — with ghost geometry for the ones switched off.
 - **subject** — one hard corner, or the whole letter.
 
-`scene.ts` keeps finding its built run by nearest point. Provenance does not retire that search, and
-the reason is worth stating because it looks like it should: a hard corner's own vertex is never
-carried by any run — being acted on by the cut is what makes a corner hard, so break deletes that
-vertex and fillet replaces its whole group with analytic points. Measured across `ABDEGMNQRSW8` at
-both looks and all three path sources, 0 of 203 hard corners are carried. Asking which run holds a
-corner returns nothing, every time.
+`scene.ts` finds its run by searching outward from the corner, not at it. A hard corner's own vertex
+is never carried by any run — being acted on by the cut is what makes a corner hard, so break
+deletes that vertex and fillet replaces its whole group with analytic points. Measured across
+`ABDEGMNQRSW8` at both looks and all three path sources, 0 of 203 hard corners are carried. Asking
+which run holds a corner returns nothing, every time; the vertices either side are carried, within
+1 to 13 steps.
 
-What provenance does give the lab is the vertices either side of the corner, which are carried, and
-which resolve to the same run proximity picks in all 203 cases. Going by those instead needs a
-tiebreak — 52 of the 203 have carried vertices on both sides belonging to different runs, which is
-what a cut at that corner means — and choosing one is a question about what the lab shows at a
-corner that became two runs. That belongs with the lab's own design, not here.
+Searching outward surfaces what the old nearest-point search hid. **83 of the 203 corners have
+carried vertices either side belonging to different runs** — the cut split the path there into two
+runs, and proximity silently showed whichever was nearer. The lab draws both, in separate inks. On
+the single-run corners the two strategies agree 119 of 120; the one disagreement is a corner where
+proximity picked a 9-point run over the 25-point run that actually carries it.
+
+An earlier pass measured 52 splits rather than 83. Both claimed to match on `path` and `index`, so
+the discrepancy is unexplained and the 83 is the one the shipped code produces.
 
 `scene.ts` should come out thinner, not fatter. It currently both finds corners and hand-rolls
 repairs; `blendAcross` and `relaxAcross` move into core as registry entries, and the lab stops

@@ -236,13 +236,26 @@ export const LOOKS: Record<LookName, LookSpec> = {
     tintTo: 'decoration',
     decoration: {
       kind: 'chunks',
-      count: 400,
-      size: 0.045,
-      shape: 'flake',
-      align: 0.1,
-      cluster: 0.2,
-      proud: 0.35,
-      look: { color: 0xffd9c0, metalness: 1, roughness: 0.08, clearcoat: 1 },
+      count: 520,
+      size: 0.062,
+      shape: 'disc',
+      align: 0,
+      // Not 1: discs that lie perfectly flat are parallel mirrors showing the same reflection, so
+      // the field reads as one dull sheet. The last degrees of tilt are what make them catch light.
+      lie: 0.82,
+      cluster: 0,
+      // Not 0: a disc lying exactly in the surface z-fights with it along its whole face.
+      proud: 0.08,
+      faceBias: 16,
+      bedding: {
+        angle: 15,
+        spacing: 0.055,
+        thickness: 0.055,
+        scatter: 1,
+        pitch: 0.055,
+        jitter: 0.2,
+      },
+      look: { color: 0xffd9c0, metalness: 1, roughness: 0.18, clearcoat: 1 },
     },
   },
 };

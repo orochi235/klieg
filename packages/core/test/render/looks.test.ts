@@ -315,11 +315,18 @@ describe('decorated looks', () => {
     expect(decoration.level).toBeGreaterThan(-decoration.radius);
   });
 
-  it('gives sequin free-tumbling flakes rather than a shared lattice', () => {
+  it('sews sequin flat to the surface rather than sprinkling it on', () => {
     const sequin = specOf('sequin').decoration;
+    if (sequin?.kind !== 'chunks') throw new Error('not chunks');
 
-    expect(sequin?.kind === 'chunks' && sequin.shape).toBe('flake');
-    expect(sequin?.kind === 'chunks' && sequin.align).toBeLessThan(0.5);
+    expect(sequin.shape).toBe('disc');
+    // Mostly flat, and off a whole letter's shared lattice, which is the orientation align can give.
+    expect(sequin.lie as number).toBeGreaterThan(0.7);
+    expect(sequin.align).toBe(0);
+    // Sewn on, not stood off: proud is in chunk edges, so a third of one was a third of a disc.
+    expect(sequin.proud).toBeLessThan(0.1);
+    // Rows, at a spacing, rather than a scatter that clumps.
+    expect(sequin.bedding?.pitch).toBeGreaterThan(0);
   });
 });
 

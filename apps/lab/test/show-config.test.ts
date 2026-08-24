@@ -1,6 +1,6 @@
 import { LOOK_NAMES } from 'klieg';
 import { describe, expect, it } from 'vitest';
-import { decodeConfig, encodeConfig, resolveConfig } from '../src/show-config.js';
+import { DEFAULT_LOOKS, decodeConfig, encodeConfig, resolveConfig } from '../src/show-config.js';
 
 describe('show config', () => {
   it('round-trips a config through the URL codec', () => {
@@ -37,7 +37,7 @@ describe('show config', () => {
     it(`falls back to defaults for a ${label} hash`, () => {
       expect(decodeConfig(raw)).toEqual({
         text: 'klieg',
-        looks: [...LOOK_NAMES],
+        looks: [...DEFAULT_LOOKS],
         cycleMs: 3000,
         lighting: 'static',
         bloom: undefined,
@@ -55,7 +55,7 @@ describe('show config', () => {
   });
 
   it('falls back to every look when none of them are known', () => {
-    expect(resolveConfig({ looks: ['nope'] }).looks).toEqual([...LOOK_NAMES]);
+    expect(resolveConfig({ looks: ['nope'] }).looks).toEqual([...DEFAULT_LOOKS]);
   });
 
   it('clamps a cycle a URL could use to melt a phone, and keeps 0 as "never advance"', () => {
@@ -87,5 +87,12 @@ describe('show config', () => {
   it('takes only a lighting name it knows', () => {
     expect(resolveConfig({ lighting: 'sweep' }).lighting).toBe('sweep');
     expect(resolveConfig({ lighting: 'disco' }).lighting).toBe('static');
+  });
+
+  it('leaves neon out of the default cycle but still accepts it', () => {
+    expect(DEFAULT_LOOKS).not.toContain('neon');
+    expect(DEFAULT_LOOKS).toContain('tubing');
+    expect(DEFAULT_LOOKS).toHaveLength(LOOK_NAMES.length - 1);
+    expect(resolveConfig({ looks: ['neon'] }).looks).toEqual(['neon']);
   });
 });

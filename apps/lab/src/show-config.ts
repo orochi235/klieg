@@ -58,7 +58,7 @@ export function resolveConfig(input: unknown): ShowConfig {
 
   return {
     text: pickText(raw.text),
-    looks: looks.length ? looks : [...LOOK_NAMES],
+    looks: looks.length ? looks : [...DEFAULT_LOOKS],
     cycleMs: pickCycle(raw.cycleMs),
     lighting: LIGHTING_NAMES.includes(raw.lighting as LightingName)
       ? (raw.lighting as LightingName)
@@ -73,6 +73,9 @@ function pickText(value: unknown): string {
   if (typeof value !== 'string' || value.trim() === '') return 'klieg';
   return value.slice(0, MAX_TEXT);
 }
+
+/** `tubing` supersedes `neon` as klieg's neon: a swept glass tube rather than a flat pink glow. */
+export const DEFAULT_LOOKS: readonly LookName[] = LOOK_NAMES.filter((name) => name !== 'neon');
 
 function pickLooks(value: unknown): LookName[] {
   if (!Array.isArray(value)) return [];

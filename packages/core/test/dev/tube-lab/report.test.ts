@@ -22,7 +22,7 @@ function arcRun(radius: number, index: number): Run {
 }
 
 function blueprint(runs: Run[]) {
-  return { kind: 'tube' as const, runs, corners: [], lit: [], dark: [], dispose() {} };
+  return { kind: 'tube' as const, runs, corners: [], paths: [], lit: [], dark: [], dispose() {} };
 }
 
 describe('reportOf', () => {

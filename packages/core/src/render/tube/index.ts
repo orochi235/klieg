@@ -1,7 +1,12 @@
 import type * as THREE from 'three';
 import type { MaterialSpec } from '../decoration.js';
 import { assign, type SelectSpec } from './assign.js';
-import { generateConnectors, generatePaths, type PathSource } from './generators.js';
+import {
+  type GeneratedPath,
+  generateConnectors,
+  generatePaths,
+  type PathSource,
+} from './generators.js';
 import type { GradientSpec } from './gradient.js';
 import { type CornerRecord, type CornerWeights, cutIntoRuns, type Run } from './runs.js';
 import type { SurfaceKind } from './surfaces.js';
@@ -74,6 +79,8 @@ export interface TubeBlueprint {
   runs: Run[];
   /** One entry per corner the cut walked, in draw order. Diagnostic; nothing renders it. */
   corners: CornerRecord[];
+  /** The paths `Run.from` indexes into, in the order the cut received them. @internal */
+  paths: readonly GeneratedPath[];
   lit: THREE.BufferGeometry[];
   dark: THREE.BufferGeometry[];
   dispose(): void;
@@ -108,7 +115,8 @@ export function buildTubeBlueprint(
       : [];
   // Before the cut: a bend wander introduces is a bend the corner stage has to see.
   wanderPaths(paths, spec.amplitude ?? 0, seed);
-  const cut = cutIntoRuns([...paths, ...links], {
+  const cutPaths = [...paths, ...links];
+  const cut = cutIntoRuns(cutPaths, {
     runs: spec.runs,
     minRun: spec.minRun,
     corners: spec.corners,
@@ -163,6 +171,7 @@ export function buildTubeBlueprint(
     kind: 'tube',
     runs,
     corners,
+    paths: cutPaths,
     lit,
     dark,
     dispose() {

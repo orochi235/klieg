@@ -5,7 +5,7 @@ tags: [webgl, graphics, typescript]
 featured: true
 order: 10
 demo: https://orochi235.github.io/klieg/
-media: { kind: embed, src: https://orochi235.github.io/klieg/, span: 2, aspect: "16/9" }
+media: { kind: image, src: apps/lab/test/looks.spec.ts-snapshots/look-neon-darwin.png, span: 2, aspect: "16/9" }
 ---
 
 A transparent WebGL overlay that renders shiny extruded type over an existing web app, for

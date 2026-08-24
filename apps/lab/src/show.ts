@@ -107,6 +107,7 @@ fallback.textContent = config.text;
 const quiet = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const cycling = !quiet && config.cycleMs > 0 && config.looks.length > 1;
 
+const SETTLE_MS = 620;
 const view = { yaw: 0, pitch: 0 };
 const euler = new THREE.Euler(0, 0, 0, 'XYZ');
 const point = new THREE.Vector3();
@@ -206,8 +207,31 @@ function markActive(at: number): void {
   });
 }
 
+let resting = 0;
+
+/** Eases the word back to head-on so a let-go always resolves, rather than leaving it askew. */
+function returnToRest(): void {
+  cancelAnimationFrame(resting);
+  if (quiet) {
+    view.yaw = 0;
+    view.pitch = 0;
+    return;
+  }
+  const from = { yaw: view.yaw, pitch: view.pitch };
+  const start = performance.now();
+  const step = (now: number) => {
+    const t = Math.min(1, (now - start) / SETTLE_MS);
+    const eased = 1 - (1 - t) ** 3;
+    view.yaw = from.yaw * (1 - eased);
+    view.pitch = from.pitch * (1 - eased);
+    if (t < 1) resting = requestAnimationFrame(step);
+  };
+  resting = requestAnimationFrame(step);
+}
+
 if (config.pivot) {
   stage.addEventListener('pointerdown', (event) => {
+    cancelAnimationFrame(resting);
     stage.setPointerCapture(event.pointerId);
     let last = { x: event.clientX, y: event.clientY };
     const move = (e: PointerEvent) => {
@@ -223,6 +247,7 @@ if (config.pivot) {
       stage.removeEventListener('pointerup', up);
       stage.removeEventListener('pointercancel', up);
       stage.removeEventListener('lostpointercapture', up);
+      returnToRest();
     };
     stage.addEventListener('pointermove', move);
     stage.addEventListener('pointerup', up);
@@ -230,10 +255,6 @@ if (config.pivot) {
     // Capture can go without a pointerup, and after that neither move nor up fires here — which
     // would leave a buttonless hover still turning the word.
     stage.addEventListener('lostpointercapture', up);
-  });
-  stage.addEventListener('dblclick', () => {
-    view.yaw = 0;
-    view.pitch = 0;
   });
 }
 

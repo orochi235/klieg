@@ -46,9 +46,12 @@ is conditional on a value rather than a shape, so it needs measuring before it i
 **`BeddingSpec.pitch` and `.jitter` — regular spacing along a bed.** `bedding` already runs chunks
 in bands at an angle, which is the row a sequin is sewn in; within a band placement is free, so
 spacing still clumps. `pitch` puts sites at a fixed spacing along each bed, alternate beds offset by
-half a pitch so rows stagger, and `jitter` displaces each by a fraction of a pitch so the field does
-not read as printed. A sampled point snaps to its nearest free site, reusing the probe-on-collision
-walk the clustered draw already uses for an exhausted pool.
+half a pitch so rows stagger, and `jitter` is how far off its site a chunk may sit, so the field does
+not read as printed.
+
+A site is a **rejection inside the sampling loop, not a snap applied after it**. A snap of up to half
+a pitch can carry a chunk over the edge of a letter, and off the glyph is not a place a sequin can be
+sewn; rejecting keeps every chunk on the surface it was sampled from by construction.
 
 Omitting `pitch` leaves bedding exactly as it behaves today, so both distributions are one
 parameter rather than two code paths.

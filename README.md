@@ -300,6 +300,7 @@ const bounce = transition(700, { from: { scale: 0 }, ease: easeElasticOut });
 | `clock` | `requestAnimationFrame` | time source; pass the exported `ManualClock` to drive effects by hand in tests |
 | `policy` | `'queue'` | what a fire does when one is already running (below) |
 | `idleTimeoutMs` | `8000` | idle milliseconds before the GL context is torn down; the next fire brings it back |
+| `framing` | `{ width: 0.62, height: 0.3 }` | share of the viewport the type may fill, per axis; raise it on a page that is nothing but the type |
 
 `fire(text, options)`:
 

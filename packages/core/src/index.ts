@@ -106,6 +106,20 @@ export interface KliegOptions {
    */
   policy?: QueuePolicy;
   idleTimeoutMs?: number;
+  /** How much of the viewport the type may fill. The default leaves room for the page underneath. */
+  framing?: Framing;
+}
+
+/**
+ * The share of the viewport the type is allowed to fill on each axis, as a fraction of what the
+ * camera sees at the word's depth. An omitted axis keeps its default; 1 runs the type to that edge.
+ * Height stays the tighter of the two by default because turning the word swings it taller.
+ */
+export interface Framing {
+  /** Defaults to 0.62. */
+  width?: number;
+  /** Defaults to 0.3. */
+  height?: number;
 }
 
 /** Closed union so element-anchoring can arrive in v1.2 without an API break. */
@@ -225,7 +239,7 @@ export function createKlieg(options: KliegOptions): Klieg {
         text,
         loaded,
         opts.look ?? 'gold',
-        stage.viewportBudget(),
+        stage.viewportBudget(options.framing?.width, options.framing?.height),
         opts.wrap,
         opts.tint,
       );

@@ -162,6 +162,9 @@ const klieg = createKlieg({
   fontUrl: `${import.meta.env.BASE_URL}font.ttf`,
   clock,
   policy: 'replace',
+  // Nothing shares this page with the type, so it takes far more of the frame than the library
+  // leaves an overlay. Tuned on a 390x844 phone, where width is what binds a single line.
+  framing: { width: 0.84, height: 0.46 },
 });
 
 let index = 0;

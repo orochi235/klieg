@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### The type can be told to fill more of the frame
+
+`createKlieg({ framing })` sets the share of the viewport a word is fitted into, per axis; the
+library's own 0.62 wide by 0.3 tall was previously unreachable. An overlay over a live app wants
+that room left, but a page that is nothing but the type does not. An omitted axis keeps its
+default, so nothing already written changes size.
+
 ### A run vertex knows where it came from
 
 Every point in a tube run now records the contour vertex it was extracted from, or null where the

@@ -924,6 +924,40 @@ describe('caller-supplied transform', () => {
   });
 });
 
+describe('framing', () => {
+  /** The fit lives on the word group's scale, so a wider budget reads straight off it. */
+  async function fitScaleOf(text: string, framing?: { width?: number; height?: number }) {
+    const bk = create(framing ? { framing } : {});
+    const done = bk.fire(text, INSTANT);
+    await flush();
+    const scale = (words()[0] as THREE.Group).scale.x;
+    clock.advance(16);
+    await done;
+    return scale;
+  }
+
+  it('fits exactly as the built-in framing does when the caller says nothing', async () => {
+    const omitted = await fitScaleOf('HELLOTHERE');
+
+    expect(await fitScaleOf('HELLOTHERE', { width: 0.62, height: 0.3 })).toBe(omitted);
+    expect(await fitScaleOf('HELLOTHERE', {})).toBe(omitted);
+  });
+
+  it('grows the word in proportion to the width it is given', async () => {
+    const wide = await fitScaleOf('HELLOTHERE', { width: 1 });
+
+    expect(wide).toBeCloseTo((await fitScaleOf('HELLOTHERE')) / 0.62, 6);
+  });
+
+  it('leaves the other axis on its default', async () => {
+    // Four lines make height the binding axis, so a width the caller widened cannot move the fit.
+    const tall = 'HI\nHI\nHI\nHI';
+
+    expect(await fitScaleOf(tall, { width: 1 })).toBe(await fitScaleOf(tall));
+    expect(await fitScaleOf(tall, { height: 0.6 })).toBeCloseTo((await fitScaleOf(tall)) * 2, 6);
+  });
+});
+
 describe('caller-supplied motion', () => {
   it('accepts a piece in place of a name', async () => {
     const seen: number[] = [];

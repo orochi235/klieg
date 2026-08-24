@@ -1,0 +1,191 @@
+# Effects pipeline — design
+
+**For:** whoever implements it. **Answers:** how a klieg effect drives appearance over time below the
+level of a letter, what an effect can address, and what has to be fixed before any of it works.
+
+Today a look is static. A run's colour, a chunk's brightness and a letter's emissive are decided once
+at build time; the only thing that changes per frame is the pose, which moves letters and nothing
+else. The immediate want is a neon sign with one bad tube — one length of glass flickering on its own
+timing — but a flag for that idea buys only that idea. This makes appearance addressable and
+animatable, once, for every decoration kind.
+
+## The part model
+
+A word is made of **parts**. A part is the smallest thing an effect can address, and each decoration
+kind contributes its own:
+
+| kind | one part is | what it already is in the scene |
+|---|---|---|
+| `run` | a length of tube between cuts | its own `THREE.Mesh`, child of the letter group |
+| `chunk` | one sequin, flake or glitter chunk | one instance in an `InstancedMesh` |
+| `body` | the extruded letter itself | its own `THREE.Mesh`, sibling of the runs |
+
+`body` is a part kind because it is the only thing `neon`, `gold`, `chrome`, `gem` and `velvet` have —
+without it, effects reach the decorated looks and the sign that started this cannot flicker. It needs
+no special case: `word.ts:296` builds the letter as a `Group` and adds the body as a child, so a body
+mesh is structurally a sibling of a run mesh. Motion drives the group, effects drive the children, and
+they compose through the scene graph in either order.
+
+Every part is described the same way, mirroring `LetterInfo` one level down:
+
+```ts
+interface PartInfo {
+  kind: PartKind;
+  /** Position in the word's pool of parts of this kind. Stable across frames. */
+  index: number;
+  count: number;
+  /** The letter this part belongs to, so a piece can order by letter as well as by part. */
+  letter: LetterInfo;
+  /** Layout position in em, relative to the block centre. */
+  x: number;
+  y: number;
+  /** Fraction of the pool's extent lying before this part, and this part's share of it. */
+  at: number;
+  span: number;
+}
+```
+
+The pool is word-wide, not per letter: `{ amount: 1 }` is one bad tube in the sign rather than one per
+letter. `at` and `span` are not new work for runs — `buildTubeBlueprint` already computes exactly this
+into `spans` to drive the `letter` gradient domain.
+
+## The grammar
+
+Deliberately the same shape as `MotionPiece`, so the repo has one compositional vocabulary rather than
+two:
+
+```ts
+interface EffectPiece {
+  /** Milliseconds for one pass. Loops. */
+  duration: number;
+  /** `t` is normalized 0..1 within this pass. */
+  at(t: number, part: PartInfo): PartOffset;
+}
+
+/** Partial, like PoseOffset: a piece writes only the channels it drives. */
+interface PartOffset {
+  gain?: number;                     // multiplies emissive
+  color?: number;
+  dark?: number;                     // 0..1 toward a tube decoration's `dark` material
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  scale?: number;
+  crawl?: number;                    // shifts the colour ramp along the part
+}
+```
+
+Composition is an array, as `Slot` already is for motion, and the merge follows the existing
+compositor's rule: `gain` and `scale` multiply toward 1, `position`, `rotation` and `crawl` sum,
+`dark` takes the max, `color` is last-writer-wins. A part ignores channels its kind cannot carry — a
+chunk has no `dark`, and `crawl` needs a ramp.
+
+`crawl` is nearly free because the parameter it shifts already exists. `gradientT` is a per-vertex arc
+length, and on the `letter` domain it already runs continuously across a glyph's runs in draw order,
+so a crawl is one uniform added before the ramp lookup and it chases through the whole letter rather
+than restarting at every cut.
+
+**`stagger` generalizes rather than being duplicated.** `orderKey` and `stagger` in `motion/types.ts`
+take a `LetterInfo` but only read `index`, `count`, `column`, `line`, `lineCount` and `columnCount`.
+Widen them to a minimal ordering interface that both `LetterInfo` and `PartInfo` satisfy, and a per-
+part phase spread is the same `from: 'start' | 'end' | 'center' | 'edges' | 'random'` grammar a
+reader already knows.
+
+## Authoring
+
+```ts
+interface EffectSpec {
+  piece: EffectName;
+  /** Which parts, out of the word's pool of that kind. The `assign` selection grammar. */
+  target: { kind: PartKind } & SelectSpec;
+  /** Per-part phase spread. */
+  stagger?: number | StaggerSpec;
+  /** Fixes the selection so a pinned frame is reproducible. Defaults to 0. */
+  seed?: number;
+  // piece parameters, discriminated on `piece`
+}
+```
+
+A look declares `effects`; `fire(text, { effects })` **replaces** that list rather than appending, so
+there is one place to look when a sign misbehaves. `EFFECT_NAMES` exports the piece names for a
+picker, matching `ENTER_NAMES` and the rest.
+
+## Frame ownership, which has to be fixed first
+
+`spec.opacity` works: `Word` reads it into `bodyOpacity` and multiplies it into a per-frame write
+(`word.ts:139`, `word.ts:533`). What fails is the other door — `applyLook` writes every `PARAM_KEYS`
+property onto the material once at build time, and `apply()` then reassigns opacity every tick from
+its own two factors, so a look setting opacity through `LookKey` is erased before it is seen. The
+comment at `looks.ts:26` warns against the broken door instead of closing it.
+
+Every channel an effect drives has this problem waiting. `emissiveIntensity` is the channel `gain`
+needs and is not frame-owned today, so an effect writing it would work now and break silently the day
+anything else writes it per frame — which is how the opacity trap was born.
+
+Name the frame-owned properties once and subtract them from the look's vocabulary:
+
+```ts
+/** Written every tick by Word from base × pose × effects. A look cannot set these directly. */
+type FrameOwned = 'opacity' | 'emissiveIntensity';
+type LookKey = Exclude<Extract<keyof THREE.MeshPhysicalMaterial, /* the existing list */>, FrameOwned>;
+```
+
+Adding `'opacity'` to that list then fails to compile. Opacity keeps its two factors — fading a letter
+is motion's job and no effect channel drives it — and `emissiveIntensity` joins it as a composed
+write, gaining one factor that defaults to 1 so an absent effect changes nothing:
+
+```ts
+material.opacity = pose.opacity * base.opacity;
+material.emissiveIntensity = base.emissiveIntensity * effect.gain;
+```
+
+`Word` stays the sole writer, so no second clobberer is introduced. The rule the rest of this design
+rests on: **a channel an effect drives must be frame-owned, and a frame-owned property cannot be named
+by a look.**
+
+## Order of work
+
+Each step has its own guard, checked at that step rather than only at the end.
+
+1. **Frame ownership.** The `FrameOwned` split and the widened `emissiveIntensity` write, with the
+   effect factor pinned at 1. No behaviour change; the look snapshots are the guard.
+2. **The part model and per-part materials.** All lit runs of a letter share one material today, so
+   nothing per-part can be written at runtime. Give each part its own material instance and assemble
+   the word-wide pool. Draw calls do not change — runs are already separate meshes — and programs stay
+   shared through `customProgramCacheKey`. Still no behaviour change; same guard.
+3. **The grammar, for `run` and `body`.** `EffectPiece`, the compositor, the generalized `stagger`,
+   and a first set of pieces. `flicker` is what the ask needs; `chase`, `buzz` and `warmup` are the
+   seed of the list, not a closed one.
+4. **`chunk` parts.** Per-instance writes: `setMatrixAt` for transform, `instanceColor` for colour.
+   Different write path, same grammar.
+5. **`crawl`.** The ramp-offset uniform, and the per-part phase that rides it.
+
+## Acceptance
+
+- Every shipped look renders byte-identical with no effects declared — `apps/lab/test/looks.spec.ts`,
+  checked after step 1, after step 2, and again at the end.
+- Per-part materials produce the same pixels as one shared material, which is the claim that step 2
+  moved nothing.
+- A look naming a `FrameOwned` property fails to compile — asserted by a type test, not by review.
+- With a pinned clock, a frame mid-flicker is reproducible across runs, so an effect can hold a visual
+  baseline of its own.
+- An effect targeting nothing, and a look with no effects, cost no per-frame writes.
+- `npm run check` and `npx playwright test` stay green.
+
+## Traps
+
+**A frame-owned property written from a closed set of factors is the bug this design exists to stop.**
+Widening the set is the fix; adding a second writer outside `Word` reproduces it one channel over.
+
+**`fire()` replacing rather than appending is load-bearing.** A caller expecting to add one effect and
+silently dropping the look's own is a support question that looks like a rendering bug.
+
+**A run's index is not stable across a spec change.** The cut moves with path source, spacing and
+letter, so an effect targeting explicit indices retargets silently. `SelectSpec` with a fixed `seed`
+is the addressable form; explicit indices are not offered.
+
+**Chunks are an `InstancedMesh`, so a per-chunk write is a buffer update, not a property set.** A
+selection that targets most of 520 chunks per letter is a different cost class from one that targets
+three, and only targeted parts should be written.
+
+**Per-part materials must be disposed.** `Word.dispose` walks three material arrays today; the pool
+makes that a loop over parts, and a missed one leaks a GL program per fire.

@@ -91,7 +91,7 @@ crossfading `blendMs` across each boundary. Enter and exit run at a fixed length
 | `leather` | upholstery panels, creased at the seams |
 | `tubing` | glowing tube piped around a near-invisible volume; turns bloom on by itself |
 | `piping` | corded seam running the edge of a hide |
-| `sequin` | chunky glitter that breaks the silhouette |
+| `sequin` | discs sewn flat in staggered rows, catching light as they tilt |
 
 ### lighting
 

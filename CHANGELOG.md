@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
 ### The light can follow the pointer
 
@@ -87,12 +87,26 @@ hex and interpolate in linear space, so a pink-to-cyan fade does not pass throug
 
 No built-in look sets it, and without it every run is flat as before.
 
-### Breaking
+### `sequin` is sewn on
 
-**The package is now `klieg`.** `blitsklieg` on npm is deprecated and points here; its published
-versions stay resolvable, but nothing further ships under that name. The entry points rename with
-it — `createBlitsklieg` is `createKlieg`, and the `Blitsklieg` and `BlitskliegOptions` types are
-`Klieg` and `KliegOptions`. The lab workspace is `@klieg/lab`.
+`sequin` was a freely tumbling square standing a third of its own size off the letter. It is now 520
+discs lying nearly flat on staggered rows — sewn on rather than landed there. Three fields on the
+chunk generator do it, each inert at its default, so a `decoration` of `kind: 'chunks'` you wrote
+yourself places exactly as before.
+
+`ChunkSpec.lie`, 0..1, is how flat a chunk lies on the surface it sits on, applied after `align`. It
+turns the chunk onto that surface's outward normal by the shortest arc, so the chunk keeps the spin
+its tumble gave it. From 0.7 up no chunk can face into the letter, so the field renders `FrontSide`
+and stops drawing the chunks on the far side of the glyph — turn the word and they come back.
+
+`shape: 'disc'` is a twelve-segment circle beside `flake` and `cube`.
+
+`BeddingSpec.pitch` puts sites at a fixed spacing along each bed with alternate beds offset by half a
+pitch, and `.jitter` is how far off its site a chunk may stray, as a fraction of the pitch. A site is
+a rejection rather than a snap, so no chunk is carried off the letter to reach one. Omit `pitch` and
+bedding places chunks freely along a bed as it always has.
+
+### Breaking
 
 `loop` is gone from `CornerStrategy` and `CornerWeights`. Bridging a corner with a full turn of tube
 cannot be built to hold the bend minimum inside the advance any run in a glyph has, and it is not a
@@ -110,6 +124,13 @@ cap, so it read as an outline effect. The respec that would have fixed it was no
 spec naming it fails to typecheck; a `show` URL naming it falls through to the default look cycle.
 
 ## 0.4.0
+
+### Breaking
+
+**The package is now `klieg`.** `blitsklieg` on npm is deprecated and points here; its published
+versions stay resolvable, but nothing further ships under that name. The entry points rename with
+it — `createBlitsklieg` is `createKlieg`, and the `Blitsklieg` and `BlitskliegOptions` types are
+`Klieg` and `KliegOptions`. The lab workspace is `@klieg/lab`.
 
 ### Looks
 

@@ -514,9 +514,10 @@ export function chunkMatrices(
       // Turned by the shortest arc onto the normal rather than built from it, so the chunk keeps
       // the spin the tumble gave it and `lie` costs no random draw of its own.
       face.set(0, 0, 1).applyQuaternion(rotation);
-      // Onto whichever side of the surface the face already points: the opposite normal is the same
-      // plane, and reaching for it would spin a chunk half a turn to land somewhere it already was.
-      onto.copy(normal).multiplyScalar(face.dot(normal) < 0 ? -1 : 1);
+      // Always the outward normal, never the near side of the same plane: a one-faced chunk laid
+      // onto the near side points its face into the letter half the time, which is what forces the
+      // whole field to render DoubleSide. See `chunkGeometrySide`.
+      onto.copy(normal);
       lay.setFromUnitVectors(face, onto).multiply(rotation);
       rotation.slerp(lay, lie);
     }
@@ -536,10 +537,18 @@ export function chunkGeometry(shape: ChunkSpec['shape']): THREE.BufferGeometry {
 }
 
 /**
- * A flake and a disc are each one open face, so culling the back hides every chunk that tumbled
- * away from the camera. A disc only faces reliably outward at `lie` 1, which is a value rather than
- * a shape, so it cannot decide this.
+ * A chunk this flat has been turned far enough onto the outward normal that its face cannot end up
+ * pointing into the letter. Measured on `sequin`: at 0.7 no chunk on the near cap faced inward, and
+ * at 0.5 one in sixty still did, which culling would delete rather than hide.
  */
-export function chunkGeometrySide(shape: ChunkSpec['shape']): THREE.Side {
-  return shape === 'cube' ? THREE.FrontSide : THREE.DoubleSide;
+const LIE_FACES_OUT = 0.7;
+
+/**
+ * A flake and a disc are each one open face, so culling the back hides exactly the chunks the letter
+ * itself already hides — but only once they face outward, which `lie` decides and a shape cannot.
+ * Below that, a chunk still tumbling can face inward, and culling would delete it outright.
+ */
+export function chunkGeometrySide(spec: ChunkSpec): THREE.Side {
+  if (spec.shape === 'cube') return THREE.FrontSide;
+  return (spec.lie ?? 0) >= LIE_FACES_OUT ? THREE.FrontSide : THREE.DoubleSide;
 }

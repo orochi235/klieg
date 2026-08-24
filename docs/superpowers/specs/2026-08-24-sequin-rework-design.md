@@ -38,10 +38,17 @@ its neighbours, and pinning the spin would produce a stamped pattern.
 quad's two, which for an eight-letter word at 400 chunks a letter is ~38k triangles — not a cost
 worth designing around.
 
-The side stays `DoubleSide`. A disc only faces reliably outward at `lie: 1`, and `FrontSide` below
-that would cull chunks out of existence as they tumble. There is a real optimization at `lie: 1` —
-back-cap discs would cull for free, against the 25.1% of `sequin`'s chunks that land there — but it
-is conditional on a value rather than a shape, so it needs measuring before it is wired.
+The side follows `lie`, not the shape. Laying a chunk onto the *outward* normal — rather than onto
+whichever side of the surface plane its tumble already leaned toward — is what makes its one face
+reliably point out of the letter; at `lie` 0.7 and above no chunk on a near cap faces inward, so the
+field renders `FrontSide` and the back cap culls per view. That culling is not a placement change:
+turn the letter and those chunks come back, which matters because two shipped enters put the back
+cap on screen. Below 0.7 a chunk is still part way through its tumble and can face inward, where
+culling would delete it rather than hide it, so it stays `DoubleSide`.
+
+Laying always outward costs half a turn for the chunks that leaned the other way, which leaves them
+sitting less flat: at `lie: 0.82` the near cap's mean tilt off the surface goes from 10.7° to 16.1°.
+`sequin` ships at 0.88 instead, which puts it back at 10.8°. `spikes/disc-facing.mjs` measures both.
 
 **`BeddingSpec.pitch` and `.jitter` — regular spacing along a bed.** `bedding` already runs chunks
 in bands at an angle, which is the row a sequin is sewn in; within a band placement is free, so

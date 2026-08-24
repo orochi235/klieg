@@ -69,11 +69,11 @@ function capShare(spec: ChunkSpec): number {
   return caps / matrices.length;
 }
 
-/**
- * Angle in radians between a chunk's own face and the surface it sat on. A flake and a disc face
- * local +Z, so this is what `lie` drives to zero.
- */
-function tilt(m: THREE.Matrix4, blueprint: { position: Float32Array; normal: Float32Array }) {
+/** Outward normal of the surface a chunk was sewn to, taken from the pool sample nearest it. */
+function normalUnder(
+  m: THREE.Matrix4,
+  blueprint: { position: Float32Array; normal: Float32Array },
+) {
   const at = new THREE.Vector3().setFromMatrixPosition(m);
   let best = Infinity;
   const p = new THREE.Vector3();
@@ -93,8 +93,16 @@ function tilt(m: THREE.Matrix4, blueprint: { position: Float32Array; normal: Flo
       blueprint.normal[i * 3 + 2] as number,
     );
   }
+  return near;
+}
+
+/**
+ * Angle in radians between a chunk's own face and the surface it sat on. A flake and a disc face
+ * local +Z, so this is what `lie` drives to zero.
+ */
+function tilt(m: THREE.Matrix4, blueprint: { position: Float32Array; normal: Float32Array }) {
   const face = new THREE.Vector3(0, 0, 1).applyQuaternion(quaternionOf(m));
-  return Math.acos(Math.min(1, Math.abs(face.dot(near))));
+  return Math.acos(Math.min(1, Math.abs(face.dot(normalUnder(m, blueprint)))));
 }
 
 /** Rotation only, so two matrices can be compared for shared orientation. */
@@ -380,17 +388,15 @@ describe('lie', () => {
     expect(zero.map((m) => m.elements.join())).toEqual(off.map((m) => m.elements.join()));
   });
 
-  it('turns a chunk the short way, so a partial lie never tilts it further off', () => {
+  it('turns a chunk onto the outward normal, not onto the near side of the same plane', () => {
     const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec) });
-    const free = chunkMatrices(blueprint, { ...spec, lie: 0 }, 3);
-    const half = chunkMatrices(blueprint, { ...spec, lie: 0.5 }, 3);
+    const matrices = chunkMatrices(blueprint, { ...spec, lie: 0.8 }, 3);
 
-    // Reaching for the far side of the surface would spin a nearly-flipped chunk most of a turn to
-    // reach a plane it was already in, which reads as a chunk standing up on the way to lying down.
-    for (let i = 0; i < half.length; i++) {
-      expect(tilt(half[i] as THREE.Matrix4, blueprint)).toBeLessThanOrEqual(
-        tilt(free[i] as THREE.Matrix4, blueprint) + 1e-9,
-      );
+    // The far side is the same plane and costs half a turn to reach, but a one-faced chunk laid onto
+    // the near side points its face into the letter, which is what keeps the field off FrontSide.
+    for (const m of matrices) {
+      const face = new THREE.Vector3(0, 0, 1).applyQuaternion(quaternionOf(m));
+      expect(face.dot(normalUnder(m, blueprint))).toBeGreaterThan(0);
     }
   });
 
@@ -525,7 +531,7 @@ describe('sequin', () => {
       }
     }
 
-    expect(hash >>> 0).toBe(3083282461);
+    expect(hash >>> 0).toBe(404111772);
   });
 });
 
@@ -556,11 +562,19 @@ describe('chunkGeometry', () => {
 });
 
 describe('chunkGeometrySide', () => {
-  it('renders a flake from both sides', () => {
-    expect(chunkGeometrySide('flake')).toBe(THREE.DoubleSide);
+  it('renders a tumbling flake from both sides', () => {
+    expect(chunkGeometrySide({ ...CHUNKS, shape: 'flake' })).toBe(THREE.DoubleSide);
+  });
+
+  it('culls the back of a chunk laid flat enough to face outward', () => {
+    expect(chunkGeometrySide({ ...CHUNKS, shape: 'disc', lie: 0.88 })).toBe(THREE.FrontSide);
+  });
+
+  it('keeps both sides of a chunk only part way onto the normal', () => {
+    expect(chunkGeometrySide({ ...CHUNKS, shape: 'disc', lie: 0.5 })).toBe(THREE.DoubleSide);
   });
 
   it('leaves a closed cube front-sided', () => {
-    expect(chunkGeometrySide('cube')).toBe(THREE.FrontSide);
+    expect(chunkGeometrySide({ ...CHUNKS, shape: 'cube' })).toBe(THREE.FrontSide);
   });
 });

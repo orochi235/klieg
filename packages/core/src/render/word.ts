@@ -358,7 +358,7 @@ export class Word {
         tintMaterialOf(spec) === 'decoration' ? hue : undefined,
       );
       decorMaterial.transparent = true;
-      if (decoration.kind === 'chunks') decorMaterial.side = chunkGeometrySide(decoration.shape);
+      if (decoration.kind === 'chunks') decorMaterial.side = chunkGeometrySide(decoration);
       seedFlake(decorMaterial, i);
       this.decorMaterials.push(decorMaterial);
       this.darkMaterials.push(null);

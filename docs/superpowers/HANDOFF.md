@@ -311,9 +311,14 @@ the extrusion band stands perpendicular to, so a grid projected onto the band sm
 extrusion. The band keeps free placement, told apart by the per-triangle facing `faceBias` already
 computes.
 
-**Left undone, measured but not wired:** at `lie: 1` every disc faces outward, so `FrontSide` becomes
-correct and the 25.1% of chunks on the back cap would cull for free. It turns on a value rather than
-a shape, and `sequin` does not ship at 1, so it needs measuring before it is wired.
+**`lie` lays a chunk onto the outward normal, and the field is `FrontSide` from 0.7 up.** The earlier
+note here — that a disc only faces outward at `lie: 1` — was wrong, and wrong in a way that hid the
+fix: the side a face ends up on was decided by the tumble, not by `lie`, so *no* value of `lie` made
+`FrontSide` safe. Only 47.8% of near-cap discs faced outward at any setting, 1 included. Laying
+always onto the outward normal makes it 100% from 0.7 up, at the cost of half a turn for the chunks
+that leaned the other way — which leaves them less flat, so `sequin` moved from `lie: 0.82` to 0.88
+to hold its old tilt spread. Buys nothing measurable in frame time (see the back-cap bullet above);
+it is here because a one-faced chunk that lies on a surface should face out of it.
 
 ## A known limitation of the lab
 

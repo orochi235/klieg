@@ -242,7 +242,7 @@ export const LOOKS: Record<LookName, LookSpec> = {
       align: 0,
       // Not 1: discs that lie perfectly flat are parallel mirrors showing the same reflection, so
       // the field reads as one dull sheet. The last degrees of tilt are what make them catch light.
-      lie: 0.82,
+      lie: 0.88,
       cluster: 0,
       // Not 0: a disc lying exactly in the surface z-fights with it along its whole face.
       proud: 0.08,

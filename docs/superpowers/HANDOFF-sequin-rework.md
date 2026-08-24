@@ -24,7 +24,8 @@ Two of the eleven commits are unrelated to sequin and were asked for separately:
 ## What is left
 
 - **Merge it.** Nothing blocks this but review.
-- **`FrontSide` at `lie: 1`** — measured, deliberately not wired. See the handoff's sequin section.
+- ~~**`FrontSide` at `lie: 1`**~~ — measured and wired; the premise was wrong. See the handoff's
+  sequin section.
 - **`pyrite-respec` can be deleted once this merges.** Its two generic commits (`ffc7c45`,
   `7ed4bb0`) are cherry-picked onto this branch; the other four are pyrite-specific and the look is
   gone. It still has a worktree at `/private/tmp/.../pyrite-wt`. **Do not delete it before this

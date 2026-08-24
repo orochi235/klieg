@@ -220,7 +220,9 @@ function returnToRest(): void {
   const from = { yaw: view.yaw, pitch: view.pitch };
   const start = performance.now();
   const step = (now: number) => {
-    const t = Math.min(1, (now - start) / SETTLE_MS);
+    // rAF reports the frame's start time, which can precede the performance.now() taken on
+    // release; an unclamped negative t inverts the ease and kicks the word further off-axis.
+    const t = Math.min(1, Math.max(0, (now - start) / SETTLE_MS));
     const eased = 1 - (1 - t) ** 3;
     view.yaw = from.yaw * (1 - eased);
     view.pitch = from.pitch * (1 - eased);

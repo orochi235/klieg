@@ -43,15 +43,30 @@ floatingStrategy(gridStrategy)   // or stripStrategy, stackStrategy, or nothing
 strategies read flags like `pinned`. Tiled items go to the inner strategy against the **full**
 container, so tiling is unchanged and reserves no room for the panel. Floating items are placed from
 the strategy's own state, and both merge into one `placements` map. Affordance ids are namespaced so
-`reduce` routes by prefix. `canAccept`, `navigate` and `getDropPreview` delegate to the inner
-strategy; `configSpec` is the union.
+`reduce` routes by prefix. `canAccept` and `navigate` delegate to the inner strategy with floating
+items filtered out, so it never counts them; `configSpec` is the union. `getDropPreview` is left
+undefined, which sends the host down the canonical `layout({ preview })` path — and `preview` is
+forwarded to the inner strategy, so drop previews keep working without a second code path.
 
 No existing strategy changes. A container needing no tiling wraps nothing.
 
-**State**, per item: `{ anchor: Corner } | { x: number; y: number }`, where `Corner` is
-`'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'`. This union is the reason snapping is
-worth building — the anchor form survives any resize with no recomputation, while a free position
-must be re-clamped on mount and on resize.
+**State**, per item: `{ x: number; y: number; anchor: Corner | null }`, where `Corner` is
+`'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'`. The position always accumulates and
+`anchor` is a sticky cache over it. Storing `anchor` is what makes a resize exact — the rect
+re-derives from the corner rather than being re-clamped from stale coordinates.
+
+It cannot be the tidier `{ anchor } | { x, y }` union. While snapped, `layout()` would resolve to the
+corner origin, so every incoming delta would be measured from that same origin and a slow drag
+outward would re-snap forever, never escaping. The visible consequence of the working shape is
+correct sticky-snap behavior: un-snapping jumps the panel up to `snapThreshold` px at once.
+
+**Eligible corners are per item, not container config.** `ConfigFieldSpec` is
+`'number' | 'boolean' | 'string' | readonly string[]`, where the array form is an enum of allowed
+*scalars*, and `checkStrategyConfig` reports unknown keys — so a list-valued config key both fails
+validation and cannot be declared. They live on `meta.snapCorners`, which is the better semantics
+anyway: `LayoutItem.meta` *is* the `membership.placement` bag where `pinned` already lives, and two
+floating panels in one container can differ. Container config keeps only the scalars `inset`,
+`snapThreshold` and `defaultAnchor`.
 
 windease owns this state and its snapshot shape. It does not choose where the snapshot is written;
 that is the host's, and is what labkit's `storageKey` names.
@@ -67,8 +82,10 @@ small, so free placement is the common case.
 
 **Two constraints the existing contract imposes:**
 
-- `reduce` must resolve `payload.point`, not `dx`/`dy`. Snapping quantizes the extent, and per the
-  `LayoutEvent` doc a quantized strategy never accumulates small deltas — the drag would never move.
+- `reduce` must work from absolute `payload.point`, not `dx`/`dy`. Per the `LayoutEvent` doc a
+  strategy whose extents are quantized never accumulates small deltas. Motion is the difference
+  between successive absolute points, so the first event of a gesture only records the pointer and
+  moves nothing.
 - There is no drag-end event. The snap is therefore **live during the drag**, committing wherever the
   pointer is released, rather than resolving on release.
 
@@ -84,7 +101,7 @@ A thin React shell binding the strategy to DOM. Consumer-facing config only:
 interface FloatingPanelProps {
   children: ReactNode;
   anchor?: Corner;          // resting corner before first drag; default 'bottom-left'
-  snapCorners?: Corner[];   // eligible corners; default all four
+  snapCorners?: Corner[];   // eligible corners, written to meta.snapCorners; default all four
   inset?: number;           // default 12
   storageKey?: string;      // slot for windease's snapshot; omit for ephemeral
   className?: string;
@@ -150,18 +167,19 @@ windease:
 
 - a floating item is placed from state; tiled items reach the inner strategy against the full container
 - an inner strategy's own placements are unchanged by the wrapper
-- a drag resolving `payload.point` within 12px per-axis of an eligible corner stores `{ anchor }`
+- a drag whose accumulated position lands within 12px per-axis of an eligible corner sets `anchor`
 - the shoved-into-corner case — pointer at (0, 0) with inset 12 — snaps; this is the regression test
   for the per-axis metric
 - a corner absent from config never captures
-- a free drop stores `{ x, y }` and is re-clamped when the container shrinks
+- a position past the threshold clears `anchor`, and is clamped when the container shrinks
+- a slow drag out of a snapped corner escapes rather than re-snapping every event
 - state round-trips through a snapshot
 
 labkit:
 
 - `FloatingPanel` renders at the anchored corner before any drag
 - a pointerdown on a `[data-no-drag]` child does not start a drag
-- `storageKey` writes and restores the strategy's snapshot for both arms of the union
+- `storageKey` writes and restores the strategy's snapshot, anchored and free alike
 - `Legend` renders one row per entry with the mark class matching `mark`
 
 klieg:

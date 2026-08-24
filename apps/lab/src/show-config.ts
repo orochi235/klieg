@@ -12,7 +12,10 @@ export interface ShowConfig {
   looks: LookName[];
   /** Milliseconds a look holds before the next; the enter and exit add ~1.5s on top. 0 never advances. */
   cycleMs: number;
-  /** `sweep` rakes a highlight across the type, which leaves it dim between passes. */
+  /**
+   * `sweep` rakes a highlight across the type, which leaves it dim between passes; `pointer`
+   * aims it wherever the cursor or finger is, and lights exactly like `static` until one arrives.
+   */
   lighting: LightingName;
   /** Undefined lets each look decide, which is what the default does. */
   bloom?: boolean;

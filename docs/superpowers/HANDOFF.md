@@ -134,12 +134,12 @@ Roughly in order of value; the items are independent of each other.
   need a lab-only path source, and `tubing`'s `R` at 1.996r is wander — it vanishes at
   `amplitude: 0`.
 - **`sequin` is applied the wrong way round and should be reworked before it is tuned.** See below.
-- **The back-cap chunk waste is not worth fixing — measured, and struck from this list.** The
-  ~30% is real (27.9% `pyrite`, 25.1% `sequin`), but it costs nothing: real-GPU median frame time is
-  2.2–2.3 ms whether `pyrite` draws 55 chunks or 1. Rejecting back-facing samples would raise
-  visible chunks per letter by 39% and leave only 8.8% of positions surviving the reseed — a look
-  change dressed as an optimization. The back cap is also genuinely on screen during two shipped
-  enters.
+- **The back-cap chunk waste is not worth fixing — measured, and struck from this list.** About a
+  quarter of `sequin`'s chunks land on the back cap (25.1%; the same measurement put the deleted
+  `pyrite` at 27.9%), but it costs nothing: real-GPU median frame time was 2.2–2.3 ms whether a
+  chunk look drew 55 chunks or 1. Rejecting back-facing samples would raise visible chunks per
+  letter by 39% and leave only 8.8% of positions surviving the reseed — a look change dressed as an
+  optimization. The back cap is also genuinely on screen during two shipped enters.
 - **`flip` drops opacity 171° from rest**, so the letter fades in nearly back-on — the opposite of
   what the step's own comment claims. `easeOutCubic(s)` hits 0.05 far later than the author expected.
   Small, self-contained, and a real defect rather than a taste question.
@@ -271,12 +271,25 @@ Four qualities the rework needs, and what each costs today:
   `0.2`. Note that `0` buys *random* even scatter, not *regular* spacing — real sequins are sewn in
   rows or a near-uniform lattice, which random sampling will not produce however low `cluster` goes.
 
-`POOL = 512` in `decoration.ts` bounds distinct positions for both chunk looks, and the clustering
-draw scans the whole pool per chunk, so raising it makes placement quadratic.
+Two measurements from the deleted `pyrite` look describe `sequin` too, since both ran on this
+generator:
 
-The `pyrite` respec that used to be argued here is dropped, along with its branch. `pyrite` itself
-stays as shipped: it has been in the published `LookName` union since 0.4.0, so removing it would be
-a breaking change.
+**Placement is weighted by triangle area, and the extrusion band wins.** `pyrite` put 59.2% of its
+chunks on the band against 12.9% on the front cap, which is why it read as an outline effect rather
+than a treated surface. `sequin` is sampled the same way. Weighting placement by *visible* area
+rather than surface area is the change that would move it.
+
+**Size and embedding are single values.** Every chunk is one `size` at the same `proud` fraction, so
+the field has no scale variation.
+
+`POOL = 512` in `decoration.ts` bounds distinct positions, and the clustering draw scans the whole
+pool per chunk, so raising it makes placement quadratic. `sequin` now asks for 400 of those 512 —
+little headroom, and regular spacing may want more positions rather than fewer.
+
+**Its current numbers are provisional.** `78ba362` moved `sequin` to 400 chunks at 0.045 em from 90
+at 0.055 and dropped its clearcoat, tuned to make a nugget field read well and without this section
+in view. Once the primitive is a flush disc they are the wrong numbers: re-derive them, and expect
+to move the `look-sequin` baseline.
 
 ## A known limitation of the lab
 

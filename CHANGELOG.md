@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### The light can follow the pointer
+
+`lighting: 'pointer'` aims the environment at the cursor instead of turning it on a clock, so the
+highlight rakes across the type as the viewer moves. One `pointermove` listener serves mouse, pen
+and touch alike, and it neither captures the pointer nor cancels the event, so a page already
+dragging keeps its gesture — on the `show` route one finger turns the word and moves the light
+together.
+
+Until a pointer arrives it holds the same pose `static` does, pixel for pixel, which is what a
+fresh load and an untouched iframe get. Reduced motion snaps to the pointer rather than easing.
+Nothing defaults to it: `lighting` still defaults to `sweep`, and the `show` route still to
+`static`, so no existing call or URL changes. Being a `LightingName`, it is shareable in a `show`
+URL as `{"lighting":"pointer"}` and appears in `LIGHTING_NAMES` for any picker built from it.
+
 ### The type can be told to fill more of the frame
 
 `createKlieg({ framing })` sets the share of the viewport a word is fitted into, per axis; the
@@ -88,6 +102,12 @@ fail to typecheck; drop the field and the weight redistributes over the other tw
 `amplitude`'s depth wander now runs before the cut rather than after, so it wanders a contour as one
 piece rather than each run separately. Its own curvature cap is gone — the corner stage sees the bend
 and handles it — and a wandered word will not reproduce a previous seed's exact geometry.
+
+**`pyrite` is gone**, and with it the name from `LookName`. It was built on the wrong model: the
+chunk generator sticks a chunk on each sampled surface point, where pyrite needed crystals grown out
+of the matrix — and measurement put 59.2% of them on the extrusion band against 12.9% on the front
+cap, so it read as an outline effect. The respec that would have fixed it was not worth shipping. A
+spec naming it fails to typecheck; a `show` URL naming it falls through to the default look cycle.
 
 ## 0.4.0
 

@@ -20,8 +20,7 @@ export type LookName =
   | 'leather'
   | 'tubing'
   | 'piping'
-  | 'sequin'
-  | 'pyrite';
+  | 'sequin';
 
 /** Extract silently drops a name that is not a real material property, so a typo fails DEFAULTS. */
 // Never add 'opacity' here, tempting as it looks: Word rewrites material.opacity every frame from
@@ -128,25 +127,23 @@ export const LOOKS: Record<LookName, LookSpec> = {
     bloom: true,
   },
   flake: {
-    // Dark and metallic on purpose: a bright diffuse base drowns the glints, and sparkle is
-    // entirely a contrast effect — the flecks have to be much brighter than what surrounds them.
+    // Sparkle is a contrast effect, so the flecks have to be the only bright pixels: the base
+    // stays dark so it cannot drown them, and matte so a coat's own highlight cannot compete.
     color: 0x2b2740,
     metalness: 0.85,
-    roughness: 0.5,
-    clearcoat: 0.5,
-    clearcoatRoughness: 0.15,
-    flake: { density: 0.33, size: 1 / 100, spread: 1, color: 0xff5ecb, colorMix: 0.12 },
+    roughness: 0.7,
+    clearcoat: 0,
+    flake: { density: 0.8, size: 1 / 100, spread: 1, color: 0xff5ecb, colorMix: 0.12 },
   },
   glitter: {
     color: 0x8a1c2b,
     metalness: 0.9,
-    roughness: 0.28,
-    clearcoat: 1,
-    clearcoatRoughness: 0.04,
+    roughness: 0.5,
+    clearcoat: 0,
     // 315 cells per em looked right on a retina display but sits past the top of the shader's
     // fade band on a 1x one, where it smooths to a flat sheen. 120 is full strength at DPR 2 and
-    // still about two thirds at DPR 1. Density is untouched: it does not alias.
-    flake: { density: 0.81, size: 1 / 120, spread: 0.9, color: 0xffd9c0, colorMix: 0.06 },
+    // still about two thirds at DPR 1. Density is what carries a denser field: it does not alias.
+    flake: { density: 0.96, size: 1 / 120, spread: 0.9, color: 0xffd9c0, colorMix: 0.06 },
   },
   leather: {
     color: 0x5a2f1d,
@@ -234,36 +231,18 @@ export const LOOKS: Record<LookName, LookSpec> = {
   sequin: {
     color: 0x2a0f1c,
     metalness: 0.6,
-    roughness: 0.45,
-    clearcoat: 0.4,
+    roughness: 0.7,
+    clearcoat: 0,
     tintTo: 'decoration',
     decoration: {
       kind: 'chunks',
-      count: 90,
-      size: 0.055,
+      count: 400,
+      size: 0.045,
       shape: 'flake',
       align: 0.1,
       cluster: 0.2,
       proud: 0.35,
       look: { color: 0xffd9c0, metalness: 1, roughness: 0.08, clearcoat: 1 },
-    },
-  },
-  pyrite: {
-    color: 0x30302c,
-    metalness: 0.2,
-    roughness: 0.85,
-    clearcoat: 0,
-    tintTo: 'decoration',
-    decoration: {
-      kind: 'chunks',
-      count: 55,
-      size: 0.075,
-      shape: 'cube',
-      align: 0.85,
-      cluster: 0.6,
-      proud: 0.45,
-      // Brassier and greener than gold's 0xffc44d — fool's gold is what this is imitating.
-      look: { color: 0xd8b246, metalness: 1, roughness: 0.22, clearcoatRoughness: 0.1 },
     },
   },
 };

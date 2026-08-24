@@ -53,7 +53,6 @@ const NAMES: LookName[] = [
   'tubing',
   'piping',
   'sequin',
-  'pyrite',
 ];
 
 function snapshot(material: THREE.MeshPhysicalMaterial): Record<string, unknown> {
@@ -269,7 +268,6 @@ describe('decorated looks', () => {
       'tubing',
       'piping',
       'sequin',
-      'pyrite',
     ]);
   });
 
@@ -279,10 +277,8 @@ describe('decorated looks', () => {
     }
   });
 
-  it('builds sequin and pyrite from the chunks generator', () => {
-    for (const name of ['sequin', 'pyrite'] as const) {
-      expect(specOf(name).decoration?.kind).toBe('chunks');
-    }
+  it('builds sequin from the chunks generator', () => {
+    expect(specOf('sequin').decoration?.kind).toBe('chunks');
   });
 
   it('makes tubing a glowing tube over a near-invisible body', () => {
@@ -319,15 +315,11 @@ describe('decorated looks', () => {
     expect(decoration.level).toBeGreaterThan(-decoration.radius);
   });
 
-  it('gives pyrite crystal habit and sequin free tumble', () => {
-    const pyrite = specOf('pyrite').decoration;
+  it('gives sequin free-tumbling flakes rather than a shared lattice', () => {
     const sequin = specOf('sequin').decoration;
 
-    expect(pyrite?.kind === 'chunks' && pyrite.shape).toBe('cube');
     expect(sequin?.kind === 'chunks' && sequin.shape).toBe('flake');
-    expect(pyrite?.kind === 'chunks' && pyrite.align).toBeGreaterThan(
-      (sequin?.kind === 'chunks' && sequin.align) as number,
-    );
+    expect(sequin?.kind === 'chunks' && sequin.align).toBeLessThan(0.5);
   });
 });
 

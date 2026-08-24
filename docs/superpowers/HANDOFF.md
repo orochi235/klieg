@@ -122,13 +122,11 @@ how the source changes the cut. The spec lists the rest.
 
 Roughly in order of value; the items are independent of each other.
 
-- **Playwright reuses whatever owns port 5180, so a run in one worktree can test another's code.**
-  `playwright.config.ts` sets `reuseExistingServer: !CI` against a hardcoded 5180, and vite's port
-  is not strict — so a second checkout silently slides to 5181 while every probe keeps hitting the
-  first. It fails silently and returns confident wrong answers: a session in
-  `.claude/worktrees/vertex-provenance` ran its suite against main's dev server and got four bogus
-  failures before noticing. Both halves need fixing — the reuse and the non-strict port. Until then,
-  any visual run taken while another checkout's server is up is invalid, in either direction.
+- ~~**Playwright reuses whatever owns port 5180**~~ — fixed in `484692b`: `playwright.config.ts`
+  derives a port from the checkout's own path and starts vite `--strictPort`. Before that, a run in
+  one worktree silently answered from another's dev server and returned confident wrong answers —
+  four bogus failures, and two sessions judging appearance off contaminated runs. A checkout without
+  that commit is still exposed.
 - **`visual.spec.ts` is flaky under parallel load.** `bloom path` and `two-line block` fail
   intermittently in the full suite and pass 4/4 in isolation. It predates the particle work —
   `two-line block` was seen failing before the `index.ts` changes existed. Both read the whole
@@ -305,6 +303,13 @@ at once — so tightening it starves the caps rather than sharpening the lattice
 from 1236 at 0.5 to 51 at 0.05 while the share of them sitting on a site stays at 100% throughout.
 `spikes/bed-lattice.mjs` measures both, and `spikes/look-shot.mjs <look> <out.png>` renders one look
 for eye-judging on a port derived from the worktree.
+
+**Two traps for anything else that measures this field.** `glyphToShapes(font, char, size)` takes a
+size, and omitting it silently builds the glyph in font units — about 53x too large, with every spec
+number written at 1 em. Use `buildGlyphGeometry(font, char, 1, DEFAULT_GLYPH_OPTIONS)`, which is what
+the renderer does. And classify a cap by its normal, not by z: the bevel stands proud of the cap
+plane, so a z cutoff files bevel samples as band and reports a lattice far worse than it is. Both
+produced a wrong number mid-session before they were caught.
 
 **The lattice governs the caps only.** A bed is measured in word space, which the caps lie in and
 the extrusion band stands perpendicular to, so a grid projected onto the band smears along the

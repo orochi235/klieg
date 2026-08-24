@@ -92,7 +92,6 @@ crossfading `blendMs` across each boundary. Enter and exit run at a fixed length
 | `tubing` | glowing tube piped around a near-invisible volume; turns bloom on by itself |
 | `piping` | corded seam running the edge of a hide |
 | `sequin` | chunky glitter that breaks the silhouette |
-| `pyrite` | intergrown cubic crystals on a dull matrix |
 
 ### lighting
 

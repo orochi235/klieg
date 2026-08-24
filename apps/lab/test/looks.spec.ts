@@ -24,7 +24,6 @@ const LOOKS = [
   'tubing',
   'piping',
   'sequin',
-  'pyrite',
 ] as const;
 
 /** Every source of frame-to-frame variation off, so a screenshot is a function of the look. */

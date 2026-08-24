@@ -133,13 +133,12 @@ Roughly in order of value; the items are independent of each other.
 - **Only `piping`/`direct` `B` fails in a shipped configuration.** The `exact` and `field` failures
   need a lab-only path source, and `tubing`'s `R` at 1.996r is wander — it vanishes at
   `amplitude: 0`.
-- **`pyrite` is built on the wrong model and should be respecced before it is tuned.** See below.
-- **The back-cap chunk waste is not worth fixing — measured, and struck from this list.** The
-  ~30% is real (27.9% `pyrite`, 25.1% `sequin`), but it costs nothing: real-GPU median frame time is
-  2.2–2.3 ms whether `pyrite` draws 55 chunks or 1. Rejecting back-facing samples would raise
-  visible chunks per letter by 39% and leave only 8.8% of positions surviving the reseed — a look
-  change dressed as an optimization. The back cap is also genuinely on screen during two shipped
-  enters.
+- **The back-cap chunk waste is not worth fixing — measured, and struck from this list.** About a
+  quarter of `sequin`'s chunks land on the back cap (25.1%; the same measurement put the deleted
+  `pyrite` at 27.9%), but it costs nothing: real-GPU median frame time was 2.2–2.3 ms whether a
+  chunk look drew 55 chunks or 1. Rejecting back-facing samples would raise visible chunks per
+  letter by 39% and leave only 8.8% of positions surviving the reseed — a look change dressed as an
+  optimization. The back cap is also genuinely on screen during two shipped enters.
 - **`flip` drops opacity 171° from rest**, so the letter fades in nearly back-on — the opposite of
   what the step's own comment claims. `easeOutCubic(s)` hits 0.05 far later than the author expected.
   Small, self-contained, and a real defect rather than a taste question.
@@ -251,29 +250,25 @@ highest-yield instruction was "verify this by mutation". It has held on everythi
   counter it was aimed at. A number that agrees with the hypothesis is not evidence until the code
   under it has been deleted and the number moved.
 
-## `pyrite` is built on the wrong model
+## `pyrite` is gone; what it taught applies to `sequin`
 
-The chunk generator samples surface points and sticks a chunk on each — dip it in glue and roll it in
-sprinkles. That is right for `glitter` and roughly right for `sequin`, which genuinely are applied to
-a surface. Pyrite is *intergrown*: cubes grown out of the matrix, mostly buried, penetrating each
-other, faces parallel within a grain because they share a lattice.
+`pyrite` was deleted rather than respecced — it needed crystals grown out of the matrix and the
+chunk generator only sticks a chunk on each sampled surface point. Two measurements from that
+analysis still describe `sequin`, which is on the same generator:
 
-More crystals will not fix that. Three changes to the placement model would do more than raising the
-count 30x: **vary size** (crystal beds are power-law, and that scale variation is most of what makes a
-texture read as grown rather than applied); **vary embedding** (`proud` is one value for every chunk,
-so all of them sit the same fraction out, which is precisely the glued look); and **weight
-placement by area** (`pyrite` puts 12.9% of its chunks on the front cap against 59.2% on the
-extrusion band, so it reads as an outline effect rather than a grown surface — measured, and the
-largest single defect).
+**Placement is weighted by triangle area, and the extrusion band wins.** The deleted look put 59.2%
+of its chunks on the band against 12.9% on the front cap, which is why it read as an outline effect
+rather than a treated surface. `sequin` is sampled the same way. Weighting placement by *visible*
+area rather than surface area is the change that would move it.
 
-Interpenetration was on this list and is struck: drawing sample points without replacement stops two
-chunks sharing a *point*, not from overlapping, and 66.6% of `pyrite`'s chunks already certainly
-intersect a neighbour (mean nearest neighbour 0.0722 em against a 0.075 em edge).
+**Size and embedding are single values.** Every chunk is one `size` and sits `proud` by the same
+fraction, so the field has no scale variation. That reads as applied rather than grown; for a look
+that genuinely is applied, as `sequin` is, it matters much less.
 
-If a respec still leaves it not worth shipping, killing it is the owner's call — but note that is a
-breaking change, since `pyrite` has been in the published `LookName` union since 0.4.0. Separately,
-`POOL = 512` in `decoration.ts` bounds distinct positions for both chunk looks, and the clustering
-draw scans the whole pool per chunk, so raising it makes placement quadratic.
+`POOL = 512` in `decoration.ts` bounds distinct positions, and the clustering draw scans the whole
+pool per chunk, so raising it makes placement quadratic. `sequin` now asks for 400 of those 512,
+which still builds a word in under 12 ms — but there is little headroom left before the pool has to
+grow, and growing it is not free.
 
 ## A known limitation of the lab
 

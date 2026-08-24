@@ -89,6 +89,12 @@ fail to typecheck; drop the field and the weight redistributes over the other tw
 piece rather than each run separately. Its own curvature cap is gone — the corner stage sees the bend
 and handles it — and a wandered word will not reproduce a previous seed's exact geometry.
 
+**`pyrite` is gone**, and with it the name from `LookName`. It was built on the wrong model: the
+chunk generator sticks a chunk on each sampled surface point, where pyrite needed crystals grown out
+of the matrix — and measurement put 59.2% of them on the extrusion band against 12.9% on the front
+cap, so it read as an outline effect. The respec that would have fixed it was not worth shipping. A
+spec naming it fails to typecheck; a `show` URL naming it falls through to the default look cycle.
+
 ## 0.4.0
 
 ### Looks

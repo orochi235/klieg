@@ -20,8 +20,7 @@ export type LookName =
   | 'leather'
   | 'tubing'
   | 'piping'
-  | 'sequin'
-  | 'pyrite';
+  | 'sequin';
 
 /** Extract silently drops a name that is not a real material property, so a typo fails DEFAULTS. */
 // Never add 'opacity' here, tempting as it looks: Word rewrites material.opacity every frame from
@@ -244,24 +243,6 @@ export const LOOKS: Record<LookName, LookSpec> = {
       cluster: 0.2,
       proud: 0.35,
       look: { color: 0xffd9c0, metalness: 1, roughness: 0.08, clearcoat: 1 },
-    },
-  },
-  pyrite: {
-    color: 0x30302c,
-    metalness: 0.2,
-    roughness: 0.85,
-    clearcoat: 0,
-    tintTo: 'decoration',
-    decoration: {
-      kind: 'chunks',
-      count: 55,
-      size: 0.075,
-      shape: 'cube',
-      align: 0.85,
-      cluster: 0.6,
-      proud: 0.45,
-      // Brassier and greener than gold's 0xffc44d — fool's gold is what this is imitating.
-      look: { color: 0xd8b246, metalness: 1, roughness: 0.22, clearcoatRoughness: 0.1 },
     },
   },
 };

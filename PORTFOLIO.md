@@ -4,8 +4,8 @@ tagline: Shiny extruded 3D type, overlaid on your app
 tags: [webgl, graphics, typescript]
 featured: true
 order: 10
-demo: https://orochi235.github.io/klieg/
-media: { kind: image, src: apps/lab/test/looks.spec.ts-snapshots/look-neon-darwin.png, span: 2, aspect: "16/9" }
+demo: https://orochi235.github.io/klieg/show/
+media: { kind: embed, src: https://orochi235.github.io/klieg/show/#JTdCJTIydGV4dCUyMiUzQSUyMmtsaWVnJTIyJTJDJTIybG9va3MlMjIlM0ElNUIlMjJ0dWJpbmclMjIlMkMlMjJwaXBpbmclMjIlMkMlMjJnb2xkJTIyJTJDJTIyY2hyb21lJTIyJTJDJTIyZ2VtJTIyJTVEJTJDJTIyY3ljbGVNcyUyMiUzQTMwMDAlN0Q=, span: 2, aspect: "16/9" }
 ---
 
 A transparent WebGL overlay that renders shiny extruded type over an existing web app, for

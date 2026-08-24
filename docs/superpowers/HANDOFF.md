@@ -29,6 +29,14 @@ what a repair step receives and returns is undecided. **The lab is called kliegs
 
 ## State
 
+**0.5.0 is tagged and not published.** `v0.5.0` is on `origin` at `f38ef6a`, `package.json` says
+0.5.0, and CI is green there — but the Release run 404s on `PUT /klieg`. npm's trusted publisher for
+this repo was set up under the old package name and never moved: the last run that published through
+it was `blitsklieg` 0.3.1, and `klieg@0.4.0` went out by hand without a tag. **Point the trusted
+publisher at `klieg`** on npmjs.com (repo `orochi235/klieg`, workflow `release.yml`), then re-run the
+job from Actions with tag `v0.5.0` — `workflow_dispatch` takes the tag exactly so a retry does not
+move it. `v0.4.0` is tagged retroactively at `a3ddc44`, the last commit before that manual publish.
+
 **`main` carries the tube lab, the tube geometry rewrite, the colour gradients, the junction
 reconciliation and direct paths by default, all merged.** `npm run check` green at 736 tests on
 `main` (737 on `vertex-provenance`); `npx playwright test` green at 24.
@@ -121,6 +129,14 @@ how the source changes the cut. The spec lists the rest.
 ## What is worth doing next
 
 Roughly in order of value; the items are independent of each other.
+
+- **An effects pipeline for the tube looks, asked for and not yet designed.** The immediate want is
+  optional per-region flickering on `neon` with its own timing per region — a sign with one bad
+  tube — but that is one instance of a wider ask: driving tube appearance over time, per run or per
+  region, from composable effects rather than a flag per idea. Nothing is built and nothing is
+  decided; it needs a design pass before code. What already exists to build on: `assign` owns run
+  colour, `TubeSpec.gradient` already varies appearance along a domain, and the per-letter material
+  model means a run's own channel can be patched without touching the others.
 
 - ~~**Playwright reuses whatever owns port 5180**~~ — fixed in `484692b`: `playwright.config.ts`
   derives a port from the checkout's own path and starts vite `--strictPort`. Before that, a run in

@@ -16,6 +16,7 @@ interface Config {
 const INK = {
   contour: '#7d7f86',
   built: '#4d8fe0',
+  builtAfter: '#a855f7',
   authored: '#2aa87a',
   drawn: '#e08a20',
   replaced: 'rgba(255, 107, 96, 0.28)',
@@ -163,10 +164,13 @@ export const junction = defineInstrument<CornerScene, Config>({
         id: 'built',
         draw: (ctx, { state, zoom }) =>
           centred(ctx, zoom, () => {
-            stroke(ctx, state.built, state.centre, INK.built, 2.6 / zoom);
-            state.built.forEach((p, i) => {
-              if (state.authored[i]) dot(ctx, p, state.centre, INK.authored, 2.2 / zoom);
-            });
+            for (const run of state.carried) {
+              const ink = run.side === 'after' ? INK.builtAfter : INK.built;
+              stroke(ctx, run.points, state.centre, ink, 2.6 / zoom);
+              run.points.forEach((p, i) => {
+                if (run.authored[i]) dot(ctx, p, state.centre, INK.authored, 2.2 / zoom);
+              });
+            }
           }),
       },
       {

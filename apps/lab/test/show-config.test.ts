@@ -9,7 +9,7 @@ describe('show config', () => {
       text: 'JACKPOT!',
       looks: ['neon'],
       cycleMs: 2000,
-      lighting: 'sweep',
+      lighting: 'static',
       bloom: undefined,
       pivot: false,
       tint: undefined,
@@ -39,7 +39,7 @@ describe('show config', () => {
         text: 'klieg',
         looks: [...LOOK_NAMES],
         cycleMs: 3000,
-        lighting: 'sweep',
+        lighting: 'static',
         bloom: undefined,
         pivot: true,
         tint: undefined,
@@ -85,7 +85,7 @@ describe('show config', () => {
   });
 
   it('takes only a lighting name it knows', () => {
-    expect(resolveConfig({ lighting: 'static' }).lighting).toBe('static');
-    expect(resolveConfig({ lighting: 'disco' }).lighting).toBe('sweep');
+    expect(resolveConfig({ lighting: 'sweep' }).lighting).toBe('sweep');
+    expect(resolveConfig({ lighting: 'disco' }).lighting).toBe('static');
   });
 });

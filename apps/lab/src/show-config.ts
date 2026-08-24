@@ -12,6 +12,7 @@ export interface ShowConfig {
   looks: LookName[];
   /** Milliseconds a look holds before the next; the enter and exit add ~1.5s on top. 0 never advances. */
   cycleMs: number;
+  /** `sweep` rakes a highlight across the type, which leaves it dim between passes. */
   lighting: LightingName;
   /** Undefined lets each look decide, which is what the default does. */
   bloom?: boolean;
@@ -61,7 +62,7 @@ export function resolveConfig(input: unknown): ShowConfig {
     cycleMs: pickCycle(raw.cycleMs),
     lighting: LIGHTING_NAMES.includes(raw.lighting as LightingName)
       ? (raw.lighting as LightingName)
-      : 'sweep',
+      : 'static',
     bloom: typeof raw.bloom === 'boolean' ? raw.bloom : undefined,
     pivot: raw.pivot !== false,
     tint: pickTint(raw.tint),

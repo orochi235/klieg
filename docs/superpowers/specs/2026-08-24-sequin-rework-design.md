@@ -65,16 +65,33 @@ lattice therefore governs cap samples only; band samples keep free placement alo
 per-triangle `facing` value that `faceBias` computes (`|cross.z| / 2·area`) separates them, so this
 needs no new classification. With `faceBias` lifting the caps, that is where the chunks are.
 
+`jitter` is a second dial on the same split, which is not obvious from its name. A stray too tight
+to hit rejects cap draw after cap draw until the sampler happens to draw a band triangle, which it
+accepts immediately — so tightening `jitter` does not make the lattice more exact, it **starves the
+caps**. `spikes/bed-lattice.mjs` measures it: cap samples fall from 1236 at 0.5 to 51 at 0.05, while
+the share of cap samples actually sitting on a site stays at 100% throughout. Read it against
+`faceBias`, which pulls the other way.
+
 ## `sequin`'s own values
 
-Re-derived, not preserved. Its current 400 chunks at 0.045 em with no clearcoat were tuned to make
-a field of tumbling nuggets read well, and none of that survives the primitive changing: a flush
-disc covers differently, catches light differently, and at `proud` near zero cannot self-shadow.
-Expect `align: 0`, `lie: 1`, `proud` at or near 0, `shape: 'disc'`, a bedding with a pitch, and a
-count and size found against the new primitive.
+Re-derived, not preserved: 400 flakes at 0.045 em standing 0.35 proud become **520 discs at 0.062 em
+lying at 0.08 on a lattice pitched at 0.055**, with `faceBias: 16` putting them on the faces a
+reader looks at. The pitch is under the disc's own width, so each row overlaps the next the way sewn
+rows do.
+
+Two values cannot be what the look wants, and both are traps rather than taste:
+
+**`proud` cannot be 0.** A disc lying exactly in the surface z-fights with it across its whole face.
+It stands off a twelfth of an edge, which is invisible and enough.
+
+**`lie` cannot be 1.** Discs that lie perfectly flat are parallel mirrors: every one returns the
+same reflection, and the field reads as a single dull sheet rather than a garment. 0.82 is flat
+enough to read as sewn and varied enough that each disc catches its own light. A look whose whole
+point is glitter is destroyed by orienting its facets perfectly, which is the opposite of what the
+capability seemed to promise.
 
 `look-sequin`'s visual baseline moves, and the placement pin in `decoration.test.ts` is re-recorded
-with it. Both are the deliverable, not collateral.
+with it. Both are the deliverable, not collateral. The other 22 baselines pass untouched.
 
 ## Verification
 

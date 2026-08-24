@@ -510,28 +510,32 @@ describe('poolFor', () => {
   });
 });
 
+/** Ten-thousandths of an em: finer than any placement change, coarser than the platforms disagree. */
+const PIN_GRID = 1e4;
+
 /**
  * Pins `sequin`'s placement so a change to the shared chunk machinery cannot move it unnoticed.
  * The pool scales with `count`, so this moves whenever `sequin`'s own count crosses a pool step —
  * which is a real change to the look, not drift, and the pin is re-recorded deliberately.
+ *
+ * Hashed on a grid rather than on the float64s: this ran on the raw bits until the day a matrix
+ * element's last bits came out differently on macOS and on Linux CI, and a green local suite sat
+ * against three red runs. A real move is a chunk in a different place, orders above this grid.
  */
 describe('sequin', () => {
   it('draws the chunks it was pinned at', () => {
     const spec = specOf('sequin').decoration as ChunkSpec;
     const blueprint = buildChunkBlueprint(box());
     let hash = 0x811c9dc5;
-    const view = new DataView(new ArrayBuffer(8));
     for (let letter = 0; letter < 6; letter++) {
       for (const m of chunkMatrices(blueprint, spec, letter)) {
         for (const value of m.elements) {
-          view.setFloat64(0, value);
-          hash = Math.imul(hash ^ view.getUint32(0), 0x01000193);
-          hash = Math.imul(hash ^ view.getUint32(4), 0x01000193);
+          hash = Math.imul(hash ^ Math.round(value * PIN_GRID), 0x01000193);
         }
       }
     }
 
-    expect(hash >>> 0).toBe(2478817451);
+    expect(hash >>> 0).toBe(1685984237);
   });
 });
 

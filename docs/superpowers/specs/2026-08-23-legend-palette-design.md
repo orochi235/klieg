@@ -82,12 +82,20 @@ small, so free placement is the common case.
 
 **Two constraints the existing contract imposes:**
 
-- `reduce` must work from absolute `payload.point`, not `dx`/`dy`. Per the `LayoutEvent` doc a
-  strategy whose extents are quantized never accumulates small deltas. Motion is the difference
-  between successive absolute points, so the first event of a gesture only records the pointer and
-  moves nothing.
+- **Motion comes from `dx`/`dy`, not `payload.point`.** The `LayoutEvent` doc reserves `point` for a
+  strategy whose extents are *quantized*, where a few pixels round to no change and deltas never
+  accumulate. A floating position is continuous pixels, so deltas accumulate exactly — and the
+  `{ x, y, anchor }` shape above is what makes that true even while snapped. Resolving against
+  `point` would need the previous event's pointer held in state, and with no drag-end event to clear
+  it the next gesture's first move would measure against where the last one ended and teleport the
+  panel. It would also persist per-gesture data into state that snapshots.
 - There is no drag-end event. The snap is therefore **live during the drag**, committing wherever the
   pointer is released, rather than resolving on release.
+- **The affordance is a band, not the whole panel** — for `<Container>` hosts. windease renders each
+  affordance as an interactive `div` at its rect, `z-index: 1`, pointer events on, so one spanning
+  the panel would swallow the panel's own clicks; `handleSize` confines it. labkit's `FloatingPanel`
+  sidesteps this entirely by driving the strategy as a pure function and owning pointer handling
+  itself, so it keeps drag-from-anywhere.
 
 **Z-order is deferred.** `LayoutResult` carries no stacking order, so nothing guarantees a floating
 item renders above a tiled one; that falls to the host's render order. Recorded in windease's

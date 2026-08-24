@@ -65,3 +65,26 @@
   background: rgba(209, 69, 59, 0.22);
   color: #d1453b;
 }
+
+/* Sits in the same overlay as .junction, opposite corner. */
+.cornermap {
+  position: absolute;
+  inset: 0 0 auto auto;
+  padding: 0.4rem;
+  border-bottom-left-radius: 8px;
+  background: color-mix(in srgb, var(--wzl-surface) 88%, transparent);
+  line-height: 0;
+}
+
+/* Matches MAP_SIZE in instrument.tsx. */
+.cornermap__canvas {
+  width: 160px;
+  height: 160px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.cornermap__canvas:focus-visible {
+  outline: 2px solid var(--wzl-accent);
+  outline-offset: 2px;
+}

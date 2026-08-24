@@ -133,7 +133,7 @@ Roughly in order of value; the items are independent of each other.
 - **Only `piping`/`direct` `B` fails in a shipped configuration.** The `exact` and `field` failures
   need a lab-only path source, and `tubing`'s `R` at 1.996r is wander — it vanishes at
   `amplitude: 0`.
-- **`pyrite` is built on the wrong model and should be respecced before it is tuned.** See below.
+- **`sequin` is applied the wrong way round and should be reworked before it is tuned.** See below.
 - **The back-cap chunk waste is not worth fixing — measured, and struck from this list.** The
   ~30% is real (27.9% `pyrite`, 25.1% `sequin`), but it costs nothing: real-GPU median frame time is
   2.2–2.3 ms whether `pyrite` draws 55 chunks or 1. Rejecting back-facing samples would raise
@@ -251,29 +251,32 @@ highest-yield instruction was "verify this by mutation". It has held on everythi
   counter it was aimed at. A number that agrees with the hypothesis is not evidence until the code
   under it has been deleted and the number moved.
 
-## `pyrite` is built on the wrong model
+## `sequin` is applied the wrong way round
 
 The chunk generator samples surface points and sticks a chunk on each — dip it in glue and roll it in
-sprinkles. That is right for `glitter` and roughly right for `sequin`, which genuinely are applied to
-a surface. Pyrite is *intergrown*: cubes grown out of the matrix, mostly buried, penetrating each
-other, faces parallel within a grain because they share a lattice.
+sprinkles. That is right for `glitter`. It is wrong for `sequin`, which should read as discs sewn flat
+onto a garment.
 
-More crystals will not fix that. Three changes to the placement model would do more than raising the
-count 30x: **vary size** (crystal beds are power-law, and that scale variation is most of what makes a
-texture read as grown rather than applied); **vary embedding** (`proud` is one value for every chunk,
-so all of them sit the same fraction out, which is precisely the glued look); and **weight
-placement by area** (`pyrite` puts 12.9% of its chunks on the front cap against 59.2% on the
-extrusion band, so it reads as an outline effect rather than a grown surface — measured, and the
-largest single defect).
+Four qualities the rework needs, and what each costs today:
 
-Interpenetration was on this list and is struck: drawing sample points without replacement stops two
-chunks sharing a *point*, not from overlapping, and 66.6% of `pyrite`'s chunks already certainly
-intersect a neighbour (mean nearest neighbour 0.0722 em against a 0.075 em edge).
+- **Thin.** A sequin is a disc, not a nugget. `shape: 'flake'` has one `size` and no separate
+  thickness, so thinness is not expressible yet.
+- **Oriented parallel to the surface.** `align` does not do this — it is "0 free tumble, 1 one shared
+  lattice per letter" (`decoration.ts:26`), which shares one orientation across a letter rather than
+  following the surface normal. `sequin` sets `0.1`, so its flakes tumble freely. **No parameter
+  expresses surface-parallel orientation; this is a new capability, not a value change.**
+- **Flush on the surface.** `proud` is "how far a chunk sits proud of the surface, 0..1", and `sequin`
+  sets `0.35` — a third of each flake stands off. Sewn sequins sit at ~0.
+- **Regularly distributed.** `cluster` is "0 even scatter, 1 tight intergrown clumps"; `sequin` sets
+  `0.2`. Note that `0` buys *random* even scatter, not *regular* spacing — real sequins are sewn in
+  rows or a near-uniform lattice, which random sampling will not produce however low `cluster` goes.
 
-If a respec still leaves it not worth shipping, killing it is the owner's call — but note that is a
-breaking change, since `pyrite` has been in the published `LookName` union since 0.4.0. Separately,
 `POOL = 512` in `decoration.ts` bounds distinct positions for both chunk looks, and the clustering
 draw scans the whole pool per chunk, so raising it makes placement quadratic.
+
+The `pyrite` respec that used to be argued here is dropped, along with its branch. `pyrite` itself
+stays as shipped: it has been in the published `LookName` union since 0.4.0, so removing it would be
+a breaking change.
 
 ## A known limitation of the lab
 

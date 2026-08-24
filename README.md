@@ -102,6 +102,7 @@ slots.
 |---|---|
 | `sweep` | rakes the highlight across the letters, on its own period |
 | `static` | holds the environment still |
+| `pointer` | aims the highlight wherever the cursor or finger is; `static` until one arrives |
 
 Each list is also exported as a runtime array — `ENTER_NAMES`, `ACTIVE_NAMES`, `EXIT_NAMES`,
 `LOOK_NAMES`, `LIGHTING_NAMES`, `POLICY_NAMES` — for building a picker.

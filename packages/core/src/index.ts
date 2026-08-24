@@ -8,7 +8,7 @@ import { Sequence } from './motion/sequence.js';
 import type { ActiveName, EnterName, ExitName, LetterInfo, MotionPiece } from './motion/types.js';
 import { EffectQueue, type QueuePolicy } from './queue.js';
 import { BloomPath } from './render/bloom.js';
-import { envRotationAt, LIGHTING, type LightingName } from './render/lighting.js';
+import { envRotationAt, LIGHTING, type LightingName, PointerLight } from './render/lighting.js';
 import { LOOKS, type Look, type LookName, type LookSpec, specOf } from './render/looks.js';
 import { prefersReducedMotion, Stage as SceneStage, webglSupported } from './render/stage.js';
 import { Word } from './render/word.js';
@@ -216,6 +216,8 @@ export function createKlieg(options: KliegOptions): Klieg {
     idleTimeoutMs: options.idleTimeoutMs ?? 8000,
   });
 
+  const pointerLight = new PointerLight();
+
   let fontPromise: Promise<LoadedFont> | null = null;
   function font(): Promise<LoadedFont> {
     if (fontPromise) return fontPromise;
@@ -254,6 +256,8 @@ export function createKlieg(options: KliegOptions): Klieg {
     const enter = resolveSlot(opts.enter ?? 'slam', ENTER);
     const active = resolveSlot(opts.active ?? 'none', ACTIVE);
     const lighting = opts.lighting ?? 'sweep';
+    const tracksPointer = LIGHTING[lighting].tracksPointer === true;
+    if (tracksPointer) pointerLight.attach();
     const envDriven = slotDrivesEnv(active);
     const hold = opts.hold ?? 1200;
     const untilClick = hold === 'click';
@@ -345,10 +349,14 @@ export function createKlieg(options: KliegOptions): Klieg {
         };
       }
 
+      let lastTick = clock.now();
+
       const off = clock.subscribe((now) => {
         if (signal.aborted) return finish();
 
         try {
+          const dt = now - lastTick;
+          lastTick = now;
           // rAF reports the frame's start time, which can precede a now() sampled moments earlier.
           const since = now - startedAt;
           const settled = slotDuration(enter);
@@ -360,9 +368,17 @@ export function createKlieg(options: KliegOptions): Klieg {
 
           // A caller piece declaring envRotation wins: it is the more specific choice, and it
           // carries its own duration as the period.
+          // Reduced motion snaps rather than eases: following the viewer's own finger is asked
+          // for, but the 90ms glide after it is the one part of this nobody asked for.
+          if (tracksPointer && !envDriven) pointerLight.step(still ? Number.POSITIVE_INFINITY : dt);
+          // Both axes every frame: only the pointer mode tilts x, and leaving a tilt behind would
+          // follow the viewer into the next effect.
+          stage.scene.environmentRotation.x = tracksPointer && !envDriven ? pointerLight.pitch : 0;
           stage.scene.environmentRotation.y = envDriven
             ? (elapsed / Math.max(1, slotDuration(active))) * TAU
-            : envRotationAt(lighting, elapsed);
+            : tracksPointer
+              ? pointerLight.yaw
+              : envRotationAt(lighting, elapsed);
 
           if (bloom) {
             bloom.render(stage.scene, stage.camera);
@@ -399,6 +415,7 @@ export function createKlieg(options: KliegOptions): Klieg {
     },
     destroy() {
       destroyed = true;
+      pointerLight.release();
       // A running effect only notices the abort on its next tick, and tearing down first would
       // leave it re-arming idle teardown against a stage that is already gone.
       void queue.cancelAll().then(() => stage.unmount());

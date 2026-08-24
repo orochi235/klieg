@@ -842,7 +842,7 @@ describe('published name lists', () => {
   it('lists every name a consumer can fire with, motion-first', () => {
     expect(ENTER_NAMES).toEqual(['slam', 'spin', 'flip', 'assemble', 'rise', 'none']);
     expect(ACTIVE_NAMES).toEqual(['float', 'pulse', 'shimmer', 'none']);
-    expect(LIGHTING_NAMES).toEqual(['sweep', 'static']);
+    expect(LIGHTING_NAMES).toEqual(['sweep', 'static', 'pointer']);
     expect(EXIT_NAMES).toEqual(['shatter', 'drop', 'recede', 'fade', 'none']);
     expect(LOOK_NAMES).toEqual([
       'gold',

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### The light can follow the pointer
+
+`lighting: 'pointer'` aims the environment at the cursor instead of turning it on a clock, so the
+highlight rakes across the type as the viewer moves. One `pointermove` listener serves mouse, pen
+and touch alike, and it neither captures the pointer nor cancels the event, so a page already
+dragging keeps its gesture — on the `show` route one finger turns the word and moves the light
+together.
+
+Until a pointer arrives it holds the same pose `static` does, pixel for pixel, which is what a
+fresh load and an untouched iframe get. Reduced motion snaps to the pointer rather than easing.
+Nothing defaults to it: `lighting` still defaults to `sweep`, and the `show` route still to
+`static`, so no existing call or URL changes. Being a `LightingName`, it is shareable in a `show`
+URL as `{"lighting":"pointer"}` and appears in `LIGHTING_NAMES` for any picker built from it.
+
 ### The type can be told to fill more of the frame
 
 `createKlieg({ framing })` sets the share of the viewport a word is fitted into, per axis; the

@@ -40,6 +40,12 @@ export interface ChunkSpec {
   shape: 'flake' | 'cube';
   /** 0 free tumble, 1 one shared lattice per letter. */
   align: number;
+  /**
+   * How flat a chunk lies on the surface it sits on, 0..1. 1 puts its face in the surface's own
+   * plane, which `align` cannot do — that shares one orientation across a whole letter. Spin about
+   * the normal is left as the tumble drew it.
+   */
+  lie?: number;
   /** 0 even scatter, 1 tight intergrown clumps. */
   cluster: number;
   /** How far a chunk sits proud of the surface, 0..1. */
@@ -429,6 +435,10 @@ export function chunkMatrices(
   const scale = new THREE.Vector3(spec.size, spec.size, spec.size);
   const sizeVary = spec.sizeVary ?? 0;
   const sink = spec.sink ?? 0;
+  const lie = spec.lie ?? 0;
+  const face = new THREE.Vector3();
+  const onto = new THREE.Vector3();
+  const lay = new THREE.Quaternion();
 
   for (const index of chosen) {
     const position = new THREE.Vector3(
@@ -451,6 +461,16 @@ export function chunkMatrices(
     position.addScaledVector(normal, scale.x * proud);
 
     const rotation = randomQuaternion(random).slerp(lattice, spec.align);
+    if (lie > 0) {
+      // Turned by the shortest arc onto the normal rather than built from it, so the chunk keeps
+      // the spin the tumble gave it and `lie` costs no random draw of its own.
+      face.set(0, 0, 1).applyQuaternion(rotation);
+      // Onto whichever side of the surface the face already points: the opposite normal is the same
+      // plane, and reaching for it would spin a chunk half a turn to land somewhere it already was.
+      onto.copy(normal).multiplyScalar(face.dot(normal) < 0 ? -1 : 1);
+      lay.setFromUnitVectors(face, onto).multiply(rotation);
+      rotation.slerp(lay, lie);
+    }
     matrices.push(new THREE.Matrix4().compose(position, rotation, scale));
   }
 

@@ -68,6 +68,34 @@ function capShare(spec: ChunkSpec): number {
   return caps / matrices.length;
 }
 
+/**
+ * Angle in radians between a chunk's own face and the surface it sat on. A flake and a disc face
+ * local +Z, so this is what `lie` drives to zero.
+ */
+function tilt(m: THREE.Matrix4, blueprint: { position: Float32Array; normal: Float32Array }) {
+  const at = new THREE.Vector3().setFromMatrixPosition(m);
+  let best = Infinity;
+  const p = new THREE.Vector3();
+  const near = new THREE.Vector3();
+  for (let i = 0; i < blueprint.position.length / 3; i++) {
+    p.set(
+      blueprint.position[i * 3] as number,
+      blueprint.position[i * 3 + 1] as number,
+      blueprint.position[i * 3 + 2] as number,
+    );
+    const d = at.distanceToSquared(p);
+    if (d >= best) continue;
+    best = d;
+    near.set(
+      blueprint.normal[i * 3] as number,
+      blueprint.normal[i * 3 + 1] as number,
+      blueprint.normal[i * 3 + 2] as number,
+    );
+  }
+  const face = new THREE.Vector3(0, 0, 1).applyQuaternion(quaternionOf(m));
+  return Math.acos(Math.min(1, Math.abs(face.dot(near))));
+}
+
 /** Rotation only, so two matrices can be compared for shared orientation. */
 function quaternionOf(m: THREE.Matrix4): THREE.Quaternion {
   const q = new THREE.Quaternion();
@@ -294,6 +322,61 @@ describe('bedding', () => {
     const along = buildChunkBlueprint(box(), { ...options, originY: 0.25 });
 
     expect(Array.from(along.position)).not.toEqual(Array.from(here.position));
+  });
+});
+
+describe('lie', () => {
+  const spec: ChunkSpec = { ...CHUNKS, shape: 'flake', count: 40, proud: 0 };
+
+  it('lays every chunk flat on the surface at 1', () => {
+    const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec) });
+    const matrices = chunkMatrices(blueprint, { ...spec, lie: 1 }, 3);
+
+    const worst = Math.max(...matrices.map((m) => tilt(m, blueprint)));
+    expect(worst).toBeLessThan(1e-6);
+  });
+
+  it('leaves a chunk tumbling at 0', () => {
+    const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec) });
+    const matrices = chunkMatrices(blueprint, { ...spec, lie: 0 }, 3);
+
+    // A free tumble sits about a radian off the surface; near zero would mean `lie` leaked.
+    const mean = matrices.reduce((sum, m) => sum + tilt(m, blueprint), 0) / matrices.length;
+    expect(mean).toBeGreaterThan(0.5);
+  });
+
+  it('places a chunk exactly as an omitted lie does at 0', () => {
+    const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec) });
+    const off = chunkMatrices(blueprint, spec, 3);
+    const zero = chunkMatrices(blueprint, { ...spec, lie: 0 }, 3);
+
+    expect(zero.map((m) => m.elements.join())).toEqual(off.map((m) => m.elements.join()));
+  });
+
+  it('turns a chunk the short way, so a partial lie never tilts it further off', () => {
+    const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec) });
+    const free = chunkMatrices(blueprint, { ...spec, lie: 0 }, 3);
+    const half = chunkMatrices(blueprint, { ...spec, lie: 0.5 }, 3);
+
+    // Reaching for the far side of the surface would spin a nearly-flipped chunk most of a turn to
+    // reach a plane it was already in, which reads as a chunk standing up on the way to lying down.
+    for (let i = 0; i < half.length; i++) {
+      expect(tilt(half[i] as THREE.Matrix4, blueprint)).toBeLessThanOrEqual(
+        tilt(free[i] as THREE.Matrix4, blueprint) + 1e-9,
+      );
+    }
+  });
+
+  it('spins a chunk freely about the normal even when it lies flat', () => {
+    const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec) });
+    const matrices = chunkMatrices(blueprint, { ...spec, lie: 1 }, 3);
+
+    // Every chunk on one cap shares a normal, so a pinned spin would make them all identical.
+    const onCap = matrices.filter(
+      (m) => new THREE.Vector3().setFromMatrixPosition(m).z > 0.15 - 1e-3,
+    );
+    const spins = new Set(onCap.map((m) => quaternionOf(m).x.toFixed(6)));
+    expect(spins.size).toBeGreaterThan(1);
   });
 });
 

@@ -37,7 +37,7 @@ export interface ChunkSpec {
   count: number;
   /** Chunk edge, in em. */
   size: number;
-  shape: 'flake' | 'cube';
+  shape: 'flake' | 'cube' | 'disc';
   /** 0 free tumble, 1 one shared lattice per letter. */
   align: number;
   /**
@@ -477,11 +477,20 @@ export function chunkMatrices(
   return matrices;
 }
 
+/** Segments around a disc. Twelve reads round at the size a chunk is drawn and costs six triangles. */
+const DISC_SEGMENTS = 12;
+
 export function chunkGeometry(shape: ChunkSpec['shape']): THREE.BufferGeometry {
-  return shape === 'cube' ? new THREE.BoxGeometry(1, 1, 1) : new THREE.PlaneGeometry(1, 1);
+  if (shape === 'cube') return new THREE.BoxGeometry(1, 1, 1);
+  if (shape === 'disc') return new THREE.CircleGeometry(0.5, DISC_SEGMENTS);
+  return new THREE.PlaneGeometry(1, 1);
 }
 
-/** A flake is one open quad, so culling its back face hides every chunk that tumbled away. */
+/**
+ * A flake and a disc are each one open face, so culling the back hides every chunk that tumbled
+ * away from the camera. A disc only faces reliably outward at `lie` 1, which is a value rather than
+ * a shape, so it cannot decide this.
+ */
 export function chunkGeometrySide(shape: ChunkSpec['shape']): THREE.Side {
   return shape === 'cube' ? THREE.FrontSide : THREE.DoubleSide;
 }

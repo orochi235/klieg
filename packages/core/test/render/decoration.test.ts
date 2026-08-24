@@ -4,6 +4,7 @@ import {
   type BeddingSpec,
   buildChunkBlueprint,
   type ChunkSpec,
+  chunkGeometry,
   chunkGeometrySide,
   chunkMatrices,
   poolFor,
@@ -412,6 +413,32 @@ describe('sequin', () => {
     }
 
     expect(hash >>> 0).toBe(1879882926);
+  });
+});
+
+describe('chunkGeometry', () => {
+  it('draws a disc round rather than square', () => {
+    const disc = chunkGeometry('disc');
+    const at = disc.getAttribute('position');
+    const radii = new Set<string>();
+    for (let i = 0; i < at.count; i++) {
+      const r = Math.hypot(at.getX(i), at.getY(i));
+      if (r > 1e-6) radii.add(r.toFixed(6));
+    }
+
+    // A quad's corners sit further out than its edge midpoints; every point on a rim shares one radius.
+    expect(radii.size).toBe(1);
+    expect(Number([...radii][0])).toBeCloseTo(0.5, 6);
+  });
+
+  it('spans the same edge a flake does, so size means one thing across shapes', () => {
+    const disc = chunkGeometry('disc');
+    const flake = chunkGeometry('flake');
+    disc.computeBoundingBox();
+    flake.computeBoundingBox();
+
+    expect(disc.boundingBox?.max.x).toBeCloseTo(flake.boundingBox?.max.x as number, 6);
+    expect(disc.boundingBox?.max.y).toBeCloseTo(flake.boundingBox?.max.y as number, 6);
   });
 });
 

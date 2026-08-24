@@ -51,7 +51,6 @@ export type {
   SelectSpec,
   SurfaceKind,
   TubeSpec,
-  VertexSource,
 } from './render/tube/index.js';
 export { ALL_BREAK, ALL_CONNECT } from './render/tube/index.js';
 export type { Arrangement } from './text/placement.js';

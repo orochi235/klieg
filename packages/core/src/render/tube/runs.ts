@@ -11,7 +11,7 @@ import type { GeneratedPath } from './generators.js';
 import { minCurvatureRadius3 } from './resample.js';
 import type { SurfaceKind } from './surfaces.js';
 
-/** Where a run vertex came from, before the cut rewrote the path. */
+/** Where a run vertex came from, before the cut rewrote the path. @internal */
 export interface VertexSource {
   /** Index into the path array handed to `cutIntoRuns`. */
   path: number;
@@ -23,7 +23,8 @@ export interface Run {
   points: THREE.Vector3[];
   /**
    * Index-parallel to `points`: the contour vertex each one came from, or null where the corner
-   * stage built it.
+   * stage built it. Not injective — `slice()` reuses the boundary object, so one contour vertex is
+   * the last entry of one run and the first entry of the next. @internal
    */
   from: (VertexSource | null)[];
   /**

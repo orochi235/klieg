@@ -122,6 +122,26 @@ how the source changes the cut. The spec lists the rest.
 
 Roughly in order of value; the items are independent of each other.
 
+- **Playwright reuses whatever owns port 5180, so a run in one worktree can test another's code.**
+  `playwright.config.ts` sets `reuseExistingServer: !CI` against a hardcoded 5180, and vite's port
+  is not strict — so a second checkout silently slides to 5181 while every probe keeps hitting the
+  first. It fails silently and returns confident wrong answers: a session in
+  `.claude/worktrees/vertex-provenance` ran its suite against main's dev server and got four bogus
+  failures before noticing. Both halves need fixing — the reuse and the non-strict port. Until then,
+  any visual run taken while another checkout's server is up is invalid, in either direction.
+- **`visual.spec.ts` is flaky under parallel load.** `bloom path` and `two-line block` fail
+  intermittently in the full suite and pass 4/4 in isolation. It predates the particle work —
+  `two-line block` was seen failing before the `index.ts` changes existed. Both read the whole
+  drawing buffer inside rAF and assert on a single sampled frame, which is the likely cause.
+- **`K` and `k` have non-parallel arm sides, and the bevel is what makes it visible.** In Archivo
+  Black's own outline the arm's two long edges are 1.31° apart on `K` and 2.56° on `k`, and both
+  terminals are cut flat-horizontal — 39.8° off square to the arm. That is the typeface, not klieg:
+  the contour seam is at the inner crotch (295, 394), nowhere near the top-right. But a bevel lays a
+  constant-width highlight along each edge, so two edges that diverge by a degree produce a visibly
+  tapering strip. Three ways out: swap the face, regularize outlines at load (klieg correcting a
+  typeface, and it would touch every glyph), or leave it — in motion at display size it reads as a
+  highlight taper rather than a defect.
+
 - **The last bend-minimum failure is a junction defect, and it is wider than three corners.** See
   [tangential junctions](specs/2026-08-22-tangential-junctions-design.md), which has the mechanism,
   the five things tried and what each cost. In short: `resumeAt` clears the invariant by lengthening

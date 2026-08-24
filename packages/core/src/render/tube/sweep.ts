@@ -15,6 +15,9 @@ const SMOOTH_PASSES = 3;
  * see past.
  */
 export function smoothedPoints(run: Run): THREE.Vector3[] {
+  if (run.from.length !== run.points.length) {
+    throw new Error(`run ${run.index}: ${run.from.length} sources for ${run.points.length} points`);
+  }
   const flat = smooth(
     run.points.map((p) => ({ x: p.x, y: p.y })),
     SMOOTH_PASSES,

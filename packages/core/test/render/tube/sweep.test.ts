@@ -128,6 +128,13 @@ describe('smoothedPoints', () => {
     expect(out[1]?.y).toBeCloseTo(0.01, 12);
     expect(out[3]?.y).toBeLessThan(0.01);
   });
+
+  it('throws when there are fewer sources than points', () => {
+    // A missing entry reads as undefined, which is falsy, so a built vertex would smooth silently.
+    const run = arcRun(0.02, Math.PI / 2);
+    run.from = run.from.slice(0, run.points.length - 1);
+    expect(() => smoothedPoints(run)).toThrow('39 sources for 40 points');
+  });
 });
 
 describe('sweepRun', () => {

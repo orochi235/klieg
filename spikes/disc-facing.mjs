@@ -57,7 +57,7 @@ function surfaceOf(position) {
   return best;
 }
 
-const LIES = [0.4, 0.5, 0.6, 0.7, 0.82, 0.88, 1];
+const LIES = [0.4, 0.5, 0.6, 0.7, 0.8, 0.88, 1];
 const position = new THREE.Vector3();
 const rotation = new THREE.Quaternion();
 const scale = new THREE.Vector3();

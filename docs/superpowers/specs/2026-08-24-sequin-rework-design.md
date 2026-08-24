@@ -40,15 +40,24 @@ worth designing around.
 
 The side follows `lie`, not the shape. Laying a chunk onto the *outward* normal — rather than onto
 whichever side of the surface plane its tumble already leaned toward — is what makes its one face
-reliably point out of the letter; at `lie` 0.7 and above no chunk on a near cap faces inward, so the
-field renders `FrontSide` and the back cap culls per view. That culling is not a placement change:
-turn the letter and those chunks come back, which matters because two shipped enters put the back
-cap on screen. Below 0.7 a chunk is still part way through its tumble and can face inward, where
+reliably point out of the letter; at `lie` 0.8 and above the near cap loses nothing to culling, so
+the field renders `FrontSide` and the back cap culls per view. That culling is not a placement
+change: turn the letter and those chunks come back, which matters because two shipped enters put the
+back cap on screen. Below 0.8 a chunk is still part way through its tumble and can face inward, where
 culling would delete it rather than hide it, so it stays `DoubleSide`.
 
-Laying always outward costs half a turn for the chunks that leaned the other way, which leaves them
-sitting less flat: at `lie: 0.82` the near cap's mean tilt off the surface goes from 10.7° to 16.1°.
-`sequin` ships at 0.88 instead, which puts it back at 10.8°. `spikes/disc-facing.mjs` measures both.
+**Aim the turn at the near side of the plane and flip afterwards, not at the far normal.** The two
+land in the same place, and aiming straight at the far normal is the shorter code — but it hands
+`Quaternion.setFromUnitVectors` a pair of vectors near antiparallel, which is where it keeps least of
+its precision. Sequin's closest chunk comes within 3.2e-4 of antiparallel: past three's own
+degenerate-case threshold, but close enough that a last-bit difference upstream reaches the matrix.
+The build placed chunks differently on macOS and on Linux CI, and the placement pin caught it. Laying
+onto the near side and turning a face-down chunk half a turn about its own laid axis is stable, and
+both platforms agree again.
+
+Laying outward costs that half turn, which leaves those chunks sitting less flat: at `lie: 0.82` the
+near cap's mean tilt off the surface goes from 10.7° to 17.1°. `sequin` ships at 0.88 instead, which
+puts it back at 11.4°. `spikes/disc-facing.mjs` measures both.
 
 **`BeddingSpec.pitch` and `.jitter` — regular spacing along a bed.** `bedding` already runs chunks
 in bands at an angle, which is the row a sequin is sewn in; within a band placement is free, so

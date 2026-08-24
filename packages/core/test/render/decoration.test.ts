@@ -531,7 +531,7 @@ describe('sequin', () => {
       }
     }
 
-    expect(hash >>> 0).toBe(404111772);
+    expect(hash >>> 0).toBe(2478817451);
   });
 });
 

@@ -488,6 +488,8 @@ export function chunkMatrices(
   const face = new THREE.Vector3();
   const onto = new THREE.Vector3();
   const lay = new THREE.Quaternion();
+  const axis = new THREE.Vector3();
+  const flip = new THREE.Quaternion();
 
   for (const index of chosen) {
     const position = new THREE.Vector3(
@@ -514,11 +516,20 @@ export function chunkMatrices(
       // Turned by the shortest arc onto the normal rather than built from it, so the chunk keeps
       // the spin the tumble gave it and `lie` costs no random draw of its own.
       face.set(0, 0, 1).applyQuaternion(rotation);
-      // Always the outward normal, never the near side of the same plane: a one-faced chunk laid
-      // onto the near side points its face into the letter half the time, which is what forces the
-      // whole field to render DoubleSide. See `chunkGeometrySide`.
-      onto.copy(normal);
+      // Onto the near side of the surface plane, then half a turn about the chunk's own laid axis
+      // for one that landed face-down. Aiming `setFromUnitVectors` straight at the far normal is
+      // the same orientation and reads simpler, but it hands the function a pair of vectors close
+      // to antiparallel, where it keeps only a fraction of its precision — enough that the same
+      // build placed chunks differently on macOS and on CI.
+      const down = face.dot(normal) < 0;
+      onto.copy(normal).multiplyScalar(down ? -1 : 1);
       lay.setFromUnitVectors(face, onto).multiply(rotation);
+      if (down) {
+        // In the surface plane, since the lay just put the chunk's face on the normal.
+        axis.set(1, 0, 0).applyQuaternion(lay);
+        flip.set(axis.x, axis.y, axis.z, 0);
+        lay.premultiply(flip);
+      }
       rotation.slerp(lay, lie);
     }
     matrices.push(new THREE.Matrix4().compose(position, rotation, scale));
@@ -537,11 +548,11 @@ export function chunkGeometry(shape: ChunkSpec['shape']): THREE.BufferGeometry {
 }
 
 /**
- * A chunk this flat has been turned far enough onto the outward normal that its face cannot end up
- * pointing into the letter. Measured on `sequin`: at 0.7 no chunk on the near cap faced inward, and
- * at 0.5 one in sixty still did, which culling would delete rather than hide.
+ * A chunk this flat has been turned far enough onto the outward normal that culling its back cannot
+ * take a chunk the viewer should see. Measured on `sequin`: at 0.8 the near cap loses none, at 0.75
+ * one in a hundred, and at 0.4 one in eight.
  */
-const LIE_FACES_OUT = 0.7;
+const LIE_FACES_OUT = 0.8;
 
 /**
  * A flake and a disc are each one open face, so culling the back hides exactly the chunks the letter

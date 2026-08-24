@@ -96,7 +96,7 @@ yourself places exactly as before.
 
 `ChunkSpec.lie`, 0..1, is how flat a chunk lies on the surface it sits on, applied after `align`. It
 turns the chunk onto that surface's outward normal by the shortest arc, so the chunk keeps the spin
-its tumble gave it. From 0.7 up no chunk can face into the letter, so the field renders `FrontSide`
+its tumble gave it. From 0.8 up no chunk can face into the letter, so the field renders `FrontSide`
 and stops drawing the chunks on the far side of the glyph — turn the word and they come back.
 
 `shape: 'disc'` is a twelve-segment circle beside `flake` and `cube`.

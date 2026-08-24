@@ -2,6 +2,8 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './apps/lab/test',
+  // Narrowed from the default so the vitest specs alongside these are not picked up as browser tests.
+  testMatch: '**/*.spec.ts',
   // Reusing a server in CI can serve stale code from a previous run's leftover process.
   webServer: {
     command: 'npm run dev -w @klieg/lab',

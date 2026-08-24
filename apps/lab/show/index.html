@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#07080c" />
+    <link rel="icon" href="/klieg-mark.svg" type="image/svg+xml" />
+    <title>klieg</title>
+    <meta name="description" content="Shiny extruded 3D type, turning in a browser. Drag it." />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="klieg" />
+    <meta property="og:title" content="klieg" />
+    <meta property="og:description" content="Shiny extruded 3D type, turning in a browser. Drag it." />
+    <meta property="og:url" content="https://orochi235.github.io/klieg/show/" />
+    <meta property="og:image" content="https://orochi235.github.io/klieg/show-og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="The word klieg in shiny extruded gold type on a dark ground" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="klieg" />
+    <meta name="twitter:description" content="Shiny extruded 3D type, turning in a browser. Drag it." />
+    <meta name="twitter:image" content="https://orochi235.github.io/klieg/show-og.png" />
+
+    <style>
+      html, body { height: 100%; }
+      body { margin: 0; overflow: hidden; overscroll-behavior: none; color: #e6e9f0;
+             background: #07080c radial-gradient(78% 58% at 50% 42%, #12161f 0%, #07080c 64%);
+             font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+      /* The klieg canvas is click-through by design, so the drag has to land on a layer of our
+         own; touch-action keeps a phone from scrolling the page instead of turning the word. */
+      .stage { position: fixed; inset: 0; z-index: 1; touch-action: none; cursor: grab; }
+      .stage:active { cursor: grabbing; }
+
+      /* Thirteen names do not fit a phone, and a hard cut at the edge reads as a broken row rather
+         than a scrollable one, so both ends fade out. */
+      .looks { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2;
+               overflow-x: auto; scrollbar-width: none; touch-action: pan-x;
+               padding: 0 env(safe-area-inset-right) calc(4px + env(safe-area-inset-bottom)) env(safe-area-inset-left);
+               -webkit-mask-image: linear-gradient(to right, transparent, #000 30px, #000 calc(100% - 30px), transparent);
+               mask-image: linear-gradient(to right, transparent, #000 30px, #000 calc(100% - 30px), transparent); }
+      .looks::-webkit-scrollbar { display: none; }
+      .looks--hidden { display: none; }
+      /* max-content plus auto margins centres the row when it fits and lets it scroll when it
+         does not; `justify-content: center` clips the first names off the scrollable start. */
+      .looks__row { display: flex; width: max-content; margin-inline: auto; }
+
+      .chip { appearance: none; background: none; border: 0; margin: 0;
+              padding: 15px 11px; min-height: 44px; min-width: 44px;
+              color: #5d6474; cursor: pointer; font: inherit; letter-spacing: 0.18em;
+              transition: color 500ms ease; }
+      .chip--on { color: #d8b25f; }
+      .chip:focus-visible { outline: 1px solid #d8b25f; outline-offset: -8px; }
+
+      /* A held glow rather than a spinner: the font and the environment map take a moment, and
+         this is the same light the type arrives in. */
+      .veil { position: fixed; inset: 0; z-index: 4; pointer-events: none;
+              opacity: 1; transition: opacity 1200ms ease; }
+      .veil::before { content: ''; position: absolute; inset: 0;
+                      background: radial-gradient(46% 32% at 50% 46%, rgba(216, 178, 95, 0.16), rgba(7, 8, 12, 0) 72%);
+                      animation: breathe 3600ms ease-in-out infinite; }
+      .veil--gone { opacity: 0; }
+      @keyframes breathe { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+      .fallback { position: fixed; inset: 0; z-index: 3; display: none; place-items: center;
+                  padding: 8vh 7vw; text-align: center; color: #d8b25f;
+                  font-size: clamp(28px, 11vw, 96px); letter-spacing: 0.1em;
+                  text-transform: uppercase; white-space: pre-wrap; }
+      body.is-unsupported .fallback { display: grid; }
+      body.is-unsupported .looks { display: none; }
+
+      @media (prefers-reduced-motion: reduce) {
+        .veil::before { animation: none; }
+        .chip { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage" id="stage"></div>
+    <nav class="looks" id="looks" aria-label="looks">
+      <div class="looks__row" id="looksRow"></div>
+    </nav>
+    <div class="fallback" id="fallback"></div>
+    <div class="veil" id="veil"></div>
+    <script type="module" src="/src/show.ts"></script>
+  </body>
+</html>

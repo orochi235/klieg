@@ -1,13 +1,37 @@
-# Handoff — klieg, 2026-08-22
+# Handoff — klieg, 2026-08-23
 
-**For:** the next session picking this up. **Answers:** what is on `main`, and what is worth doing
-next.
+**For:** the next session picking this up. **Answers:** what is on `main`, what is in flight, and
+what is worth doing next.
+
+## In flight
+
+Two branches, both in the worktree `.claude/worktrees/vertex-provenance`. Neither is merged, and
+`main` is nine commits ahead of `origin/main` — **branch from local `main`, not `origin/main`, or
+you start without the corner lab or labkit 1.1.**
+
+**`vertex-provenance` — complete, verified, unmerged.** Ten commits. Every tube run vertex now
+records the contour vertex it came from (`Run.from`, index-parallel to `Run.points`), or null where
+the corner stage built it. Replaces a module-level `WeakSet` keyed on `Vector3` identity that
+anything copying a point lost silently. 737 vitest, 24/24 playwright, no snapshot re-recorded. Plan
+and findings: [plans/2026-08-23-vertex-provenance.md](plans/2026-08-23-vertex-provenance.md).
+
+**`corner-lab-minimap` — in progress**, stacked on it. A top-right minimap of the whole glyph with
+every hard corner clickable. Its viewport rectangle is an indicator only: labkit hands an instrument
+`zoom` and `setZoom` and publishes the view read-only through `CanvasStackContext`, but exposes no
+`setPan` or `onViewChange`, so drag-to-pan from a minimap cannot be built without reaching past its
+public API. File it against labkit rather than working around it.
+
+**Next, unplanned:** the stage and repair registries, then the lab —
+[specs/2026-08-23-pipeline-lab-design.md](specs/2026-08-23-pipeline-lab-design.md). The registries
+need a design pass first: the six corner repairs are not uniform `(span) → span` transforms, and
+what a repair step receives and returns is undecided. **The lab is called kliegsminister**;
+`dev/corner-lab` is renamed to it when it grows past one corner.
 
 ## State
 
 **`main` carries the tube lab, the tube geometry rewrite, the colour gradients, the junction
-reconciliation and direct paths by default, all merged.** `npm run check` green at 736 tests;
-`npx playwright test` green at 24. No code is in flight.
+reconciliation and direct paths by default, all merged.** `npm run check` green at 736 tests on
+`main` (737 on `vertex-provenance`); `npx playwright test` green at 24.
 
 **[Direct tube paths](specs/2026-08-20-direct-tube-paths-design.md) ships, and is the default.**
 `TubeSpec.pathSource` (`field` | `exact` | `direct`) defaults to `direct`, which traces the glyph's

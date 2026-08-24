@@ -50,8 +50,35 @@ export interface CarriedRun {
   side: 'before' | 'after' | 'both';
 }
 
+export interface CornerMark {
+  /** Position in the glyph's own 1 em space. */
+  at: THREE.Vector3;
+  /** 1-based, matching the `corner` config. */
+  ordinal: number;
+  /** True where the cut split this corner into two runs. */
+  split: boolean;
+}
+
+export interface OutlinePath {
+  points: THREE.Vector3[];
+  closed: boolean;
+}
+
+/** The glyph's extent in its own 1 em space. */
+export interface GlyphBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
 export interface CornerScene {
   contour: THREE.Vector3[];
+  /** Every front path of the glyph — more than one where the letter has counters. */
+  outline: OutlinePath[];
+  bounds: GlyphBounds;
+  /** Every hard corner, in the order the `corner` config numbers them. */
+  corners: CornerMark[];
   /** The run or runs the tube builds through this corner — two where the cut split it. */
   carried: CarriedRun[];
   /** The stretch a repair replaces, and what the chosen repair draws in its place. */
@@ -91,14 +118,35 @@ function hardCorners(font: LoadedFont, req: SceneRequest) {
     corner: Corner;
     bends: Map<number, VertexBend>;
   }[] = [];
+  const fronts: GeneratedPath[] = [];
   paths.forEach((path, pathIndex) => {
     if (path.surface !== 'front') return;
+    fronts.push(path);
     const bends = new Map(vertexBends(path.points, path.closed).map((b) => [b.index, b]));
     for (const corner of cornersByBend(path.points, path.closed, rhoMin, radius * STYLE_FACTOR)) {
       if (corner.hard) found.push({ path, pathIndex, corner, bends });
     }
   });
-  return { found, spec, radius, rhoMin };
+  return { found, fronts, spec, radius, rhoMin };
+}
+
+function boundsOf(outline: OutlinePath[]): GlyphBounds {
+  const bounds: GlyphBounds = {
+    minX: Number.POSITIVE_INFINITY,
+    minY: Number.POSITIVE_INFINITY,
+    maxX: Number.NEGATIVE_INFINITY,
+    maxY: Number.NEGATIVE_INFINITY,
+  };
+  for (const { points } of outline) {
+    for (const p of points) {
+      bounds.minX = Math.min(bounds.minX, p.x);
+      bounds.minY = Math.min(bounds.minY, p.y);
+      bounds.maxX = Math.max(bounds.maxX, p.x);
+      bounds.maxY = Math.max(bounds.maxY, p.y);
+    }
+  }
+  if (!Number.isFinite(bounds.minX)) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+  return bounds;
 }
 
 const at = (pts: THREE.Vector3[], i: number) =>
@@ -188,6 +236,13 @@ function carrierNear(
   return null;
 }
 
+/** The runs reaching a corner from either side, and whether the cut left it two of them. */
+function carriersAt(runs: readonly Run[], pathIndex: number, index: number, count: number) {
+  const before = carrierNear(runs, pathIndex, index, count, -1);
+  const after = carrierNear(runs, pathIndex, index, count, 1);
+  return { before, after, split: before !== null && after !== null && before !== after };
+}
+
 function carriedRun(run: Run, side: CarriedRun['side'], radius: number): CarriedRun {
   return {
     points: run.points.map((p) => p.clone()),
@@ -198,7 +253,9 @@ function carriedRun(run: Run, side: CarriedRun['side'], radius: number): Carried
 }
 
 export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
-  const { found, spec, radius, rhoMin } = hardCorners(font, req);
+  const { found, fronts, spec, radius, rhoMin } = hardCorners(font, req);
+  const outline = fronts.map((path) => ({ points: path.points, closed: path.closed }));
+  const bounds = boundsOf(outline);
   const pick = found.length
     ? (found[Math.min(req.corner, found.length - 1)] as (typeof found)[number])
     : null;
@@ -207,6 +264,9 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
   if (!pick) {
     return {
       contour: [],
+      outline,
+      bounds,
+      corners: [],
       carried: [],
       replaced: [],
       drawn: null,
@@ -240,8 +300,13 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
     PAD,
     0,
   );
-  const before = carrierNear(blueprint.runs, pathIndex, corner.index, points.length, -1);
-  const after = carrierNear(blueprint.runs, pathIndex, corner.index, points.length, 1);
+  const corners: CornerMark[] = found.map((f, i) => ({
+    at: at(f.path.points, f.corner.index).clone(),
+    ordinal: i + 1,
+    split: carriersAt(blueprint.runs, f.pathIndex, f.corner.index, f.path.points.length).split,
+  }));
+
+  const { before, after } = carriersAt(blueprint.runs, pathIndex, corner.index, points.length);
   const carried: CarriedRun[] = [];
   if (before && before === after) carried.push(carriedRun(before, 'both', radius));
   else {
@@ -368,6 +433,9 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
 
   return {
     contour: points,
+    outline,
+    bounds,
+    corners,
     carried,
     replaced,
     drawn,

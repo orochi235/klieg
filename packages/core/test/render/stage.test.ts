@@ -1,8 +1,12 @@
 import type * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  BASE_FOV,
+  BASE_Z,
   canHoldCanvas,
   canvasCss,
+  lensFor,
+  MAX_HALF_ANGLE_DEG,
   needsContainingBlock,
   prefersReducedMotion,
   Stage,
@@ -290,6 +294,75 @@ describe('framing against an anchor', () => {
     });
     // What resize() writes for that box; the frustum height at this depth never moves.
     strip.camera.aspect = 800 / 120;
+    const budget = strip.viewportBudget(0.94, 0.66);
+
+    expect(budget.width / (frustumHeight(strip) * strip.camera.aspect)).toBeCloseTo(0.94, 12);
+    expect(budget.height / frustumHeight(strip)).toBeCloseTo(0.66, 12);
+  });
+});
+
+describe('the lens against a wide anchor', () => {
+  const halfAngleDeg = (aspect: number, lens: { fov: number; z: number }): number => {
+    const frustumH = 2 * Math.tan((lens.fov * Math.PI) / 360) * lens.z;
+    return (Math.atan((frustumH * aspect) / 2 / lens.z) * 180) / Math.PI;
+  };
+
+  it('leaves a narrow box on the lens the overlay has always used', () => {
+    expect(lensFor(16 / 9)).toEqual({ fov: BASE_FOV, z: BASE_Z });
+  });
+
+  it('holds the frustum height at the word depth, so framing keeps its meaning', () => {
+    const base = 2 * Math.tan((BASE_FOV * Math.PI) / 360) * BASE_Z;
+
+    for (const aspect of [1, 2.5, 6.9, 10.17, 14.75]) {
+      const lens = lensFor(aspect);
+      expect(2 * Math.tan((lens.fov * Math.PI) / 360) * lens.z).toBeCloseTo(base, 9);
+    }
+  });
+
+  it('bounds the angle the outer glyphs are seen at, however wide the box', () => {
+    for (const aspect of [6.9, 10.17, 14.75, 40]) {
+      expect(halfAngleDeg(aspect, lensFor(aspect))).toBeLessThanOrEqual(MAX_HALF_ANGLE_DEG + 1e-9);
+    }
+  });
+
+  it('narrows monotonically as the box widens', () => {
+    const wide = lensFor(10.17);
+    const wider = lensFor(14.75);
+
+    expect(wider.fov).toBeLessThan(wide.fov);
+    expect(wider.z).toBeGreaterThan(wide.z);
+  });
+
+  it('keeps a fullscreen overlay on the base lens at any aspect', () => {
+    const stage = headlessStage();
+    stage.applyLens(10.17);
+
+    expect(stage.camera.fov).toBe(BASE_FOV);
+    expect(stage.camera.position.z).toBe(BASE_Z);
+  });
+
+  it('narrows an anchored stage on a strip the overlay would never see', () => {
+    const strip = new Stage({
+      idleTimeoutMs: 1000,
+      placement: { kind: 'element', el: anchor(1180, 116) },
+    });
+    strip.applyLens(1180 / 116);
+
+    expect(strip.camera.fov).toBeLessThan(BASE_FOV);
+    expect(strip.camera.position.z).toBeGreaterThan(BASE_Z);
+    expect(
+      halfAngleDeg(1180 / 116, { fov: strip.camera.fov, z: strip.camera.position.z }),
+    ).toBeLessThanOrEqual(MAX_HALF_ANGLE_DEG + 1e-9);
+  });
+
+  it('spends the same framing fractions on the box after narrowing', () => {
+    const strip = new Stage({
+      idleTimeoutMs: 1000,
+      placement: { kind: 'element', el: anchor(1180, 116) },
+    });
+    strip.camera.aspect = 1180 / 116;
+    strip.applyLens(1180 / 116);
     const budget = strip.viewportBudget(0.94, 0.66);
 
     expect(budget.width / (frustumHeight(strip) * strip.camera.aspect)).toBeCloseTo(0.94, 12);

@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### A wide anchor no longer merges the glyphs
+
+An element placement lifts `FIT_CAP`, so the word scales up to fill its anchor. Against a masthead
+strip the fit then put the outer glyphs past 70 degrees off-axis, where an extruded letter is seen
+near enough to edge-on that its side wall projects across its neighbour: `Michael Baker` in a
+1180x116 anchor rendered as one merged mass. The camera now takes a longer lens as the box widens —
+`z` grows until the frustum edge falls within 35 degrees and `fov` narrows to hold the frustum
+height at the word's depth, so every framing fraction keeps its meaning and the type keeps its size.
+
+A box narrow enough to already be within that angle keeps the base lens exactly, so a fullscreen
+overlay is unchanged; the 23 visual baselines pass untouched.
+
 ## 0.5.1
 
 ### The type can be anchored inside a page element

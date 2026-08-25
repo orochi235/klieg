@@ -51,9 +51,37 @@ export function prefersReducedMotion(): boolean {
   return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 }
 
+/** The lens a fullscreen overlay has always used. */
+export const BASE_FOV = 38;
+export const BASE_Z = 11;
+const BASE_FAR = 100;
+
+/**
+ * Horizontal half-angle the outer glyphs may be seen at. Past it an extruded glyph is viewed near
+ * enough to edge-on that its side wall projects across its neighbour and the word reads as merged.
+ * A fullscreen overlay never reaches it because `FIT_CAP` holds the word well inside the frustum;
+ * an anchor lifts that cap, so the lens carries the bound instead.
+ */
+export const MAX_HALF_ANGLE_DEG = 35;
+
+/** Frustum height at the word's depth, fixed so every framing fraction keeps its meaning. */
+const FRUSTUM_HEIGHT = 2 * Math.tan((BASE_FOV * Math.PI) / 360) * BASE_Z;
+
+/**
+ * A longer lens for a wider box: `z` grows until the frustum's horizontal edge falls within
+ * `MAX_HALF_ANGLE_DEG`, and `fov` narrows to hold the frustum height at the word's depth. Narrow
+ * boxes keep the base lens exactly, so a fullscreen overlay renders byte-identically.
+ */
+export function lensFor(aspect: number): { fov: number; z: number } {
+  const halfWidth = (FRUSTUM_HEIGHT * aspect) / 2;
+  const z = Math.max(BASE_Z, halfWidth / Math.tan((MAX_HALF_ANGLE_DEG * Math.PI) / 180));
+  if (z === BASE_Z) return { fov: BASE_FOV, z: BASE_Z };
+  return { fov: (2 * Math.atan(FRUSTUM_HEIGHT / (2 * z)) * 180) / Math.PI, z };
+}
+
 export class Stage {
   readonly scene = new THREE.Scene();
-  readonly camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+  readonly camera = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.1, BASE_FAR);
   canvas: HTMLCanvasElement | null = null;
   renderer: THREE.WebGLRenderer | null = null;
   environment: THREE.WebGLRenderTarget | null = null;
@@ -67,7 +95,7 @@ export class Stage {
 
   constructor(private readonly opts: StageOptions) {
     this.placement = opts.placement ?? { kind: 'fullscreen' };
-    this.camera.position.set(0, 0, 11);
+    this.camera.position.set(0, 0, BASE_Z);
   }
 
   /** Idempotent: repeated fires reuse one context rather than allocating a new one. */
@@ -148,6 +176,16 @@ export class Stage {
     if (this.renderer.getPixelRatio() !== ratio) this.renderer.setPixelRatio(ratio);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
+    this.applyLens(w / h);
+  }
+
+  /** Only an anchor can be wide enough to need the longer lens; the overlay keeps the base one. */
+  applyLens(aspect: number): void {
+    const lens = this.placement.kind === 'element' ? lensFor(aspect) : { fov: BASE_FOV, z: BASE_Z };
+    this.camera.fov = lens.fov;
+    this.camera.position.z = lens.z;
+    // The far plane rides at a fixed depth behind the word rather than at a fixed distance.
+    this.camera.far = lens.z + (BASE_FAR - BASE_Z);
     this.camera.updateProjectionMatrix();
   }
 

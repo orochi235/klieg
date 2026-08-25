@@ -49,7 +49,7 @@ import {
   specOf,
   tintMaterialOf,
 } from './looks.js';
-import { rampTexture } from './tube/gradient.js';
+import { CRAWL_ATTRIBUTE, rampTexture } from './tube/gradient.js';
 import {
   GRADIENT_BOUNDS_UNIFORM,
   GRADIENT_ORIGIN_UNIFORM,
@@ -474,6 +474,15 @@ export class Word {
       array[v + 2] = color.b;
     }
     attribute.needsUpdate = true;
+
+    // Only present when the look declared a gradient; without a ramp there is nothing to shift.
+    const crawl = mesh.geometry.getAttribute(CRAWL_ATTRIBUTE) as THREE.BufferAttribute | undefined;
+    if (!crawl) return;
+    const shift = out.crawl;
+    const buffer = crawl.array as Float32Array;
+    if (buffer[0] === shift) return;
+    buffer.fill(shift);
+    crawl.needsUpdate = true;
   }
 
   /**

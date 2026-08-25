@@ -39,7 +39,8 @@ export interface PartOffset {
   position?: Vec3;
   rotation?: Vec3;
   scale?: number;
-  /** Shifts the colour ramp along the part. Inert until the crawl step lands. */
+  /** Shifts the colour ramp along the part. Needs a look with a `gradient`; without a
+   * ramp there is nothing to shift. */
   crawl?: number;
 }
 
@@ -61,7 +62,7 @@ export interface EffectPiece {
   at(t: number, part: PartInfo): PartOffset;
 }
 
-export type EffectName = 'flicker' | 'hue';
+export type EffectName = 'flicker' | 'hue' | 'chase';
 
 export interface EffectSpec {
   piece: EffectName | EffectPiece;

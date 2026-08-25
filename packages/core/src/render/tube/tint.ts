@@ -1,5 +1,10 @@
 import * as THREE from 'three';
-import { GRADIENT_T_ATTRIBUTE, type GradientSpec, rampTexture } from './gradient.js';
+import {
+  CRAWL_ATTRIBUTE,
+  GRADIENT_T_ATTRIBUTE,
+  type GradientSpec,
+  rampTexture,
+} from './gradient.js';
 
 /**
  * Which channel a run's colour drives. A tube look is emissive and its base colour is nearly black;
@@ -133,8 +138,14 @@ export function tintByRunColor(
       head += `uniform vec4 ${GRADIENT_BOUNDS_UNIFORM};\nuniform vec2 ${GRADIENT_ORIGIN_UNIFORM};\n`;
       body += `\n${positionalT(gradient)}  vGradT = clamp(gt, 0.0, 1.0);`;
     } else {
-      head += `attribute float ${GRADIENT_T_ATTRIBUTE};\n`;
-      body += `\n  vGradT = clamp(${GRADIENT_T_ATTRIBUTE}, 0.0, 1.0);`;
+      head += `attribute float ${GRADIENT_T_ATTRIBUTE};\nattribute float ${CRAWL_ATTRIBUTE};\n`;
+      // `fract` only where a crawl is actually running. A run's last vertex sits at gradientT 1.0
+      // exactly, and fract(1.0) is 0.0 — applied unconditionally it would snap every ramp's end
+      // back to its start and move every gradient that never asked to crawl.
+      body +=
+        `\n  vGradT = ${CRAWL_ATTRIBUTE} == 0.0` +
+        `\n    ? clamp(${GRADIENT_T_ATTRIBUTE}, 0.0, 1.0)` +
+        `\n    : fract(${GRADIENT_T_ATTRIBUTE} + ${CRAWL_ATTRIBUTE});`;
     }
   }
 

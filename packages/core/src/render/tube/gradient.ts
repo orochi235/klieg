@@ -59,6 +59,8 @@ export function perRunT(
 }
 
 export const GRADIENT_T_ATTRIBUTE = 'gradientT';
+/** Per-vertex shift of `gradientT`, written per part per frame by an effect's `crawl` channel. */
+export const CRAWL_ATTRIBUTE = 'crawlT';
 
 /** Where a run sits inside its glyph's lit length, as a fraction. */
 export interface RunSpan {

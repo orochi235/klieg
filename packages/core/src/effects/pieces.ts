@@ -68,6 +68,32 @@ export function hue(spec: HueSpec = {}): EffectPiece {
   };
 }
 
+export interface ChaseSpec {
+  /** One trip of the ramp along the part, in ms. */
+  duration?: number;
+  /** Ramp lengths travelled per trip. Negative runs the other way. */
+  laps?: number;
+  /** Ramp offset between consecutive parts, so the chase reads as a procession. */
+  spread?: number;
+}
+
+/**
+ * Slides the colour ramp along the part. Inert on a look that declares no `gradient`: a shift of a
+ * ramp that is not there changes nothing, and both shipped looks are flat.
+ */
+export function chase(spec: ChaseSpec = {}): EffectPiece {
+  const duration = spec.duration ?? 2400;
+  const laps = spec.laps ?? 1;
+  const spread = spec.spread ?? 0;
+
+  return {
+    duration,
+    at(t, part) {
+      return { crawl: t * laps + part.at * spread };
+    },
+  };
+}
+
 // `satisfies` rather than an annotation: it holds every name to a factory usable with no spec,
 // which is all a name lookup can supply, without binding the next piece to `FlickerSpec`.
-export const EFFECTS = { flicker, hue } satisfies Record<EffectName, () => EffectPiece>;
+export const EFFECTS = { flicker, hue, chase } satisfies Record<EffectName, () => EffectPiece>;

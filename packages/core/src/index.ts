@@ -34,7 +34,7 @@ export {
   type SpringParams,
   spring,
 } from './easing.js';
-export { EFFECTS, type FlickerSpec, type HueSpec } from './effects/pieces.js';
+export { type ChaseSpec, EFFECTS, type FlickerSpec, type HueSpec } from './effects/pieces.js';
 export { type RovingSpec, roving } from './effects/roving.js';
 export type {
   EffectName,

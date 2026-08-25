@@ -326,7 +326,18 @@ describe('positional gradient GLSL', () => {
 
   it('clamps t before handing it to the fragment stage', () => {
     expect(vertexFor({ of: 'radial' })).toContain('vGradT = clamp(gt, 0.0, 1.0);');
-    expect(vertexFor({ of: 'run' })).toContain('vGradT = clamp(gradientT, 0.0, 1.0);');
+    expect(vertexFor({ of: 'run' })).toContain('clamp(gradientT, 0.0, 1.0)');
+  });
+
+  // A run's last vertex sits at gradientT 1.0 exactly, and fract(1.0) is 0.0 — wrapping
+  // unconditionally would snap every ramp's end back to its start.
+  it('wraps t only where a crawl is running, and clamps it otherwise', () => {
+    const glsl = vertexFor({ of: 'run' });
+    expect(glsl).toContain('crawlT == 0.0');
+    expect(glsl).toContain('fract(gradientT + crawlT)');
+    expect(glsl.indexOf('clamp(gradientT, 0.0, 1.0)')).toBeLessThan(
+      glsl.indexOf('fract(gradientT + crawlT)'),
+    );
   });
 
   it('defaults the uniforms to a unit box at the origin', () => {

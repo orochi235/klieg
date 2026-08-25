@@ -1515,6 +1515,49 @@ describe('effects', () => {
     return mesh.geometry.getAttribute('runColor').getX(0);
   }
 
+  /** The crawl buffer only exists where the look declared a gradient. */
+  function crawlOf(word: Word, ordinal: number): number | null {
+    const meshes = groups(word).flatMap((cell) => {
+      const lit = (cell.children[1] as THREE.Mesh).material;
+      return (cell.children.slice(1) as THREE.Mesh[]).filter((m) => m.material === lit);
+    });
+    const mesh = meshes[ordinal];
+    if (!mesh) throw new Error(`the word has no run ${ordinal}`);
+    const a = mesh.geometry.getAttribute('crawlT');
+    return a ? a.getX(0) : null;
+  }
+
+  const RAMP: GradientSpec = {
+    domain: { of: 'run' },
+    stops: [0xff0000, 0x0000ff],
+    mode: 'replace',
+  };
+
+  function gradientTubingWith(effects: LookSpec['effects']): Word {
+    const base = specOf('tubing');
+    const decoration = { ...base.decoration, gradient: RAMP } as LookSpec['decoration'];
+    return new Word('AA', stubFont(), { ...base, decoration, effects }, ROOMY);
+  }
+
+  it('gives a gradient look a crawl buffer, and a flat one none', () => {
+    expect(crawlOf(gradientTubingWith(undefined), 0)).toBe(0);
+    expect(crawlOf(tubingWith(undefined), 0)).toBeNull();
+  });
+
+  it('drives the crawl buffer from an effect that writes the channel', () => {
+    const slide: EffectPiece = { duration: 1000, at: () => ({ crawl: 0.25 }) };
+    const word = gradientTubingWith([{ piece: slide, target: { kind: 'run', ...FIRST } }]);
+    word.apply(STILL, 0);
+    expect(crawlOf(word, 0)).toBeCloseTo(0.25, 6);
+  });
+
+  it('leaves the crawl buffer at rest for a part no effect targets', () => {
+    const slide: EffectPiece = { duration: 1000, at: () => ({ crawl: 0.25 }) };
+    const word = gradientTubingWith([{ piece: slide, target: { kind: 'run', ...FIRST } }]);
+    word.apply(STILL, 0);
+    expect(crawlOf(word, 1)).toBe(0);
+  });
+
   it('leaves every part alone when a look declares no effects', () => {
     const word = tubingWith(undefined);
     const before = [runColorOf(word, 0), runColorOf(word, 1)];

@@ -1,7 +1,13 @@
 import * as THREE from 'three';
 import type { Point2 } from './field.js';
 import { type Frame, rotationMinimizingFrames } from './frames.js';
-import { GRADIENT_T_ATTRIBUTE, type GradientDomain, perVertexT, type RunSpan } from './gradient.js';
+import {
+  CRAWL_ATTRIBUTE,
+  GRADIENT_T_ATTRIBUTE,
+  type GradientDomain,
+  perVertexT,
+  type RunSpan,
+} from './gradient.js';
 import { minCurvatureRadius3, smooth } from './resample.js';
 import type { Run } from './runs.js';
 import { RUN_COLOR_ATTRIBUTE } from './tint.js';
@@ -170,6 +176,12 @@ function buildTubeGeometry(
   geo.setAttribute(RUN_COLOR_ATTRIBUTE, new THREE.Float32BufferAttribute(colors, 3));
   if (ts.length > 0) {
     geo.setAttribute(GRADIENT_T_ATTRIBUTE, new THREE.Float32BufferAttribute(ts, 1));
+    // Zeroed: at 0 the shader reads the clamped gradientT it always did, so a word with no crawl
+    // effect renders byte-identically.
+    geo.setAttribute(
+      CRAWL_ATTRIBUTE,
+      new THREE.Float32BufferAttribute(new Float32Array(ts.length), 1),
+    );
   }
   geo.computeBoundingSphere();
   return geo;

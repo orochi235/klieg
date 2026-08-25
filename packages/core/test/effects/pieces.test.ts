@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EFFECTS, flicker, hue } from '../../src/effects/pieces.js';
+import { chase, EFFECTS, flicker, hue } from '../../src/effects/pieces.js';
 import type { EffectPiece, PartInfo } from '../../src/effects/types.js';
 
 const part: PartInfo = {
@@ -151,12 +151,44 @@ describe('hue', () => {
 describe('the public surface', () => {
   it('names every registry piece in EFFECT_NAMES', async () => {
     const { EFFECT_NAMES } = await import('../../src/index.js');
-    expect([...EFFECT_NAMES].sort()).toEqual(['flicker', 'hue']);
+    expect([...EFFECT_NAMES].sort()).toEqual(['chase', 'flicker', 'hue']);
   });
 
   it('exports roving as a factory, since no name can carry an inner piece', async () => {
     const api = await import('../../src/index.js');
     expect(typeof api.roving).toBe('function');
     expect(typeof api.roving(api.EFFECTS.flicker()).at).toBe('function');
+  });
+});
+
+describe('chase', () => {
+  const P = part;
+
+  it('travels one ramp length per pass by default', () => {
+    const p = chase();
+    expect(p.at(0, P).crawl).toBe(0);
+    expect(p.at(0.5, P).crawl).toBe(0.5);
+    expect(p.at(1, P).crawl).toBe(1);
+  });
+
+  it('runs backwards on a negative lap count', () => {
+    expect(chase({ laps: -1 }).at(0.25, P).crawl).toBe(-0.25);
+  });
+
+  // The shader wraps with fract, so the piece is free to hand out an unwrapped offset — and must,
+  // or a spread would collapse every part onto the same phase once it crossed 1.
+  it('hands out an unwrapped offset, leaving the wrap to the shader', () => {
+    expect(chase({ laps: 3 }).at(1, P).crawl).toBe(3);
+  });
+
+  it('spreads consecutive parts so the chase reads as a procession', () => {
+    const p = chase({ spread: 0.25 });
+    const a = p.at(0, { ...P, at: 0 }).crawl as number;
+    const b = p.at(0, { ...P, at: 1 }).crawl as number;
+    expect(b - a).toBeCloseTo(0.25, 9);
+  });
+
+  it('is usable with no spec, which is all a name lookup can supply', () => {
+    expect(EFFECTS.chase().duration).toBeGreaterThan(0);
   });
 });

@@ -8,9 +8,10 @@ A tint on a look with `tintTo: 'decoration'` was written to the decoration mater
 channel, which `tintByRunColor` then sets to white so a run's own colour drives it exactly. The tint
 was gone before the first frame: `tubing` rendered its native magenta whether tinted or not. The
 tint now recolours the palette the runs are dealt from, which is where a tube look's colour actually
-lives — so it survives, and composes with the effects compositor rather than racing it.
-`tint: 0x22d3ee` produces exactly that colour. `piping` and `sequin` were never affected and are
-byte-identical.
+lives — so it survives, and composes with the effects compositor rather than racing it. The tint
+becomes the run's palette entry exactly; what reaches the screen is that colour through the look's
+emissive gain and then bloom, so a bloomed tube reads as the tint's hue rather than its literal
+value. `piping` and `sequin` were never affected and render byte-identically.
 
 ### Material properties no longer vanish from `LookSpec` for a TypeScript consumer
 

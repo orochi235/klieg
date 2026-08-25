@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   blankPose,
   slotDrivesEnv,
+  slotMovesLetters,
   Timeline,
   type TimelineOptions,
 } from '../../src/motion/compositor.js';
@@ -283,5 +284,45 @@ describe('poseAt out-parameter', () => {
     const tl = build(100);
 
     expect(tl.poseAt(150, L)).not.toBe(tl.poseAt(150, L));
+  });
+});
+
+describe('slotMovesLetters', () => {
+  const drift: MotionPiece = { duration: 1000, offset: (t) => ({ position: [0, t, 0] }) };
+  const tilt: MotionPiece = { duration: 1000, offset: () => ({ rotation: [0, 0.2, 0] }) };
+  const breathe: MotionPiece = { duration: 1000, offset: (t) => ({ scale: 1 + t * 0.1 }) };
+  const dim: MotionPiece = { duration: 1000, offset: () => ({ opacity: 0.5 }) };
+  const perLetter: MotionPiece = {
+    duration: 1000,
+    offset: (_t, letter) => (letter.index === 3 ? { position: [1, 0, 0] } : {}),
+  };
+
+  it('clears a slot that never leaves rest', () => {
+    expect(slotMovesLetters(NONE)).toBe(false);
+    expect(slotMovesLetters([NONE, NONE])).toBe(false);
+  });
+
+  it('catches position, rotation and scale', () => {
+    expect(slotMovesLetters(drift)).toBe(true);
+    expect(slotMovesLetters(tilt)).toBe(true);
+    expect(slotMovesLetters(breathe)).toBe(true);
+  });
+
+  it('ignores opacity, which does not move a letter', () => {
+    expect(slotMovesLetters(dim)).toBe(false);
+  });
+
+  it('catches a layer that moves even when its neighbours do not', () => {
+    expect(slotMovesLetters([NONE, drift])).toBe(true);
+  });
+
+  it('catches a piece that only moves one letter of the word', () => {
+    expect(slotMovesLetters(perLetter)).toBe(true);
+  });
+
+  it('catches a constant offset, which misaligns without ever animating', () => {
+    expect(slotMovesLetters({ duration: 1000, offset: () => ({ position: [0, 2, 0] }) })).toBe(
+      true,
+    );
   });
 });

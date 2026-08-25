@@ -136,6 +136,17 @@ the floor it is, the junction chord and radius, and a radius profile either side
 floor circle at true scale. Two static spikes are frozen versions of it and can go once it grows:
 `junction-repair.mjs` and `fillet-view.mjs`.
 
+**The corner lab has an ink key now, and labkit is not getting one.** `FloatingPanel` and `Legend`
+were **deferred upstream**, so [the legend plan](plans/2026-08-23-corner-lab-legend.md) cannot be run
+as written: labkit 1.2.0 published without them, and windease's `floatingStrategy` is built in source
+but never released — the registry is at 1.2.1. klieg grew its own `LegendPanel.tsx` instead, static
+rather than draggable, with `LegendEntry` declared locally. The plan's header records which of its
+tasks are void, so the upstream chain does not need walking again.
+
+`legend.ts` holds the ink table and the key together, and a test asserts every drawn ink has an
+entry. It earned itself on the first run: the lab had gained a ninth ink, `frame`, after the plan was
+written, and the drift check caught the missing entry.
+
 **labkit 1.1 fixed every gap the corner lab reported**, so the workarounds are gone: `render()` is
 now an overlay beside the canvas rather than an alternative to it, layers draw in world coordinates
 with the camera already applied, a typed instrument no longer needs a cast, and `styles.css` carries

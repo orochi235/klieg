@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rng } from '../rng.js';
 import type { LookSpec } from './looks.js';
 import type { TubeBlueprint, TubeSpec } from './tube/index.js';
 
@@ -166,16 +167,6 @@ function oreAt(x: number, y: number, bedding: BeddingSpec): number {
 /** Distinct positions a spec's chunks are drawn from. Never below POOL, so a sparse look holds still. */
 export function poolFor(spec: ChunkSpec): number {
   return Math.max(POOL, spec.count * POOL_PER_CHUNK);
-}
-
-function rng(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 export interface ChunkPoolOptions {

@@ -197,10 +197,10 @@ Roughly in order of value; the items are independent of each other.
   element — a `pointer-events:none` canvas — so its text is invisible to selection, copy-paste,
   Ctrl+F, screen readers and crawlers. Tier 1 is a visually-hidden text node (small, independent,
   worth doing on its own merits); tier 2 is an aligned transparent per-letter layer, the PDF.js
-  approach. The notes have the projection maths that already exists, the three things that bite —
-  the font is not registered as a CSS font, selection collides with the shipped click-through
-  guarantee, and extrusion offsets the scale — and the decisions still open. Start it on its own
-  branch off `main`.
+  approach. The design is settled — one `selectable: 'hidden' | 'layer' | 'none'` option, the layer
+  a sibling of the canvas owned by `Stage`, dropped back to `'hidden'` when `transform` or a moving
+  motion piece would misalign it. Read the spec for the projection maths and the silent traps.
+  Start it on its own branch off `main`.
 
 - **A composition lab, so effect pieces get built by hand rather than through a plan.** Asked for
   directly. `roving` and `hue` were specified in prose, and the wrapper's epoch arithmetic came out

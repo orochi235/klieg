@@ -1,9 +1,10 @@
 import type { Font, PathCommand } from 'opentype.js';
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
+import type { PartInfo } from '../../src/effects/types.js';
 import { Timeline } from '../../src/motion/compositor.js';
 import type { LetterInfo, MotionPiece } from '../../src/motion/types.js';
-import { NONE } from '../../src/motion/types.js';
+import { NONE, orderKey } from '../../src/motion/types.js';
 import type { PoseOffset } from '../../src/pose.js';
 import type { FlakeUniforms } from '../../src/render/flake.js';
 import type { LookSpec } from '../../src/render/looks.js';
@@ -1388,5 +1389,80 @@ describe('frame-owned material properties', () => {
     runOneFrame(word);
 
     expect(material.emissiveIntensity).toBe(3.4);
+  });
+});
+
+describe('part pool', () => {
+  it('has one body part per drawn letter, numbered across the word', () => {
+    const word = new Word('AA', stubFont(), 'gold', ROOMY);
+    const parts = word.partsOf('body');
+
+    expect(parts.map((p) => p.index)).toEqual([0, 1]);
+    expect(parts.every((p) => p.count === 2)).toBe(true);
+    expect(parts[0]?.letter.index).toBe(0);
+    expect(parts[1]?.letter.index).toBe(1);
+  });
+
+  it('draws no body part for a glyph with no outline', () => {
+    expect(new Word('A B', stubFont(), 'gold', ROOMY).partsOf('body')).toHaveLength(2);
+  });
+
+  it('has no run parts on a look with no tube', () => {
+    expect(new Word('A', stubFont(), 'gold', ROOMY).partsOf('run')).toHaveLength(0);
+  });
+
+  it('numbers run parts across the whole word, not per letter', () => {
+    const word = new Word('AA', stubFont(), 'tubing', ROOMY);
+    const parts = word.partsOf('run');
+
+    expect(parts.length).toBeGreaterThan(1);
+    expect(parts.map((p) => p.index)).toEqual(parts.map((_, n) => n));
+    expect(new Set(parts.map((p) => p.letter.index))).toEqual(new Set([0, 1]));
+  });
+
+  it('gives every run part a share of the pool extent that sums to one', () => {
+    const parts = new Word('AA', stubFont(), 'tubing', ROOMY).partsOf('run');
+    const total = parts.reduce((a, p) => a + p.span, 0);
+
+    expect(total).toBeCloseTo(1, 5);
+  });
+
+  it('pairs a lit mesh with a lit run for every letter of both tube looks', () => {
+    for (const look of ['tubing', 'piping'] as const) {
+      for (const char of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') {
+        expect(() => new Word(char, stubFont(), look, ROOMY)).not.toThrow();
+      }
+    }
+  });
+
+  it('shares the pool extent by arc length, so a longer run takes more of it', () => {
+    const word = new Word('AA', stubFont(), 'tubing', ROOMY);
+    const parts = word.partsOf('run');
+    // Lit meshes come first in a cell and share one material; pool order walks the cells in turn.
+    const lit = groups(word).flatMap((cell) => {
+      const litMaterial = (cell.children[1] as THREE.Mesh).material;
+      return (cell.children.slice(1) as THREE.Mesh[]).filter((m) => m.material === litMaterial);
+    });
+    const extent = lit.map((mesh) => {
+      mesh.geometry.computeBoundingBox();
+      return (mesh.geometry.boundingBox as THREE.Box3).getSize(new THREE.Vector3()).length();
+    });
+
+    expect(lit).toHaveLength(parts.length);
+    const longest = extent.indexOf(Math.max(...extent));
+    const shortest = extent.indexOf(Math.min(...extent));
+    expect(parts[longest]?.span).toBeGreaterThan((parts[shortest]?.span as number) * 1.5);
+  });
+
+  it('carries its letter grid position, so a radial stagger has something to read', () => {
+    const word = new Word('NA\nEB\nOC', stubFont(), 'gold', ROOMY);
+    // Middle row, left column: off centre on the grid, but near the middle in reading order.
+    const part = word.partsOf('body')[2] as PartInfo;
+
+    expect([part.line, part.column, part.lineCount, part.columnCount]).toEqual([1, 0, 3, 2]);
+    expect(orderKey(part, { grid: true, from: 'center' })).not.toBeCloseTo(
+      orderKey(part, { from: 'center' }),
+      5,
+    );
   });
 });

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { PartInfo, PartKind } from '../effects/types.js';
 import { blankPose } from '../motion/compositor.js';
 import type { RegroupResult } from '../motion/sequence.js';
 import type { LetterInfo } from '../motion/types.js';
@@ -120,10 +121,26 @@ export class Word {
   private readonly decorMaterials: (THREE.Material | null)[] = [];
   /** A tube decoration's unlit-run material, one per letter; null for every non-tube letter. */
   private readonly darkMaterials: (THREE.Material | null)[] = [];
+  /** Indexed by letter slot; a slot whose glyph drew no outline is a hole. */
+  private readonly bodyMeshes: (THREE.Mesh | null)[] = [];
+  /** A tube letter's lit-run meshes in blueprint order; indexed by letter slot. */
+  private readonly litMeshes: THREE.Mesh[][] = [];
+  /** The word-wide part pool, body parts first and then run parts. */
+  private readonly parts: PartInfo[] = [];
+  private readonly partMeshes: THREE.Mesh[] = [];
+  /**
+   * A run part's own colour, so an effect composes from the base rather than from last frame. A
+   * body part gets white, which nothing reads: white is a tint's identity, so a later reader that
+   * does read it gets the body untinted rather than black.
+   */
+  private readonly partBaseColor: number[] = [];
   private readonly cache: GlyphCache;
   private readonly decorCache: GlyphCache<Blueprint> | null;
-  /** Tube blueprints, one per letter — a per-letter seed can't go through the char-keyed cache. */
-  private readonly tubeBlueprints: TubeBlueprint[] = [];
+  /**
+   * Tube blueprints, one per letter — a per-letter seed can't go through the char-keyed cache.
+   * Indexed by letter slot, so a hole is a letter that grew no tube.
+   */
+  private readonly tubeBlueprints: (TubeBlueprint | undefined)[] = [];
   /** Per-letter run bounds in the letter's own 1 em space; null where the glyph drew nothing. */
   private readonly tubeBounds: (THREE.Box2 | null)[] = [];
   /** One ramp for the whole word: every letter's tint samples the same stops. */
@@ -217,6 +234,92 @@ export class Word {
       this.buildCell(i, font, look, spec, decoration, tint, debug);
     }
     this.setGradientBounds();
+    this.buildParts();
+  }
+
+  /**
+   * The word-wide pool of addressable parts, built once every letter exists. Word-wide rather than
+   * per letter: `{ amount: 1 }` picks one bad tube in the sign, not one in every letter.
+   */
+  private buildParts(): void {
+    const bodies: number[] = [];
+    for (let i = 0; i < this.charOf.length; i++) {
+      if (this.bodyMeshes[i]) bodies.push(i);
+    }
+    for (let n = 0; n < bodies.length; n++) {
+      const i = bodies[n] as number;
+      this.parts.push(
+        this.partInfo('body', n, bodies.length, i, n / bodies.length, 1 / bodies.length),
+      );
+      this.partMeshes.push(this.bodyMeshes[i] as THREE.Mesh);
+      this.partBaseColor.push(0xffffff);
+    }
+
+    const runs: { slot: number; mesh: THREE.Mesh; length: number; color: number }[] = [];
+    for (let i = 0; i < this.charOf.length; i++) {
+      const blueprint = this.tubeBlueprints[i];
+      const meshes = this.litMeshes[i];
+      if (!blueprint || !meshes) continue;
+      const lit = blueprint.runs.filter((r) => r.lit);
+      // Paired by ordinal, which only holds while every lit run swept a geometry: one missing
+      // shifts every later pair, and each effect then lands on a tube it never targeted.
+      if (meshes.length !== lit.length) {
+        throw new Error(
+          `tube blueprint ${i}: ${meshes.length} lit meshes for ${lit.length} lit runs`,
+        );
+      }
+      for (let r = 0; r < meshes.length; r++) {
+        const run = lit[r] as (typeof lit)[number];
+        runs.push({ slot: i, mesh: meshes[r] as THREE.Mesh, length: run.length, color: run.color });
+      }
+    }
+
+    // Arc length, not ordinal: runs differ in length by an order of magnitude, and an ordinal
+    // share would put a chase's dwell somewhere other than where the glass is.
+    const total = runs.reduce((a, r) => a + r.length, 0);
+    let walked = 0;
+    for (let n = 0; n < runs.length; n++) {
+      const run = runs[n] as (typeof runs)[number];
+      const at = total > 0 ? walked / total : n / runs.length;
+      const span = total > 0 ? run.length / total : 1 / runs.length;
+      this.parts.push(this.partInfo('run', n, runs.length, run.slot, at, span));
+      this.partMeshes.push(run.mesh);
+      this.partBaseColor.push(run.color);
+      walked += run.length;
+    }
+  }
+
+  /**
+   * A part carries its letter's grid position: `orderKey` reads `column` to decide whether a
+   * radial stagger is even possible, and a part without one silently falls back to reading order.
+   */
+  private partInfo(
+    kind: PartKind,
+    index: number,
+    count: number,
+    slot: number,
+    at: number,
+    span: number,
+  ): PartInfo {
+    return {
+      kind,
+      index,
+      count,
+      letter: this.letterInfo(slot),
+      x: this.baseX[slot] as number,
+      y: this.baseY[slot] as number,
+      line: this.lineOf[slot] as number,
+      column: this.columnOf[slot] as number,
+      lineCount: this.lineCount,
+      columnCount: this.columnCount,
+      at,
+      span,
+    };
+  }
+
+  /** The word's parts of one kind, in pool order. */
+  partsOf(kind: PartKind): readonly PartInfo[] {
+    return this.parts.filter((p) => p.kind === kind);
   }
 
   /**
@@ -312,7 +415,9 @@ export class Word {
     this.bodyMaterials.push(material);
 
     const cell = new THREE.Group();
-    cell.add(new THREE.Mesh(geo, material));
+    const bodyMesh = new THREE.Mesh(geo, material);
+    this.bodyMeshes[i] = bodyMesh;
+    cell.add(bodyMesh);
 
     let debugShapes: THREE.Shape[] | undefined;
 
@@ -363,14 +468,20 @@ export class Word {
       const shapes = glyphToShapes(font.font, char, EM);
       debugShapes = shapes;
       const blueprint = buildTubeBlueprint(shapes, decoration, DEFAULT_GLYPH_OPTIONS.depth, i);
-      this.tubeBlueprints.push(blueprint);
+      this.tubeBlueprints[i] = blueprint;
       const box = new THREE.Box2();
       const point = new THREE.Vector2();
       for (const run of blueprint.runs) {
         for (const p of run.points) box.expandByPoint(point.set(p.x, p.y));
       }
       this.tubeBounds.push(box.isEmpty() ? null : box);
-      for (const geo of blueprint.lit) cell.add(new THREE.Mesh(geo, decorMaterial));
+      const litMeshes: THREE.Mesh[] = [];
+      for (const geo of blueprint.lit) {
+        const mesh = new THREE.Mesh(geo, decorMaterial);
+        litMeshes.push(mesh);
+        cell.add(mesh);
+      }
+      this.litMeshes[i] = litMeshes;
       for (const geo of blueprint.dark) cell.add(new THREE.Mesh(geo, darkMaterial));
     } else if (decoration && decoration.kind === 'chunks') {
       const decorMaterial = createMaterial();
@@ -580,9 +691,14 @@ export class Word {
     this.decorMaterials.length = 0;
     for (const material of this.darkMaterials) material?.dispose();
     this.darkMaterials.length = 0;
-    for (const blueprint of this.tubeBlueprints) blueprint.dispose();
+    for (const blueprint of this.tubeBlueprints) blueprint?.dispose();
     this.tubeBlueprints.length = 0;
     this.tubeBounds.length = 0;
+    this.parts.length = 0;
+    this.partMeshes.length = 0;
+    this.partBaseColor.length = 0;
+    this.bodyMeshes.length = 0;
+    this.litMeshes.length = 0;
     this.gradientRamp?.dispose();
     this.decorCache?.dispose();
     this.chunkGeo?.dispose();

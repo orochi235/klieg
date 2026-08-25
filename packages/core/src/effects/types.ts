@@ -18,6 +18,11 @@ export interface PartInfo {
   /** Layout position in em, relative to the block centre. */
   x: number;
   y: number;
+  /** The letter's place in the laid-out block, so `stagger`'s `grid` order has something to read. */
+  line?: number;
+  column?: number;
+  lineCount?: number;
+  columnCount?: number;
   /** Fraction of the pool's extent lying before this part, and this part's share of it. */
   at: number;
   span: number;

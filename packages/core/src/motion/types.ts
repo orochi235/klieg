@@ -51,13 +51,26 @@ function hash01(n: number): number {
   return x - Math.floor(x);
 }
 
+/**
+ * What ordering a pool needs: position within it, and optionally where its member sits in the
+ * laid-out block. `LetterInfo` satisfies it, and so does a part of a letter.
+ */
+export interface Ordered {
+  index: number;
+  count: number;
+  line?: number;
+  column?: number;
+  lineCount?: number;
+  columnCount?: number;
+}
+
 /** Radial distance from the middle of the laid-out block, 0 at the center and 1 at a corner. */
-function radial(letter: LetterInfo): number {
-  const multiRow = (letter.lineCount ?? 1) > 1;
-  const cols = Math.max(1, (letter.columnCount ?? 1) - 1);
-  const rows = Math.max(1, (letter.lineCount ?? 1) - 1);
-  const dx = (letter.column ?? 0) / cols - 0.5;
-  const dy = multiRow ? (letter.line ?? 0) / rows - 0.5 : 0;
+function radial(item: Ordered): number {
+  const multiRow = (item.lineCount ?? 1) > 1;
+  const cols = Math.max(1, (item.columnCount ?? 1) - 1);
+  const rows = Math.max(1, (item.lineCount ?? 1) - 1);
+  const dx = (item.column ?? 0) / cols - 0.5;
+  const dy = multiRow ? (item.line ?? 0) / rows - 0.5 : 0;
   // Normalized against this block's own corner, not a constant: dividing by a fixed factor
   // clamps every letter of a wide block to 1 and flattens the ripple to nothing.
   const corner = Math.hypot(0.5, multiRow ? 0.5 : 0);
@@ -65,39 +78,39 @@ function radial(letter: LetterInfo): number {
 }
 
 /** Distance from the middle of the word in reading order, 0 at the center and 1 at either end. */
-function fromMiddle(letter: LetterInfo): number {
-  const mid = (Math.max(1, letter.count) - 1) / 2;
-  return mid > 0 ? Math.abs(letter.index - mid) / mid : 0;
+function fromMiddle(item: Ordered): number {
+  const mid = (Math.max(1, item.count) - 1) / 2;
+  return mid > 0 ? Math.abs(item.index - mid) / mid : 0;
 }
 
-/** Where a letter sits in the stagger order: 0 goes first, 1 goes last. */
-export function orderKey(letter: LetterInfo, spec: StaggerSpec = {}): number {
+/** Where a pool member sits in the stagger order: 0 goes first, 1 goes last. */
+export function orderKey(item: Ordered, spec: StaggerSpec = {}): number {
   const from = spec.from ?? 'start';
   // `grid` only changes what "middle" means; reading order is already the same either way.
-  const middle = spec.grid && letter.column !== undefined ? radial(letter) : fromMiddle(letter);
+  const middle = spec.grid && item.column !== undefined ? radial(item) : fromMiddle(item);
 
   switch (from) {
     case 'random':
-      return hash01(letter.index);
+      return hash01(item.index);
     case 'end':
-      return 1 - letter.index / Math.max(1, letter.count);
+      return 1 - item.index / Math.max(1, item.count);
     case 'center':
       return middle;
     case 'edges':
       return 1 - middle;
     default:
-      return letter.index / Math.max(1, letter.count);
+      return item.index / Math.max(1, item.count);
   }
 }
 
-/** Stagger helper: returns 0..1 for how far along letter `index` should be at word-time `t`. */
-export function stagger(t: number, letter: LetterInfo, spec: number | StaggerSpec = 0.5): number {
+/** Stagger helper: returns 0..1 for how far along member `index` should be at word-time `t`. */
+export function stagger(t: number, item: Ordered, spec: number | StaggerSpec = 0.5): number {
   const resolved: StaggerSpec = typeof spec === 'number' ? { spread: spec } : spec;
-  const count = Math.max(1, letter.count);
+  const count = Math.max(1, item.count);
   const spread =
     resolved.each !== undefined ? Math.min(1, resolved.each * count) : (resolved.spread ?? 0.5);
 
-  const start = orderKey(letter, resolved) * spread;
+  const start = orderKey(item, resolved) * spread;
   // spread=1 would make span 0, and (t - start) is also 0 at t=start — 0/0 is NaN, which
   // clamps straight through into a transform and makes the letter vanish silently.
   const span = Math.max(1e-6, 1 - spread);

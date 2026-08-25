@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { ActiveName, EnterName, ExitName, LetterInfo } from '../../src/motion/types.js';
+import type {
+  ActiveName,
+  EnterName,
+  ExitName,
+  LetterInfo,
+  Ordered,
+} from '../../src/motion/types.js';
 import { NONE, orderKey, stagger } from '../../src/motion/types.js';
 
 function letter(index: number, count: number): LetterInfo {
@@ -185,5 +191,32 @@ describe('stagger spec forms', () => {
 
   it('never lets each push spread past the whole pass', () => {
     expect(Number.isNaN(stagger(0.5, L(3), { each: 0.9 }))).toBe(false);
+  });
+});
+
+describe('orderKey over a non-letter pool', () => {
+  it('orders anything carrying index and count', () => {
+    const part: Ordered = { index: 3, count: 4 };
+
+    expect(orderKey(part, { from: 'start' })).toBeCloseTo(0.75);
+    expect(orderKey(part, { from: 'end' })).toBeCloseTo(0.25);
+  });
+
+  it('ignores the letter-only fields, so a part staggers like the letter it sits in', () => {
+    const spec = { spread: 0.5, from: 'start' as const };
+    const asLetter: LetterInfo = {
+      index: 1,
+      count: 4,
+      line: 0,
+      column: 1,
+      lineCount: 1,
+      columnCount: 4,
+      x: -0.5,
+      y: 0.25,
+      leaving: true,
+    };
+    const asPart: Ordered = { index: 1, count: 4 };
+
+    expect(stagger(0.75, asPart, spec)).toBe(stagger(0.75, asLetter, spec));
   });
 });

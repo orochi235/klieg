@@ -5,75 +5,52 @@ what is worth doing next.
 
 ## In flight
 
-**Nothing is in flight.** Every branch is merged and every worktree is gone.
+**Nothing is in flight.** Every branch is merged and every worktree is gone. `main` is pushed.
 
-**`main` is 39 commits ahead of `origin/main`, and unpushed.** Nothing is released until a `v*` tag
-is pushed, so the gap blocks no one, but anyone reading the repo on GitHub is 39 commits behind what
-this doc describes.
+## Two consumer defects, both verified, both needing a decision
 
-A lab dev server may be holding port 5180 from an earlier session; kill it if so. The visual suite
-does not care — `playwright.config.ts` derives its own port from the checkout's path.
+Reported by the portfolio session, which builds the michaelbaker.tech masthead against published
+klieg. Both reproduce on 0.6.0. Neither is fixed — each needs a call that is not the implementer's
+to make.
 
-**The effects pipeline landed, and so did `roving` and `hue` on top of it.** All eight tasks of
-[plans/2026-08-24-effects-pipeline.md](plans/2026-08-24-effects-pipeline.md), each with an implementer
-and a two-stage review, plus a whole-branch review at the end. The 16 baseline PNGs that predate it are
-byte-identical — no shipped look moved, which is the claim the whole approach rests on. One baseline is
-new: `effect-flicker-darwin.png`, `tubing` at a pinned clock with one run dark.
+**1. `tint` is discarded by any look with `tintTo: 'decoration'` — `tubing` only.** In `buildCell`,
+`applyLook(decorMaterial, deco.look, hue)` writes the tint, then `tintByRunColor(decorMaterial,
+'emissive', …)` sets `emissive` to white so it can drive the channel from the `runColor` attribute.
+Same material, second call wins, tint gone before the first frame — `word.ts:583-586` then `:592`.
+Verified at the material level: after `applyLook` the emissive is the tint; after `tintByRunColor`
+it is `0xffffff`.
 
-| landed | what |
-|---|---|
-| 1-2 | `applyLook` no longer writes `opacity` or `emissiveIntensity`; `Word` composes both from a per-family `frameOwnedBase`, at construction and per frame |
-| 3 | the selection grammar moved to `src/select.ts`; `assign` routes through it |
-| 4 | `stagger`/`orderKey` widened from `LetterInfo` to a minimal `Ordered` |
-| 5 | `effects/types.ts`, `effects/compositor.ts` — `PartInfo`, `PartOffset`, the merge rule |
-| 6 | `effects/pieces.ts` — the `flicker` piece and the `EFFECTS` registry |
-| 7 | the word-wide part pool in `Word`, over `run` and `body` parts |
-| 8 | the apply path, `LookSpec.effects`, `FireOptions.effects`, `EFFECT_NAMES` |
+*The report also named `sequin`; that half is wrong.* There is exactly one `tintByRunColor` call
+site and it sits inside the `kind: 'tube'` branch. `sequin` is `kind: 'chunks'`, takes the branch at
+~644, and its material still carries the tint afterwards. If sequin does drop a tint on screen the
+cause is downstream — most likely the chunk `instanceColor` path — and it is a separate defect.
 
-**What is deliberately not built.** `chunk` parts and `crawl` are steps 4 and 5 of the design and each
-want their own plan. `PartOffset.dark` is composited and typed but nothing writes it — labelled inert
-in the type, like `crawl`. `EffectSpec` still has no per-piece parameter field, so a name can only
-produce defaults; tuning goes through `piece: EFFECTS.flicker({ depth: 0.2 })`, and `FlickerSpec`,
-`HueSpec` and `RovingSpec` are all exported for it. That question was reopened by `roving` and closed
-the same way: a wrapper takes another piece, which no name can express at all, so per-piece parameters
-would not have made `roving` nameable.
+**The decision:** a tint on a tube look can *replace* the `runColor` palette outright, which is
+simple but discards the per-surface shading `surfaceColors` sets, or *modulate* it (say by the run
+colour's luminance), which keeps the shading but means `tint: 0x22d3ee` does not literally produce
+`0x22d3ee`. It touches the same material path the effects compositor now writes through, so
+whichever way it goes it has to compose with the compositor rather than race it. The README's
+options table currently promises tint recolours any look, which two shipped looks do not do.
 
-**Two things a reader will otherwise rediscover the hard way.** The part pool is a **construction-time
-snapshot** — `regroup()` does not rebuild it, deliberately: a pool index is the identity an effect's
-targets were resolved against, so rebuilding would re-run selection and jump a flicker to a different
-tube mid-pass. `applyEffects` skips parts whose letter a regroup dropped. And `SelectSpec` now has
-`count` alongside `amount`: `amount` is a fraction (so `{ amount: 1 }` selects the **whole** pool, which
-is what `piping` relies on), while `count` is a literal number of members and wins when both are given.
+**2. `LookParams` collapses to `{}` for a TS consumer.** `look: { ...tube.look, emissive: … }`
+fails with *"'emissive' does not exist in type 'MaterialSpec'"* after nothing but `npm i klieg
+three`. `looks.d.ts` emits `LookKey` as a live `Extract<keyof THREE.MeshPhysicalMaterial, …>`, so
+the *consumer* re-evaluates it; three 0.185.1's `exports` map carries only `import` and `require`
+and no `types` condition, so `import * as THREE from 'three'` resolves to no declarations, `keyof`
+collapses and `Extract` yields nothing. It does not reproduce in-repo because `packages/core` has
+`@types/three` in devDependencies, which a consumer cannot learn from the package. Confirmed in the
+built `dist/render/looks.d.ts`.
 
-
-**`roving` and `hue` both shipped**, against
-[their design](specs/2026-08-25-roving-and-hue-design.md) and
-[plan](plans/2026-08-25-roving-and-hue.md). `hue` is a registry name alongside `flicker` and sweeps
-the colour wheel at a held Rec.709 luminance; `roving` is a factory only — it wraps another piece and
-moves that piece's affliction from tube to tube, and no name can carry the piece it wraps. The README
-now documents the effects pipeline, which had shipped with no public documentation at all.
-
-**The wrapper's epoch arithmetic has one trap that reads as the correct version.** Making the epoch a
-whole multiple of the inner piece's duration tiles both clocks and looks tidier; it permanently
-breaks the effect, because every handover then samples the inner at one fixed phase where its rest is
-a per-part constant, and the first part that blocks its own handover keeps the fault forever. The
-spec's trap list has the measurement. A prototype caught it in one run; review had not.
-
-**Also unplanned: the stage and repair registries, then the lab** —
-[specs/2026-08-23-pipeline-lab-design.md](specs/2026-08-23-pipeline-lab-design.md). The registries need
-a design pass first: the six corner repairs are not uniform `(span) → span` transforms, and what a
-repair step receives and returns is undecided. **That lab is called kliegsminister**; `dev/corner-lab`
-is renamed to it when it grows past one corner. Independent of the effects pipeline — they touch
-different halves of the tube code.
-
-**One labkit gap is still open.** The minimap's viewport rectangle is an indicator only: labkit hands
-an instrument `zoom` and `setZoom` and publishes the view read-only through `CanvasStackContext`, but
-exposes no `setPan` or `onViewChange`, so drag-to-pan from a minimap cannot be built without reaching
-past its public API. File it against labkit rather than working around it.
+**The decision:** declare `@types/three` as an optional peer dependency, or resolve `LookKey` at
+build time so the `.d.ts` ships a literal union and the package is self-contained. Only the second
+helps a consumer who never installs the types. The error names `MaterialSpec`, so it reads as a
+klieg API removal rather than a resolution problem, which is what cost the reporter the time.
 
 ## State
 
-**0.5.1 is published and is `latest`.** Releases are automatic: push a `v*` tag and `release.yml`
+**0.6.0 is published and is `latest`**, carrying the wide-anchor lens fix and the `flip` opacity
+fix. Read `https://registry.npmjs.org/klieg` to check what landed — `npm view` reports stale right
+after a publish. Releases are automatic: push a `v*` tag and `release.yml`
 publishes through npm trusted publishing, checking first that the tag matches
 `packages/core/package.json` and skipping a version already on the registry. The trusted publisher
 was still pointed at the old `blitsklieg` name until 2026-08-25, which is what made 0.5.0's first
@@ -84,7 +61,7 @@ Release run 404 on `PUT /klieg`; that is fixed, and 0.5.0 and 0.5.1 both went ou
 **`main` carries the tube lab, the tube geometry rewrite, the colour gradients, the junction
 reconciliation, direct paths by default, element-anchored placement and the effects pipeline, all
 merged.** On `main`, `npm run check` is green at **913 tests across 48 files** and `npx playwright
-test` at **26 across 2 files**, both measured on `main` at `7a5d0fc`. Every count in this doc is
+test` at **26 across 2 files**, measured on `main` after `crawl` landed. Every count in this doc is
 measured, not carried over — it has twice claimed a playwright number one higher than `--list`
 reports.
 
@@ -181,6 +158,18 @@ stretches against a synthetic control, and `fillet-view.mjs` draws the corner st
 SVG page. For the path source work: `join-geometry.mjs` dumps a failing run per vertex,
 `source-shootout.mjs` is the acceptance across all three sources, and `run-decomposition.mjs` shows
 how the source changes the cut. The spec lists the rest.
+
+**`crawl` shipped, and the design was wrong twice.** A `chase` piece drives it and the offset reaches
+the shader as a per-vertex float beside `gradientT`, not as the uniform the design specified — a
+uniform is per-material and every lit run of a letter shares one, so a per-part crawl cannot be one.
+And the ramp is `ClampToEdgeWrapping` with the shader clamping, so the design's crawl would have
+pinned a run to the ramp's last colour within half a cycle and stayed there. It wraps with `fract`,
+**conditional on a non-zero crawl**: a run's last vertex sits at `gradientT` 1.0 exactly and
+`fract(1.0)` is 0.0, so wrapping unconditionally snaps every ramp's end to its start and moves every
+baseline. Both faults came out of running it; neither was visible in the prose.
+
+**Crawl is inert on both shipped looks**, which declare no `gradient`. No visual baseline can show it
+working — it needs a caller-supplied `TubeSpec.gradient`.
 
 ## What is worth doing next
 

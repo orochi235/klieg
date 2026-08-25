@@ -121,26 +121,31 @@ Every channel an effect drives has this problem waiting. `emissiveIntensity` is 
 needs and is not frame-owned today, so an effect writing it would work now and break silently the day
 anything else writes it per frame — which is how the opacity trap was born.
 
-Name the frame-owned properties once and subtract them from the look's vocabulary:
+The fix is not to take these properties away from looks — `neon` and `tubing` both declare
+`emissiveIntensity`, and a look declaring its own base is correct. The fix is to stop `applyLook`
+writing them, and let `Word` compose them:
 
 ```ts
-/** Written every tick by Word from base × pose × effects. A look cannot set these directly. */
+/** Written every tick by Word from base × pose × effects, so applyLook must not write them. */
 type FrameOwned = 'opacity' | 'emissiveIntensity';
-type LookKey = Exclude<Extract<keyof THREE.MeshPhysicalMaterial, /* the existing list */>, FrameOwned>;
+type AppliedKey = Exclude<LookKey, FrameOwned>;
 ```
 
-Adding `'opacity'` to that list then fails to compile. Opacity keeps its two factors — fading a letter
-is motion's job and no effect channel drives it — and `emissiveIntensity` joins it as a composed
-write, gaining one factor that defaults to 1 so an absent effect changes nothing:
+`applyLook` loops `AppliedKey` instead of every `PARAM_KEYS` entry; a look still declares the value,
+`resolveParams` still clamps it, and `Word` reads it as the base for a per-frame write:
 
 ```ts
 material.opacity = pose.opacity * base.opacity;
 material.emissiveIntensity = base.emissiveIntensity * effect.gain;
 ```
 
-`Word` stays the sole writer, so no second clobberer is introduced. The rule the rest of this design
-rests on: **a channel an effect drives must be frame-owned, and a frame-owned property cannot be named
-by a look.**
+`Word` already keeps `bodyOpacity`, `decorOpacity` and `darkOpacity` this way; this generalizes what
+it does for one property to the set. `Word` stays the sole writer, so no second clobberer appears.
+
+The payoff is that the broken door becomes a working one. `opacity` can now be added to `LookKey`
+legally — it would be routed to frame ownership like any other member of the set — so the warning at
+`looks.ts:26` is deleted rather than re-worded. The rule the rest of this design rests on: **a channel
+an effect drives must be frame-owned, and a frame-owned property is written by `Word` alone.**
 
 ## Order of work
 
@@ -165,7 +170,9 @@ Each step has its own guard, checked at that step rather than only at the end.
   checked after step 1, after step 2, and again at the end.
 - Per-part materials produce the same pixels as one shared material, which is the claim that step 2
   moved nothing.
-- A look naming a `FrameOwned` property fails to compile — asserted by a type test, not by review.
+- `applyLook` cannot write a frame-owned property — asserted by a type test on `AppliedKey`, not by
+  review. `neon` and `tubing` still render at the `emissiveIntensity` they declare, which is the claim
+  that moving the write moved no pixels.
 - With a pinned clock, a frame mid-flicker is reproducible across runs, so an effect can hold a visual
   baseline of its own.
 - An effect targeting nothing, and a look with no effects, cost no per-frame writes.

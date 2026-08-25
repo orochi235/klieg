@@ -205,3 +205,238 @@ test('the overlay does not intercept clicks meant for the page beneath it', asyn
   await page.getByRole('button', { name: 'FIRE', exact: true }).click({ timeout: 5000 });
   await expect(page.locator('#log')).toContainText('fire "SECOND"');
 });
+
+/** A serialisable box: Playwright's evaluate serialiser does not carry a `DOMRect` across. */
+interface Box {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+const width = (box: Box) => box.right - box.left;
+const height = (box: Box) => box.bottom - box.top;
+const midX = (box: Box) => (box.left + box.right) / 2;
+const midY = (box: Box) => (box.top + box.bottom) / 2;
+
+// The first fire in a fresh page compiles the overlay's shaders, which stalls the main thread for
+// seconds under a software GPU — so nothing below sleeps for the layer, and the hold outlasts it.
+const SELECTABLE_HOLD_MS = 20000;
+// Under the 30s test timeout, so a layer that never arrives reports the poll's own message.
+const LAYER_TIMEOUT_MS = 15000;
+
+/** Fires one still, long-held word under a chosen `selectable` mode. */
+async function fireSelectable(page: Page, mode: string, text = 'BIG'): Promise<void> {
+  await page.goto('/');
+  await page.locator('#enter').selectOption('none');
+  await page.locator('#active').selectOption('none');
+  await page.locator('#hold').fill(String(SELECTABLE_HOLD_MS));
+  await page.locator('#text').fill(text);
+  await page.locator('#selectable').selectOption(mode);
+  await page.getByRole('button', { name: 'FIRE', exact: true }).click();
+  await expect(page.locator('canvas')).toBeAttached();
+}
+
+/**
+ * Boxes of the layer's spans in DOM order, empty where no layer was built. They are found by the
+ * transparent colour only they carry: the library gives its nodes no class or attribute to match.
+ */
+function layerBoxes(page: Page): Promise<Box[]> {
+  return page.evaluate(() =>
+    [...document.querySelectorAll('span')]
+      .filter((s) => getComputedStyle(s).color === 'rgba(0, 0, 0, 0)')
+      .map((s) => {
+        const r = s.getBoundingClientRect();
+        return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+      }),
+  );
+}
+
+/** The clipped tier-1 node, with the text a copy or a find-in-page would actually reach. */
+function hiddenNode(page: Page): Promise<{ text: string; rendered: string } | null> {
+  return page.evaluate(() => {
+    const node = [...document.querySelectorAll('span')].find(
+      (s) => getComputedStyle(s).clipPath === 'inset(50%)',
+    );
+    return node ? { text: node.textContent ?? '', rendered: node.innerText } : null;
+  });
+}
+
+/** Waits for the built layer and returns its spans' boxes. */
+async function settledLayer(page: Page): Promise<Box[]> {
+  await expect
+    .poll(async () => (await layerBoxes(page)).length, {
+      message: 'the layer never built a single span',
+      timeout: LAYER_TIMEOUT_MS,
+    })
+    .toBeGreaterThan(0);
+  return layerBoxes(page);
+}
+
+/**
+ * Waits until the overlay has drawn a lit frame. An absence check that skips this proves nothing:
+ * the DOM is empty before the first fire reaches the screen whatever the mode was.
+ */
+async function waitForDraw(page: Page): Promise<void> {
+  await expect
+    .poll(async () => (await readOverlay(page, 2)).drawn, {
+      message: 'the overlay never drew a lit frame',
+      timeout: LAYER_TIMEOUT_MS,
+    })
+    .toBeGreaterThan(0);
+}
+
+/** Bounding box of every non-transparent pixel the overlay drew, in the canvas's CSS coordinates. */
+function inkBox(page: Page): Promise<Box | null> {
+  return page.evaluate(
+    () =>
+      new Promise<Box | null>((resolve, reject) => {
+        const canvas = document.querySelector('canvas');
+        if (!canvas) return reject(new Error('the overlay never created a canvas'));
+        const gl = canvas.getContext('webgl2');
+        if (!gl) return reject(new Error('the overlay canvas has no webgl2 context'));
+
+        const { width: w, height: h } = canvas;
+        const px = new Uint8Array(w * h * 4);
+        // Inside rAF, after the library's own draw: the buffer is not preserveDrawingBuffer.
+        requestAnimationFrame(() => {
+          gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+          let left = w;
+          let right = -1;
+          let low = h;
+          let high = -1;
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              if (px[(y * w + x) * 4 + 3] === 0) continue;
+              if (x < left) left = x;
+              if (x > right) right = x;
+              if (y < low) low = y;
+              if (y > high) high = y;
+            }
+          }
+          if (right < 0) return resolve(null);
+          const rect = canvas.getBoundingClientRect();
+          const scale = rect.height / h;
+          // readPixels counts rows from the bottom; the DOM counts them from the top.
+          resolve({
+            left: rect.left + left * (rect.width / w),
+            right: rect.left + right * (rect.width / w),
+            top: rect.top + (h - 1 - high) * scale,
+            bottom: rect.top + (h - 1 - low) * scale,
+          });
+        });
+      }),
+  );
+}
+
+/** Drags from inside the first letter to inside the last, and reports what got selected. */
+async function dragAcrossLayer(page: Page, boxes: Box[]): Promise<string> {
+  const from = boxes[0];
+  const to = boxes[boxes.length - 1];
+  if (!from || !to) throw new Error('the layer built no spans to drag across');
+  await page.mouse.move(from.left + 2, midY(from));
+  await page.mouse.down();
+  await page.mouse.move(to.right - 2, midY(to), { steps: 10 });
+  await page.mouse.up();
+  return page.evaluate(() => window.getSelection()?.toString() ?? '');
+}
+
+/** Box of the layer's whitespace span: carried so a copy keeps the gap, but not clickable. */
+function gapBox(page: Page): Promise<Box | null> {
+  return page.evaluate(() => {
+    const gap = [...document.querySelectorAll('span')].find(
+      (s) => getComputedStyle(s).color === 'rgba(0, 0, 0, 0)' && s.textContent?.trim() === '',
+    );
+    if (!gap) return null;
+    const r = gap.getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+  });
+}
+
+/** The element a click at this point would land on, as its tag and the letter it carries. */
+function hitAt(page: Page, x: number, y: number): Promise<{ tag: string; text: string } | null> {
+  return page.evaluate(
+    ({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      return el ? { tag: el.tagName, text: el.textContent ?? '' } : null;
+    },
+    { x, y },
+  );
+}
+
+test('the hidden node puts the word in the DOM without a layer', async ({ page }) => {
+  await fireSelectable(page, 'hidden');
+  await waitForDraw(page);
+  // `rendered` is the difference between find-in-page reaching the word and not: a node clipped
+  // to nothing still carries its text, one taken out of the layout with `display:none` does not.
+  expect(await hiddenNode(page)).toEqual({ text: 'BIG', rendered: 'BIG' });
+  expect(await layerBoxes(page)).toHaveLength(0);
+});
+
+test('none puts no klieg text in the page at all', async ({ page }) => {
+  await fireSelectable(page, 'none');
+  await waitForDraw(page);
+  // Not `document.body.innerText`: the lab's own #log echoes every fired string, so it holds
+  // 'BIG' whatever the mode did, and a body-wide check would pass with the feature ripped out.
+  expect(await hiddenNode(page)).toBeNull();
+  expect(await layerBoxes(page)).toHaveLength(0);
+});
+
+test('a drag across the layer selects the word', async ({ page }) => {
+  await fireSelectable(page, 'layer');
+  expect((await dragAcrossLayer(page, await settledLayer(page))).trim()).toBe('BIG');
+});
+
+test('the layer sits over the glyphs it names', async ({ page }) => {
+  await fireSelectable(page, 'layer');
+  const boxes = await settledLayer(page);
+  const span = {
+    left: Math.min(...boxes.map((b) => b.left)),
+    right: Math.max(...boxes.map((b) => b.right)),
+    top: Math.min(...boxes.map((b) => b.top)),
+    bottom: Math.max(...boxes.map((b) => b.bottom)),
+  };
+  const ink = await inkBox(page);
+  expect(ink, 'the overlay drew nothing to compare the layer against').not.toBeNull();
+  if (!ink) return;
+
+  // The em boxes contain the ink, bar a few pixels the extrusion pushes past the front face.
+  const SLACK = 8;
+  expect(ink.left).toBeGreaterThan(span.left - SLACK);
+  expect(ink.right).toBeLessThan(span.right + SLACK);
+  expect(ink.top).toBeGreaterThan(span.top - SLACK);
+  expect(ink.bottom).toBeLessThan(span.bottom + SLACK);
+
+  // Containment alone would let the layer be any size at all around the word.
+  expect(width(span)).toBeLessThan(width(ink) * 1.15);
+  expect(height(span)).toBeLessThan(height(ink) * 1.5);
+  expect(Math.abs(midX(span) - midX(ink))).toBeLessThan(10);
+  expect(Math.abs(midY(span) - midY(ink))).toBeLessThan(10);
+});
+
+test('a letter in the layer takes the click the page would otherwise get', async ({ page }) => {
+  await fireSelectable(page, 'layer');
+  const box = (await settledLayer(page))[0];
+  if (!box) throw new Error('the layer built no spans');
+  expect(await hitAt(page, midX(box), midY(box))).toEqual({ tag: 'SPAN', text: 'B' });
+});
+
+test('a two-line word copies with the break between its lines', async ({ page }) => {
+  // Fails today: the per-effect host div klieg appends inherits `white-space: normal`, which
+  // collapses away the '\n' text node the layer emits, so the word copies as 'BIGMONEY'.
+  test.fail();
+  await fireSelectable(page, 'layer', 'BIG\nMONEY');
+  expect((await dragAcrossLayer(page, await settledLayer(page))).trim()).toBe('BIG\nMONEY');
+});
+
+test('a space is carried for the copy but does not take a click', async ({ page }) => {
+  await fireSelectable(page, 'layer', 'BIG WIN');
+  const boxes = await settledLayer(page);
+  expect((await dragAcrossLayer(page, boxes)).trim()).toBe('BIG WIN');
+
+  // The gap between the words is a span like any other, and the only one a click falls through.
+  const gap = await gapBox(page);
+  expect(gap, 'the layer built no whitespace span').not.toBeNull();
+  if (!gap) return;
+  expect((await hitAt(page, midX(gap), midY(gap)))?.tag).not.toBe('SPAN');
+});

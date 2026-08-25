@@ -1,15 +1,17 @@
-# Handoff — klieg, 2026-08-24
+# Handoff — klieg, 2026-08-25
 
 **For:** the next session picking this up. **Answers:** what is on `main`, what is in flight, and
 what is worth doing next.
 
 ## In flight
 
-**`effects-pipeline` is merged and green but not landed.** The branch in
-`.claude/worktrees/effects-pipeline` now contains `main` (element-anchored placement and 0.5.1
-included); `npm run check` is 872 across 46 files and `npx playwright test` is 24. The last step is a
-fast-forward that has to run from the main checkout, because a worktree-isolated session cannot reach
-it:
+**`effects-pipeline` carries `roving` and `hue`, green and not landed.** The branch in
+`.claude/worktrees/effects-pipeline` is `main` plus the two effect pieces of
+[the plan](plans/2026-08-25-roving-and-hue.md), every task done. `npm run check` is **906 across 48
+files** and `npx playwright test` is **26 across 2 files**, both measured on this branch. Two
+baselines are new — `effect-hue-darwin.png` and `effect-roving-darwin.png` — and no pre-existing
+baseline moved, which is the claim the whole pipeline rests on. The last step is a fast-forward that
+has to run from the main checkout, because a worktree-isolated session cannot reach it:
 
 ```
 git merge --ff-only effects-pipeline
@@ -17,7 +19,8 @@ git worktree remove .claude/worktrees/effects-pipeline
 git branch -d effects-pipeline
 ```
 
-The lab dev server on port 5180 may still be running from that session; kill it if so.
+A lab dev server may be holding port 5180 from an earlier session; kill it if so. The visual suite
+does not care — `playwright.config.ts` derives its own port from the checkout's path.
 
 **The effects pipeline landed.** All eight tasks of
 [plans/2026-08-24-effects-pipeline.md](plans/2026-08-24-effects-pipeline.md), each with an implementer
@@ -37,9 +40,11 @@ new: `effect-flicker-darwin.png`, `tubing` at a pinned clock with one run dark.
 
 **What is deliberately not built.** `chunk` parts and `crawl` are steps 4 and 5 of the design and each
 want their own plan. `PartOffset.dark` is composited and typed but nothing writes it — labelled inert
-in the type, like `crawl`. `EffectSpec` has no per-piece parameter field, so the `piece: 'flicker'`
-name form can only produce defaults; tuning goes through `piece: EFFECTS.flicker({ depth: 0.2 })`, and
-`FlickerSpec` is exported for it.
+in the type, like `crawl`. `EffectSpec` still has no per-piece parameter field, so a name can only
+produce defaults; tuning goes through `piece: EFFECTS.flicker({ depth: 0.2 })`, and `FlickerSpec`,
+`HueSpec` and `RovingSpec` are all exported for it. That question was reopened by `roving` and closed
+the same way: a wrapper takes another piece, which no name can express at all, so per-piece parameters
+would not have made `roving` nameable.
 
 **Two things a reader will otherwise rediscover the hard way.** The part pool is a **construction-time
 snapshot** — `regroup()` does not rebuild it, deliberately: a pool index is the identity an effect's
@@ -51,16 +56,18 @@ is what `piping` relies on), while `count` is a literal number of members and wi
 The worktree `.claude/worktrees/vertex-provenance` is named after a branch that no longer exists and
 holds `sequin-rework` — reuse or remove it, but do not trust its name.
 
-**Next, designed and unplanned: two more effect pieces** —
-[specs/2026-08-25-roving-and-hue-design.md](specs/2026-08-25-roving-and-hue-design.md). `roving` moves
-a fault from segment to segment; `hue` cycles the sign's colour. The design decisions are settled and
-the open questions are named at its end.
+**`roving` and `hue` both shipped**, against
+[their design](specs/2026-08-25-roving-and-hue-design.md) and
+[plan](plans/2026-08-25-roving-and-hue.md). `hue` is a registry name alongside `flicker` and sweeps
+the colour wheel at a held Rec.709 luminance; `roving` is a factory only — it wraps another piece and
+moves that piece's affliction from tube to tube, and no name can carry the piece it wraps. The README
+now documents the effects pipeline, which had shipped with no public documentation at all.
 
-`hue` needs **no new pipeline capability** — `PartOffset.color` and `writePart` already carry it, and it
-composes with `flicker` for free because gain and colour are separate channels of one merged offset.
-`roving` does need something new, and the reason is worth knowing: layering composes channels on a part
-and cannot gate *which* part, so a moving fault has to be a piece that wraps a piece rather than a
-second entry in the effects list.
+**The wrapper's epoch arithmetic has one trap that reads as the correct version.** Making the epoch a
+whole multiple of the inner piece's duration tiles both clocks and looks tidier; it permanently
+breaks the effect, because every handover then samples the inner at one fixed phase where its rest is
+a per-part constant, and the first part that blocks its own handover keeps the fault forever. The
+spec's trap list has the measurement. A prototype caught it in one run; review had not.
 
 **Also unplanned: the stage and repair registries, then the lab** —
 [specs/2026-08-23-pipeline-lab-design.md](specs/2026-08-23-pipeline-lab-design.md). The registries need
@@ -86,9 +93,10 @@ Release run 404 on `PUT /klieg`; that is fixed, and 0.5.0 and 0.5.1 both went ou
 
 **`main` carries the tube lab, the tube geometry rewrite, the colour gradients, the junction
 reconciliation, direct paths by default, element-anchored placement and the effects pipeline, all
-merged.** `npm run check` green at **872 tests across 46 files**; `npx playwright test` green at **24
-across 2 files**. Both counts measured, not carried over — the doc has twice claimed a playwright
-number one higher than `--list` reports.
+merged.** On `main`, `npm run check` is green at **872 tests across 46 files** and `npx playwright
+test` at **24 across 2 files**; the in-flight branch above adds to both. Every count in this doc is
+measured, not carried over — it has twice claimed a playwright number one higher than `--list`
+reports.
 
 **[Direct tube paths](specs/2026-08-20-direct-tube-paths-design.md) ships, and is the default.**
 `TubeSpec.pathSource` (`field` | `exact` | `direct`) defaults to `direct`, which traces the glyph's
@@ -179,13 +187,21 @@ how the source changes the cut. The spec lists the rest.
 
 Roughly in order of value; the items are independent of each other.
 
-- **An effects pipeline for the tube looks, asked for and not yet designed.** The immediate want is
-  optional per-region flickering on `neon` with its own timing per region — a sign with one bad
-  tube — but that is one instance of a wider ask: driving tube appearance over time, per run or per
-  region, from composable effects rather than a flag per idea. Nothing is built and nothing is
-  decided; it needs a design pass before code. What already exists to build on: `assign` owns run
-  colour, `TubeSpec.gradient` already varies appearance along a domain, and the per-letter material
-  model means a run's own channel can be patched without touching the others.
+- **A composition lab, so effect pieces get built by hand rather than through a plan.** Asked for
+  directly. `roving` and `hue` were specified in prose, and the wrapper's epoch arithmetic came out
+  wrong in a way that read as *more* correct than the fix — a prototype found it in one run and
+  review had not. A piece is a pure function of `(t, part)` with no GL anywhere in it, so a lab can
+  plot one against time, layer several, scrub a pinned clock, and show the merged offset per part.
+  That is most of what a session currently burns tokens reconstructing, and it is also where the
+  numbers the design deferred get picked: `roving`'s `dwell` ships at a stated-provisional 3200ms
+  precisely because there was nothing to measure against. Nothing is designed yet.
+
+  It is a **different lab** from **kliegsminister**, the stage-and-repair lab in
+  [the pipeline lab design](specs/2026-08-23-pipeline-lab-design.md) — that one is about tube
+  geometry, this one about time.
+
+- ~~**An effects pipeline for the tube looks**~~ — shipped, along with `roving` and `hue` on top of
+  it. See the `## In flight` section.
 
 - ~~**Playwright reuses whatever owns port 5180**~~ — fixed in `484692b`: `playwright.config.ts`
   derives a port from the checkout's own path and starts vite `--strictPort`. Before that, a run in
@@ -329,6 +345,13 @@ of its range on caps that are 11% of it, and the share moved with point density.
 **Never add `opacity` to `LookKey`.** `Word` rewrites `material.opacity` every frame, so a value
 applied through `PARAM_KEYS` is gone by the first tick — and it would pass any test that never calls
 `apply()`.
+
+**Colour never reaches a `body` part.** `writePart` returns after the brightness write for a body, so
+a `hue` effect on `{ kind: 'body' }` is silently inert — no error, no warning, no change on screen.
+
+**`roving` wants `{ amount: 1 }`.** It picks its holder from the whole pool of its kind, because
+`at(t, part)` sees pool-wide numbering and cannot know which subset an effect targets. Against a
+subset the fault lands on a part the effect does not drive, and the sign shows nothing.
 
 **Do not `git add -A`**, and do not chain `npm run check && git commit` through a `grep` — the grep
 succeeds and the failed check is swallowed.

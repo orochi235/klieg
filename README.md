@@ -188,6 +188,58 @@ Omit `gradient` and every run is flat, which is what the built-in looks do. `tub
 itself, and the glow fills a dim tube end, so a ramp that darkens its ends reads flatter than it is;
 `bloom: false` shows it plainly.
 
+### effects
+
+Effects drive a sign's appearance over time, below the level of a letter. A `look` sets what every
+letter is made of; an effect changes some *part* of it — one tube of a neon sign, not the sign. Set
+them on a look with `LookSpec.effects`, or per fire with `FireOptions.effects`, which replaces a
+look's own list rather than adding to it.
+
+```js
+import { fire, EFFECTS, roving } from 'klieg';
+
+fire('JACKPOT!', {
+  look: 'tubing',
+  effects: [
+    // One run of the whole sign, picked by seed, stutters like failing glass.
+    { piece: 'flicker', target: { kind: 'run', by: 'index', count: 1 } },
+    // Every run cycles colour together.
+    { piece: 'hue', target: { kind: 'run', by: 'index', amount: 1 } },
+  ],
+});
+```
+
+| field | meaning |
+|---|---|
+| `piece` | a name from `EFFECT_NAMES`, or a piece from a factory so it can be tuned |
+| `target` | `{ kind: 'run' \| 'body' }` plus a selection — `by` orders the pool (`'seed'`, `'length'`, `'index'`), `amount` takes a fraction of it and `count` a literal number of members, and `count` wins when both are given |
+| `stagger` | per-part phase spread, the same spec `enter` and `exit` take |
+| `seed` | fixes the selection, so a pinned frame is reproducible |
+
+The pool is word-wide, so `{ count: 1 }` picks one bad tube in the sign rather than one in every
+letter. A `body` part only reads brightness; colour reaches `run` parts only.
+
+**`flicker`** — a tube on its way out. `EFFECTS.flicker({ depth, unrest, duration })`: `depth` is the
+floor of its brightness, `unrest` the share of the pass spent stuttering.
+
+**`hue`** — a colour sweep across the sign. `EFFECTS.hue({ from, span, spread, luminance, duration })`,
+in turns: `span` of 1 is the whole wheel and the only value that meets itself at the loop seam, and
+`spread` offsets the hue along the word to make a travelling gradient rather than one synchronized
+sign. The sweep holds Rec.709 luminance rather than saturation, so blues and violets come out paler
+and the sign glows evenly all the way round — at constant saturation it would brighten through yellow
+and fall out of the bloom threshold through blue.
+
+**`roving(inner, { dwell, seed })`** — takes another piece and moves its affliction from one part to
+another, so `roving(EFFECTS.flicker())` is one bad tube that jumps every few seconds. It is a factory
+rather than a name, because a name cannot carry the piece it wraps. Give it `{ amount: 1 }`: it picks
+its holder from the whole pool of that kind, so against a subset the fault can land on a part the
+effect does not drive and nothing happens at all.
+
+Effects layer. Brightness multiplies and colour is replaced, so `flicker` and `hue` compose without
+either knowing about the other — but two pieces both writing colour fight, and the last one wins.
+A hue piece writes colour every frame, which overrides `tint`: `tubing` tints its decoration, so a
+hue sweep and a tint on that look are the same fight, and the sweep wins.
+
 ## Stages
 
 An effect can exit part of its word and lay the survivors out again as a word of their own — a

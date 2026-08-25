@@ -91,6 +91,39 @@ unboundedly.
 The inner's reconstructed phase is discontinuous there, so a drop can truncate or repeat once per
 wrapper pass — rare enough to look like a different bug.
 
+**Never make the *epoch* a multiple of the inner's duration.** It looks like the tidier version of
+the rule above — both clocks tile, and the loop seam stops being a special case — and it permanently
+breaks the effect. Every handover then samples the inner piece at the same phase, and whether a piece
+is at rest at a fixed phase is a per-part constant: `flicker` is mid-stutter at phase 0 for about 18%
+of part indices, and the first such index to take the fault blocks its own handover forever. Measured
+on a prototype at one holder per pass and zero handovers, against 4 holders and 6 handovers for the
+arithmetic that shipped. The wrapper's *duration* is a whole multiple of the inner's, so the inner's
+phase is continuous at the seam; the epoch then divides that duration evenly, which leaves the
+boundary phase free to move through the inner's cycle.
+
+**A deferred handover waits a whole epoch.** Resolving "until the outgoing part is at rest" mid-epoch
+makes the holder a function of a search over continuous time. Retrying at the next boundary keeps the
+holder constant within an epoch, which is what makes "exactly one holder at every sample" testable at
+all.
+
+**The holder chain is walked twice per pass.** `t` is normalized within a pass, so the walk needs a
+start, and starting fresh each pass leaves the loop seam as the one handover nothing defers. The
+first lap finds where the previous pass left the fault; the second answers.
+
+**`roving` draws its holder from the whole pool of its kind, not from the parts it was given.**
+`at(t, part)` sees pool-wide numbering and cannot know which subset an effect targets, so a `roving`
+against anything but `{ amount: 1 }` can put the fault on a part nothing drives — and the sign then
+shows no fault at all, which reads as the piece being broken.
+
+**Colour never reaches a `body` part.** `writePart` returns after the brightness write for a body, so
+`hue` on `{ kind: 'body' }` is silently inert. A run only reads it when the look applied its own
+material: a debug material override clears `litReadsRunColor` and the buffer write is skipped.
+
+**A roving visual baseline has to be pinned at a moment the holder is actually dark.** `flicker` rests
+about 82% of the time, so most pins give a shot byte-identical to plain `tubing` — a baseline that
+would pass with the whole effect deleted. Two of five epochs sampled at their midpoint showed nothing
+at all. Pick the pin by measuring against the look's own baseline, not by picking a round number.
+
 **`color` is last-writer-wins, so two hue pieces fight silently.** The merge keeps the last non-undefined
 value; nothing warns.
 
@@ -109,10 +142,18 @@ should modulate the swept hue or lose to it.
 - Every shipped look renders byte-identical: no built-in look declares either piece.
 - `npm run check` and `npx playwright test` stay green.
 
-## Not decided
+## Decided, on implementation
 
-- Whether `EffectSpec` gains per-piece parameters so `piece: 'roving'` is expressible by name at all —
-  a wrapper takes another piece, which the current name-or-piece union cannot express in a name.
-- The default `dwell`. Pick it against the lab the way `flicker`'s `unrest` was picked: measure, do not
-  guess.
-- Whether the hue sweep travels the whole wheel or an arc a look names.
+Both pieces ship. [The plan](../plans/2026-08-25-roving-and-hue.md) has the tasks.
+
+- **`roving` is factory-only and `hue` is a name.** `EffectName` is `'flicker' | 'hue'`. `EffectSpec`
+  did not gain a per-piece parameter field: a wrapper takes another piece, which no name can express,
+  and tuning a leaf piece already works through `piece: EFFECTS.hue({ ... })`. Whether names should be
+  tunable at all is still open, and still blocking nothing.
+- **The sweep travels the whole wheel by default**, `from` 0 and `span` 1 turn. Any other `span` snaps
+  back at the loop seam, which is stated on the field rather than designed around.
+- **`dwell` defaults to 3200ms, provisionally.** It was not measured — the lab that would measure it
+  is not built, and no shipped look declares `roving`, so nothing depends on the number. Pick it
+  properly the way `flicker`'s `unrest` was picked once there is something to measure against.
+- **`luminance` defaults to 0.5**, which is where the wheel's darkest and brightest hues give up the
+  same amount: blue's saturation against yellow's brightness.

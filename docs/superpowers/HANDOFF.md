@@ -1,31 +1,33 @@
-# Handoff — klieg, 2026-08-23
+# Handoff — klieg, 2026-08-24
 
 **For:** the next session picking this up. **Answers:** what is on `main`, what is in flight, and
 what is worth doing next.
 
 ## In flight
 
-Two branches, both in the worktree `.claude/worktrees/vertex-provenance`. Neither is merged, and
-`main` is nine commits ahead of `origin/main` — **branch from local `main`, not `origin/main`, or
-you start without the corner lab or labkit 1.1.**
+Nothing. `main`, `origin/main` and `sequin-rework` are the same commit; vertex provenance and the
+corner-lab minimap are both merged. The worktree `.claude/worktrees/vertex-provenance` is named after
+a branch that no longer exists and holds `sequin-rework` — reuse or remove it, but do not trust its
+name.
 
-**`vertex-provenance` — complete, verified, unmerged.** Ten commits. Every tube run vertex now
-records the contour vertex it came from (`Run.from`, index-parallel to `Run.points`), or null where
-the corner stage built it. Replaces a module-level `WeakSet` keyed on `Vector3` identity that
-anything copying a point lost silently. 737 vitest, 24/24 playwright, no snapshot re-recorded. Plan
-and findings: [plans/2026-08-23-vertex-provenance.md](plans/2026-08-23-vertex-provenance.md).
+**Next, designed and unplanned: the effects pipeline** —
+[specs/2026-08-24-effects-pipeline-design.md](specs/2026-08-24-effects-pipeline-design.md). Appearance
+becomes addressable below the level of a letter: a *part* is a tube run, a chunk, or the letter body,
+and one grammar mirroring `MotionPiece` animates all three. Step 1 is a frame-ownership fix that stands
+on its own — opacity has two authoring paths today and only one is wired, and every channel an effect
+drives has the same bug waiting.
 
-**`corner-lab-minimap` — in progress**, stacked on it. A top-right minimap of the whole glyph with
-every hard corner clickable. Its viewport rectangle is an indicator only: labkit hands an instrument
-`zoom` and `setZoom` and publishes the view read-only through `CanvasStackContext`, but exposes no
-`setPan` or `onViewChange`, so drag-to-pan from a minimap cannot be built without reaching past its
-public API. File it against labkit rather than working around it.
+**Also unplanned: the stage and repair registries, then the lab** —
+[specs/2026-08-23-pipeline-lab-design.md](specs/2026-08-23-pipeline-lab-design.md). The registries need
+a design pass first: the six corner repairs are not uniform `(span) → span` transforms, and what a
+repair step receives and returns is undecided. **That lab is called kliegsminister**; `dev/corner-lab`
+is renamed to it when it grows past one corner. Independent of the effects pipeline — they touch
+different halves of the tube code.
 
-**Next, unplanned:** the stage and repair registries, then the lab —
-[specs/2026-08-23-pipeline-lab-design.md](specs/2026-08-23-pipeline-lab-design.md). The registries
-need a design pass first: the six corner repairs are not uniform `(span) → span` transforms, and
-what a repair step receives and returns is undecided. **The lab is called kliegsminister**;
-`dev/corner-lab` is renamed to it when it grows past one corner.
+**One labkit gap is still open.** The minimap's viewport rectangle is an indicator only: labkit hands
+an instrument `zoom` and `setZoom` and publishes the view read-only through `CanvasStackContext`, but
+exposes no `setPan` or `onViewChange`, so drag-to-pan from a minimap cannot be built without reaching
+past its public API. File it against labkit rather than working around it.
 
 ## State
 

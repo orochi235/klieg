@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### The rendered word now exists in the DOM
+
+klieg's only DOM element was a `pointer-events:none` canvas, so the fired text was invisible to
+copy-paste, Ctrl+F, screen readers and crawlers. A new `selectable` option puts it in the DOM as
+well: `'hidden'` (the default) is a visually-hidden node, `'layer'` is a transparent per-letter
+layer a drag can select, and `'none'` opts out for a page whose own markup already carries the
+string. `'layer'` takes pointer events on the letters themselves, which is why it is opt-in rather
+than the default — every other caller keeps klieg's click-through guarantee unchanged. It also
+needs the word to hold still, and falls back to `'hidden'` with a console warning under a
+`transform` or a motion piece that moves the letters.
+
 ### `tint` now reaches `tubing`
 
 A tint on a look with `tintTo: 'decoration'` was written to the decoration material's colour

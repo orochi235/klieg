@@ -371,6 +371,7 @@ const bounce = transition(700, { from: { scale: 0 }, ease: easeElasticOut });
 | `bloom` | look's choice | adds a glow pass, at the cost of three render targets while the effect runs |
 | `wrap` | `false` | break long text into the arrangement that renders largest |
 | `modal` | `false` | while a `'click'` hold waits, let the overlay swallow the dismissing press |
+| `selectable` | `'hidden'` | how the fired word appears in the DOM — copyable, findable and readable, or selectable (below) |
 
 ## Multiple lines
 
@@ -404,6 +405,25 @@ one state in which klieg is not click-through, which is why Escape is always bou
 - `replace` — a new fire aborts the running effect and drops anything still waiting.
 - `concurrent` — effects play on top of each other. Avoid it with `lighting: 'sweep'`: the live
   effects fight over the one shared highlight and it sawtooths between their phases.
+
+## Selectable text
+
+klieg draws its letters in WebGL, so by default nothing it renders can be copied, found with
+Ctrl+F, or read by a screen reader. `selectable` puts the fired word into the DOM to fix that:
+
+```js
+await bk.fire('CONGRATULATIONS', { selectable: 'layer' });
+```
+
+- `'hidden'` (default) — one visually-hidden node carrying the word. Copy, find and screen readers
+  work; the glyphs themselves don't highlight.
+- `'layer'` — a transparent layer over the type, one span per letter in klieg's own typeface, so a
+  drag across it selects the word. A click on a letter is taken by the layer rather than reaching
+  the page beneath; the gaps between letters, and whitespace, still pass a click through. It needs
+  the word to hold still — under a `transform`, or a motion piece that moves the letters, it falls
+  back to `'hidden'` and warns once on the console.
+- `'none'` — no DOM text, for a page whose own markup already carries the string, such as an
+  element `placement` rendered over a real `<h1>`.
 
 ## Browser support
 

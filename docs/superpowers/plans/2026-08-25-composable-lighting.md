@@ -543,6 +543,18 @@ git commit -m "expose the emissive and hue a lamp resolves against"
 
 ### Task 5: `word.ts` resolves the light channel
 
+**Decide this first: does the light channel sum in sRGB or in linear?** Task 1's review raised it
+and deferred it here. `ResolvedOffset.light` accumulates sRGB-encoded bytes over 255, and
+`litEmissive` below stays in that space and hands the result to `THREE.Color.setHex()`, which does
+the sRGB-to-linear conversion. That is self-consistent, but summing sRGB is not summing radiance:
+two lamps at half strength do not add to the brightness one lamp at full strength gives.
+
+It matters only where two lamps overlap, which is why the design did not catch it. Ship the simple
+version, then render two overlapping lamps and look at the seam — if it reads wrong, the fix is to
+decode in `rgb()` and encode once in `litEmissive`, not to change the channel's shape. Add that
+render to Task 9 either way.
+
+
 This is the task no unit test can prove. Write the unit test anyway for the arithmetic, then prove
 it on screen in Task 9.
 

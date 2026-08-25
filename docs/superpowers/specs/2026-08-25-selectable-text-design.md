@@ -54,23 +54,27 @@ change the DOM shape every current consumer sees.
 
 ## The projection
 
-For a front-on untransformed word every letter shares one z, so the map is a uniform scale and a
-translate — a 2D affine, not a per-frame matrix. It is a pure function of placement, fit, camera and
-canvas box, and needs no DOM to test.
+For a front-on untransformed word every letter shares one z, so the map is a scale and a translate —
+a 2D affine, not a per-frame matrix, and a pure function of placement, fit, camera and canvas box
+that needs no DOM to test. `placed.x[i]` / `placed.y[i]` (`text/placement.ts`) give per-letter
+positions in em; `fit.scale` and `fit.midY` come from `fitOf`. The lens covers
+`vh = 2 · tan(fov/2) · d` world units of height at the letters, so `fontSize = fit.scale · height / vh`.
 
-`Stage.viewportBudget` (`render/stage.ts`) already derives `vh = 2 · tan(fov/2) · camera.position.z`,
-the world height visible at the word plane; pixels per world unit is `canvas.clientHeight / vh`.
-`placed.x[i]` / `placed.y[i]` (`text/placement.ts`) give per-letter positions in em, with `fit.scale`
-and `fit.midY` from `fitOf`, so `fontSize = fit.scale · pxPerWorld`.
+**`d` runs to the front cap, not to the word plane.** `THREE.ExtrudeGeometry` extrudes from `z = 0`
+to `z = +depth` and nothing recentres it, so the shape plane is the letter's back and its readable
+face is a whole depth nearer: `d = camera.position.z − depth · fit.scale`. Project at the word plane
+and the layer comes out a few percent small — near enough to right to read as a rendering bug rather
+than a missing term.
 
-**A letter's front face sits at `+depth/2`, not at the word plane.** Project at `z = 0` and the layer
-comes out a few percent small — near enough to right to read as a rendering bug rather than a
-missing term. `DEFAULT_GLYPH_OPTIONS.depth` is constant, so the correction is
-`camera.position.z − depth/2`.
+**x and y take separate scales.** The camera's aspect need not match the canvas box: fullscreen,
+`Stage.measure()` reads `innerWidth`, which counts a classic scrollbar, while the canvas resolves
+`width:100%` against the ICB. So x scales by `width / (vh · camera.aspect)` and y by `height / vh`;
+one shared figure puts a letter 400px off centre about 4px out.
 
-**CSS positions a box top; the layout gives a baseline.** At `line-height: 1` the gap between them is
-`halfLeading + ascender · fontSize / unitsPerEm`, both metrics already on `LoadedFont`. Guessing it
-puts every letter a few pixels off — invisible until someone drags across the word.
+**The baseline gap is measured, not derived.** CSS positions a box top, the layout gives a baseline,
+and the gap at `line-height: 1` is a fixed fraction of the font size — but which fraction depends on
+whether the browser takes hhea, OS/2 win or OS/2 typo for the inline box, and that varies by
+platform. `measureBaselineRatio` (`text/font-face.ts`) reads it off a hidden probe once per face.
 
 ## The font is not a CSS font
 

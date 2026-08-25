@@ -3,7 +3,13 @@ import type { Easing } from './easing.js';
 import { EFFECTS } from './effects/pieces.js';
 import type { EffectName, EffectSpec } from './effects/types.js';
 import { ACTIVE } from './motion/active.js';
-import { type Slot, slotDrivesEnv, slotDuration, Timeline } from './motion/compositor.js';
+import {
+  type Slot,
+  slotDrivesEnv,
+  slotDuration,
+  slotMovesLetters,
+  Timeline,
+} from './motion/compositor.js';
 import { ENTER } from './motion/enter.js';
 import { EXIT } from './motion/exit.js';
 import { Sequence } from './motion/sequence.js';
@@ -19,9 +25,13 @@ import {
   webglSupported,
 } from './render/stage.js';
 import { Word } from './render/word.js';
+import { type SelectableMode, TextLayer } from './text/dom-layer.js';
 import { type LoadedFont, loadFont } from './text/font.js';
+import { measureBaselineRatio, registerFace } from './text/font-face.js';
+import { DEFAULT_GLYPH_OPTIONS } from './text/glyphs.js';
 import type { Arrangement } from './text/placement.js';
-import type { Transform } from './transform.js';
+import { projectLetters } from './text/projection.js';
+import { isIdentity, type Transform } from './transform.js';
 
 export { ManualClock } from './clock.js';
 export {
@@ -70,6 +80,7 @@ export type {
   TubeSpec,
 } from './render/tube/index.js';
 export { ALL_BREAK, ALL_CONNECT } from './render/tube/index.js';
+export type { SelectableMode } from './text/dom-layer.js';
 export type { Arrangement } from './text/placement.js';
 export { compose, fromAxisAngle, fromEuler, type Transform } from './transform.js';
 export type {
@@ -112,6 +123,13 @@ function resolveSlot<N extends string>(
   if (typeof slot === 'string') return builtin[slot];
   if (Array.isArray(slot)) return slot.map((s) => (typeof s === 'string' ? builtin[s] : s));
   return slot;
+}
+
+/** Names a slot for a diagnostic; a caller's own piece has no name to give. */
+function describeSlot(slot: EnterSlot | ActiveSlot | ExitSlot): string {
+  if (typeof slot === 'string') return slot;
+  if (Array.isArray(slot)) return slot.map(describeSlot).join(' + ');
+  return 'a custom piece';
 }
 
 export interface KliegOptions {
@@ -194,6 +212,16 @@ export interface FireOptions {
   wrap?: boolean;
   /** Let the overlay swallow the dismissing click instead of passing it through to the page. */
   modal?: boolean;
+  /**
+   * How the word appears in the DOM, so it can be copied, found and read aloud. `'hidden'` is one
+   * visually-hidden node; `'layer'` adds a transparent per-letter layer a drag can select, and
+   * takes a click on a letter instead of passing it through; `'none'` adds nothing, for a page
+   * whose own markup already carries this text.
+   *
+   * `'layer'` needs the word still — it falls back to `'hidden'` under a `transform` or a motion
+   * piece that moves the letters. Defaults to `'hidden'`.
+   */
+  selectable?: SelectableMode;
   /**
    * Stages played after the enter, each regrouping what survives it. Advanced by the viewer when
    * a stage holds on `'click'`. Ignored under reduced motion, which never travels.
@@ -294,6 +322,40 @@ export function createKlieg(options: KliegOptions): Klieg {
 
     const enter = resolveSlot(opts.enter ?? 'slam', ENTER);
     const active = resolveSlot(opts.active ?? 'none', ACTIVE);
+    const asked = opts.selectable ?? 'hidden';
+    // Whether it *moves* the word, not whether it was passed: a caller wiring rotation sliders
+    // sends an identity transform at 0°, and refusing that costs the layer for nothing.
+    const blocker =
+      opts.transform && !isIdentity(opts.transform)
+        ? 'a transform'
+        : slotMovesLetters(active)
+          ? `the active motion (${describeSlot(opts.active ?? 'none')})`
+          : null;
+    if (asked === 'layer' && blocker) {
+      console.warn(
+        `klieg: selectable 'layer' needs the word still, and ${blocker} moves it — falling back to 'hidden'`,
+      );
+    }
+    const mode: SelectableMode = asked === 'layer' && blocker ? 'hidden' : asked;
+
+    // Its own node inside the shared container: under `policy: 'concurrent'` two live effects
+    // would otherwise clear each other's text, and the first to settle would wipe the survivor's.
+    const host = stage.textLayer?.appendChild(document.createElement('div')) ?? null;
+    const layer = host ? new TextLayer(host) : null;
+    let family: string | null = null;
+    let baselineRatio = 0;
+    let built = false;
+    // Up first even for 'layer', so the word is never absent from the DOM while the face loads —
+    // and a browser with no `FontFace` keeps it rather than getting nothing at all.
+    if (layer && mode !== 'none') layer.setHidden(text);
+    if (layer && mode === 'layer') {
+      void registerFace(options.fontUrl, loaded.bytes).then((f) => {
+        if (!f) return;
+        baselineRatio = measureBaselineRatio(f);
+        family = f;
+      });
+    }
+
     const lighting = opts.lighting ?? 'sweep';
     const tracksPointer = LIGHTING[lighting].tracksPointer === true;
     if (tracksPointer) pointerLight.attach();
@@ -351,6 +413,7 @@ export function createKlieg(options: KliegOptions): Klieg {
         off();
         detachDismiss();
         stage.scene.remove(word.group);
+        host?.remove();
         word.dispose();
         bloom?.dispose();
         stage.scheduleIdleTeardown();
@@ -404,6 +467,38 @@ export function createKlieg(options: KliegOptions): Klieg {
           // Ahead of the pose, or the fit and the phase advance both lag it by a frame.
           sequence?.tick(elapsed);
           word.apply(driver, elapsed);
+
+          if (layer && mode === 'layer' && family) {
+            if (word.atRest()) {
+              const canvas = stage.canvas;
+              const readout = word.readout();
+              const key = {
+                version: word.layoutVersion,
+                width: canvas?.clientWidth ?? 0,
+                height: canvas?.clientHeight ?? 0,
+                scale: readout.fit.scale,
+                midY: readout.fit.midY,
+              };
+              if (layer.isStale(key)) {
+                const projected = projectLetters({
+                  ...readout,
+                  fov: stage.camera.fov,
+                  cameraZ: stage.camera.position.z,
+                  aspect: stage.camera.aspect,
+                  depth: DEFAULT_GLYPH_OPTIONS.depth,
+                  width: key.width,
+                  height: key.height,
+                  baselineRatio,
+                });
+                layer.setLayer(projected.boxes, projected.fontSize, family, key);
+              } else {
+                layer.setVisible(true);
+              }
+              built = true;
+            } else if (built) {
+              layer.setVisible(false);
+            }
+          }
 
           // A caller piece declaring envRotation wins: it is the more specific choice, and it
           // carries its own duration as the period.

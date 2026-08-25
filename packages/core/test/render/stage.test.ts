@@ -5,6 +5,7 @@ import {
   BASE_Z,
   canHoldCanvas,
   canvasCss,
+  layerCss,
   lensFor,
   MAX_HALF_ANGLE_DEG,
   needsContainingBlock,
@@ -212,6 +213,28 @@ describe('canvasCss', () => {
   it('stays click-through either way', () => {
     expect(canvasCss({ kind: 'fullscreen' })).toContain('pointer-events:none');
     expect(canvasCss({ kind: 'element', el: anchor(800, 120) })).toContain('pointer-events:none');
+  });
+});
+
+describe('layerCss', () => {
+  it('is click-through at the container, so only a span can take a click', () => {
+    expect(layerCss({ kind: 'fullscreen' })).toContain('pointer-events:none');
+    expect(layerCss({ kind: 'element', el: null as unknown as HTMLElement })).toContain(
+      'pointer-events:none',
+    );
+  });
+
+  it('sits one above the canvas when fullscreen, and stacks by paint order when anchored', () => {
+    expect(layerCss({ kind: 'fullscreen' })).toContain('z-index:2147483001');
+    expect(layerCss({ kind: 'element', el: null as unknown as HTMLElement })).not.toContain(
+      'z-index',
+    );
+  });
+
+  it('covers the same box the canvas does', () => {
+    for (const css of [layerCss({ kind: 'fullscreen' }), canvasCss({ kind: 'fullscreen' })]) {
+      expect(css).toContain('inset:0');
+    }
   });
 });
 

@@ -53,6 +53,29 @@ export const slotDuration = (slot: Slot): number =>
 export const slotDrivesEnv = (slot: Slot): boolean =>
   layers(slot).some((p) => p.envRotation === true);
 
+const SAMPLE_T = [0, 0.17, 0.33, 0.5, 0.67, 0.83, 1];
+const SAMPLE_LETTERS = 8;
+
+const shifts = (v: readonly number[] | undefined): boolean => v?.some((n) => n !== 0) ?? false;
+
+/**
+ * Whether a slot puts any letter anywhere but its layout position. Sampled rather than declared:
+ * `offset` is a pure function, so a caller's own piece is judged exactly as a built-in is.
+ * Opacity is not movement — a fading letter stays where the DOM layer put it.
+ */
+export function slotMovesLetters(slot: Slot): boolean {
+  for (const piece of layers(slot)) {
+    for (const t of SAMPLE_T) {
+      for (let index = 0; index < SAMPLE_LETTERS; index++) {
+        const o = piece.offset(t, { index, count: SAMPLE_LETTERS, line: 0, column: index });
+        if (shifts(o.position) || shifts(o.rotation)) return true;
+        if (o.scale !== undefined && o.scale !== 1) return true;
+      }
+    }
+  }
+  return false;
+}
+
 interface Segment {
   pieces: MotionPiece[];
   start: number;

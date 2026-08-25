@@ -51,6 +51,7 @@ function stubFont(): LoadedFont {
     font,
     unitsPerEm: UPEM,
     metrics: { advanceOf: () => ADVANCE, kernOf: () => 0 },
+    bytes: new ArrayBuffer(0),
   };
 }
 
@@ -1705,5 +1706,110 @@ describe('effects', () => {
     const run = cell.children[1] as THREE.Mesh;
     expect(cell.position.x).toBeCloseTo(rest + 1, 10);
     expect([run.position.x, run.position.y]).toEqual([0, 0.25]);
+  });
+});
+
+describe('readout', () => {
+  it('reports one entry per live letter, with the fit that maps em to world', () => {
+    const word = new Word('AB', stubFont(), 'gold', ROOMY);
+    const out = word.readout();
+
+    expect(out.chars).toEqual(['A', 'B']);
+    expect(out.x).toHaveLength(2);
+    expect(out.y).toHaveLength(2);
+    expect(out.line).toEqual([0, 0]);
+    expect(out.fit.scale).toBeGreaterThan(0);
+  });
+
+  it('reports which line each letter is on, so a caller can break the text between them', () => {
+    const out = new Word('AB\nCD', stubFont(), 'gold', ROOMY).readout();
+
+    expect(out.chars).toEqual(['A', 'B', 'C', 'D']);
+    expect(out.line).toEqual([0, 0, 1, 1]);
+  });
+
+  it('drops a letter a regroup retired', () => {
+    const word = new Word('AB', stubFont(), 'gold', ROOMY);
+    word.regroup((l) => l.index === 0, 'line');
+
+    expect(word.readout().chars).toEqual(['A']);
+  });
+});
+
+describe('atRest', () => {
+  /** Leaves every letter on its layout position, the way a finished timeline does. */
+  const rest = timelineOf(() => ({}));
+
+  it('is true for a word nothing has posed', () => {
+    expect(new Word('AB', stubFont(), 'gold', ROOMY).atRest()).toBe(true);
+  });
+
+  it('is false while a piece holds a letter off its layout position', () => {
+    const word = new Word('AB', stubFont(), 'gold', ROOMY);
+    word.apply(
+      timelineOf(() => ({ position: [0, 1, 0] })),
+      0,
+    );
+
+    expect(word.atRest()).toBe(false);
+  });
+
+  it('is false while a piece spins or grows a letter in place', () => {
+    const word = new Word('AB', stubFont(), 'gold', ROOMY);
+    word.apply(
+      timelineOf(() => ({ rotation: [0, 0.4, 0] })),
+      0,
+    );
+    expect(word.atRest()).toBe(false);
+
+    word.apply(
+      timelineOf(() => ({ scale: 1.5 })),
+      0,
+    );
+    expect(word.atRest()).toBe(false);
+  });
+
+  it('is false until a regroup has moved the survivors onto their new positions', () => {
+    const word = new Word('ABC', stubFont(), 'gold', ROOMY);
+    word.regroup((l) => l.index < 2, 'line');
+    word.setFitProgress(1);
+    expect(word.atRest()).toBe(false);
+
+    word.apply(rest, 0);
+    expect(word.atRest()).toBe(true);
+  });
+
+  it('is false part-way through a fit tween and true once it settles', () => {
+    const word = new Word('ABCDE', stubFont(), 'gold', { width: 2, height: 2 });
+    word.regroup((l) => l.index < 2, 'line');
+    word.apply(rest, 0);
+
+    word.setFitProgress(0.5);
+    expect(word.atRest()).toBe(false);
+
+    word.setFitProgress(1);
+    expect(word.atRest()).toBe(true);
+  });
+
+  it('ignores a letter the regroup left behind to play its exit', () => {
+    const word = new Word('ABC', stubFont(), 'gold', ROOMY);
+    word.regroup((l) => l.index < 2, 'line');
+    word.setFitProgress(1);
+    word.apply(
+      timelineOf((_t, letter) => (letter.leaving ? { position: [0, -3, 0] } : {})),
+      0,
+    );
+
+    expect(word.atRest()).toBe(true);
+  });
+});
+
+describe('layoutVersion', () => {
+  it('changes when a regroup re-lays the letters', () => {
+    const word = new Word('ABC', stubFont(), 'gold', ROOMY);
+    const before = word.layoutVersion;
+    word.regroup((l) => l.index < 2, 'line');
+
+    expect(word.layoutVersion).not.toBe(before);
   });
 });

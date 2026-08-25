@@ -89,11 +89,19 @@ for (const look of LOOKS) {
       blend,
       strength: STRENGTH,
       lamp: LAMP,
+      env: arg('env', '2.2'),
     }).toString();
     await page.goto(`${base}/?${q}`);
     await page.waitForFunction(() => window.__shot === true, null, { timeout: 60_000 });
+    const probe = await page.evaluate(() => window.__probe ?? null);
+    if (probe) console.log(`  probe ${JSON.stringify(probe)}`);
+    const scene = await page.evaluate(() => {
+      const c = document.querySelector('canvas');
+      return { canvases: document.querySelectorAll('canvas').length, w: c?.width, h: c?.height };
+    });
+    void scene;
     const png = await page.screenshot({ clip: { x: 0, y: 0, width: 1000, height: 200 } });
-    writeFileSync(resolve(OUT, `${look}-${blend}.png`), png);
+    writeFileSync(resolve(OUT, `${look}-${blend}${blend.startsWith('env') ? `-${arg('env', '2.2')}` : ''}.png`), png);
     rows.push({ look, blend, md5: md5(png).slice(0, 8) });
     console.log(`${n}/${total} ${look}-${blend}`);
   }

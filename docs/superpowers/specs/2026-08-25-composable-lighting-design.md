@@ -137,15 +137,33 @@ here.
 
 ## Traps
 
-**`envMapIntensity` did nothing.** Raising it per part — "more studio reaches this letter" — is the
-most physically honest blend, and it produced byte-identical output on all four looks tested.
-`looks.ts` sets it to `2.2` at material construction. Worth one look before dismissing it.
+**`envMapIntensity` is inert, and that is a shipped bug.** klieg lights through `scene.environment`,
+so no material owns an `envMap` — and `material.envMapIntensity` only scales a material's *own* map.
+`looks.ts` constructs every material with `envMapIntensity: 2.2` and that value has never been
+applied: `spikes/lamp-blend.mjs --blends envown --env 1` reproduces the shipped render byte for byte.
+Every look has been rendering at an effective env intensity of 1.
+
+Assigning the scene's environment texture to the material makes the knob live, which gives lighting
+a second, more honest channel than emissive — **for metals**. Gold holds its hue from `env=2.2`
+through `14` and simply gets brighter, where an emissive add pushes it toward cream.
+
+**It is the wrong knob for `gem`, in the opposite direction.** At `env=0` gem reads red — the
+`attenuationColor` is doing its job. Raising env adds specular reflection *over* that, and the red
+washes to blue-gray. So gem is red-but-dark at low env and bright-but-gray at high env; one
+intensity cannot give both, and a lamp that only raises env desaturates the stone it is lighting.
+Transmissive looks need a channel that raises transmitted light rather than reflected.
 
 **Adding onto existing emissive, not replacing it.** `neon` has its own glow. A lamp that assigns
 `material.emissive` deletes it everywhere the lamp does not reach.
 
-**Three part topologies, not one.** `sequin` produced **zero** `run` parts, so a run-targeted lamp
-never reaches it at all. `tubing` and `piping` have runs; the rest have bodies only.
+**Three part topologies, not one.** Run parts are built only from the tube pipeline
+(`word.ts`, from `tubeBlueprints` and `litMeshes`), so `sequin` — decoration `kind: 'chunks'` —
+produces **zero** of them and no run-targeted lamp reaches it. Its `body` is the wrong target too: a
+near-black `0x2a0f1c` backing under the disc field that carries the whole look.
+
+Lighting `sequin` means a `'chunk'` `PartKind` addressing the letter's `InstancedMesh`. That is
+cheaper than it sounds — `createMaterial()` runs per letter, so each letter's chunk field already
+owns its material. Only lighting *individual* sequins needs `instanceColor`.
 
 **Layout space is not centered on zero.** `KLIEG` gives `x ∈ [-1.72, 0.89]`, `y = 0` on every part.
 `fromPointer`'s mapping must read the word's real extent rather than assume a symmetric range, and

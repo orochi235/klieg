@@ -217,34 +217,18 @@ Roughly in order of value; the items are independent of each other.
 
 - ~~**Selectable text**~~ — built. See the `## In flight` section; it wants a PR, not a plan.
 
-- **Composable lighting, asked for directly and decided in conversation. Nothing is designed yet.**
-  Today `lighting` takes one of three names and every number behind them is a module constant no
-  caller can reach: `sweep`'s `periodMs: 3400`, and `pointer`'s `YAW_RANGE`, `PITCH_RANGE` and
-  `FOLLOW_MS` (`render/lighting.ts`).
+- **Composable lighting — designed, not built.** See
+  [the design](specs/2026-08-25-composable-lighting-design.md), which has the whole shape: `lighting`
+  becomes a composable slot posing the environment, a `lamp` effect piece carries light landing on a
+  part, and light sources are `(t, ctx)` functions with the cursor as one of them. It also folds in
+  the `PointerLight.aimAt` viewport bug and retires `slotDrivesEnv`. Next step is an implementation
+  plan.
 
-  Two decisions are made. **Lighting becomes composable pieces, the way motion already is** — a
-  piece is a function of `(t, pointer)` returning an offset that accumulates, with the built-in
-  names as presets, so `['sweep', lamp({ … })]` layers them the way an `active` slot layers motion.
-  And **both pointer modes ship**: the existing one, and a genuinely positional light.
-
-  The distinction that motivated the ask: `pointer` today is not a light anywhere. It maps the
-  cursor to `scene.environmentRotation` — x to yaw over ±90°, y to pitch over ±20° — which is one
-  scene-wide value, so hovering over the **K** does not light the K any differently. It turns the
-  same knob `sweep` turns, from position instead of time. A cursor that actually lights the letter
-  under it needs a real light with a position and falloff, which is the second mode, and which
-  will need per-look tuning: `gem` reads through transmission and `tubing` is emissive, so a lamp
-  tuned on `gold` may do nothing on either.
-
-  Two things to fold in rather than leave beside it:
-
-  **`PointerLight.aimAt` normalizes against `globalThis.innerWidth/innerHeight`** — the viewport,
-  never the canvas box. Under `placement: element` an anchored sign in a 400px box on a 1600px page
-  only ever sees a slice of the yaw range, and a cursor dead-centre on the type does not centre the
-  highlight. A plain bug, fixable on its own if the redesign stalls.
-
-  **`slotDrivesEnv` becomes redundant.** A motion piece can currently declare `envRotation: true`
-  to hijack the environment (`index.ts`, the `envDriven` branch); composable lighting gives that
-  intent a real home, and leaving both would be two ways to drive one thing.
+  **Two spikes are the evidence, and they re-run.** `spikes/lamp-falloff.mjs` proves
+  `PartOffset.gain` is a byte-identical no-op on seven of eight looks; `spikes/lamp-blend.mjs`
+  compares five ways to combine a lamp with the material under it. Both compare lamp-on and lamp-off
+  renders by md5, which is the only thing that caught the no-op — the effect ran, the compositor
+  merged, the material was written, and the image did not change.
 
 - **A composition lab, so effect pieces get built by hand rather than through a plan.** Asked for
   directly. `roving` and `hue` were specified in prose, and the wrapper's epoch arithmetic came out
@@ -267,6 +251,24 @@ Roughly in order of value; the items are independent of each other.
   one worktree silently answered from another's dev server and returned confident wrong answers —
   four bogus failures, and two sessions judging appearance off contaminated runs. A checkout without
   that commit is still exposed.
+- **`envMapIntensity` has never been applied, on any look.** `looks.ts` constructs every material
+  with `envMapIntensity: 2.2`, but klieg lights through `scene.environment` and the property only
+  scales a material's *own* `envMap`, which none of them have.
+  `node spikes/lamp-blend.mjs --blends envown --env 1` reproduces the shipped render byte for byte;
+  `--env 2.2` is visibly richer. Assigning the scene's environment texture to each material makes
+  the authored value live — and moves every visual baseline, which is why it is its own change and
+  not a footnote to lighting.
+
+- **Another pass on light-up letters — medium priority.** The design picks a blend and a channel; it
+  does not finish the look. **`gem` cannot be lit with one knob.** At `env=0` it reads red, its
+  `attenuationColor` working as authored; raising env lays specular reflection over that and washes
+  it to blue-gray. Red-but-dark or bright-but-gray, with nothing in between — a transmissive look
+  needs a channel that raises *transmitted* light, not reflected. Metals have no such problem: gold
+  holds its hue from `env=2.2` to `14`. **`sequin` is unreachable** — zero `run` parts and a
+  near-black body under the disc field; it needs a `'chunk'` `PartKind`. **The defaults are
+  unsampled** — radius, strength and falloff were judged at one lamp position on a five-letter word,
+  enough to choose a blend and not enough to ship numbers.
+
 - **`visual.spec.ts` is flaky under parallel load, and it is three tests now, not two.** `bloom path`,
   `two-line block` and `wrap breaks a long line into rows` have each failed intermittently in the full
   suite and passed on isolated re-run. It predates the particle work — `two-line block` was seen

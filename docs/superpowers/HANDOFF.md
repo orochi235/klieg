@@ -151,10 +151,15 @@ Roughly in order of value; the items are independent of each other.
   one worktree silently answered from another's dev server and returned confident wrong answers —
   four bogus failures, and two sessions judging appearance off contaminated runs. A checkout without
   that commit is still exposed.
-- **`visual.spec.ts` is flaky under parallel load.** `bloom path` and `two-line block` fail
-  intermittently in the full suite and pass 4/4 in isolation. It predates the particle work —
-  `two-line block` was seen failing before the `index.ts` changes existed. Both read the whole
-  drawing buffer inside rAF and assert on a single sampled frame, which is the likely cause.
+- **`visual.spec.ts` is flaky under parallel load, and it is three tests now, not two.** `bloom path`,
+  `two-line block` and `wrap breaks a long line into rows` have each failed intermittently in the full
+  suite and passed on isolated re-run. It predates the particle work — `two-line block` was seen
+  failing before the `index.ts` changes existed. All three read the whole drawing buffer inside rAF
+  and assert on a single sampled frame, which is the likely cause; that the third is a pure layout
+  test touching no material narrows it further, since it rules out anything look-specific. **A single
+  failure in this file is not evidence of a regression — re-run before believing it**, and note that
+  a passing re-run deletes the failure artifacts, so capture the diff before re-running if you want
+  to diagnose it rather than dismiss it.
 - **`K` and `k` have non-parallel arm sides, and the bevel is what makes it visible.** In Archivo
   Black's own outline the arm's two long edges are 1.31° apart on `K` and 2.56° on `k`, and both
   terminals are cut flat-horizontal — 39.8° off square to the arm. That is the typeface, not klieg:

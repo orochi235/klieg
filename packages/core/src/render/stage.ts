@@ -220,7 +220,7 @@ export class Stage {
     };
   }
 
-  /** A modal hold is the one state in which the overlay is not click-through. */
+  /** A modal hold is the only thing that stops the canvas itself being click-through. */
   setInteractive(on: boolean): void {
     if (this.canvas) this.canvas.style.pointerEvents = on ? 'auto' : 'none';
   }

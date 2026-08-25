@@ -396,8 +396,9 @@ it instead. A stage's `hold: 'click'` waits for the same press whatever the top-
 each press advances one stage, and only the last ends the effect.
 
 The dismissing click passes through to your page by default, so it both dismisses the effect and
-presses whatever was underneath. `modal: true` makes the overlay swallow it instead; that is the
-one state in which klieg is not click-through, which is why Escape is always bound.
+presses whatever was underneath. `modal: true` makes the overlay swallow it instead, which is why
+Escape is always bound. That and `selectable: 'layer'`, which takes a click that lands on a letter,
+are the only two things that stop a click reaching your page.
 
 ## Queue policies
 

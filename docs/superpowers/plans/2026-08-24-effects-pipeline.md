@@ -1131,6 +1131,23 @@ Add a private method, called once at the end of the constructor after every lett
   }
 ```
 
+**A part must carry its letter's grid position, or `grid: true` lies.** `orderKey` gates its radial
+branch on `item.column !== undefined`, so a `PartInfo` without `line`/`column` compiles fine and
+silently falls back to reading order — a stagger option that appears to work and does not. A part's
+grid position is its letter's, and `PartInfo.letter` already holds both, so copy them across when
+building each part:
+
+```ts
+        line: this.lineOf[i],
+        column: this.columnOf[i],
+        lineCount: this.lineCount,
+        columnCount: this.columnCount,
+```
+
+Add the four optional fields to `PartInfo` in `effects/types.ts` when you do, and pin it with a test
+that `orderKey(part, { grid: true, from: 'center' })` differs from the reading-order result for a
+part whose letter sits off-centre in a multi-row block.
+
 Note `blueprint.lit` and `blueprint.runs.filter(r => r.lit)` are index-parallel — `buildTubeBlueprint` pushes a geometry per run in run order and skips only runs whose sweep returned nothing. If `meshes.length !== lit.length` for any letter the pairing is wrong; add an assertion in a test rather than silently mis-pairing.
 
 - [ ] **Step 5: Run it to verify it passes**

@@ -140,7 +140,7 @@ git commit -m "add an additive light channel to a part offset"
 - Create: `packages/core/src/effects/lamp.ts`
 - Test: `packages/core/test/effects/lamp.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `packages/core/test/effects/lamp.test.ts`:
 
@@ -203,12 +203,12 @@ describe('along', () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/core/test/effects/lamp.test.ts`
 Expected: FAIL — `packages/core/src/effects/lamp.js` does not exist.
 
-- [ ] **Step 3: Add `FrameCtx` to lighting**
+- [x] **Step 3: Add `FrameCtx` to lighting**
 
 At the top of `packages/core/src/render/lighting.ts`:
 
@@ -225,7 +225,7 @@ export interface FrameCtx {
 }
 ```
 
-- [ ] **Step 4: Write the sources**
+- [x] **Step 4: Write the sources**
 
 Create `packages/core/src/effects/lamp.ts`:
 
@@ -289,12 +289,12 @@ export function along(points: readonly { x: number; y: number }[]): LightSource 
 }
 ```
 
-- [ ] **Step 5: Run the test**
+- [x] **Step 5: Run the test**
 
 Run: `npx vitest run packages/core/test/effects/lamp.test.ts`
-Expected: PASS, 8 tests.
+Expected: PASS, 7 tests. (The review round added two more, taking it to 9.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/core/src/effects/lamp.ts packages/core/src/render/lighting.ts packages/core/test/effects/lamp.test.ts

@@ -5,13 +5,14 @@ what is worth doing next.
 
 ## In flight
 
-**`composable-lighting`, one task of nine done.** Branch cut from `fb058fe`, nothing pushed.
-Task 1 is done and passed both gates — spec compliance clean on the first pass, code quality after
-one fix round. `9425be1` added the additive `light` channel on `PartOffset` and summed it in the
-effects compositor; `e637b33` answered the review. `npm run check` is green at **982 tests**, up
-from 977.
+**`composable-lighting`, two tasks of nine done.** Branch cut from `fb058fe`, nothing pushed.
+Both tasks passed both gates — spec compliance clean on the first pass, code quality after one fix
+round each. Task 1 (`9425be1`, `e637b33`) added the additive `light` channel on `PartOffset` and
+summed it in the effects compositor. Task 2 (`13d1c62`, `4a61f72`) added `FrameCtx` to
+`render/lighting.ts` and the four light sources — `fixed`, `fromPointer`, `orbit`, `along` — in the
+new `effects/lamp.ts`. `npm run check` is green at **991 tests**, up from 977 at the branch point.
 
-Pick up at **Task 2** of [the plan](plans/2026-08-25-composable-lighting.md), which is
+Pick up at **Task 3** of [the plan](plans/2026-08-25-composable-lighting.md), which is
 self-contained: every signature, test body and command is in it. The execution method was
 subagent-driven — one implementer per task, then a spec-compliance review, then a code-quality
 review, no skipping and no reordering.
@@ -26,18 +27,34 @@ And **the channel accumulates sRGB, not linear radiance** — which is self-cons
 at full strength gives. Task 5 now opens by deciding this, and Task 9 renders the overlap either
 way. The label was corrected; the maths was deliberately left alone.
 
+**Two things Task 2 learned that the plan did not say.** The plan's supplied tests are vacuous on
+the two things worth testing. `along` is only exercised on a 2-point path, where `last === 1` so the
+segment index is always 0 — an `along` that ignored every interior point and lerped first-to-last
+passes every assertion the plan gives. `orbit` is only called with its centre defaulted to the
+origin, so a transposed `cx`/`cy` passes too. Both gaps were closed in the review round and both new
+tests were confirmed red against the defect they target; the suite is 9, not the 7 the plan writes
+out. **Assume the same of tasks 3-8** — the plan's test bodies are a floor, and the parameter a test
+leaves at its default is the one the implementation gets wrong for free.
+
+**`FrameCtx` in `render/lighting.ts` is an open call, and Task 4 hardens it.** The plan's file table
+puts it there, so `effects/lamp.ts` is now the only module under `effects/` importing from
+`render/`. It is `import type` only, no cycle and no runtime coupling, but `FrameCtx` is a pure data
+shape sharing a module with `PointerLight`, a class that attaches DOM `pointermove` listeners — so
+every effects consumer's type graph now pulls in `render/lighting.d.ts`. `effects/types.ts`, which
+already owns `PartInfo` and `EffectPiece`, is the more natural home. Task 4 puts `ctx` on
+`EffectPiece.at` and makes `effects/types.ts` cross the same boundary. Cheaper to move before that
+than after. Not moved: it is a deviation from the plan and the call had not been made.
+
 **Green units still mean nothing here.** Tasks 1-8 are all pure functions and all unit-testable, and
 none of them can show that light reaches the screen. That is Task 9's whole job, and it is the
 defect this design exists to fix — `gain` ran, merged, wrote to the material, and changed no pixels.
 
 
-**`selectable-text`, complete and unmerged.** 14 commits off `main`, nothing uncommitted, not
-pushed. `npm run check` is green at 977 unit tests and `npm run test:visual` at 33. It implements
+**`selectable-text` is merged into `main`.** It implements
 [the design](specs/2026-08-25-selectable-text-design.md) in full — one `FireOptions.selectable` of
-`'hidden' | 'layer' | 'none'`, defaulting to `'hidden'`. The next step is a PR; nothing is
-half-done.
+`'hidden' | 'layer' | 'none'`, defaulting to `'hidden'`. Nothing is outstanding on it.
 
-Three things the branch knows that the design doc does not:
+Three things it knows that the design doc does not:
 
 **The Playwright suite is the only evidence any of this works.** The unit harness stubs
 `Stage.mount`, so `stage.textLayer` is never set and no unit test has ever seen one of these DOM
@@ -241,7 +258,7 @@ working — it needs a caller-supplied `TubeSpec.gradient`.
 
 Roughly in order of value; the items are independent of each other.
 
-- ~~**Selectable text**~~ — built. See the `## In flight` section; it wants a PR, not a plan.
+- ~~**Selectable text**~~ — built and merged into `main`.
 
 - **Composable lighting — planned, not built. This is the next thing to execute.** See
   [the plan](plans/2026-08-25-composable-lighting.md), nine TDD tasks, and behind it
@@ -259,6 +276,25 @@ Roughly in order of value; the items are independent of each other.
   compares five ways to combine a lamp with the material under it. Both compare lamp-on and lamp-off
   renders by md5, which is the only thing that caught the no-op — the effect ran, the compositor
   merged, the material was written, and the image did not change.
+
+- **The rendered word does not register against the text it stands in for. Asked for directly.**
+  Two settings, one theme: klieg replaces real DOM text and does not currently agree with it.
+
+  **Horizontal alignment is not settable, and centred is the wrong default.** `text/placement.ts`
+  centres every line on `x = 0` across the glyphs that draw ink, and nothing exposes a choice. It
+  wants `'left' | 'center' | 'right'`, defaulting to **left**, with the `selectable` layer reading
+  the same setting so its spans keep matching the ink. `apps/lab/test/visual.spec.ts` already
+  compares span boxes to the drawing buffer's ink — centres within 10px, bounds within 8 — so that
+  test is the guard, and it is the one that has to be re-pointed per alignment. Changing the default
+  moves every multi-line baseline — a breaking visual change, and a minor.
+
+  **The neon renders smaller than the fallback it replaces.** Observed under `placement: element`,
+  not yet measured. Size comes from `framing` (0.62 wide, 0.3 tall) through `FIT_CAP` in
+  `text/layout.ts`, which an anchored placement already lifts — so what to expose is a scale and
+  offset trim on top of the fit, not another fit. Do not name it for fudging; name it for what it
+  does. **Measure the gap before adding the knob:** a fallback is styled type with its own
+  line-height and cap-height, and if the neon comes out smaller by a consistent ratio that is a fit
+  bug to fix rather than a knob to hand the caller.
 
 - **A composition lab, so effect pieces get built by hand rather than through a plan.** Asked for
   directly. `roving` and `hue` were specified in prose, and the wrapper's epoch arithmetic came out
@@ -292,27 +328,6 @@ Roughly in order of value; the items are independent of each other.
   Each item names the spike that proves it and the flags to reproduce it. The env fix moves every
   visual baseline, so it is its own change rather than a footnote to lighting.
 
-- **A composition lab, so effect pieces get built by hand rather than through a plan.** Asked for
-  directly. `roving` and `hue` were specified in prose, and the wrapper's epoch arithmetic came out
-  wrong in a way that read as *more* correct than the fix — a prototype found it in one run and
-  review had not. A piece is a pure function of `(t, part)` with no GL anywhere in it, so a lab can
-  plot one against time, layer several, scrub a pinned clock, and show the merged offset per part.
-  That is most of what a session currently burns tokens reconstructing, and it is also where the
-  numbers the design deferred get picked: `roving`'s `dwell` ships at a stated-provisional 3200ms
-  precisely because there was nothing to measure against. Nothing is designed yet.
-
-  It is a **different lab** from **kliegsminister**, the stage-and-repair lab in
-  [the pipeline lab design](specs/2026-08-23-pipeline-lab-design.md) — that one is about tube
-  geometry, this one about time.
-
-- ~~**An effects pipeline for the tube looks**~~ — shipped, along with `roving` and `hue` on top of
-  it. See the `## In flight` section.
-
-- ~~**Playwright reuses whatever owns port 5180**~~ — fixed in `484692b`: `playwright.config.ts`
-  derives a port from the checkout's own path and starts vite `--strictPort`. Before that, a run in
-  one worktree silently answered from another's dev server and returned confident wrong answers —
-  four bogus failures, and two sessions judging appearance off contaminated runs. A checkout without
-  that commit is still exposed.
 - **`envMapIntensity` has never been applied, on any look.** `looks.ts` constructs every material
   with `envMapIntensity: 2.2`, but klieg lights through `scene.environment` and the property only
   scales a material's *own* `envMap`, which none of them have.

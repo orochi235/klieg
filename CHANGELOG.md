@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Material properties no longer vanish from `LookSpec` for a TypeScript consumer
+
+`look: { ...tube.look, emissive: 0x22d3ee }` failed with *"'emissive' does not exist in type
+`MaterialSpec`"* after nothing but `npm i klieg three`. `LookKey` shipped as a live
+`Extract<keyof THREE.MeshPhysicalMaterial, …>`, so a consumer re-evaluated it against their own
+three — and three's exports map carries no `types` condition, so without `@types/three` it resolved
+to nothing, `keyof` collapsed, and every property disappeared. It now ships as a literal union, so
+the types are self-contained; a repo-side assertion still fails the build if a key stops naming a
+real material property. `@types/three` is also declared as an optional peer dependency.
+
 ### `crawl` slides a colour ramp along a part
 
 A new `chase` piece drives it, and `EffectSpec` accepts `chase` by name. The offset reaches the

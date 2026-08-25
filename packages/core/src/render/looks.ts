@@ -23,9 +23,14 @@ export type LookName =
   | 'piping'
   | 'sequin';
 
-/** Extract silently drops a name that is not a real material property, so a typo fails DEFAULTS. */
-type LookKey = Extract<
-  keyof THREE.MeshPhysicalMaterial,
+/**
+ * A literal union rather than `Extract<keyof THREE.MeshPhysicalMaterial, …>`. The emitted `.d.ts`
+ * carries this type as written, so a live expression would be re-evaluated against the consumer's
+ * three — and three ships no `types` condition in its exports map, so a consumer without
+ * `@types/three` resolves it to nothing, `keyof` collapses, and every material property silently
+ * vanishes from `LookParams`. `MATERIAL_KEYS` below keeps the typo check that `Extract` gave us.
+ */
+type LookKey =
   | 'color'
   | 'metalness'
   | 'roughness'
@@ -46,8 +51,13 @@ type LookKey = Extract<
   | 'anisotropyRotation'
   | 'dispersion'
   | 'emissive'
-  | 'emissiveIntensity'
->;
+  | 'emissiveIntensity';
+
+// Every LookKey must still name a real material property. This runs where `@types/three` is
+// installed — here — rather than in a consumer's build, which is the only place it ever worked.
+type MissingFromMaterial = Exclude<LookKey, keyof THREE.MeshPhysicalMaterial>;
+const _everyLookKeyIsAMaterialProperty: MissingFromMaterial extends never ? true : never = true;
+void _everyLookKeyIsAMaterialProperty;
 
 export type LookParams = {
   [K in LookKey]: K extends 'iridescenceThicknessRange' ? [number, number] : number;

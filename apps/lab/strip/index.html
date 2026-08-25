@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="/klieg-mark.svg" type="image/svg+xml" />
+    <title>klieg — anchored strip</title>
+
+    <style>
+      html { height: 100%; }
+      body { margin: 0; min-height: 100%; color: #e6e9f0; background: #07080c;
+             font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+      .page { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+      .page p { color: #7d8494; max-width: 62ch; }
+
+      /* The anchor. Deliberately left `position: static` so the library's own claim on the
+         containing block is what gets exercised here. */
+      .masthead { height: 120px; background: #0d1017; border: 1px solid #1d2230;
+                  display: grid; place-items: center; overflow: hidden; }
+      /* The resting state, and what a reduced-motion viewer keeps. */
+      .masthead__heading { margin: 0; color: #d8b25f; font-size: 28px; letter-spacing: 0.22em;
+                           text-transform: uppercase; transition: opacity 400ms ease; }
+      .masthead--lit .masthead__heading { opacity: 0; }
+
+      .controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0; }
+      button { appearance: none; background: #12161f; border: 1px solid #262c3b; color: #d8b25f;
+               padding: 8px 14px; cursor: pointer; font: inherit; }
+      button:hover { border-color: #d8b25f; }
+
+      /* Drag to prove the fit tracks the anchor's box rather than the window's. */
+      .resizer { resize: horizontal; overflow: auto; min-width: 260px; max-width: 100%;
+                 border: 1px dashed #262c3b; padding: 8px; }
+
+      @media (prefers-reduced-motion: reduce) {
+        .masthead__heading { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <p>Page content above the strip. The masthead below is an ordinary block in this flow — the
+        klieg canvas lives inside it and the rest of the page lays out around it, not under it.</p>
+
+      <div class="resizer">
+        <header class="masthead" id="masthead">
+          <h1 class="masthead__heading" id="heading">klieg</h1>
+        </header>
+      </div>
+
+      <div class="controls">
+        <button id="fire" type="button">fire</button>
+        <button id="fireLong" type="button">fire (long text)</button>
+        <button id="destroy" type="button">destroy</button>
+      </div>
+
+      <p id="notes"></p>
+      <p>Drag the dashed box's bottom-right corner to resize the anchor. The type re-fits to the
+        strip's box, which no window resize event reports.</p>
+      <p>Page content below the strip, to show it is in the flow rather than over it.</p>
+    </div>
+    <script type="module" src="/src/strip.ts"></script>
+  </body>
+</html>

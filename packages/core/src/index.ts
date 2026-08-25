@@ -12,7 +12,12 @@ import { EffectQueue, type QueuePolicy } from './queue.js';
 import { BloomPath } from './render/bloom.js';
 import { envRotationAt, LIGHTING, type LightingName, PointerLight } from './render/lighting.js';
 import { LOOKS, type Look, type LookName, type LookSpec, specOf } from './render/looks.js';
-import { prefersReducedMotion, Stage as SceneStage, webglSupported } from './render/stage.js';
+import {
+  type Placement,
+  prefersReducedMotion,
+  Stage as SceneStage,
+  webglSupported,
+} from './render/stage.js';
 import { Word } from './render/word.js';
 import { type LoadedFont, loadFont } from './text/font.js';
 import type { Arrangement } from './text/placement.js';
@@ -110,6 +115,12 @@ function resolveSlot<N extends string>(
 
 export interface KliegOptions {
   target?: HTMLElement;
+  /**
+   * Fullscreen overlay, or the type anchored inside one element of the page. Fixed for the
+   * instance's lifetime; a page wanting both needs two instances, and two WebGL contexts.
+   * An element placement is its own parent, so it cannot be combined with `target`.
+   */
+  placement?: Placement;
   fontUrl: string;
   clock?: Clock;
   /**
@@ -134,8 +145,7 @@ export interface Framing {
   height?: number;
 }
 
-/** Closed union so element-anchoring can arrive in v1.2 without an API break. */
-export type Placement = { kind: 'fullscreen' };
+export type { Placement } from './render/stage.js';
 
 /** A built-in name, your own piece, or several layered together — names and pieces may mix. */
 export type EnterSlot = EnterName | MotionPiece | (EnterName | MotionPiece)[];
@@ -177,6 +187,7 @@ export interface FireOptions {
   hold?: number | 'click';
   bloom?: boolean;
   blendMs?: number;
+  /** @deprecated Unread. Placement is fixed per instance — pass it to `createKlieg` instead. */
   placement?: Placement;
   /** Break long lines to whatever arrangement renders largest. Explicit newlines always break. */
   wrap?: boolean;
@@ -225,12 +236,19 @@ export interface Klieg {
 }
 
 export function createKlieg(options: KliegOptions): Klieg {
+  const placement = options.placement ?? { kind: 'fullscreen' };
+  const anchored = placement.kind === 'element';
+  if (anchored && options.target) {
+    throw new Error('klieg: an element placement is its own parent, so `target` cannot apply');
+  }
+
   const supported = webglSupported();
   const clock = options.clock ?? new RafClock();
   const queue = new EffectQueue(options.policy ?? 'queue');
   const stage = new SceneStage({
     target: options.target,
     idleTimeoutMs: options.idleTimeoutMs ?? 8000,
+    placement,
   });
 
   const pointerLight = new PointerLight();
@@ -430,6 +448,12 @@ export function createKlieg(options: KliegOptions): Klieg {
   return {
     supported,
     fire(text, opts = {}) {
+      // Every honest meaning for it hangs: a window listener dismisses on clicks that have nothing
+      // to do with the strip, and one scoped to the anchor never fires once the anchor scrolls off,
+      // stalling the effect and blocking the queue for good.
+      if (anchored && (opts.hold === 'click' || opts.stages?.some((s) => s.hold === 'click'))) {
+        throw new Error("klieg: `hold: 'click'` has no meaning for an element placement");
+      }
       if (!supported || destroyed) return Promise.resolve();
       return queue.push(`${counter++}:${text}`, (signal) => run(text, opts, signal));
     },

@@ -1,6 +1,14 @@
 import type * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { prefersReducedMotion, Stage, webglSupported } from '../../src/render/stage.js';
+import {
+  canHoldCanvas,
+  canvasCss,
+  needsContainingBlock,
+  prefersReducedMotion,
+  Stage,
+  webglSupported,
+} from '../../src/render/stage.js';
+import { FIT_CAP, fitScale } from '../../src/text/layout.js';
 
 /** No DOM here, so every test stays on the paths that never touch `target`. */
 function headlessStage(idleTimeoutMs = 1000): Stage {
@@ -174,5 +182,117 @@ describe('prefersReducedMotion', () => {
 
     matchMedia.mockReturnValue({ matches: false });
     expect(prefersReducedMotion()).toBe(false);
+  });
+});
+
+function anchor(width: number, height: number): HTMLElement {
+  return { clientWidth: width, clientHeight: height } as HTMLElement;
+}
+
+describe('canvasCss', () => {
+  it('pins a fullscreen canvas to the viewport above everything', () => {
+    const css = canvasCss({ kind: 'fullscreen' });
+
+    expect(css).toContain('position:fixed');
+    expect(css).toContain('z-index:2147483000');
+  });
+
+  it('carries no z-index when anchored, which would escape the anchor', () => {
+    const css = canvasCss({ kind: 'element', el: anchor(800, 120) });
+
+    expect(css).toContain('position:absolute');
+    expect(css).toContain('inset:0');
+    expect(css).not.toContain('z-index');
+  });
+
+  it('stays click-through either way', () => {
+    expect(canvasCss({ kind: 'fullscreen' })).toContain('pointer-events:none');
+    expect(canvasCss({ kind: 'element', el: anchor(800, 120) })).toContain('pointer-events:none');
+  });
+});
+
+describe('needsContainingBlock', () => {
+  it('claims only a static anchor, leaving every deliberate value alone', () => {
+    expect(needsContainingBlock('static')).toBe(true);
+    for (const value of ['relative', 'absolute', 'fixed', 'sticky']) {
+      expect(needsContainingBlock(value)).toBe(false);
+    }
+  });
+});
+
+describe('canHoldCanvas', () => {
+  it('rejects the displays with no box to position against', () => {
+    expect(canHoldCanvas('contents')).toBe(false);
+    expect(canHoldCanvas('inline')).toBe(false);
+  });
+
+  it('accepts anything that lays out a box', () => {
+    for (const value of ['block', 'flex', 'grid', 'inline-block', 'flow-root']) {
+      expect(canHoldCanvas(value)).toBe(true);
+    }
+  });
+});
+
+describe('measure', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('defaults to fullscreen and reads the viewport', () => {
+    vi.stubGlobal('innerWidth', 1440);
+    vi.stubGlobal('innerHeight', 900);
+    const stage = new Stage({ idleTimeoutMs: 1000 });
+
+    expect(stage.placement).toEqual({ kind: 'fullscreen' });
+    expect(stage.measure()).toEqual({ width: 1440, height: 900 });
+  });
+
+  it('reads the anchor box, not the viewport, when anchored', () => {
+    vi.stubGlobal('innerWidth', 1440);
+    vi.stubGlobal('innerHeight', 900);
+    const stage = new Stage({
+      idleTimeoutMs: 1000,
+      placement: { kind: 'element', el: anchor(800, 120) },
+    });
+
+    expect(stage.measure()).toEqual({ width: 800, height: 120 });
+  });
+});
+
+describe('the fit cap', () => {
+  it('holds a fullscreen overlay to the default bound', () => {
+    const stage = new Stage({ idleTimeoutMs: 1000 });
+
+    expect(stage.viewportBudget().cap).toBeUndefined();
+    expect(fitScale(1, 1, stage.viewportBudget())).toBe(FIT_CAP);
+  });
+
+  it('lifts it when anchored, where the box is the bound and the cap only starves the fit', () => {
+    const strip = new Stage({
+      idleTimeoutMs: 1000,
+      placement: { kind: 'element', el: anchor(800, 120) },
+    });
+    strip.camera.aspect = 800 / 120;
+    const budget = strip.viewportBudget(0.94, 0.66);
+
+    expect(budget.cap).toBe(Number.POSITIVE_INFINITY);
+    // A short word in a wide strip: the height budget binds, not an arbitrary ceiling.
+    expect(fitScale(1, 1, budget)).toBeCloseTo(budget.height, 12);
+    expect(fitScale(1, 1, budget)).toBeGreaterThan(FIT_CAP);
+  });
+});
+
+describe('framing against an anchor', () => {
+  it('spends the same fractions on the anchor box that it spends on the viewport', () => {
+    const strip = new Stage({
+      idleTimeoutMs: 1000,
+      placement: { kind: 'element', el: anchor(800, 120) },
+    });
+    // What resize() writes for that box; the frustum height at this depth never moves.
+    strip.camera.aspect = 800 / 120;
+    const budget = strip.viewportBudget(0.94, 0.66);
+
+    expect(budget.width / (frustumHeight(strip) * strip.camera.aspect)).toBeCloseTo(0.94, 12);
+    expect(budget.height / frustumHeight(strip)).toBeCloseTo(0.66, 12);
   });
 });

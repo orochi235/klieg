@@ -1108,3 +1108,58 @@ describe('mixed name and piece slots', () => {
     expect(Number.isNaN(firstCell().position.y)).toBe(false);
   });
 });
+
+describe('element placement', () => {
+  const el = {} as HTMLElement;
+
+  beforeEach(() => {
+    stubWebgl(true);
+    stubFetch();
+    stubStage();
+  });
+
+  it('refuses a target alongside it, rather than silently picking one', () => {
+    expect(() => create({ placement: { kind: 'element', el } })).toThrow(/`target` cannot apply/);
+  });
+
+  it('takes the placement when no target competes with it', () => {
+    const klieg = create({ placement: { kind: 'element', el }, target: undefined });
+
+    expect(klieg.supported).toBe(true);
+  });
+
+  it("refuses hold: 'click', which could only ever hang", () => {
+    const klieg = create({ placement: { kind: 'element', el }, target: undefined });
+
+    expect(() => klieg.fire('hi', { hold: 'click' })).toThrow(
+      /no meaning for an element placement/,
+    );
+  });
+
+  it("refuses a stage holding on 'click' too, not just the top level", () => {
+    const klieg = create({ placement: { kind: 'element', el }, target: undefined });
+
+    expect(() => klieg.fire('hi', { stages: [{ hold: 'click' }] })).toThrow(
+      /no meaning for an element placement/,
+    );
+  });
+
+  it("leaves hold: 'click' alone for a fullscreen overlay", () => {
+    // node has no window event target for the dismissal listeners the held effect attaches.
+    vi.stubGlobal('addEventListener', () => {});
+    vi.stubGlobal('removeEventListener', () => {});
+    const klieg = create();
+
+    expect(() => klieg.fire('hi', { hold: 'click' })).not.toThrow();
+    klieg.destroy();
+  });
+
+  it('hands the placement to the stage it builds', () => {
+    const klieg = create({ placement: { kind: 'element', el }, target: undefined });
+    void klieg.fire('hi');
+
+    return flush().then(() => {
+      expect(stage().placement).toEqual({ kind: 'element', el });
+    });
+  });
+});

@@ -5,14 +5,13 @@ what is worth doing next.
 
 ## In flight
 
-**`effects-pipeline` is complete and unmerged**, in the worktree `.claude/worktrees/effects-pipeline`,
-branched from local `main`. All eight tasks of
-[plans/2026-08-24-effects-pipeline.md](plans/2026-08-24-effects-pipeline.md) landed, each with an
-implementer and a two-stage review, plus a whole-branch review at the end. 24 commits. `npm run check`
-green at **855 tests across 46 files**; `npx playwright test` green at **24**, of which the 16
-pre-existing baseline PNGs are byte-identical to `main` — no shipped look moved, which is the claim
-the whole approach rests on. One baseline is new: `effect-flicker-darwin.png`, `tubing` at a pinned
-clock with one run dark.
+Nothing.
+
+**The effects pipeline landed.** All eight tasks of
+[plans/2026-08-24-effects-pipeline.md](plans/2026-08-24-effects-pipeline.md), each with an implementer
+and a two-stage review, plus a whole-branch review at the end. The 16 baseline PNGs that predate it are
+byte-identical — no shipped look moved, which is the claim the whole approach rests on. One baseline is
+new: `effect-flicker-darwin.png`, `tubing` at a pinned clock with one run dark.
 
 | landed | what |
 |---|---|
@@ -37,15 +36,6 @@ tube mid-pass. `applyEffects` skips parts whose letter a regroup dropped. And `S
 `count` alongside `amount`: `amount` is a fraction (so `{ amount: 1 }` selects the **whole** pool, which
 is what `piping` relies on), while `count` is a literal number of members and wins when both are given.
 
-**Do not branch this from `origin/main`.** It sits on six commits of local `main` that were never
-pushed.
-
-**A second session owns the main checkout.** `/Users/mike/src/blitsklieg` is on `element-placement`,
-scoping `placement: { kind: 'element', el }` (see the untracked `HANDOFF-element-placement.md` at the
-repo root). That work will touch `packages/core/src/index.ts`, which Task 8 of this plan also touches
-— expect to reconcile them. One commit, the handoff pointer to the effects plan, exists on both
-branches; identical content, so a merge resolves it either way.
-
 The worktree `.claude/worktrees/vertex-provenance` is named after a branch that no longer exists and
 holds `sequin-rework` — reuse or remove it, but do not trust its name.
 
@@ -63,17 +53,19 @@ past its public API. File it against labkit rather than working around it.
 
 ## State
 
-**0.5.0 is tagged and not published.** `v0.5.0` is on `origin` at `f38ef6a`, `package.json` says
-0.5.0, and CI is green there — but the Release run 404s on `PUT /klieg`. npm's trusted publisher for
-this repo was set up under the old package name and never moved: the last run that published through
-it was `blitsklieg` 0.3.1, and `klieg@0.4.0` went out by hand without a tag. **Point the trusted
-publisher at `klieg`** on npmjs.com (repo `orochi235/klieg`, workflow `release.yml`), then re-run the
-job from Actions with tag `v0.5.0` — `workflow_dispatch` takes the tag exactly so a retry does not
-move it. `v0.4.0` is tagged retroactively at `a3ddc44`, the last commit before that manual publish.
+**0.5.1 is published and is `latest`.** Releases are automatic: push a `v*` tag and `release.yml`
+publishes through npm trusted publishing, checking first that the tag matches
+`packages/core/package.json` and skipping a version already on the registry. The trusted publisher
+was still pointed at the old `blitsklieg` name until 2026-08-25, which is what made 0.5.0's first
+Release run 404 on `PUT /klieg`; that is fixed, and 0.5.0 and 0.5.1 both went out through it.
+`npm view` can report a stale version straight after a publish — read
+`https://registry.npmjs.org/klieg` to check what actually landed.
 
 **`main` carries the tube lab, the tube geometry rewrite, the colour gradients, the junction
-reconciliation and direct paths by default, all merged.** `npm run check` green at 789 tests across
-43 files; `npx playwright test` green at 23 across 2 files.
+reconciliation, direct paths by default, element-anchored placement and the effects pipeline, all
+merged.** `npm run check` green at **872 tests across 46 files**; `npx playwright test` green at **24
+across 2 files**. Both counts measured, not carried over — the doc has twice claimed a playwright
+number one higher than `--list` reports.
 
 **[Direct tube paths](specs/2026-08-20-direct-tube-paths-design.md) ships, and is the default.**
 `TubeSpec.pathSource` (`field` | `exact` | `direct`) defaults to `direct`, which traces the glyph's

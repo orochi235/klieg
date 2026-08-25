@@ -14,11 +14,15 @@ export default defineConfig({
       },
     ],
   },
-  // Two pages out of one app: the tuning lab at the root, and `show` — the no-chrome demo — one
-  // directory down, so Pages serves it from the same artifact at /klieg/show/.
+  // Pages out of one app: the tuning lab at the root, and `show` (the no-chrome demo) and `strip`
+  // (the anchored-placement route) one directory down, served from the same artifact.
   build: {
     rollupOptions: {
-      input: { main: entry('./index.html'), show: entry('./show/index.html') },
+      input: {
+        main: entry('./index.html'),
+        show: entry('./show/index.html'),
+        strip: entry('./strip/index.html'),
+      },
     },
   },
   server: { port: 5180 },

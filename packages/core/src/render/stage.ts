@@ -25,6 +25,16 @@ export function canvasCss(placement: Placement): string {
   return placement.kind === 'element' ? ANCHORED_CSS : FULLSCREEN_CSS;
 }
 
+// One above the canvas: the layer must take a click on a letter, and the canvas must not shade it.
+const FULLSCREEN_LAYER_CSS =
+  'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:2147483001';
+// No z-index, for the reason ANCHORED_CSS gives; appended after the canvas, so paint order stacks it.
+const ANCHORED_LAYER_CSS = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none';
+
+export function layerCss(placement: Placement): string {
+  return placement.kind === 'element' ? ANCHORED_LAYER_CSS : FULLSCREEN_LAYER_CSS;
+}
+
 /** Only `static` is certainly broken; every other value is the host positioning it on purpose. */
 export function needsContainingBlock(position: string): boolean {
   return position === 'static';
@@ -83,6 +93,7 @@ export class Stage {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.1, BASE_FAR);
   canvas: HTMLCanvasElement | null = null;
+  textLayer: HTMLElement | null = null;
   renderer: THREE.WebGLRenderer | null = null;
   environment: THREE.WebGLRenderTarget | null = null;
 
@@ -120,6 +131,11 @@ export class Stage {
     renderer.toneMapping = THREE.NoToneMapping;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     (anchor ?? this.opts.target ?? document.body).appendChild(canvas);
+
+    const layer = document.createElement('div');
+    layer.style.cssText = layerCss(this.placement);
+    (anchor ?? this.opts.target ?? document.body).appendChild(layer);
+    this.textLayer = layer;
 
     this.canvas = canvas;
     this.renderer = renderer;
@@ -222,10 +238,12 @@ export class Stage {
   unmount(): void {
     this.cancelIdle();
     const { canvas, renderer, environment } = this;
+    const layer = this.textLayer;
     const detachResize = this.detachResize;
     const detachObserver = this.detachObserver;
     const restorePosition = this.restorePosition;
     this.canvas = null;
+    this.textLayer = null;
     this.renderer = null;
     this.environment = null;
     this.detachResize = null;
@@ -243,6 +261,7 @@ export class Stage {
       // dispose() drops three's caches but keeps the GL context; only loseContext returns it.
       renderer?.forceContextLoss();
       canvas?.remove();
+      layer?.remove();
     }
   }
 }

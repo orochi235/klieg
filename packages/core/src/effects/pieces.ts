@@ -1,4 +1,5 @@
 import { hash01 } from '../motion/types.js';
+import { hueColor } from './luminance.js';
 import type { EffectName, EffectPiece } from './types.js';
 
 export interface FlickerSpec {
@@ -37,6 +38,36 @@ export function flicker(spec: FlickerSpec = {}): EffectPiece {
   };
 }
 
+export interface HueSpec {
+  duration?: number;
+  /** Where the sweep starts, in turns. */
+  from?: number;
+  /** How far it travels in one pass, in turns. 1 is the whole wheel, and the only value that meets
+   * itself at the loop seam — any other snaps back there. */
+  span?: number;
+  /** Hue offset across the word, in turns per unit of `part.at`. 0 is one synchronized sign. */
+  spread?: number;
+  /** Rec.709 luma the sweep holds. 0.5 is where the wheel's darkest and brightest hues give up the
+   * same amount — blue's saturation against yellow's brightness. */
+  luminance?: number;
+}
+
+/** A sign that changes colour, at a luma the bloom threshold sees the same all the way round. */
+export function hue(spec: HueSpec = {}): EffectPiece {
+  const duration = spec.duration ?? 6000;
+  const from = spec.from ?? 0;
+  const span = spec.span ?? 1;
+  const spread = spec.spread ?? 0;
+  const luminance = clamp01(spec.luminance ?? 0.5);
+
+  return {
+    duration,
+    at(t, part) {
+      return { color: hueColor(from + t * span + part.at * spread, luminance) };
+    },
+  };
+}
+
 // `satisfies` rather than an annotation: it holds every name to a factory usable with no spec,
 // which is all a name lookup can supply, without binding the next piece to `FlickerSpec`.
-export const EFFECTS = { flicker } satisfies Record<EffectName, () => EffectPiece>;
+export const EFFECTS = { flicker, hue } satisfies Record<EffectName, () => EffectPiece>;

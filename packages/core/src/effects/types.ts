@@ -61,7 +61,7 @@ export interface EffectPiece {
   at(t: number, part: PartInfo): PartOffset;
 }
 
-export type EffectName = 'flicker';
+export type EffectName = 'flicker' | 'hue';
 
 export interface EffectSpec {
   piece: EffectName | EffectPiece;

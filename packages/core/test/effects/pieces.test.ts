@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EFFECTS, flicker } from '../../src/effects/pieces.js';
+import { EFFECTS, flicker, hue } from '../../src/effects/pieces.js';
 import type { EffectPiece, PartInfo } from '../../src/effects/types.js';
 
 const part: PartInfo = {
@@ -89,5 +89,59 @@ describe('flicker', () => {
 
   it('is reachable by name', () => {
     expect(typeof EFFECTS.flicker).toBe('function');
+  });
+});
+
+describe('hue', () => {
+  it('writes only colour, leaving gain to another layer', () => {
+    expect(Object.keys(hue().at(0.5, part))).toEqual(['color']);
+  });
+
+  it('travels the whole wheel by default, and is seamless across the loop', () => {
+    const piece = hue();
+    const seen = new Set(
+      Array.from({ length: 120 }, (_, n) => piece.at(n / 120, part).color as number),
+    );
+    expect(seen.size).toBeGreaterThan(90);
+    // span defaults to a whole turn, so the end of a pass is the start of the next one.
+    expect(piece.at(1, part).color).toBe(piece.at(0, part).color);
+  });
+
+  it('takes an arc, so a look can throb rather than cycle', () => {
+    const spread = (p: EffectPiece) =>
+      new Set(
+        Array.from({ length: 60 }, (_, n) => ((p.at(n / 60, part).color as number) >> 16) & 0xff),
+      ).size;
+    expect(spread(hue({ from: 0.5, span: 0.1 }))).toBeLessThan(spread(hue()));
+    expect(hue({ from: 0.5, span: 0.1 }).at(0, part).color).toBe(
+      hue({ from: 0.5, span: 1 }).at(0, part).color,
+    );
+  });
+
+  it('gives every part the same colour when unspread, which is one sign changing together', () => {
+    const piece = hue();
+    expect(piece.at(0.3, { ...part, index: 0, at: 0 }).color).toBe(
+      piece.at(0.3, { ...part, index: 3, at: 0.75 }).color,
+    );
+  });
+
+  it('offsets by arc-length share when spread, which is a gradient down the word', () => {
+    const piece = hue({ spread: 0.5 });
+    expect(piece.at(0.3, { ...part, at: 0 }).color).not.toBe(
+      piece.at(0.3, { ...part, at: 0.75 }).color,
+    );
+    // The offset is in turns, so a part three quarters along at spread 0.5 reads the same hue the
+    // whole sign reads 0.375 turns later.
+    expect(piece.at(0, { ...part, at: 0.75 }).color).toBe(piece.at(0.375, { ...part, at: 0 }).color);
+  });
+
+  it('is deterministic in t, across separately built pieces', () => {
+    const of = (p: EffectPiece) =>
+      Array.from({ length: 50 }, (_, n) => p.at(n / 50, part).color as number);
+    expect(of(hue())).toEqual(of(hue()));
+  });
+
+  it('is reachable by name', () => {
+    expect(typeof EFFECTS.hue).toBe('function');
   });
 });

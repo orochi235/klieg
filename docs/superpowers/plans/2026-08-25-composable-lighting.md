@@ -990,6 +990,12 @@ export { type EnvOffset, type EnvPiece, type FrameCtx, mergeEnv, still, sweep, t
 export type { LightingSlot };
 ```
 
+Also re-export `LightOffset` from `./effects/types.js` beside the existing `PartOffset` export.
+Task 1 added it as a named interface following the `FlakeSpec` precedent but deliberately left the
+barrel alone, since `PartOffset` already re-exports and consumers get the shape structurally. It
+wants the name once callers are writing lamps.
+
+
 - [ ] **Step 2: Write the CHANGELOG entry**
 
 Under `## Unreleased`:

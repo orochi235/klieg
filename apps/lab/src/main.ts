@@ -2,6 +2,7 @@ import {
   ACTIVE_NAMES,
   type Clock,
   createKlieg,
+  EFFECTS,
   type EffectSpec,
   ENTER_NAMES,
   EXIT_NAMES,
@@ -13,6 +14,7 @@ import {
   type Look,
   type LookSpec,
   POLICY_NAMES,
+  roving,
   type SurfaceKind,
   specOf,
 } from 'klieg';
@@ -59,6 +61,8 @@ const grainInput = el<HTMLInputElement>('grain');
 const densityInput = el<HTMLInputElement>('density');
 const surfacesInput = el<HTMLSelectElement>('surfaces');
 const flickerInput = el<HTMLInputElement>('flicker');
+const hueInput = el<HTMLInputElement>('hue');
+const rovingInput = el<HTMLInputElement>('roving');
 const number = (id: string) => Number(el<HTMLInputElement>(id).value);
 
 /** The four surface combinations the lab exposes; `connector` runs have no slider of their own. */
@@ -103,6 +107,8 @@ const CONTROL_IDS = [
   'minRun',
   'litAmount',
   'flicker',
+  'hue',
+  'roving',
   'amplitude',
   'wallDepth',
   'wallRise',
@@ -266,6 +272,24 @@ const FLICKER: EffectSpec[] = [
   { piece: 'flicker', target: { kind: 'run', by: 'index', count: 1 } },
 ];
 
+/** Every run, since the whole sign changes colour together. */
+const HUE: EffectSpec[] = [{ piece: 'hue', target: { kind: 'run', by: 'index', amount: 1 } }];
+
+/** Every run: the wrapper picks the holder out of the pool it was given, so a subset would let the
+ * fault land on a part this effect does not drive. */
+const ROVING: EffectSpec[] = [
+  { piece: roving(EFFECTS.flicker()), target: { kind: 'run', by: 'index', amount: 1 } },
+];
+
+function chosenEffects(): EffectSpec[] | undefined {
+  const specs = [
+    ...(flickerInput.checked ? FLICKER : []),
+    ...(hueInput.checked ? HUE : []),
+    ...(rovingInput.checked ? ROVING : []),
+  ];
+  return specs.length > 0 ? specs : undefined;
+}
+
 /**
  * Holds every frame at one elapsed time, so a shot of a time-varying effect is a function of the
  * pin rather than of when it was taken. `?pin=<ms>` turns it on; the visual suite needs it.
@@ -317,7 +341,7 @@ function fire(text: string): void {
     active: active.get(),
     exit: exit.get(),
     look: chosenLook(),
-    effects: flickerInput.checked ? FLICKER : undefined,
+    effects: chosenEffects(),
     lighting: lighting.get(),
     tint: tintOnInput.checked ? Number.parseInt(tintInput.value.slice(1), 16) : undefined,
     // Sliders are degrees for a human; fromEuler wants radians, three's XYZ order.
@@ -484,6 +508,7 @@ function syncDisabled(): void {
     el<HTMLInputElement>(id).disabled = !tube;
   }
   surfacesInput.disabled = flickerInput.disabled = !tube;
+  hueInput.disabled = rovingInput.disabled = !tube;
   for (const id of ['count', 'chunkSize', 'align', 'cluster', 'proud']) {
     el<HTMLInputElement>(id).disabled = !chunks;
   }

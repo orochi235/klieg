@@ -119,4 +119,25 @@ test.describe('effects', () => {
     await page.check('#flicker');
     await shoot(page, 'effect-flicker');
   });
+
+  test('hue recolours the whole sign at once', async ({ page }) => {
+    await still(page, '?pin=1500');
+    await page.selectOption('#look', 'tubing');
+    await page.check('#hue');
+    await shoot(page, 'effect-hue');
+  });
+
+  /**
+   * The pin is load-bearing twice over. It sits in the second epoch, so the shot is of a fault
+   * that has already moved once rather than of where it started; and it is a moment the holder is
+   * actually dark, which most pins are not — `flicker` rests about 82% of the time, so a carelessly
+   * pinned roving shot is byte-identical to plain `tubing` and would pass with the effect deleted.
+   * The run down here is a different one from what `effect-flicker` takes down.
+   */
+  test('roving takes down a different run than flicker, one epoch on', async ({ page }) => {
+    await still(page, '?pin=4725');
+    await page.selectOption('#look', 'tubing');
+    await page.check('#roving');
+    await shoot(page, 'effect-roving');
+  });
 });

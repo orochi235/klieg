@@ -136,6 +136,8 @@ export class Word {
   private readonly idxOf: number[] = [];
   /** Set on a letter a regroup dropped; its info stops tracking the live group. */
   private readonly frozenInfo: (LetterInfo | null)[] = [];
+  /** Bumped by every regroup, so a DOM layer can tell it is built against a stale layout. */
+  layoutVersion = 0;
   lineCount: number;
   private columnCount: number;
   /** Letters still in the group — not `letters.length`, which counts the retired ones too. */
@@ -731,6 +733,37 @@ export class Word {
       .decompose(this.inner.position, this.inner.quaternion, this.inner.scale);
   }
 
+  /** The live letters' layout, in em, with the fit that maps em to world units. */
+  readout(): { chars: string[]; x: number[]; y: number[]; fit: Fit } {
+    const chars: string[] = [];
+    const x: number[] = [];
+    const y: number[] = [];
+    for (let i = 0; i < this.charOf.length; i++) {
+      if (this.leavingAt(i)) continue;
+      chars.push(this.charOf[i] as string);
+      x.push(this.baseX[i] as number);
+      y.push(this.baseY[i] as number);
+    }
+    return { chars, x, y, fit: { ...this.fit } };
+  }
+
+  /**
+   * Whether every live letter sits exactly where the layout puts it, fit included. The DOM text
+   * layer is only aligned while this holds — through an enter, an exit or a stage tween it does not.
+   */
+  atRest(): boolean {
+    if (this.fit.scale !== this.fitTo.scale || this.fit.midY !== this.fitTo.midY) return false;
+    for (let i = 0; i < this.letters.length; i++) {
+      const cell = this.letters[i];
+      if (!cell || this.leavingAt(i)) continue;
+      if (cell.position.x !== this.baseX[i] || cell.position.y !== this.baseY[i]) return false;
+      if (cell.position.z !== 0) return false;
+      if (cell.rotation.x !== 0 || cell.rotation.y !== 0 || cell.rotation.z !== 0) return false;
+      if (cell.scale.x !== 1 || cell.scale.y !== 1 || cell.scale.z !== 1) return false;
+    }
+    return true;
+  }
+
   /** Fresh each call: a caller-supplied piece receives this, and a reused object would alias. */
   private letterInfo(i: number): LetterInfo {
     const frozen = this.frozenInfo[i];
@@ -799,6 +832,7 @@ export class Word {
       this.budget,
     );
     this.setGradientBounds();
+    this.layoutVersion++;
 
     return { kept, dropped, delta };
   }

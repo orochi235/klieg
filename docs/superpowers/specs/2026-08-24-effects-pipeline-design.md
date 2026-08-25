@@ -205,3 +205,22 @@ time.
 **A run whose material was supplied by a debug hook has no run-colour contract.** `word.ts:311` already
 skips `tintByRunColor` for an override, and an effect writing `runColor` there writes into a shader
 that never reads it. Skip those parts rather than writing invisibly.
+
+## Two limits found by asking for a roving fault
+
+The shipped `flicker` afflicts a fixed set of runs. Asking for the bad tube to *move* from segment to
+segment surfaced two structural limits, both worth knowing before designing anything on top.
+
+**Layering composes channels on a part; it cannot gate which part.** The merge rule is multiplicative
+for `gain`, so a second layered effect can push a run darker but cannot undo what the first dropped —
+there is no value it can return that cancels a `gain` of 0.08. "Which part is afflicted right now" is
+therefore not expressible by adding an effect to the list. It has to be a piece that wraps a piece and
+delegates only to whichever part is currently it, which composes at the piece level rather than the
+offset level and works for any inner piece rather than only for `flicker`.
+
+**A piece cannot see across its own passes.** `at(t, part)` receives `t` normalized within one pass, so
+anything varying on a slower clock than `duration` is structurally inexpressible. A roving affliction
+is exactly that: the stutter cycles at 1400ms while the choice of tube should change far more slowly.
+The ways out are a wrapper whose `duration` spans several dwells and which reconstructs the inner
+piece's phase, or handing `at` the raw elapsed alongside `t`. Re-running selection periodically is the
+third option and the worst: "selection resolves once" is the property the regroup decision rests on.

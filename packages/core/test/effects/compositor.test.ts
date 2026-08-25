@@ -1,0 +1,71 @@
+import { describe, expect, it } from 'vitest';
+import { mergeOffsets, REST_OFFSET } from '../../src/effects/compositor.js';
+import type { Vec3 } from '../../src/pose.js';
+
+describe('mergeOffsets', () => {
+  it('is the identity for no offsets', () => {
+    expect(mergeOffsets([])).toEqual(REST_OFFSET);
+  });
+
+  it('multiplies gain toward 1 rather than summing it', () => {
+    expect(mergeOffsets([{ gain: 0.5 }, { gain: 0.5 }]).gain).toBe(0.25);
+  });
+
+  it('multiplies scale the same way', () => {
+    expect(mergeOffsets([{ scale: 2 }, { scale: 3 }]).scale).toBe(6);
+  });
+
+  it('sums position and rotation', () => {
+    const out = mergeOffsets([
+      { position: [1, 0, 0], rotation: [0, 1, 0] },
+      { position: [0, 2, 0], rotation: [0, 0, 3] },
+    ]);
+    expect(out.position).toEqual([1, 2, 0]);
+    expect(out.rotation).toEqual([0, 1, 3]);
+  });
+
+  it('sums crawl, so two chases add rather than fight', () => {
+    expect(mergeOffsets([{ crawl: 0.25 }, { crawl: 0.5 }]).crawl).toBe(0.75);
+  });
+
+  it('takes the strongest dark rather than compounding it', () => {
+    expect(mergeOffsets([{ dark: 0.3 }, { dark: 0.9 }, { dark: 0.1 }]).dark).toBe(0.9);
+  });
+
+  it('lets the last writer win the colour', () => {
+    expect(mergeOffsets([{ color: 0xff0000 }, { color: 0x00ff00 }]).color).toBe(0x00ff00);
+  });
+
+  it('leaves colour unset when nobody writes one, so the part keeps its own', () => {
+    expect(mergeOffsets([{ gain: 0.5 }]).color).toBeUndefined();
+  });
+
+  it('ignores a channel an offset omits', () => {
+    expect(mergeOffsets([{ gain: 0.5 }, { color: 0x00ff00 }]).gain).toBe(0.5);
+  });
+
+  it('leaves REST_OFFSET alone, so one merge cannot poison the next', () => {
+    mergeOffsets([{ position: [1, 2, 3], rotation: [4, 5, 6] }]);
+    mergeOffsets([{ position: [1, 2, 3], rotation: [4, 5, 6] }]);
+    expect(REST_OFFSET.position).toEqual([0, 0, 0]);
+    expect(REST_OFFSET.rotation).toEqual([0, 0, 0]);
+    expect(mergeOffsets([])).toEqual({
+      gain: 1,
+      dark: 0,
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: 1,
+      crawl: 0,
+    });
+  });
+
+  it('does not hand back a piece’s own vectors, so a caller cannot write into it', () => {
+    const offset = { position: [1, 2, 3] as Vec3, rotation: [4, 5, 6] as Vec3 };
+    const out = mergeOffsets([offset]);
+    expect(out.position).not.toBe(offset.position);
+    out.position[0] = 99;
+    out.rotation[0] = 99;
+    expect(offset.position).toEqual([1, 2, 3]);
+    expect(offset.rotation).toEqual([4, 5, 6]);
+  });
+});

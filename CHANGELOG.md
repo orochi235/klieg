@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### `crawl` slides a colour ramp along a part
+
+A new `chase` piece drives it, and `EffectSpec` accepts `chase` by name. The offset reaches the
+shader as a per-vertex attribute beside `gradientT` and wraps with `fract`, so a chase cycles rather
+than pinning at the ramp's end.
+
+Both shipped looks are flat, so `crawl` does nothing on them: it shifts a ramp, and needs a caller
+who sets `TubeSpec.gradient`.
+
 ## 0.6.0
 
 ### `flip` now appears face-on, not back-on

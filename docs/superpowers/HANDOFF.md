@@ -5,10 +5,31 @@ what is worth doing next.
 
 ## In flight
 
-Nothing. `main`, `origin/main` and `sequin-rework` are the same commit; vertex provenance and the
-corner-lab minimap are both merged. The worktree `.claude/worktrees/vertex-provenance` is named after
-a branch that no longer exists and holds `sequin-rework` — reuse or remove it, but do not trust its
-name.
+**`effects-pipeline`, in the worktree `.claude/worktrees/effects-pipeline`, branched from local
+`main`.** Executing [plans/2026-08-24-effects-pipeline.md](plans/2026-08-24-effects-pipeline.md)
+task by task, each with an implementer and a two-stage review. Tasks 1–6 are done and verified;
+7 and 8 remain. Every step is checked against the 23 visual baselines, which have not moved since the
+branch was cut — that is the standing claim that none of this has changed a shipped look.
+
+| done | what landed |
+|---|---|
+| 1–2 | `applyLook` no longer writes `opacity` or `emissiveIntensity`; `Word` composes both from a per-family `frameOwnedBase`, at construction and per frame |
+| 3 | the by/amount/stride selection grammar moved to `src/select.ts`; `assign` routes through it |
+| 4 | `stagger`/`orderKey` widened from `LetterInfo` to a minimal `Ordered` |
+| 5 | `effects/types.ts` and `effects/compositor.ts` — `PartInfo`, `PartOffset`, the merge rule |
+| 6 | `effects/pieces.ts` — the `flicker` piece and the `EFFECTS` registry |
+
+**Do not branch this from `origin/main`.** It sits on six commits of local `main` that were never
+pushed.
+
+**A second session owns the main checkout.** `/Users/mike/src/blitsklieg` is on `element-placement`,
+scoping `placement: { kind: 'element', el }` (see the untracked `HANDOFF-element-placement.md` at the
+repo root). That work will touch `packages/core/src/index.ts`, which Task 8 of this plan also touches
+— expect to reconcile them. One commit, the handoff pointer to the effects plan, exists on both
+branches; identical content, so a merge resolves it either way.
+
+The worktree `.claude/worktrees/vertex-provenance` is named after a branch that no longer exists and
+holds `sequin-rework` — reuse or remove it, but do not trust its name.
 
 **Next, designed and planned: the effects pipeline** —
 [specs/2026-08-24-effects-pipeline-design.md](specs/2026-08-24-effects-pipeline-design.md), with

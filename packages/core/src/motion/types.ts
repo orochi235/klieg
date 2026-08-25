@@ -46,7 +46,7 @@ export interface StaggerSpec {
 
 /** Deterministic, so screenshots comparing frames across runs stay stable. A seeded generator
  * whose call order depends on letter count would not be. */
-function hash01(n: number): number {
+export function hash01(n: number): number {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
 }

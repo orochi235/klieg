@@ -1,18 +1,23 @@
 # Corner Lab Legend Implementation Plan
 
-> **⚠ TENTATIVE — re-review before executing.** This plan is written against the *planned* API of
-> `@weasel-js/labkit@1.2.0`'s `FloatingPanel` and `Legend`, which do not exist yet, and which in turn
-> depend on `windease@1.3.0`'s `floatingStrategy`, which also does not exist yet. That windease plan
-> has already been revised once during review. **When labkit 1.2.0 actually publishes, diff its
-> `FloatingPanel` and `Legend` props against Task 3 below before writing code.**
+> **✅ DONE, by a different route than written — 2026-08-25.** The legend ships; Tasks 2 and 3 do
+> not, and will not. `FloatingPanel` and `Legend` were **deferred upstream**: labkit 1.2.0 published
+> without them, and windease's `floatingStrategy` is built in source but unreleased (registry is at
+> 1.2.1). So klieg grew its own key instead — `LegendPanel.tsx`, statically placed, with
+> `LegendEntry` declared locally in `legend.ts`.
 >
-> Upstream plans:
-> - `~/src/windease/docs/superpowers/plans/2026-08-23-floating-strategy.md`
-> - `~/src/weasel/docs/superpowers/plans/2026-08-23-labkit-floating-legend.md`
+> - **Task 1 shipped as written**, plus one ink the plan predates: `frame`, the minimap's viewport
+>   rect, added 2026-08-24. Its drift test caught the omission, which is the test working.
+> - **Task 2 (raise the labkit floor) is void.** klieg stays on `^1.1.0`; 1.2.0 buys nothing here.
+> - **Task 3 is superseded** by the local panel. Its fragment restructure was already done by other
+>   work — `render` returns `.junction`, `<Minimap>` and now `<Legend>` as overlay siblings.
+> - **Task 4 was walked**, minus the drag and snap steps, which a static panel has no version of.
+>
+> Reopen this only if labkit ever ships `FloatingPanel`; the swap needs no change to `LEGEND`.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Give the corner lab a draggable color key, so the eight inks it draws can be read without opening the source.
+**Goal:** Give the corner lab a color key, so the inks it draws can be read without opening the source.
 
 **Architecture:** The lab's ink table moves out of `instrument.tsx` into its own module, paired with legend entries derived from it. A test asserts the two can't drift apart. The instrument's `render` then returns a fragment so the panel mounts as a sibling of the measures readout rather than inside it.
 
@@ -316,5 +321,6 @@ If the walkthrough needed CSS or prop changes, commit them with a message naming
 The design this implements, including why the snap threshold is measured per-axis and why nothing
 collapses: `docs/superpowers/specs/2026-08-23-legend-palette-design.md`.
 
-Blocked on `@weasel-js/labkit@1.2.0`, itself blocked on `windease@1.3.0`. Until both publish, `npm
-link` both packages and expect the API to move under you.
+The drag-and-snap half of the design is unbuilt and needs labkit's `FloatingPanel`, which was
+deferred. `windease`'s `floatingStrategy` is written and tested in `~/src/windease/src/layout/` but
+has never been released, so labkit could not depend on it.

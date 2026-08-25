@@ -6,19 +6,25 @@ what is worth doing next.
 ## In flight
 
 **`composable-lighting`, one task of nine done.** Branch cut from `fb058fe`, nothing pushed.
-Task 1 is committed at `9425be1` — the additive `light` channel on `PartOffset`, summed in the
-effects compositor — and passed both gates: spec compliance and code quality. `npm run check` is
-green at **981 tests**, up from 977.
+Task 1 is done and passed both gates — spec compliance clean on the first pass, code quality after
+one fix round. `9425be1` added the additive `light` channel on `PartOffset` and summed it in the
+effects compositor; `e637b33` answered the review. `npm run check` is green at **982 tests**, up
+from 977.
 
 Pick up at **Task 2** of [the plan](plans/2026-08-25-composable-lighting.md), which is
 self-contained: every signature, test body and command is in it. The execution method was
 subagent-driven — one implementer per task, then a spec-compliance review, then a code-quality
 review, no skipping and no reordering.
 
-**Two things Task 1 learned that the plan did not say.** Making `ResolvedOffset.light` a required
+**Three things Task 1 learned that the plan did not say.** Making `ResolvedOffset.light` a required
 field breaks any literal that constructs one — there was one in `compositor.test.ts` itself, fixed
-by adding `light: [0, 0, 0]`. And `render/word.ts` is the only other `ResolvedOffset` consumer; it
-takes the type as a parameter and needed no change.
+by adding `light: [0, 0, 0]`. `render/word.ts` is the only other `ResolvedOffset` consumer; it takes
+the type as a parameter and needed no change.
+
+And **the channel accumulates sRGB, not linear radiance** — which is self-consistent with how
+`litEmissive` will consume it, but means two overlapping lamps do not sum to the brightness one lamp
+at full strength gives. Task 5 now opens by deciding this, and Task 9 renders the overlap either
+way. The label was corrected; the maths was deliberately left alone.
 
 **Green units still mean nothing here.** Tasks 1-8 are all pure functions and all unit-testable, and
 none of them can show that light reaches the screen. That is Task 9's whole job, and it is the

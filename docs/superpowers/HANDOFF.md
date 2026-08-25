@@ -20,10 +20,12 @@ Same material, second call wins, tint gone before the first frame — `word.ts:5
 Verified at the material level: after `applyLook` the emissive is the tint; after `tintByRunColor`
 it is `0xffffff`.
 
-*The report also named `sequin`; that half is wrong.* There is exactly one `tintByRunColor` call
-site and it sits inside the `kind: 'tube'` branch. `sequin` is `kind: 'chunks'`, takes the branch at
-~644, and its material still carries the tint afterwards. If sequin does drop a tint on screen the
-cause is downstream — most likely the chunk `instanceColor` path — and it is a separate defect.
+*The report first named `sequin` too; that was withdrawn.* There is exactly one `tintByRunColor`
+call site and it sits inside the `kind: 'tube'` branch. `sequin` is `kind: 'chunks'` and takes the
+branch at ~644, so it never reaches that call. The reporter has since rendered it: **sequin tints
+correctly** — its sparkle goes from gold to cyan under `tint: 0x22d3ee`, while tubing stays
+pixel-identical magenta. So this is one defect, `tubing` only. **Do not go looking at the chunk
+`instanceColor` path**; there is positive evidence against it, not merely an absent repro.
 
 **The decision:** a tint on a tube look can *replace* the `runColor` palette outright, which is
 simple but discards the per-surface shading `surfaceColors` sets, or *modulate* it (say by the run

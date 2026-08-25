@@ -118,10 +118,6 @@
       } else if (blend === 'envown') {
         this.envMap = sceneEnv;
         this.envMapIntensity = num('env', 2.2);
-        if (this.metalness === 1 && !window.__probed) {
-          window.__probed = true;
-          window.__probe = { hasEnvMap: !!this.envMap, envMapIntensity: this.envMapIntensity };
-        }
         // Latch on gold's actual body (metalness 1), not the first default material written.
         if (this.metalness === 1 && !window.__probed) {
           window.__probed = true;

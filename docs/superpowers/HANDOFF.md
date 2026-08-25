@@ -7,63 +7,67 @@ what is worth doing next.
 
 **Nothing is in flight.** Every branch is merged and every worktree is gone. `main` is pushed.
 
-## Two consumer defects, both verified, both needing a decision
+## Two consumer defects, found from outside, both fixed
 
 Reported by the portfolio session, which builds the michaelbaker.tech masthead against published
-klieg. Both reproduce on 0.6.0. Neither is fixed — each needs a call that is not the implementer's
-to make.
+klieg. Both shipped in 0.6.0; both are fixed on `main` and independently re-verified by the reporter
+against a build of `08316c7`. Kept here because each has a trap that outlives the fix.
 
-**1. `tint` is discarded by any look with `tintTo: 'decoration'` — `tubing` only.** In `buildCell`,
-`applyLook(decorMaterial, deco.look, hue)` writes the tint, then `tintByRunColor(decorMaterial,
-'emissive', …)` sets `emissive` to white so it can drive the channel from the `runColor` attribute.
-Same material, second call wins, tint gone before the first frame — `word.ts:583-586` then `:592`.
-Verified at the material level: after `applyLook` the emissive is the tint; after `tintByRunColor`
-it is `0xffffff`.
+**`tint` never reached `tubing`.** The tint went to the decoration material's colour channel, and
+`tintByRunColor` sets that channel to white so a run's per-vertex colour multiplies out exactly —
+so the tint was gone before the first frame. It now recolours the palette the runs are dealt from,
+which is where a tube look's colour actually lives, so it survives by construction rather than by
+call order and composes with the effects compositor instead of racing it.
 
-*The report first named `sequin` too; that was withdrawn.* There is exactly one `tintByRunColor`
-call site and it sits inside the `kind: 'tube'` branch. `sequin` is `kind: 'chunks'` and takes the
-branch at ~644, so it never reaches that call. The reporter has since rendered it: **sequin tints
-correctly** — its sparkle goes from gold to cyan under `tint: 0x22d3ee`, while tubing stays
-pixel-identical magenta. So this is one defect, `tubing` only. **Do not go looking at the chunk
-`instanceColor` path**; there is positive evidence against it, not merely an absent repro.
+*Not replace-versus-modulate,* which is how the question first arrived. No shipped look sets
+`surfaceColors` and both tube looks carry a single-colour palette, so there was no per-surface
+shading for `modulate` to protect — it would only have returned a dimmer tint than was asked for.
+Checking that collapsed the decision.
 
-**The decision:** a tint on a tube look can *replace* the `runColor` palette outright, which is
-simple but discards the per-surface shading `surfaceColors` sets, or *modulate* it (say by the run
-colour's luminance), which keeps the shading but means `tint: 0x22d3ee` does not literally produce
-`0x22d3ee`. It touches the same material path the effects compositor now writes through, so
-whichever way it goes it has to compose with the compositor rather than race it. The README's
-options table currently promises tint recolours any look, which two shipped looks do not do.
+**The tint's value does not survive to the screen, and its hue does.** The palette entry is exactly
+the tint; the pixels are that through the look's emissive gain and then bloom — a bloomed tube
+measures `#5BFDFD` at the blown core and `#227787` along the run for a `0x22d3ee` tint. Do not write
+a test, or a doc line, asserting a literal pixel value.
 
-**2. `LookParams` collapses to `{}` for a TS consumer.** `look: { ...tube.look, emissive: … }`
-fails with *"'emissive' does not exist in type 'MaterialSpec'"* after nothing but `npm i klieg
-three`. `looks.d.ts` emits `LookKey` as a live `Extract<keyof THREE.MeshPhysicalMaterial, …>`, so
-the *consumer* re-evaluates it; three 0.185.1's `exports` map carries only `import` and `require`
-and no `types` condition, so `import * as THREE from 'three'` resolves to no declarations, `keyof`
-collapses and `Extract` yields nothing. It does not reproduce in-repo because `packages/core` has
-`@types/three` in devDependencies, which a consumer cannot learn from the package. Confirmed in the
-built `dist/render/looks.d.ts`.
+**`LookParams` collapsed to `{}` for any TypeScript consumer.** `looks.d.ts` emitted `LookKey` as a
+live `Extract<keyof THREE.MeshPhysicalMaterial, …>`, so the *consumer* re-evaluated it; three ships
+no `types` condition in its exports map, so without `@types/three` it resolved to nothing, `keyof`
+collapsed, and every material property vanished from `LookSpec`. It ships as a literal union now,
+with the `Extract` kept as a repo-side assertion — that check only ever worked where `@types/three`
+is installed, which is here and never in a consumer's build. `@types/three` is also an optional peer
+dependency.
 
-**The decision:** declare `@types/three` as an optional peer dependency, or resolve `LookKey` at
-build time so the `.d.ts` ships a literal union and the package is self-contained. Only the second
-helps a consumer who never installs the types. The error names `MaterialSpec`, so it reads as a
-klieg API removal rather than a resolution problem, which is what cost the reporter the time.
+**A consumer repro that does not assign into a typed position proves nothing.** `const x = { ...look,
+emissive: 1 }` typechecks against the *broken* package: excess-property checking only fires on
+assignment to a typed target. The first repro written for this passed on 0.6.0 and would have
+"verified" a non-fix.
+
+**`spikes/tint-matrix.mjs` is the guard.** It renders every look with and without a tint and compares
+md5s — a tint that never reaches the GPU leaves the image byte-identical — and exits non-zero when
+any look ignores its tint. It holds the *untinted* renders fixed at the same time, which is what
+catches a fix that recolours a look generally rather than only when tinted. `spikes/tint-matrix-0.6.0.md5`
+carries the published-0.6.0 hashes as a fixed point; the PNGs are gitignored because the registry
+artifact is immutable and the script regenerates them exactly.
 
 ## State
 
 **0.6.0 is published and is `latest`**, carrying the wide-anchor lens fix and the `flip` opacity
-fix. Read `https://registry.npmjs.org/klieg` to check what landed — `npm view` reports stale right
-after a publish. Releases are automatic: push a `v*` tag and `release.yml`
-publishes through npm trusted publishing, checking first that the tag matches
-`packages/core/package.json` and skipping a version already on the registry. The trusted publisher
-was still pointed at the old `blitsklieg` name until 2026-08-25, which is what made 0.5.0's first
-Release run 404 on `PUT /klieg`; that is fixed, and 0.5.0 and 0.5.1 both went out through it.
-`npm view` can report a stale version straight after a publish — read
-`https://registry.npmjs.org/klieg` to check what actually landed.
+fix. Releases are automatic: push a `v*` tag and `release.yml` publishes through npm trusted
+publishing, checking first that the tag matches `packages/core/package.json` and skipping a version
+already on the registry. `npm view` reports a stale version straight after a publish — read
+`https://registry.npmjs.org/klieg` to see what actually landed.
+
+**`main` is four changes ahead of 0.6.0 and untagged**, all under `## Unreleased` in the CHANGELOG:
+`crawl` and the `chase` piece, the `LookKey` literal union, and the `tubing` tint fix. **That wants
+a minor, not a patch** — `chase` adds a name to `EFFECT_NAMES` and `ChaseSpec` to the public surface,
+and the tint fix changes what renders for anyone tinting `tubing`. Not tagged: the call had not been
+made. The portfolio session asked to be told before a tag goes up, and since releases are
+tag-triggered there is a window between telling them and pushing it.
 
 **`main` carries the tube lab, the tube geometry rewrite, the colour gradients, the junction
 reconciliation, direct paths by default, element-anchored placement and the effects pipeline, all
-merged.** On `main`, `npm run check` is green at **913 tests across 48 files** and `npx playwright
-test` at **26 across 2 files**, measured on `main` after `crawl` landed. Every count in this doc is
+merged.** On `main`, `npm run check` is green at **938 tests across 50 files** and `npx playwright
+test` at **26 across 2 files**, both measured at `967408e`. Every count in this doc is
 measured, not carried over — it has twice claimed a playwright number one higher than `--list`
 reports.
 
@@ -249,17 +253,6 @@ Roughly in order of value; the items are independent of each other.
   chunk look drew 55 chunks or 1. Rejecting back-facing samples would raise visible chunks per
   letter by 39% and leave only 8.8% of positions surviving the reseed — a look change dressed as an
   optimization. The back cap is also genuinely on screen during two shipped enters.
-- **`flip` drops opacity 171° from rest**, so the letter fades in nearly back-on — the opposite of
-  what the step's own comment claims. `easeOutCubic(s)` hits 0.05 far later than the author expected.
-  Small, self-contained, and a real defect rather than a taste question.
-- **mulberry32 is copy-pasted verbatim in four modules** — `select.ts`, `render/tube/runs.ts`,
-  `render/decoration.ts` and `render/tube/wander.ts` — with no shared code between them. Every
-  seeded decision in the library depends on all four staying identical, and nothing enforces or
-  notices that: one edited constant silently repaints a look, and the visual baselines would show it
-  as "a look changed" rather than "the generator drifted." Hoisting it into one module is small, but
-  it is **not** a free refactor — it touches every seeded call site at once, so it wants its own
-  commit and its own baseline run rather than riding along with unrelated work.
-
 ## What was learned that is not in the plan
 
 - **`M` and `W` are the worst case, not `N`.** The standing `NSRE` string missed both extremes: `M`

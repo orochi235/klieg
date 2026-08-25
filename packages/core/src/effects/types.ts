@@ -44,7 +44,13 @@ export interface PartOffset {
   crawl?: number;
   /** Light landing on the part, added from zero. Lamps sum. A multiplier cannot express this:
    * `emissive` defaults to black, so scaling it is a no-op on every look but `neon`. */
-  light?: { color: number; amount: number };
+  light?: LightOffset;
+}
+
+/** One lamp's contribution to a part. */
+export interface LightOffset {
+  color: number;
+  amount: number;
 }
 
 /** Everything a merge resolved. Multiplicative channels rest at 1, additive at 0. */
@@ -56,7 +62,8 @@ export interface ResolvedOffset {
   rotation: Vec3;
   scale: number;
   crawl: number;
-  /** Accumulated lamp colour, premultiplied by amount. Linear RGB, 0..n. */
+  /** Accumulated lamp colour, premultiplied by amount. sRGB-encoded 0..1 per channel, matching
+   * the hex the authoring form takes — not linear radiance. */
   light: Vec3;
 }
 

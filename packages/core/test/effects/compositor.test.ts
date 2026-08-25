@@ -125,4 +125,12 @@ describe('the light channel', () => {
     expect(isRest({ light: { color: 0xffffff, amount: 0 } })).toBe(true);
     expect(isRest({ light: { color: 0xffffff, amount: 0.1 } })).toBe(false);
   });
+
+  // Red and blue alone would pass with the green byte masked wrong.
+  it('decomposes all three channels', () => {
+    const out = mergeOffsets([{ light: { color: 0x336699, amount: 1 } }]);
+    expect(out.light[0]).toBeCloseTo(0x33 / 255);
+    expect(out.light[1]).toBeCloseTo(0x66 / 255);
+    expect(out.light[2]).toBeCloseTo(0x99 / 255);
+  });
 });

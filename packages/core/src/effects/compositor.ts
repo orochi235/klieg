@@ -50,7 +50,7 @@ export function mergeOffsets(offsets: readonly PartOffset[]): ResolvedOffset {
     // Strongest wins rather than compounding: two layers each half-dead should not read as dead.
     if (o.dark !== undefined) dark = Math.max(dark, o.dark);
     if (o.color !== undefined) color = o.color;
-    if (o.light && o.light.amount !== 0) {
+    if (o.light?.amount) {
       const c = rgb(o.light.color);
       for (let i = 0; i < 3; i++) {
         light[i] = (light[i] as number) + (c[i] as number) * o.light.amount;

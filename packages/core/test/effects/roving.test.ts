@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { flicker } from '../../src/effects/pieces.js';
 import { roving } from '../../src/effects/roving.js';
-import type { EffectPiece, PartInfo } from '../../src/effects/types.js';
+import type { EffectPiece, FrameCtx, PartInfo } from '../../src/effects/types.js';
 
 const COUNT = 6;
 
@@ -20,9 +20,11 @@ function partAt(index: number): PartInfo {
 
 const PARTS = Array.from({ length: COUNT }, (_, i) => partAt(i));
 
+const NO_CTX: FrameCtx = { pointer: null, pointerInWord: null, dt: 0 };
+
 /** Which part indices are contributing anything at `t`. */
 function afflicted(piece: EffectPiece, t: number): number[] {
-  return PARTS.filter((p) => Object.keys(piece.at(t, p)).length > 0).map((p) => p.index);
+  return PARTS.filter((p) => Object.keys(piece.at(t, p, NO_CTX)).length > 0).map((p) => p.index);
 }
 
 /** A piece that is never at rest, so a deferred handover can never resolve. */
@@ -43,7 +45,7 @@ describe('roving', () => {
     const holder = afflicted(piece, 0.5)[0] as number;
     for (const p of PARTS) {
       if (p.index === holder) continue;
-      expect(piece.at(0.5, p)).toEqual({});
+      expect(piece.at(0.5, p, NO_CTX)).toEqual({});
     }
   });
 
@@ -51,7 +53,7 @@ describe('roving', () => {
     const marker: EffectPiece = { duration: 100, at: () => ({ gain: 0.5, scale: 1.25 }) };
     const piece = roving(marker);
     const holder = afflicted(piece, 0.5)[0] as number;
-    expect(piece.at(0.5, partAt(holder))).toEqual({ gain: 0.5, scale: 1.25 });
+    expect(piece.at(0.5, partAt(holder), NO_CTX)).toEqual({ gain: 0.5, scale: 1.25 });
   });
 
   // Measured at 4 distinct holders over a default pass against a pool of 6. This is the assertion
@@ -130,7 +132,7 @@ describe('roving', () => {
     const piece = roving(flicker());
     afflicted(piece, 0.5);
     const one: PartInfo = { ...partAt(0), count: 1 };
-    expect(piece.at(0.5, one).gain).toBeTypeOf('number');
+    expect(piece.at(0.5, one, NO_CTX).gain).toBeTypeOf('number');
   });
 
   it('survives an inner piece with no duration', () => {

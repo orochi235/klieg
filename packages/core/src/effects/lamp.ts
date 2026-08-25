@@ -69,8 +69,6 @@ export interface LampSpec {
 }
 
 const REST: PartOffset = {};
-/** Stands in for a caller that hasn't wired `FrameCtx` through yet — no pointer, no elapsed time. */
-const NO_CTX: FrameCtx = { pointer: null, pointerInWord: null, dt: 0 };
 
 /** Flat at the centre and zero at the edge, so a lamp reads as a pool rather than a cone point. */
 function falloff(d: number, radius: number): number {
@@ -88,11 +86,11 @@ export function lamp(spec: LampSpec = {}): EffectPiece {
 
   return {
     duration,
-    at(t, part, ctx = NO_CTX) {
+    at(t, part, ctx) {
       const pose = source(t, ctx);
       if (!pose) return REST;
       const amount = strength * falloff(Math.hypot(part.x - pose.x, part.y - pose.y), radius);
-      return { light: { color, amount } };
+      return amount === 0 ? REST : { light: { color, amount } };
     },
   };
 }

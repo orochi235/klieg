@@ -4,6 +4,7 @@ import { EFFECTS } from '../effects/pieces.js';
 import type {
   EffectPiece,
   EffectSpec,
+  FrameCtx,
   PartInfo,
   PartKind,
   PartOffset,
@@ -61,6 +62,9 @@ import {
 } from './tube/tint.js';
 
 const EM = 1; // glyphs are built at 1 em; the group scale does the fitting
+
+/** Replaced in Task 7, when the render loop builds a real ctx from the canvas rect. */
+const NO_CTX: FrameCtx = { pointer: null, pointerInWord: null, dt: 0 };
 
 /**
  * A tube look carries its colour on the per-vertex run attribute, not on the material: the material
@@ -436,7 +440,7 @@ export class Word {
         if (this.retiredPart(index)) continue;
         const part = this.parts[index] as PartInfo;
         const t = effect.stagger === undefined ? pass : stagger(pass, part, effect.stagger);
-        (this.effectLayers.get(index) as PartOffset[]).push(effect.piece.at(t, part));
+        (this.effectLayers.get(index) as PartOffset[]).push(effect.piece.at(t, part, NO_CTX));
       }
     }
 

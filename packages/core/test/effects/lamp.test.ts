@@ -93,8 +93,8 @@ describe('lamp', () => {
   it('is brightest at its centre and dark past its radius', () => {
     const piece = lamp({ source: fixed(0, 0), radius: 1, strength: 2 });
     expect(piece.at(0, partAt(0), NO_POINTER).light?.amount).toBeCloseTo(2);
-    expect(piece.at(0, partAt(1), NO_POINTER).light?.amount).toBeCloseTo(0);
-    expect(piece.at(0, partAt(5), NO_POINTER).light?.amount).toBeCloseTo(0);
+    expect(piece.at(0, partAt(1), NO_POINTER).light?.amount ?? 0).toBeCloseTo(0);
+    expect(piece.at(0, partAt(5), NO_POINTER).light?.amount ?? 0).toBeCloseTo(0);
   });
 
   it('falls off between the two', () => {

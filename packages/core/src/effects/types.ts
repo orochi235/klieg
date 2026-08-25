@@ -82,7 +82,7 @@ export interface EffectPiece {
   /** Milliseconds for one pass. Loops. */
   duration: number;
   /** `t` is normalized 0..1 within this pass. */
-  at(t: number, part: PartInfo, ctx?: FrameCtx): PartOffset;
+  at(t: number, part: PartInfo, ctx: FrameCtx): PartOffset;
 }
 
 export type EffectName = 'flicker' | 'hue' | 'chase';

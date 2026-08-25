@@ -1,6 +1,6 @@
 import { hash01 } from '../motion/types.js';
 import { isRest } from './compositor.js';
-import type { EffectPiece, PartInfo, PartOffset } from './types.js';
+import type { EffectPiece, FrameCtx, PartInfo, PartOffset } from './types.js';
 
 export interface RovingSpec {
   /** Roughly how long one part holds the fault, in milliseconds. Adjusted so a whole number of
@@ -45,13 +45,13 @@ export function roving(inner: EffectPiece, spec: RovingSpec = {}): EffectPiece {
    * the fault. Answering on the second makes the loop seam an ordinary deferred boundary rather
    * than the one handover nothing defers.
    */
-  const holderOf = (n: number, part: PartInfo) => {
+  const holderOf = (n: number, part: PartInfo, ctx: FrameCtx) => {
     const count = Math.max(1, part.count);
     let held = nominal(0, count);
     for (let lap = 0; lap < 2; lap++) {
       for (let e = 0; e < epochs; e++) {
         const phase = ((e * epoch) % innerDuration) / innerDuration;
-        if (isRest(inner.at(phase, { ...part, index: held }))) held = nominal(e, count);
+        if (isRest(inner.at(phase, { ...part, index: held }, ctx))) held = nominal(e, count);
         if (lap === 1 && e === n) return held;
       }
     }
@@ -66,14 +66,14 @@ export function roving(inner: EffectPiece, spec: RovingSpec = {}): EffectPiece {
 
   return {
     duration,
-    at(t, part) {
+    at(t, part, ctx) {
       if (t !== memoT || part.count !== memoCount) {
         memoT = t;
         memoCount = part.count;
-        memoHolder = holderOf(Math.min(epochs - 1, Math.floor((t * duration) / epoch)), part);
+        memoHolder = holderOf(Math.min(epochs - 1, Math.floor((t * duration) / epoch)), part, ctx);
       }
       if (part.index !== memoHolder) return NONE;
-      return inner.at(((t * duration) % innerDuration) / innerDuration, part);
+      return inner.at(((t * duration) % innerDuration) / innerDuration, part, ctx);
     },
   };
 }

@@ -37,17 +37,17 @@ past its public API. File it against labkit rather than working around it.
 
 ## State
 
-**0.5.0 is tagged and not published.** `v0.5.0` is on `origin` at `f38ef6a`, `package.json` says
-0.5.0, and CI is green there — but the Release run 404s on `PUT /klieg`. npm's trusted publisher for
-this repo was set up under the old package name and never moved: the last run that published through
-it was `blitsklieg` 0.3.1, and `klieg@0.4.0` went out by hand without a tag. **Point the trusted
-publisher at `klieg`** on npmjs.com (repo `orochi235/klieg`, workflow `release.yml`), then re-run the
-job from Actions with tag `v0.5.0` — `workflow_dispatch` takes the tag exactly so a retry does not
-move it. `v0.4.0` is tagged retroactively at `a3ddc44`, the last commit before that manual publish.
+**0.5.1 is published and is `latest`.** Releases are automatic: push a `v*` tag and `release.yml`
+publishes through npm trusted publishing, checking first that the tag matches
+`packages/core/package.json` and skipping a version already on the registry. The trusted publisher
+was still pointed at the old `blitsklieg` name until 2026-08-25, which is what made 0.5.0's first
+Release run 404 on `PUT /klieg`; that is fixed, and 0.5.0 and 0.5.1 both went out through it.
+`npm view` can report a stale version straight after a publish — read
+`https://registry.npmjs.org/klieg` to check what actually landed.
 
 **`main` carries the tube lab, the tube geometry rewrite, the colour gradients, the junction
-reconciliation and direct paths by default, all merged.** `npm run check` green at 789 tests across
-43 files; `npx playwright test` green at 24.
+reconciliation and direct paths by default, and element-anchored placement, all merged.**
+`npm run check` green at 806 tests across 43 files; `npx playwright test` green at 24.
 
 **[Direct tube paths](specs/2026-08-20-direct-tube-paths-design.md) ships, and is the default.**
 `TubeSpec.pathSource` (`field` | `exact` | `direct`) defaults to `direct`, which traces the glyph's

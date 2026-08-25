@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { along, fixed, fromPointer, orbit } from '../../src/effects/lamp.js';
-import type { FrameCtx } from '../../src/render/lighting.js';
+import { along, fixed, fromPointer, lamp, orbit } from '../../src/effects/lamp.js';
+import type { FrameCtx, PartInfo } from '../../src/effects/types.js';
 
 const NO_POINTER: FrameCtx = { pointer: null, pointerInWord: null, dt: 16 };
 const AT: FrameCtx = { pointer: { x: 0.5, y: -0.5 }, pointerInWord: { x: 1.2, y: 0.3 }, dt: 16 };
@@ -75,5 +75,62 @@ describe('along', () => {
 
   it('refuses a path with nothing to walk', () => {
     expect(() => along([])).toThrow(/at least two points/);
+  });
+});
+
+const partAt = (x: number, y = 0): PartInfo => ({
+  kind: 'body',
+  index: 0,
+  count: 1,
+  letter: { index: 0, count: 1 },
+  x,
+  y,
+  at: 0,
+  span: 1,
+});
+
+describe('lamp', () => {
+  it('is brightest at its centre and dark past its radius', () => {
+    const piece = lamp({ source: fixed(0, 0), radius: 1, strength: 2 });
+    expect(piece.at(0, partAt(0), NO_POINTER).light?.amount).toBeCloseTo(2);
+    expect(piece.at(0, partAt(1), NO_POINTER).light?.amount).toBeCloseTo(0);
+    expect(piece.at(0, partAt(5), NO_POINTER).light?.amount).toBeCloseTo(0);
+  });
+
+  it('falls off between the two', () => {
+    const piece = lamp({ source: fixed(0, 0), radius: 1, strength: 1 });
+    const near = piece.at(0, partAt(0.25), NO_POINTER).light?.amount as number;
+    const far = piece.at(0, partAt(0.75), NO_POINTER).light?.amount as number;
+    expect(near).toBeGreaterThan(far);
+    expect(far).toBeGreaterThan(0);
+  });
+
+  it('measures distance in both axes', () => {
+    const piece = lamp({ source: fixed(0, 0), radius: 1, strength: 1 });
+    expect(piece.at(0, partAt(0, 0.5), NO_POINTER).light?.amount).toBeCloseTo(
+      piece.at(0, partAt(0.5, 0), NO_POINTER).light?.amount as number,
+    );
+  });
+
+  // A page nobody has touched must not light a letter as though the cursor were parked on it.
+  it('contributes nothing when its source has nowhere to be', () => {
+    const piece = lamp({ source: fromPointer(), radius: 1, strength: 2 });
+    expect(piece.at(0, partAt(0), NO_POINTER).light?.amount ?? 0).toBe(0);
+  });
+
+  it('carries its own colour', () => {
+    const piece = lamp({ source: fixed(0, 0), color: 0xff8800 });
+    expect(piece.at(0, partAt(0), NO_POINTER).light?.color).toBe(0xff8800);
+  });
+
+  // A linear ramp passes centre/edge/near>far too; this pins the smoothstep shape specifically.
+  it('follows a smoothstep curve rather than a linear ramp', () => {
+    const piece = lamp({ source: fixed(0, 0), radius: 1, strength: 1 });
+    expect(piece.at(0, partAt(0.25), NO_POINTER).light?.amount).toBeCloseTo(0.84375);
+  });
+
+  it('contributes nothing when the radius is zero or negative', () => {
+    const piece = lamp({ source: fixed(0, 0), radius: 0, strength: 2 });
+    expect(piece.at(0, partAt(0), NO_POINTER).light?.amount ?? 0).toBe(0);
   });
 });

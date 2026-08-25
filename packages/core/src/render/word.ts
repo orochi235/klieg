@@ -734,17 +734,19 @@ export class Word {
   }
 
   /** The live letters' layout, in em, with the fit that maps em to world units. */
-  readout(): { chars: string[]; x: number[]; y: number[]; fit: Fit } {
+  readout(): { chars: string[]; x: number[]; y: number[]; line: number[]; fit: Fit } {
     const chars: string[] = [];
     const x: number[] = [];
     const y: number[] = [];
+    const line: number[] = [];
     for (let i = 0; i < this.charOf.length; i++) {
       if (this.leavingAt(i)) continue;
       chars.push(this.charOf[i] as string);
       x.push(this.baseX[i] as number);
       y.push(this.baseY[i] as number);
+      line.push(this.lineOf[i] as number);
     }
-    return { chars, x, y, fit: { ...this.fit } };
+    return { chars, x, y, line, fit: { ...this.fit } };
   }
 
   /**

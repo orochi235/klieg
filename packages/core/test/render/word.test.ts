@@ -1717,7 +1717,15 @@ describe('readout', () => {
     expect(out.chars).toEqual(['A', 'B']);
     expect(out.x).toHaveLength(2);
     expect(out.y).toHaveLength(2);
+    expect(out.line).toEqual([0, 0]);
     expect(out.fit.scale).toBeGreaterThan(0);
+  });
+
+  it('reports which line each letter is on, so a caller can break the text between them', () => {
+    const out = new Word('AB\nCD', stubFont(), 'gold', ROOMY).readout();
+
+    expect(out.chars).toEqual(['A', 'B', 'C', 'D']);
+    expect(out.line).toEqual([0, 0, 1, 1]);
   });
 
   it('drops a letter a regroup retired', () => {

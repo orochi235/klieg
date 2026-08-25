@@ -147,3 +147,16 @@ describe('hue', () => {
     expect(typeof EFFECTS.hue).toBe('function');
   });
 });
+
+describe('the public surface', () => {
+  it('names every registry piece in EFFECT_NAMES', async () => {
+    const { EFFECT_NAMES } = await import('../../src/index.js');
+    expect([...EFFECT_NAMES].sort()).toEqual(['flicker', 'hue']);
+  });
+
+  it('exports roving as a factory, since no name can carry an inner piece', async () => {
+    const api = await import('../../src/index.js');
+    expect(typeof api.roving).toBe('function');
+    expect(typeof api.roving(api.EFFECTS.flicker()).at).toBe('function');
+  });
+});

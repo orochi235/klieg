@@ -40,8 +40,8 @@ job from Actions with tag `v0.5.0` — `workflow_dispatch` takes the tag exactly
 move it. `v0.4.0` is tagged retroactively at `a3ddc44`, the last commit before that manual publish.
 
 **`main` carries the tube lab, the tube geometry rewrite, the colour gradients, the junction
-reconciliation and direct paths by default, all merged.** `npm run check` green at 736 tests on
-`main` (737 on `vertex-provenance`); `npx playwright test` green at 24.
+reconciliation and direct paths by default, all merged.** `npm run check` green at 789 tests across
+43 files; `npx playwright test` green at 24.
 
 **[Direct tube paths](specs/2026-08-20-direct-tube-paths-design.md) ships, and is the default.**
 `TubeSpec.pathSource` (`field` | `exact` | `direct`) defaults to `direct`, which traces the glyph's

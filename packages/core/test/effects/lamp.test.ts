@@ -37,6 +37,14 @@ describe('orbit', () => {
     expect(source(1, NO_POINTER)?.x).toBeCloseTo(2);
     expect(source(0.25, NO_POINTER)?.y).toBeCloseTo(2);
   });
+
+  it('orbits around a non-zero, non-symmetric center', () => {
+    const source = orbit({ radius: 1, x: 5, y: 7 });
+    expect(source(0, NO_POINTER)).toEqual({ x: 6, y: 7 });
+    const quarter = source(0.25, NO_POINTER);
+    expect(quarter?.x).toBeCloseTo(5);
+    expect(quarter?.y).toBeCloseTo(8);
+  });
 });
 
 describe('along', () => {
@@ -48,6 +56,21 @@ describe('along', () => {
     expect(source(0, NO_POINTER)).toEqual({ x: 0, y: 0 });
     expect(source(0.5, NO_POINTER)?.x).toBeCloseTo(2);
     expect(source(1, NO_POINTER)?.x).toBeCloseTo(4);
+  });
+
+  it('picks the correct segment across a multi-point path', () => {
+    const source = along([
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 10 },
+    ]);
+    expect(source(0.25, NO_POINTER)).toEqual({ x: 5, y: 0 });
+    const threeQuarters = source(0.75, NO_POINTER);
+    expect(threeQuarters?.x).toBeCloseTo(10);
+    expect(threeQuarters?.y).toBeCloseTo(5);
+    const end = source(1, NO_POINTER);
+    expect(end?.x).toBeCloseTo(10);
+    expect(end?.y).toBeCloseTo(10);
   });
 
   it('refuses a path with nothing to walk', () => {

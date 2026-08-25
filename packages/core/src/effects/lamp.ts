@@ -1,3 +1,4 @@
+import { clamp01 } from '../easing.js';
 import type { FrameCtx } from '../render/lighting.js';
 
 /** Where a lamp is, in the word's own layout space. */
@@ -17,10 +18,7 @@ export function fixed(x: number, y: number): LightSource {
   return () => ({ x, y });
 }
 
-/**
- * The cursor, already projected into the word. The mapping is the interesting part — the cursor is
- * one source among several rather than the concept.
- */
+/** The cursor, already projected into the word. */
 export function fromPointer(map?: (p: { x: number; y: number }) => LightPose): LightSource {
   return (_t, ctx) => {
     const p = ctx.pointerInWord;
@@ -45,13 +43,14 @@ export function orbit(spec: OrbitSpec = {}): LightSource {
 /** Walks a polyline once per pass, by segment count rather than by arc length. */
 export function along(points: readonly { x: number; y: number }[]): LightSource {
   if (points.length < 2) throw new Error('klieg: along() needs at least two points');
-  const last = points.length - 1;
+  const pts = points.slice();
+  const last = pts.length - 1;
   return (t) => {
-    const u = Math.min(Math.max(t, 0), 1) * last;
+    const u = clamp01(t) * last;
     const i = Math.min(Math.floor(u), last - 1);
     const f = u - i;
-    const a = points[i] as { x: number; y: number };
-    const b = points[i + 1] as { x: number; y: number };
+    const a = pts[i] as { x: number; y: number };
+    const b = pts[i + 1] as { x: number; y: number };
     return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
   };
 }

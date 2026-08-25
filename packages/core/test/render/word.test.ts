@@ -1471,8 +1471,8 @@ describe('effects', () => {
   const STILL = new Timeline({ enter: NONE, active: NONE, exit: NONE, hold: 0, blendMs: 0 });
   /** A fixed gain on every part it is handed, so these assert routing rather than a waveform. */
   const half: EffectPiece = { duration: 1000, at: () => ({ gain: 0.5 }) };
-  /** One part: `amount` at 1 or below is a fraction of the pool, so a literal count must exceed it. */
-  const FIRST = { by: 'index', amount: 1.2 } as const;
+  /** The pool's first part, in its own numbering. */
+  const FIRST = { by: 'index', count: 1 } as const;
 
   function tubingWith(effects: LookSpec['effects']): Word {
     return new Word('AA', stubFont(), { ...specOf('tubing'), effects }, ROOMY);

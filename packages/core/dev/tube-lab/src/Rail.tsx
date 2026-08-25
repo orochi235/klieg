@@ -396,7 +396,7 @@ export function Rail(props: RailProps) {
           min={0}
           max={100}
           step={1}
-          value={Math.round(spec.select.amount * 100)}
+          value={Math.round((spec.select.amount ?? 1) * 100)}
           onCommit={(next) => patch({ select: { ...spec.select, amount: next / 100 } })}
         />
       </section>

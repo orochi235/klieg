@@ -22,6 +22,24 @@ describe('selectIndices', () => {
     expect(selectIndices(pool, { by: 'index', amount: 99 }, 0).size).toBe(4);
   });
 
+  it('takes a literal count, where the same number as an amount would take the whole pool', () => {
+    expect(selectIndices(pool, { by: 'index', count: 1 }, 0)).toEqual(new Set([0]));
+    expect(selectIndices(pool, { by: 'index', amount: 1 }, 0).size).toBe(4);
+  });
+
+  it('lets count win over amount', () => {
+    expect(selectIndices(pool, { by: 'index', amount: 1, count: 2 }, 0)).toEqual(new Set([0, 2]));
+  });
+
+  it('clamps a count to the pool size', () => {
+    expect(selectIndices(pool, { by: 'index', count: 99 }, 0).size).toBe(4);
+    expect(selectIndices(pool, { by: 'index', count: -3 }, 0).size).toBe(0);
+  });
+
+  it('takes the whole pool when neither count nor amount is given', () => {
+    expect(selectIndices(pool, { by: 'index' }, 0).size).toBe(4);
+  });
+
   it('orders by length, longest first', () => {
     expect(selectIndices(pool, { by: 'length', amount: 2 }, 0)).toEqual(new Set([5, 0]));
   });

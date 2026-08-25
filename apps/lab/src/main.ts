@@ -238,7 +238,9 @@ function seedSliders(): void {
     el<HTMLInputElement>('level').value = String(Math.round(decoration.level * 1000));
     el<HTMLInputElement>('runs').value = String(decoration.runs);
     el<HTMLInputElement>('minRun').value = String(Math.round(decoration.minRun * 1000));
-    el<HTMLInputElement>('litAmount').value = String(Math.round(decoration.select.amount * 100));
+    el<HTMLInputElement>('litAmount').value = String(
+      Math.round((decoration.select.amount ?? 1) * 100),
+    );
     el<HTMLInputElement>('amplitude').value = String(
       Math.round((decoration.amplitude ?? 0) * 1000),
     );
@@ -259,12 +261,9 @@ function seedSliders(): void {
   }
 }
 
-/**
- * One bad tube — the sign's first run, so a pinned shot always lands on the same glass. `amount`
- * at 1 or below is a fraction of the pool, so a literal count of one has to exceed it.
- */
+/** One bad tube — the sign's first run, so a pinned shot always lands on the same glass. */
 const FLICKER: EffectSpec[] = [
-  { piece: 'flicker', target: { kind: 'run', by: 'index', amount: 1.2 } },
+  { piece: 'flicker', target: { kind: 'run', by: 'index', count: 1 } },
 ];
 
 /**

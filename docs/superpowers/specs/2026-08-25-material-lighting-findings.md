@@ -74,10 +74,22 @@ between.
 for E in 0 1 2.2 6 14; do node spikes/lamp-blend.mjs --blends envown --looks gem --env $E --out spikes/lamp-env; done
 ```
 
-**Worth trying, and currently impossible:** `specularIntensity` and `specularColor`. In three's
-shader, `material.specularColor = pow2((ior-1)/(ior+1)) * specularColorFactor * specularIntensity`,
-so lowering `specularIntensity` should let the transmitted red survive as brightness rises. They are
-absent from `LookKey` — see item 6.
+**Two specular lobes stack on it, and both must come down.** `gem` inherits `clearcoat: 1` from
+`DEFAULTS`, and clearcoat is a separate lobe that `specularIntensity` does not touch. Tested at
+`env=6`:
+
+```
+node spikes/lamp-blend.mjs --blends envown --looks gem --env 6 --over clearcoat:0
+node spikes/lamp-blend.mjs --blends envown --looks gem --env 6 --over clearcoat:0,specularIntensity:0
+```
+
+`clearcoat:0` alone still mirrors gray. So does `specularIntensity:0` alone. **Both together bring
+the red back** — and it is red *and dark*, because transmitted light has nothing behind the letters
+to pick up. Saturation is recoverable through the material; brightness is not. That half is a
+backdrop problem: `transmission` samples the scene behind the glass, and klieg renders on a
+transparent overlay over an empty one.
+
+`--over` takes any `LookKey`, as `key:value` pairs, with `#` for hex — `--over clearcoat:0,color:#ff0000`.
 
 ## 5. The extrusion walls read as cement because the studio is two-toned
 
@@ -100,13 +112,13 @@ the caps and right-facing bevels stay golden. Raising env brightens the cement w
 `bottom [0.01, 0.01, 0.02]` — blue-dominant and nearly uniform, which is what the walls mostly see).
 This is environment authoring; no lamp channel can reach it.
 
-## 6. Three material properties klieg cannot author
+## 6. Specular is authorable now; `reflectivity` stays out
 
-`specularIntensity`, `specularColor` and `reflectivity` are all absent from `LookKey`.
+~~`specularIntensity` and `specularColor` are absent from `LookKey`~~ — **added**. `reflectivity`
+was deliberately left out.
 
-Adding the first two is additive and moves no baseline — three's defaults are `1` and `0xffffff`, so
-every existing look keeps rendering exactly as it does. `specularColor` also belongs in `COLOR_KEYS`,
-and `specularIntensity` wants a `[0, 1]` clamp beside the others.
+The addition moved no baseline: three's defaults are `1` and `0xffffff`, and `gold`, `chrome`, `gem`
+and `velvet` all render to the same md5 as before the change.
 
 **They only bite on non-metals.** The shader ends with
 `specularColorBlended = mix(specularColor, diffuseColor, metalnessFactor)`, so at `metalness: 1` the

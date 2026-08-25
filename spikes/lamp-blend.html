@@ -40,7 +40,20 @@
    */
   // Read from the look rather than off the material: `emissiveIntensity` is written before
   // `applyLook` sets `color`, so a snapshot taken in the setter captures the white default.
-  const params = specOf(look);
+  // Arbitrary look overrides: `over=clearcoat:0,specularIntensity:0.2`. Values parse as numbers,
+  // or as hex when prefixed with `#`.
+  const over = q.get('over');
+  const overrides = {};
+  if (over) {
+    for (const pair of over.split(',')) {
+      const [k, v] = pair.split(':');
+      if (k && v !== undefined) {
+        overrides[k] = v.startsWith('#') ? Number.parseInt(v.slice(1), 16) : Number(v);
+      }
+    }
+  }
+  const lookArg = over ? { ...specOf(look), ...overrides } : look;
+  const params = specOf(lookArg);
   const BASE_COLOR = new THREE.Color(params.color ?? 0xffffff);
   // `tintTargetOf`'s rule, inlined: the property that carries this look's hue is not always
   // `color` — gem is clear stone whose red lives in `attenuationColor`.
@@ -157,7 +170,7 @@
   });
 
   void klieg.fire(q.get('text') ?? 'KLIEG', {
-    look,
+    look: lookArg,
     lighting: 'static',
     enter: 'none',
     hold: 600_000,

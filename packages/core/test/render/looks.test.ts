@@ -39,6 +39,8 @@ const KEY_SET: Record<keyof LookParams, true> = {
   dispersion: true,
   emissive: true,
   emissiveIntensity: true,
+  specularIntensity: true,
+  specularColor: true,
 };
 const KEYS = Object.keys(KEY_SET) as (keyof LookParams)[];
 const NAMES: LookName[] = [

@@ -90,6 +90,7 @@ for (const look of LOOKS) {
       strength: STRENGTH,
       lamp: LAMP,
       env: arg('env', '2.2'),
+      ...(arg('over', null) ? { over: arg('over', null) } : {}),
     }).toString();
     await page.goto(`${base}/?${q}`);
     await page.waitForFunction(() => window.__shot === true, null, { timeout: 60_000 });
@@ -101,7 +102,7 @@ for (const look of LOOKS) {
     });
     void scene;
     const png = await page.screenshot({ clip: { x: 0, y: 0, width: 1000, height: 200 } });
-    writeFileSync(resolve(OUT, `${look}-${blend}${blend.startsWith('env') ? `-${arg('env', '2.2')}` : ''}.png`), png);
+    writeFileSync(resolve(OUT, `${look}-${blend}${`${blend.startsWith('env') ? `-${arg('env', '2.2')}` : ''}${arg('over', null) ? `-${arg('over', null).replace(/[:,.]/g, '_')}` : ''}`}.png`), png);
     rows.push({ look, blend, md5: md5(png).slice(0, 8) });
     console.log(`${n}/${total} ${look}-${blend}`);
   }

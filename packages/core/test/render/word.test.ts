@@ -1454,6 +1454,20 @@ describe('part pool', () => {
     expect(parts[longest]?.span).toBeGreaterThan((parts[shortest]?.span as number) * 1.5);
   });
 
+  it('is a construction-time snapshot a regroup re-lays the letters around', () => {
+    const word = new Word('ABCD', stubFont(), 'gold', ROOMY);
+    const before = word
+      .partsOf('body')
+      .map((p) => [p.index, p.count, p.letter.count, p.x] as const);
+    const { delta } = word.regroup((l) => l.index < 2, 'line');
+
+    // The survivors really did move, so the pool holding still is the snapshot and not a no-op.
+    expect(delta[0]?.[0]).not.toBe(0);
+    expect(
+      word.partsOf('body').map((p) => [p.index, p.count, p.letter.count, p.x] as const),
+    ).toEqual(before);
+  });
+
   it('carries its letter grid position, so a radial stagger has something to read', () => {
     const word = new Word('NA\nEB\nOC', stubFont(), 'gold', ROOMY);
     // Middle row, left column: off centre on the grid, but near the middle in reading order.
@@ -1562,6 +1576,22 @@ describe('effects', () => {
     word.apply(STILL, 0);
 
     expect(runColorOf(word, 0)).toBe(before);
+  });
+
+  it('stops writing a part whose letter a regroup dropped', () => {
+    const word = new Word(
+      'AB',
+      stubFont(),
+      { ...specOf('neon'), effects: [{ piece: half, target: { kind: 'body', ...FIRST } }] },
+      ROOMY,
+    );
+
+    word.apply(STILL, 0);
+    const driven = materialOf(word).emissiveIntensity;
+    word.regroup((letter) => letter.index === 1, 'line');
+    word.apply(STILL, 0);
+
+    expect(driven).toBeCloseTo(materialOf(word).emissiveIntensity * 0.5, 6);
   });
 
   it('offsets a targeted part on the mesh, so it composes with the pose on the cell', () => {

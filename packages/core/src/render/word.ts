@@ -153,6 +153,8 @@ export class Word {
   private readonly partBaseColor: number[] = [];
   /** Per part, whether `writePart` may drive it through the run-colour buffer. */
   private readonly partReadsRunColor: boolean[] = [];
+  /** Per part, the letter slot it hangs off, so a retired letter's parts can be left alone. */
+  private readonly partSlot: number[] = [];
   /** Per effect: the resolved piece and the part indices it drives. Selection is not per frame. */
   private readonly effects: {
     piece: EffectPiece;
@@ -272,7 +274,12 @@ export class Word {
 
   /**
    * The word-wide pool of addressable parts, built once every letter exists. Word-wide rather than
-   * per letter: `{ amount: 1 }` picks one bad tube in the sign, not one in every letter.
+   * per letter: `{ count: 1 }` picks one bad tube in the sign, not one in every letter.
+   *
+   * A construction-time snapshot. `regroup` re-lays the letters and leaves the pool alone, so a
+   * part keeps the index its effect resolved against and the layout it was built with — a letter
+   * a regroup drops takes its parts out of play rather than renumbering the pool under an effect
+   * already running against it.
    */
   private buildParts(): void {
     const bodies: number[] = [];
@@ -287,6 +294,7 @@ export class Word {
       this.partMeshes.push(this.bodyMeshes[i] as THREE.Mesh);
       this.partBaseColor.push(0xffffff);
       this.partReadsRunColor.push(false);
+      this.partSlot.push(i);
     }
 
     const runs: {
@@ -332,6 +340,7 @@ export class Word {
       this.partMeshes.push(run.mesh);
       this.partBaseColor.push(run.color);
       this.partReadsRunColor.push(run.tinted);
+      this.partSlot.push(run.slot);
       walked += run.length;
     }
   }
@@ -397,7 +406,11 @@ export class Word {
     }
   }
 
-  /** Layers every effect that reached a part, then writes each targeted part once. */
+  /**
+   * Layers every effect that reached a part, then writes each targeted part once. A part whose
+   * letter a regroup dropped is skipped: it is playing its exit against a pool position that no
+   * longer describes it, and the mesh it would write is on its way off screen.
+   */
   private applyEffects(elapsed: number): void {
     for (const layers of this.effectLayers.values()) layers.length = 0;
 
@@ -405,13 +418,21 @@ export class Word {
       const duration = effect.piece.duration;
       const pass = duration > 0 ? (elapsed % duration) / duration : 0;
       for (const index of effect.parts) {
+        if (this.retiredPart(index)) continue;
         const part = this.parts[index] as PartInfo;
         const t = effect.stagger === undefined ? pass : stagger(pass, part, effect.stagger);
         (this.effectLayers.get(index) as PartOffset[]).push(effect.piece.at(t, part));
       }
     }
 
-    for (const [index, layers] of this.effectLayers) this.writePart(index, mergeOffsets(layers));
+    for (const [index, layers] of this.effectLayers) {
+      if (this.retiredPart(index)) continue;
+      this.writePart(index, mergeOffsets(layers));
+    }
+  }
+
+  private retiredPart(index: number): boolean {
+    return this.leavingAt(this.partSlot[index] as number);
   }
 
   /**
@@ -834,6 +855,7 @@ export class Word {
     this.partMeshes.length = 0;
     this.partBaseColor.length = 0;
     this.partReadsRunColor.length = 0;
+    this.partSlot.length = 0;
     this.effects.length = 0;
     this.effectLayers.clear();
     this.bodyMeshes.length = 0;

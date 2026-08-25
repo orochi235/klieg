@@ -301,7 +301,7 @@ export class Word {
     // behind it — the sign vanishes as the tube thins rather than being occluded by anything visible.
     material.depthWrite = this.bodyBase.opacity >= 1;
     seedFlake(material, i);
-    setEmissiveIntensity(material, this.bodyBase.emissiveIntensity);
+    material.emissiveIntensity = this.bodyBase.emissiveIntensity;
     this.bodyMaterials.push(material);
 
     const cell = new THREE.Group();

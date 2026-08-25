@@ -1347,12 +1347,16 @@ describe('frame-owned material properties', () => {
     expect(materialOf(word).emissiveIntensity).toBe(3.2);
   });
 
-  it('holds it across a frame', () => {
+  // Poisoned first: asserting the value after a frame without disturbing it passes whether or
+  // not the frame writes anything, since construction already put it there.
+  it('rewrites it every frame, not only at construction', () => {
     const word = new Word('A', stubFont(), 'neon', ROOMY);
+    const material = materialOf(word);
+    material.emissiveIntensity = 999;
 
     runOneFrame(word);
 
-    expect(materialOf(word).emissiveIntensity).toBe(3.2);
+    expect(material.emissiveIntensity).toBe(3.2);
   });
 
   it('leaves a look that declares none at the default', () => {
@@ -1369,11 +1373,13 @@ describe('frame-owned material properties', () => {
     expect(litTubeMaterial(word).emissiveIntensity).toBe(3.4);
   });
 
-  it('holds the lit tube intensity across a frame', () => {
+  it('rewrites the lit tube intensity every frame', () => {
     const word = new Word('A', stubFont(), 'tubing', ROOMY);
+    const material = litTubeMaterial(word);
+    material.emissiveIntensity = 999;
 
     runOneFrame(word);
 
-    expect(litTubeMaterial(word).emissiveIntensity).toBe(3.4);
+    expect(material.emissiveIntensity).toBe(3.4);
   });
 });

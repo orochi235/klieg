@@ -15,6 +15,7 @@ import {
   type LookSpec,
   POLICY_NAMES,
   roving,
+  type SelectableMode,
   type SurfaceKind,
   specOf,
 } from 'klieg';
@@ -53,6 +54,7 @@ const policy = choice('policy', POLICY_NAMES);
 const textInput = el<HTMLTextAreaElement>('text');
 const bloomInput = el<HTMLSelectElement>('bloom');
 const wrapInput = el<HTMLInputElement>('wrap');
+const selectableInput = el<HTMLSelectElement>('selectable');
 const tintInput = el<HTMLInputElement>('tint');
 const tintOnInput = el<HTMLInputElement>('tintOn');
 const holdClickInput = el<HTMLInputElement>('holdClick');
@@ -125,6 +127,7 @@ const CONTROL_IDS = [
   'tintOn',
   'bloom',
   'wrap',
+  'selectable',
   'holdClick',
   'modal',
 ];
@@ -352,6 +355,7 @@ function fire(text: string): void {
     // unchecked box could only mean "unset" — leaving no way to switch neon's own bloom off.
     bloom: bloomInput.value === 'auto' ? undefined : bloomInput.value === 'on',
     wrap: wrapInput.checked,
+    selectable: selectableInput.value as SelectableMode,
     modal: modalInput.checked,
     placement: { kind: 'fullscreen' },
   }).then(

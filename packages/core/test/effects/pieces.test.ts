@@ -132,7 +132,9 @@ describe('hue', () => {
     );
     // The offset is in turns, so a part three quarters along at spread 0.5 reads the same hue the
     // whole sign reads 0.375 turns later.
-    expect(piece.at(0, { ...part, at: 0.75 }).color).toBe(piece.at(0.375, { ...part, at: 0 }).color);
+    expect(piece.at(0, { ...part, at: 0.75 }).color).toBe(
+      piece.at(0.375, { ...part, at: 0 }).color,
+    );
   });
 
   it('is deterministic in t, across separately built pieces', () => {

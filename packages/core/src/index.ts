@@ -29,7 +29,7 @@ export {
   type SpringParams,
   spring,
 } from './easing.js';
-export { EFFECTS } from './effects/pieces.js';
+export { EFFECTS, type FlickerSpec } from './effects/pieces.js';
 export type {
   EffectName,
   EffectPiece,

@@ -65,13 +65,23 @@ no motion** — otherwise letter positions move per frame and would have to be m
 `transform` is the option someone reaches for on an otherwise-still sign, so the constraint needs
 naming precisely rather than implying it.
 
+## Decided
+
+- **Both tiers are wanted**, and they ship together.
+- **The tier-2 layer is opt-in, behind a `selectable` flag.** The shipped click-through default and
+  the `visual.spec.ts` guarantee that guards it are untouched; a caller asking for selection accepts
+  that a click on a letter no longer reaches the page beneath. Rejected: on-by-default everywhere,
+  which rewrites that guarantee for everyone, and on-by-default for `element` placement only, which
+  makes behaviour depend on placement and is harder to explain than a flag.
+- **Tier 1 is on by default.** It has no pointer-events tension — a visually-hidden node is not a hit
+  target — and the hole it fills is an accessibility and indexing one that nobody should have to opt
+  into.
+
 ## Not decided
 
-- **Whether the text layer is opt-in.** Gating it behind a `FireOptions` / `KliegOptions` flag keeps
-  the shipped click-through default and the test that guards it, at the cost of nobody getting it by
-  accident. Tier 1 has no such tension and could be on by default.
-- **What happens when the constraint is violated** — a `transform` or a live motion piece with the
-  layer on. Drop the layer, keep it misaligned, or refuse the combination.
+- **What happens when the constraint is violated** — a `transform` or a live motion piece with
+  `selectable` on. Drop the layer, keep it misaligned, or refuse the combination.
 - **Where the layer lives in the DOM.** A sibling of the canvas needs the same placement handling
   (`claimAnchor`, the fullscreen `z-index`); a child of the canvas is not possible.
 - Whether `regroup` and stages rebuild the layer or drop it.
+- Whether the `FontFace` family name is generated or caller-supplied.

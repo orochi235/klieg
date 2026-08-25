@@ -5,7 +5,19 @@ what is worth doing next.
 
 ## In flight
 
-Nothing.
+**`effects-pipeline` is merged and green but not landed.** The branch in
+`.claude/worktrees/effects-pipeline` now contains `main` (element-anchored placement and 0.5.1
+included); `npm run check` is 872 across 46 files and `npx playwright test` is 24. The last step is a
+fast-forward that has to run from the main checkout, because a worktree-isolated session cannot reach
+it:
+
+```
+git merge --ff-only effects-pipeline
+git worktree remove .claude/worktrees/effects-pipeline
+git branch -d effects-pipeline
+```
+
+The lab dev server on port 5180 may still be running from that session; kill it if so.
 
 **The effects pipeline landed.** All eight tasks of
 [plans/2026-08-24-effects-pipeline.md](plans/2026-08-24-effects-pipeline.md), each with an implementer
@@ -38,6 +50,17 @@ is what `piping` relies on), while `count` is a literal number of members and wi
 
 The worktree `.claude/worktrees/vertex-provenance` is named after a branch that no longer exists and
 holds `sequin-rework` — reuse or remove it, but do not trust its name.
+
+**Next, designed and unplanned: two more effect pieces** —
+[specs/2026-08-25-roving-and-hue-design.md](specs/2026-08-25-roving-and-hue-design.md). `roving` moves
+a fault from segment to segment; `hue` cycles the sign's colour. The design decisions are settled and
+the open questions are named at its end.
+
+`hue` needs **no new pipeline capability** — `PartOffset.color` and `writePart` already carry it, and it
+composes with `flicker` for free because gain and colour are separate channels of one merged offset.
+`roving` does need something new, and the reason is worth knowing: layering composes channels on a part
+and cannot gate *which* part, so a moving fault has to be a piece that wraps a piece rather than a
+second entry in the effects list.
 
 **Also unplanned: the stage and repair registries, then the lab** —
 [specs/2026-08-23-pipeline-lab-design.md](specs/2026-08-23-pipeline-lab-design.md). The registries need

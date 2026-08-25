@@ -160,6 +160,12 @@ Roughly in order of value; the items are independent of each other.
   failure in this file is not evidence of a regression — re-run before believing it**, and note that
   a passing re-run deletes the failure artifacts, so capture the diff before re-running if you want
   to diagnose it rather than dismiss it.
+
+  **The one captured artifact says the sample, not the render, is what fails.** On a `wrap breaks a
+  long line into rows` failure the error context showed `litBands` returning 0 while the page
+  snapshot showed the scene drawn normally. So the frame the assertion read was empty even though a
+  correct frame existed — the harness sampled before or between draws rather than the renderer
+  producing nothing. That points the fix at how these tests choose their frame, not at the effect.
 - **`K` and `k` have non-parallel arm sides, and the bevel is what makes it visible.** In Archivo
   Black's own outline the arm's two long edges are 1.31° apart on `K` and 2.56° on `k`, and both
   terminals are cut flat-horizontal — 39.8° off square to the arm. That is the typeface, not klieg:

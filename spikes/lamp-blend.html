@@ -1,0 +1,134 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>lamp blend modes</title>
+<style>
+  body { margin: 0; background: #08090b; }
+  #strip { position: relative; width: 100%; height: 200px; }
+</style>
+<script type="importmap">
+  {
+    "imports": {
+      "three": "/three/three.module.js",
+      "klieg": "/klieg/index.js",
+      "opentype.js": "/opentype/opentype.mjs"
+    }
+  }
+</script>
+<div id="strip"></div>
+<script type="module">
+  import * as THREE from 'three';
+  import { createKlieg, specOf } from 'klieg';
+
+  const q = new URLSearchParams(location.search);
+  const num = (name, fallback) => {
+    const v = q.get(name);
+    return v === null ? fallback : Number(v);
+  };
+
+  const look = q.get('look') ?? 'gold';
+  const blend = q.get('blend') ?? 'none';
+  const lx = num('lx', 0);
+  const radius = num('radius', 0.5);
+  const strength = num('strength', 1);
+  const lampColor = new THREE.Color(Number.parseInt(q.get('lamp') ?? 'ffffff', 16));
+
+  /**
+   * klieg has no per-part light channel yet, so the piece smuggles its amount out through the one
+   * channel that does reach a body's material — `gain` on `emissiveIntensity` — and this accessor
+   * intercepts the write, recovers the amount and applies the blend under test instead. A spike's
+   * shortcut: the point is to compare blends, not to propose this plumbing.
+   */
+  // Read from the look rather than off the material: `emissiveIntensity` is written before
+  // `applyLook` sets `color`, so a snapshot taken in the setter captures the white default.
+  const params = specOf(look);
+  const BASE_COLOR = new THREE.Color(params.color ?? 0xffffff);
+  // `tintTargetOf`'s rule, inlined: the property that carries this look's hue is not always
+  // `color` — gem is clear stone whose red lives in `attenuationColor`.
+  const hueKey =
+    (params.transmission ?? 0) > 0
+      ? 'attenuationColor'
+      : (params.emissive ?? 0) !== 0x000000
+        ? 'emissive'
+        : 'color';
+  const HUE_COLOR = new THREE.Color(params[hueKey] ?? 0xffffff);
+  const base = new WeakMap();
+  const proto = THREE.MeshPhysicalMaterial.prototype;
+  const KEY = Symbol('ei');
+  Object.defineProperty(proto, 'emissiveIntensity', {
+    configurable: true,
+    get() {
+      return this[KEY] ?? 1;
+    },
+    set(v) {
+      this[KEY] = 1;
+      if (!base.has(this)) {
+        base.set(this, {
+          color: BASE_COLOR.clone(),
+          emissive: new THREE.Color(params.emissive ?? 0x000000),
+          env: this.envMapIntensity ?? 1,
+        });
+      }
+      const b = base.get(this);
+      // The piece writes 1 + amount, so anything above 1 is the lamp's contribution.
+      const k = Math.max(0, v - 1) * strength;
+
+      this.color.copy(b.color);
+      this.emissive.copy(b.emissive);
+      this.envMapIntensity = b.env;
+
+      if (blend === 'add') {
+        this.emissive.copy(lampColor).multiplyScalar(k);
+      } else if (blend === 'albedo') {
+        // Light x albedo: a white lamp on gold reflects gold, which is what a real one does.
+        this.emissive.copy(lampColor).multiply(b.color).multiplyScalar(k);
+      } else if (blend === 'env') {
+        // More of the studio reaches this part — the material's own response, turned up.
+        this.envMapIntensity = b.env * (1 + k);
+      } else if (blend === 'albedoenv') {
+        this.emissive.copy(lampColor).multiply(b.color).multiplyScalar(k * 0.6);
+        this.envMapIntensity = b.env * (1 + k);
+      } else if (blend === 'hue') {
+        this.emissive.copy(lampColor).multiply(HUE_COLOR).multiplyScalar(k);
+      } else if (blend === 'screen') {
+        const t = lampColor.clone().multiplyScalar(Math.min(1, k));
+        this.color.setRGB(
+          1 - (1 - b.color.r) * (1 - t.r),
+          1 - (1 - b.color.g) * (1 - t.g),
+          1 - (1 - b.color.b) * (1 - t.b),
+        );
+      }
+    },
+  });
+
+  const fall = (d) => {
+    const u = Math.min(1, Math.max(0, d / radius));
+    return (1 - u) * (1 - u) * (1 + 2 * u);
+  };
+
+  const piece = {
+    duration: 1000,
+    at(_t, part) {
+      if (blend === 'none') return { gain: 1 };
+      return { gain: 1 + fall(Math.abs(part.x - lx)) };
+    },
+  };
+
+  window.__shot = false;
+  const klieg = createKlieg({
+    fontUrl: '/font.ttf',
+    placement: { kind: 'element', el: document.getElementById('strip') },
+    framing: { width: 0.9, height: 0.6 },
+  });
+
+  void klieg.fire(q.get('text') ?? 'KLIEG', {
+    look,
+    lighting: 'static',
+    enter: 'none',
+    hold: 600_000,
+    effects: [{ piece, target: { kind: 'body', by: 'index' } }],
+  });
+
+  setTimeout(() => {
+    window.__shot = true;
+  }, 2500);
+</script>

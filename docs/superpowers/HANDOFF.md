@@ -187,6 +187,16 @@ how the source changes the cut. The spec lists the rest.
 
 Roughly in order of value; the items are independent of each other.
 
+- **Selectable text, asked for and agreed: tiers 1 and 2 of
+  [the design notes](specs/2026-08-25-selectable-text-design.md).** klieg creates exactly one DOM
+  element — a `pointer-events:none` canvas — so its text is invisible to selection, copy-paste,
+  Ctrl+F, screen readers and crawlers. Tier 1 is a visually-hidden text node (small, independent,
+  worth doing on its own merits); tier 2 is an aligned transparent per-letter layer, the PDF.js
+  approach. The notes have the projection maths that already exists, the three things that bite —
+  the font is not registered as a CSS font, selection collides with the shipped click-through
+  guarantee, and extrusion offsets the scale — and the decisions still open. **This does not belong
+  on `effects-pipeline`**; start it on its own branch off `main`.
+
 - **A composition lab, so effect pieces get built by hand rather than through a plan.** Asked for
   directly. `roving` and `hue` were specified in prose, and the wrapper's epoch arithmetic came out
   wrong in a way that read as *more* correct than the fix — a prototype found it in one run and

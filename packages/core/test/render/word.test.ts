@@ -1349,7 +1349,7 @@ describe('frame-owned material properties', () => {
 
   // Poisoned first: asserting the value after a frame without disturbing it passes whether or
   // not the frame writes anything, since construction already put it there.
-  it('rewrites it every frame, not only at construction', () => {
+  it('rewrites the body emissiveIntensity every frame, not only at construction', () => {
     const word = new Word('A', stubFont(), 'neon', ROOMY);
     const material = materialOf(word);
     material.emissiveIntensity = 999;
@@ -1357,6 +1357,13 @@ describe('frame-owned material properties', () => {
     runOneFrame(word);
 
     expect(material.emissiveIntensity).toBe(3.2);
+  });
+
+  // REST.opacity is 1, so the bare base is the at-rest value rather than a guess at a pose.
+  it('seeds the base opacity at construction, before any pose exists', () => {
+    const word = new Word('A', stubFont(), { opacity: 0.4 }, ROOMY);
+
+    expect(materialOf(word).opacity).toBe(0.4);
   });
 
   it('leaves a look that declares none at the default', () => {
@@ -1373,7 +1380,7 @@ describe('frame-owned material properties', () => {
     expect(litTubeMaterial(word).emissiveIntensity).toBe(3.4);
   });
 
-  it('rewrites the lit tube intensity every frame', () => {
+  it('rewrites the lit tube emissiveIntensity every frame, not only at construction', () => {
     const word = new Word('A', stubFont(), 'tubing', ROOMY);
     const material = litTubeMaterial(word);
     material.emissiveIntensity = 999;

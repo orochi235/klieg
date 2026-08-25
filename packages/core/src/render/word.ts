@@ -58,7 +58,10 @@ function seedFlake(material: THREE.Material, i: number): void {
   if (flake) flake.uFlakeSeed.value = i * 17.13;
 }
 
-/** Writes a frame-owned emissive onto a material that has one. A debug override may not. */
+/**
+ * The decor and dark families write their emissive through here, at construction and per frame
+ * alike: those arrays are typed to the base class so a debug override can supply one without it.
+ */
 function setEmissiveIntensity(material: THREE.Material | null, value: number): void {
   if (material && 'emissiveIntensity' in material) {
     (material as THREE.MeshPhysicalMaterial).emissiveIntensity = value;
@@ -127,7 +130,10 @@ export class Word {
   private readonly gradientRamp: THREE.DataTexture | null;
   private readonly chunkGeo: THREE.BufferGeometry | null;
   private readonly pose = blankPose();
-  /** Frame-owned bases, one per material family. `Word` is the only writer of these properties. */
+  /**
+   * Frame-owned bases, one per material family. `Word` is the only writer of these properties,
+   * and seeds all of them at construction: a word before its first frame is a word at rest.
+   */
   private readonly bodyBase: FrameOwnedBase;
   private readonly decorBase: FrameOwnedBase;
   /** Base of a tube's unlit runs; irrelevant to every other decoration kind. */
@@ -301,6 +307,7 @@ export class Word {
     // behind it — the sign vanishes as the tube thins rather than being occluded by anything visible.
     material.depthWrite = this.bodyBase.opacity >= 1;
     seedFlake(material, i);
+    material.opacity = this.bodyBase.opacity;
     material.emissiveIntensity = this.bodyBase.emissiveIntensity;
     this.bodyMaterials.push(material);
 
@@ -339,6 +346,7 @@ export class Word {
       // would cull that invisible.
       decorMaterial.side = THREE.DoubleSide;
       seedFlake(decorMaterial, i);
+      decorMaterial.opacity = this.decorBase.opacity;
       setEmissiveIntensity(decorMaterial, this.decorBase.emissiveIntensity);
       this.decorMaterials.push(decorMaterial);
 
@@ -348,6 +356,7 @@ export class Word {
       darkMaterial.transparent = true;
       darkMaterial.side = THREE.DoubleSide;
       seedFlake(darkMaterial, i);
+      darkMaterial.opacity = this.darkBase.opacity;
       setEmissiveIntensity(darkMaterial, this.darkBase.emissiveIntensity);
       this.darkMaterials.push(darkMaterial);
 
@@ -373,6 +382,7 @@ export class Word {
       decorMaterial.transparent = true;
       if (decoration.kind === 'chunks') decorMaterial.side = chunkGeometrySide(decoration);
       seedFlake(decorMaterial, i);
+      decorMaterial.opacity = this.decorBase.opacity;
       setEmissiveIntensity(decorMaterial, this.decorBase.emissiveIntensity);
       this.decorMaterials.push(decorMaterial);
       this.darkMaterials.push(null);

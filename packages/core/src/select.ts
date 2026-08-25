@@ -14,7 +14,6 @@ export interface Selectable {
   length: number;
 }
 
-/** Same generator the chunk scatter uses, so seeding behaves consistently across decorations. */
 function rng(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -30,7 +29,7 @@ export function selectIndices(
   pool: readonly Selectable[],
   select: SelectSpec,
   seed: number,
-): Set<number> {
+): ReadonlySet<number> {
   if (select.by === 'index' && select.stride && select.stride > 1) {
     const stride = Math.round(select.stride);
     return new Set(pool.filter((e) => e.index % stride === 0).map((e) => e.index));

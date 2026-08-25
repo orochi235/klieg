@@ -5,7 +5,30 @@ what is worth doing next.
 
 ## In flight
 
-**Nothing is in flight.** Every branch is merged and every worktree is gone. `main` is pushed.
+**`selectable-text`, complete and unmerged.** 14 commits off `main`, nothing uncommitted, not
+pushed. `npm run check` is green at 977 unit tests and `npm run test:visual` at 33. It implements
+[the design](specs/2026-08-25-selectable-text-design.md) in full — one `FireOptions.selectable` of
+`'hidden' | 'layer' | 'none'`, defaulting to `'hidden'`. The next step is a PR; nothing is
+half-done.
+
+Three things the branch knows that the design doc does not:
+
+**The Playwright suite is the only evidence any of this works.** The unit harness stubs
+`Stage.mount`, so `stage.textLayer` is never set and no unit test has ever seen one of these DOM
+nodes exist. Every defect below was found by `npm run test:visual` and none by the 977 unit tests.
+Treat a green `npm run check` as meaning nothing here.
+
+**Three of the browser tests were rewritten because they were vacuous.** `document.body.innerText`
+contains the lab's own `#log`, which prints `fire "BIG"` — so the obvious `'hidden'` and `'none'`
+assertions pass with the feature deleted. The alignment test now reads the drawing buffer's alpha
+bounding box and compares span boxes to rendered pixels, because loose viewport fractions passed
+with the layer 80px off its glyphs. Span centres agree with ink centres within ~3px.
+
+**The visual suite is load-flaky, and this predates the branch.** `fireStill`'s 200ms sleep and
+`fire`'s 4000ms hold lose to the first fire's shader compilation when the machine is busy — the
+layer was measured appearing 1.7–5.9s after FIRE. Under load average 97 that failed 4–8 tests
+including the click-through guarantee, with the canvas never attaching. The new tests poll instead
+of sleeping. Converting the old ones is worth doing before CI trusts them.
 
 ## Two consumer defects, found from outside, both fixed
 
@@ -192,15 +215,36 @@ working — it needs a caller-supplied `TubeSpec.gradient`.
 
 Roughly in order of value; the items are independent of each other.
 
-- **Selectable text, asked for and agreed: tiers 1 and 2 of
-  [the design notes](specs/2026-08-25-selectable-text-design.md).** klieg creates exactly one DOM
-  element — a `pointer-events:none` canvas — so its text is invisible to selection, copy-paste,
-  Ctrl+F, screen readers and crawlers. Tier 1 is a visually-hidden text node (small, independent,
-  worth doing on its own merits); tier 2 is an aligned transparent per-letter layer, the PDF.js
-  approach. The design is settled — one `selectable: 'hidden' | 'layer' | 'none'` option, the layer
-  a sibling of the canvas owned by `Stage`, dropped back to `'hidden'` when `transform` or a moving
-  motion piece would misalign it. Read the spec for the projection maths and the silent traps.
-  Start it on its own branch off `main`.
+- ~~**Selectable text**~~ — built. See the `## In flight` section; it wants a PR, not a plan.
+
+- **Composable lighting, asked for directly and decided in conversation. Nothing is designed yet.**
+  Today `lighting` takes one of three names and every number behind them is a module constant no
+  caller can reach: `sweep`'s `periodMs: 3400`, and `pointer`'s `YAW_RANGE`, `PITCH_RANGE` and
+  `FOLLOW_MS` (`render/lighting.ts`).
+
+  Two decisions are made. **Lighting becomes composable pieces, the way motion already is** — a
+  piece is a function of `(t, pointer)` returning an offset that accumulates, with the built-in
+  names as presets, so `['sweep', lamp({ … })]` layers them the way an `active` slot layers motion.
+  And **both pointer modes ship**: the existing one, and a genuinely positional light.
+
+  The distinction that motivated the ask: `pointer` today is not a light anywhere. It maps the
+  cursor to `scene.environmentRotation` — x to yaw over ±90°, y to pitch over ±20° — which is one
+  scene-wide value, so hovering over the **K** does not light the K any differently. It turns the
+  same knob `sweep` turns, from position instead of time. A cursor that actually lights the letter
+  under it needs a real light with a position and falloff, which is the second mode, and which
+  will need per-look tuning: `gem` reads through transmission and `tubing` is emissive, so a lamp
+  tuned on `gold` may do nothing on either.
+
+  Two things to fold in rather than leave beside it:
+
+  **`PointerLight.aimAt` normalizes against `globalThis.innerWidth/innerHeight`** — the viewport,
+  never the canvas box. Under `placement: element` an anchored sign in a 400px box on a 1600px page
+  only ever sees a slice of the yaw range, and a cursor dead-centre on the type does not centre the
+  highlight. A plain bug, fixable on its own if the redesign stalls.
+
+  **`slotDrivesEnv` becomes redundant.** A motion piece can currently declare `envRotation: true`
+  to hijack the environment (`index.ts`, the `envDriven` branch); composable lighting gives that
+  intent a real home, and leaving both would be two ways to drive one thing.
 
 - **A composition lab, so effect pieces get built by hand rather than through a plan.** Asked for
   directly. `roving` and `hue` were specified in prose, and the wrapper's epoch arithmetic came out

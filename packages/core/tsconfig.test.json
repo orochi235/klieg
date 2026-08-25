@@ -2,5 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "noEmit": true },
   "include": ["test"],
-  "references": [{ "path": "./tsconfig.json" }, { "path": "./dev/tube-lab" }]
+  "references": [
+    { "path": "./tsconfig.json" },
+    { "path": "./dev/tube-lab" },
+    { "path": "./dev/corner-lab" }
+  ]
 }

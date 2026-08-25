@@ -3,6 +3,8 @@ import type { LoadedFont } from '@core/text/font.js';
 import { CanvasStackContext, defineInstrument, type ViewTransform } from '@weasel-js/labkit';
 import { useContext, useEffect, useRef, useState } from 'react';
 import type * as THREE from 'three';
+import { Legend } from './LegendPanel.js';
+import { INK } from './legend.js';
 import {
   buildScene,
   type CornerMark,
@@ -20,18 +22,6 @@ interface Config {
   corner: number;
   repair: string;
 }
-
-const INK = {
-  contour: '#7d7f86',
-  built: '#4d8fe0',
-  builtAfter: '#a855f7',
-  authored: '#2aa87a',
-  drawn: '#e08a20',
-  replaced: 'rgba(255, 107, 96, 0.28)',
-  floor: '#9a9ca3',
-  bad: '#d1453b',
-  frame: 'rgba(154, 156, 163, 0.9)',
-};
 
 function requestOf(config: Config) {
   return {
@@ -417,6 +407,7 @@ export const junction = defineInstrument<CornerScene, Config>({
           setState(buildScene(font, requestOf({ ...config, corner: ordinal })));
         }}
       />
+      <Legend />
     </>
   ),
 });

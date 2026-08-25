@@ -1,0 +1,14 @@
+# klieg 0.6.0 as published on npm, rendered by spikes/tint-matrix.mjs
+# tubing's two md5s match: the tint never reaches the GPU.
+80bf5389fb93db6ec776290c8708aedf  gold-22d3ee.png
+95144befd59193f3ac9634d4d432840c  gold-none.png
+d7221eeccde9462dedf90d3823b3039f  piping-22d3ee.png
+ff3cef2ac9c2722768b5a517bb3cad0b  piping-none.png
+3aa97f68b4c15a48f91e5ba055ff0427  sequin-22d3ee.png
+b75b5f3aa2c9dd550707071499be5be3  sequin-none.png
+891ef3ab0b11c598e58ae8a473a1ccca  tubing-22d3ee.png
+891ef3ab0b11c598e58ae8a473a1ccca  tubing-none.png
+#
+# Regenerate: npm i klieg@0.6.0 in a scratch dir, then
+#   node spikes/tint-matrix.mjs --klieg <scratch>/node_modules/klieg/dist/index.js
+# 0.6.0 is immutable on the registry, so these hashes are a fixed point.

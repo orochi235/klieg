@@ -1558,6 +1558,22 @@ describe('effects', () => {
     expect(crawlOf(word, 1)).toBe(0);
   });
 
+  // The tint used to be written to the decoration material's emissive, which tintByRunColor then
+  // set to white so the run attribute could drive the channel exactly. It never reached a frame.
+  it('tints a tube look by recolouring the runs, not the material', () => {
+    const plain = new Word('AA', stubFont(), 'tubing', ROOMY);
+    const tinted = new Word('AA', stubFont(), 'tubing', ROOMY, false, 0x22d3ee);
+
+    expect(runColorOf(plain, 0)).not.toBeCloseTo(runColorOf(tinted, 0), 6);
+  });
+
+  it('gives a tinted tube run exactly the colour asked for', () => {
+    const tinted = new Word('AA', stubFont(), 'tubing', ROOMY, false, 0x22d3ee);
+    const want = new THREE.Color(0x22d3ee);
+
+    expect(runColorOf(tinted, 0)).toBeCloseTo(want.r, 5);
+  });
+
   it('leaves every part alone when a look declares no effects', () => {
     const word = tubingWith(undefined);
     const before = [runColorOf(word, 0), runColorOf(word, 1)];

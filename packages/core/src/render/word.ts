@@ -37,6 +37,7 @@ import {
   type DecorationSpec,
   poolFor,
   type TubeBlueprint,
+  type TubeSpec,
 } from './decoration.js';
 import type { FlakeUniforms } from './flake.js';
 import {
@@ -60,6 +61,18 @@ import {
 } from './tube/tint.js';
 
 const EM = 1; // glyphs are built at 1 em; the group scale does the fitting
+
+/**
+ * A tube look carries its colour on the per-vertex run attribute, not on the material: the material
+ * channel is set to white so the attribute multiplies out exactly. So a tint written to the
+ * material is erased before the first frame, and a tint has to reach the palette the runs are
+ * dealt from instead. `surfaceColors` is dropped with it — it would out-rank the palette and take
+ * the tint back out.
+ */
+function tintedTube(spec: TubeSpec, tint?: number): TubeSpec {
+  if (tint === undefined) return spec;
+  return { ...spec, colors: [tint], surfaceColors: undefined };
+}
 
 /**
  * Offsets a material's flake field so repeated letters do not sparkle in lockstep. Every material
@@ -631,7 +644,12 @@ export class Word {
 
       const shapes = glyphToShapes(font.font, char, EM);
       debugShapes = shapes;
-      const blueprint = buildTubeBlueprint(shapes, decoration, DEFAULT_GLYPH_OPTIONS.depth, i);
+      const blueprint = buildTubeBlueprint(
+        shapes,
+        tintedTube(decoration, tintMaterialOf(spec) === 'decoration' ? hue : undefined),
+        DEFAULT_GLYPH_OPTIONS.depth,
+        i,
+      );
       this.tubeBlueprints[i] = blueprint;
       const box = new THREE.Box2();
       const point = new THREE.Vector2();

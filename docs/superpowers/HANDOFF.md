@@ -217,12 +217,16 @@ Roughly in order of value; the items are independent of each other.
 
 - ~~**Selectable text**~~ — built. See the `## In flight` section; it wants a PR, not a plan.
 
-- **Composable lighting — designed, not built.** See
-  [the design](specs/2026-08-25-composable-lighting-design.md), which has the whole shape: `lighting`
-  becomes a composable slot posing the environment, a `lamp` effect piece carries light landing on a
-  part, and light sources are `(t, ctx)` functions with the cursor as one of them. It also folds in
-  the `PointerLight.aimAt` viewport bug and retires `slotDrivesEnv`. Next step is an implementation
-  plan.
+- **Composable lighting — planned, not built. This is the next thing to execute.** See
+  [the plan](plans/2026-08-25-composable-lighting.md), nine TDD tasks, and behind it
+  [the design](specs/2026-08-25-composable-lighting-design.md): `lighting` becomes a composable slot
+  posing the environment, a `lamp` effect piece carries light landing on a part, and light sources
+  are `(t, ctx)` functions with the cursor as one of them. It also folds in the `PointerLight.aimAt`
+  viewport bug and retires `slotDrivesEnv`.
+
+  The plan is self-contained — it carries every signature and test it needs, so it can be executed
+  from a cold session. Task 9 is the only one that proves anything reaches the screen; treat green
+  units from tasks 1-8 as meaning nothing, for the reason the findings note gives.
 
   **Two spikes are the evidence, and they re-run.** `spikes/lamp-falloff.mjs` proves
   `PartOffset.gain` is a byte-identical no-op on seven of eight looks; `spikes/lamp-blend.mjs`

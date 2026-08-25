@@ -304,6 +304,12 @@ describe('decorated looks', () => {
     expect(tintMaterialOf(specOf('piping'))).toBe('body');
   });
 
+  it('keeps the lit tube at its own declared emissive intensity', () => {
+    const decoration = specOf('tubing').decoration;
+    if (decoration?.kind !== 'tube') throw new Error('tubing lost its tube decoration');
+    expect(frameOwnedBase(decoration.look).emissiveIntensity).toBe(3.4);
+  });
+
   it('gives tubing dark glass its own look rather than a copy of the lit one', () => {
     const decoration = specOf('tubing').decoration;
     if (decoration?.kind !== 'tube') throw new Error('not a tube');
@@ -544,8 +550,9 @@ describe('tint', () => {
 });
 
 describe('frameOwnedBase', () => {
-  it('carries a look own declared values', () => {
+  it("carries a look's own declared values", () => {
     expect(frameOwnedBase('neon')).toEqual({ opacity: 1, emissiveIntensity: 3.2 });
+    expect(frameOwnedBase('tubing')).toEqual({ opacity: 0.08, emissiveIntensity: 1 });
   });
 
   it('falls back to the defaults when a look declares neither', () => {
@@ -558,5 +565,10 @@ describe('frameOwnedBase', () => {
 
   it('clamps a negative emissiveIntensity rather than passing it through', () => {
     expect(frameOwnedBase({ emissiveIntensity: -5 }).emissiveIntensity).toBe(0);
+  });
+
+  it('clamps opacity to 0..1, which resolveParams never sees', () => {
+    expect(frameOwnedBase({ opacity: 5 }).opacity).toBe(1);
+    expect(frameOwnedBase({ opacity: -1 }).opacity).toBe(0);
   });
 });

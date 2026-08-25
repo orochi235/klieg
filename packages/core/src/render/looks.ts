@@ -53,11 +53,14 @@ export type LookParams = {
 };
 
 /**
- * Properties `Word` writes every frame from base x pose x effects. A look still declares its own
- * base and `resolveParams` still clamps it; what must not happen is `applyLook` writing a value
- * that the next frame overwrites, which is two writers for one property.
+ * Properties written every frame from base x pose x effects, on every material `applyLook`
+ * touches: body, lit decoration and dark decoration each resolve their own base and each get
+ * their own per-frame write. A look still declares the base and `resolveParams` still clamps it;
+ * what must not happen is `applyLook` writing a value that the next frame overwrites, which is
+ * two writers for one property.
  */
-type FrameOwned = 'opacity' | 'emissiveIntensity';
+const FRAME_OWNED = ['opacity', 'emissiveIntensity'] as const;
+type FrameOwned = (typeof FRAME_OWNED)[number];
 type AppliedKey = Exclude<LookKey, FrameOwned>;
 
 export const DEFAULTS: LookParams = {
@@ -331,12 +334,8 @@ const RANGES: Partial<Record<LookKey, [number, number]>> = {
 };
 
 const PARAM_KEYS = Object.keys(DEFAULTS) as LookKey[];
-const FRAME_OWNED = new Set<string>(['opacity', 'emissiveIntensity']);
-const APPLY_KEYS = PARAM_KEYS.filter((key): key is AppliedKey => !FRAME_OWNED.has(key));
-
-// A frame-owned key reaching applyLook is the two-writer bug; the compiler is what catches it.
-const _appliedKeysAreNotFrameOwned: Extract<AppliedKey, FrameOwned> extends never ? true : never =
-  true;
+const FRAME_OWNED_KEYS: ReadonlySet<string> = new Set(FRAME_OWNED);
+const APPLIED_KEYS = PARAM_KEYS.filter((key): key is AppliedKey => !FRAME_OWNED_KEYS.has(key));
 
 export function specOf(look: Look): LookSpec {
   return typeof look === 'string' ? LOOKS[look] : look;
@@ -379,7 +378,7 @@ export function applyLook(material: THREE.MeshPhysicalMaterial, look: Look, tint
 
   // A fixed key list rather than the resolved object's own keys: that is what drops a key a
   // caller invented from ever reaching the material.
-  for (const key of APPLY_KEYS) {
+  for (const key of APPLIED_KEYS) {
     const value = params[key];
     if (COLOR_KEYS.has(key)) (material[key] as THREE.Color).set(value as number);
     else if (Array.isArray(value)) target[key] = [...value];
@@ -389,16 +388,14 @@ export function applyLook(material: THREE.MeshPhysicalMaterial, look: Look, tint
   material.needsUpdate = true;
 }
 
-/** The base a frame-owned property composes from. `Word` is the only caller. */
-export interface FrameOwnedBase {
-  opacity: number;
-  emissiveIntensity: number;
-}
+/** The base a frame-owned property composes from. */
+export type FrameOwnedBase = Record<FrameOwned, number>;
 
 export function frameOwnedBase(look: Look): FrameOwnedBase {
   const spec = specOf(look);
   return {
-    opacity: spec.opacity ?? 1,
+    // resolveParams cannot clamp this one: opacity is a LookSpec field, not a LookKey.
+    opacity: Math.min(Math.max(spec.opacity ?? 1, 0), 1),
     emissiveIntensity: resolveParams(spec).emissiveIntensity,
   };
 }

@@ -5,24 +5,16 @@ what is worth doing next.
 
 ## In flight
 
-**`effects-pipeline` carries `roving` and `hue`, green and not landed.** The branch in
-`.claude/worktrees/effects-pipeline` is `main` plus the two effect pieces of
-[the plan](plans/2026-08-25-roving-and-hue.md), every task done. `npm run check` is **906 across 48
-files** and `npx playwright test` is **26 across 2 files**, both measured on this branch. Two
-baselines are new — `effect-hue-darwin.png` and `effect-roving-darwin.png` — and no pre-existing
-baseline moved, which is the claim the whole pipeline rests on. The last step is a fast-forward that
-has to run from the main checkout, because a worktree-isolated session cannot reach it:
+**Nothing is in flight.** Every branch is merged and every worktree is gone.
 
-```
-git merge --ff-only effects-pipeline
-git worktree remove .claude/worktrees/effects-pipeline
-git branch -d effects-pipeline
-```
+**`main` is 39 commits ahead of `origin/main`, and unpushed.** Nothing is released until a `v*` tag
+is pushed, so the gap blocks no one, but anyone reading the repo on GitHub is 39 commits behind what
+this doc describes.
 
 A lab dev server may be holding port 5180 from an earlier session; kill it if so. The visual suite
 does not care — `playwright.config.ts` derives its own port from the checkout's path.
 
-**The effects pipeline landed.** All eight tasks of
+**The effects pipeline landed, and so did `roving` and `hue` on top of it.** All eight tasks of
 [plans/2026-08-24-effects-pipeline.md](plans/2026-08-24-effects-pipeline.md), each with an implementer
 and a two-stage review, plus a whole-branch review at the end. The 16 baseline PNGs that predate it are
 byte-identical — no shipped look moved, which is the claim the whole approach rests on. One baseline is
@@ -53,8 +45,6 @@ tube mid-pass. `applyEffects` skips parts whose letter a regroup dropped. And `S
 `count` alongside `amount`: `amount` is a fraction (so `{ amount: 1 }` selects the **whole** pool, which
 is what `piping` relies on), while `count` is a literal number of members and wins when both are given.
 
-The worktree `.claude/worktrees/vertex-provenance` is named after a branch that no longer exists and
-holds `sequin-rework` — reuse or remove it, but do not trust its name.
 
 **`roving` and `hue` both shipped**, against
 [their design](specs/2026-08-25-roving-and-hue-design.md) and
@@ -93,10 +83,19 @@ Release run 404 on `PUT /klieg`; that is fixed, and 0.5.0 and 0.5.1 both went ou
 
 **`main` carries the tube lab, the tube geometry rewrite, the colour gradients, the junction
 reconciliation, direct paths by default, element-anchored placement and the effects pipeline, all
-merged.** On `main`, `npm run check` is green at **872 tests across 46 files** and `npx playwright
-test` at **24 across 2 files**; the in-flight branch above adds to both. Every count in this doc is
+merged.** On `main`, `npm run check` is green at **913 tests across 48 files** and `npx playwright
+test` at **26 across 2 files**, both measured on `main` at `7a5d0fc`. Every count in this doc is
 measured, not carried over — it has twice claimed a playwright number one higher than `--list`
 reports.
+
+**A wide anchor takes a longer lens.** An element placement lifts `FIT_CAP` so the word fills its
+anchor, and against a masthead strip that put the outer glyphs past 70 degrees off-axis — far enough
+that an extruded letter's side wall projects across its neighbour and the word reads as one merged
+mass. `lensFor` in `render/stage.ts` grows `z` until the frustum edge falls within
+`MAX_HALF_ANGLE_DEG` (35) and narrows `fov` to hold the frustum height at the word's depth, so every
+framing fraction keeps its meaning and the type keeps its on-screen size. A box already inside that
+angle keeps the base lens exactly, so a fullscreen overlay is byte-identical and no baseline moved.
+Unreleased — it is in the CHANGELOG under `## Unreleased`.
 
 **[Direct tube paths](specs/2026-08-20-direct-tube-paths-design.md) ships, and is the default.**
 `TubeSpec.pathSource` (`field` | `exact` | `direct`) defaults to `direct`, which traces the glyph's
@@ -194,8 +193,8 @@ Roughly in order of value; the items are independent of each other.
   worth doing on its own merits); tier 2 is an aligned transparent per-letter layer, the PDF.js
   approach. The notes have the projection maths that already exists, the three things that bite —
   the font is not registered as a CSS font, selection collides with the shipped click-through
-  guarantee, and extrusion offsets the scale — and the decisions still open. **This does not belong
-  on `effects-pipeline`**; start it on its own branch off `main`.
+  guarantee, and extrusion offsets the scale — and the decisions still open. Start it on its own
+  branch off `main`.
 
 - **A composition lab, so effect pieces get built by hand rather than through a plan.** Asked for
   directly. `roving` and `hue` were specified in prose, and the wrapper's epoch arithmetic came out

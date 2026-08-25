@@ -251,6 +251,38 @@ Roughly in order of value; the items are independent of each other.
   one worktree silently answered from another's dev server and returned confident wrong answers —
   four bogus failures, and two sessions judging appearance off contaminated runs. A checkout without
   that commit is still exposed.
+- **Material and lighting findings, with a command per item — medium priority, and the pile to try
+  next.** See [the findings note](specs/2026-08-25-material-lighting-findings.md). In short:
+  `envMapIntensity` has never been applied on any look, so every look renders 2.2x dimmer than
+  authored; the extrusion walls read as cement because the studio lights the scene blue on the left
+  and warm on the right; `gem` is red-but-dark at low env and bright-but-gray at high env, and the
+  knob that would fix it — `specularIntensity` — is one of three material properties `LookKey`
+  cannot express; and `sequin` is unreachable by any effect at all.
+
+  Each item names the spike that proves it and the flags to reproduce it. The env fix moves every
+  visual baseline, so it is its own change rather than a footnote to lighting.
+
+- **A composition lab, so effect pieces get built by hand rather than through a plan.** Asked for
+  directly. `roving` and `hue` were specified in prose, and the wrapper's epoch arithmetic came out
+  wrong in a way that read as *more* correct than the fix — a prototype found it in one run and
+  review had not. A piece is a pure function of `(t, part)` with no GL anywhere in it, so a lab can
+  plot one against time, layer several, scrub a pinned clock, and show the merged offset per part.
+  That is most of what a session currently burns tokens reconstructing, and it is also where the
+  numbers the design deferred get picked: `roving`'s `dwell` ships at a stated-provisional 3200ms
+  precisely because there was nothing to measure against. Nothing is designed yet.
+
+  It is a **different lab** from **kliegsminister**, the stage-and-repair lab in
+  [the pipeline lab design](specs/2026-08-23-pipeline-lab-design.md) — that one is about tube
+  geometry, this one about time.
+
+- ~~**An effects pipeline for the tube looks**~~ — shipped, along with `roving` and `hue` on top of
+  it. See the `## In flight` section.
+
+- ~~**Playwright reuses whatever owns port 5180**~~ — fixed in `484692b`: `playwright.config.ts`
+  derives a port from the checkout's own path and starts vite `--strictPort`. Before that, a run in
+  one worktree silently answered from another's dev server and returned confident wrong answers —
+  four bogus failures, and two sessions judging appearance off contaminated runs. A checkout without
+  that commit is still exposed.
 - **`envMapIntensity` has never been applied, on any look.** `looks.ts` constructs every material
   with `envMapIntensity: 2.2`, but klieg lights through `scene.environment` and the property only
   scales a material's *own* `envMap`, which none of them have.

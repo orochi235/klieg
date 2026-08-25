@@ -75,6 +75,18 @@ function meshes(word: Word): THREE.Mesh[] {
   return groups(word).map((g) => g.children[0] as THREE.Mesh);
 }
 
+/** Distinct material instances and meshes under a word, counted the way a draw call would be. */
+function census(word: Word): { meshes: number; materials: number } {
+  const materials = new Set<THREE.Material>();
+  let meshes = 0;
+  word.group.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) return;
+    meshes++;
+    for (const material of [object.material].flat()) materials.add(material);
+  });
+  return { meshes, materials: materials.size };
+}
+
 function materialOf(word: Word): THREE.MeshPhysicalMaterial {
   return (meshes(word)[0] as THREE.Mesh).material as THREE.MeshPhysicalMaterial;
 }
@@ -1592,6 +1604,31 @@ describe('effects', () => {
     word.apply(STILL, 0);
 
     expect(driven).toBeCloseTo(materialOf(word).emissiveIntensity * 0.5, 6);
+  });
+
+  it('never consults a piece whose target came up empty', () => {
+    const at = vi.fn<EffectPiece['at']>(() => ({ gain: 0.5 }));
+    const word = tubingWith([
+      { piece: { duration: 1000, at }, target: { kind: 'run', by: 'index', count: 0 } },
+    ]);
+    const before = [runColorOf(word, 0), runColorOf(word, 1)];
+
+    word.apply(STILL, 0);
+
+    expect(at).not.toHaveBeenCalled();
+    expect([runColorOf(word, 0), runColorOf(word, 1)]).toEqual(before);
+  });
+
+  // The premise the whole approach rests on: an effect is a write into what the look already
+  // built, so declaring one costs no material, no mesh and so no extra compiled program.
+  it('adds no material and no mesh, however many parts it drives', () => {
+    const plain = census(new Word('AA', stubFont(), specOf('tubing'), ROOMY));
+    const driven = census(tubingWith([{ piece: half, target: { kind: 'run', by: 'index' } }]));
+
+    expect(driven).toEqual(plain);
+    // Without this the assertion above would also pass a word that gave every part its own
+    // material, since both sides would have done it.
+    expect(plain.materials).toBeLessThan(plain.meshes);
   });
 
   it('offsets a targeted part on the mesh, so it composes with the pose on the cell', () => {

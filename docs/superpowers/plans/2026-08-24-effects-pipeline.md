@@ -10,7 +10,7 @@
 
 **Design:** [specs/2026-08-24-effects-pipeline-design.md](../specs/2026-08-24-effects-pipeline-design.md). This plan covers steps 1–3 of that spec. `chunk` parts (step 4) and `crawl` (step 5) each get their own plan.
 
-**Before you start:** run `npm run check` and confirm it reports **789 passed (789)** across 43 files. That is the baseline every task below is measured against. Also run `npx playwright test` once and confirm 24 passed — several tasks re-run it.
+**Before you start:** run `npm run check` and confirm it reports **789 passed (789)** across 43 files. That is the baseline every task below is measured against. Also run `npx playwright test` once and confirm 23 passed — several tasks re-run it.
 
 ---
 
@@ -309,7 +309,7 @@ Run: `npm run check`
 Expected: PASS, 796 tests (789 baseline + 4 from Task 1 + 3 here).
 
 Run: `npx playwright test`
-Expected: 24 passed. **This is the load-bearing check for Tasks 1 and 2 together** — it is the claim that moving where `emissiveIntensity` is written moved no pixels. If `look-neon` or `look-tubing` fails here, the base is not reaching the material; do not re-record the baseline.
+Expected: 23 passed. **This is the load-bearing check for Tasks 1 and 2 together** — it is the claim that moving where `emissiveIntensity` is written moved no pixels. If `look-neon` or `look-tubing` fails here, the base is not reaching the material; do not re-record the baseline.
 
 - [ ] **Step 8: Commit**
 
@@ -487,7 +487,7 @@ Run: `npm run check`
 Expected: PASS, 803 tests (796 + 7). Every existing `assign` test passes untouched.
 
 Run: `npx playwright test`
-Expected: 24 passed. A changed selection would repaint which runs are lit, so a baseline failure here means the extraction is not faithful.
+Expected: 23 passed. A changed selection would repaint which runs are lit, so a baseline failure here means the extraction is not faithful.
 
 - [ ] **Step 7: Verify by mutation**
 
@@ -1174,7 +1174,7 @@ Run: `npm run check`
 Expected: PASS, 818 tests (805 + 8 from Task 6 + 5 here).
 
 Run: `npx playwright test`
-Expected: 24 passed. This task only records references to meshes that already existed, so any baseline movement means a mesh was created differently, not merely captured.
+Expected: 23 passed. This task only records references to meshes that already existed, so any baseline movement means a mesh was created differently, not merely captured.
 
 - [ ] **Step 8: Commit**
 
@@ -1431,7 +1431,7 @@ Run: `npm run check`
 Expected: PASS, 822 tests.
 
 Run: `npx playwright test`
-Expected: 25 passed — the original 24 unchanged plus the new one. **The 24 being unchanged is the claim that this whole plan moved no shipped look.**
+Expected: 24 passed — the original 23 unchanged plus the new one. **The 23 being unchanged is the claim that this whole plan moved no shipped look.**
 
 - [ ] **Step 11: Verify by mutation**
 

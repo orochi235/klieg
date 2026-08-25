@@ -10,12 +10,18 @@ corner-lab minimap are both merged. The worktree `.claude/worktrees/vertex-prove
 a branch that no longer exists and holds `sequin-rework` — reuse or remove it, but do not trust its
 name.
 
-**Next, designed and unplanned: the effects pipeline** —
-[specs/2026-08-24-effects-pipeline-design.md](specs/2026-08-24-effects-pipeline-design.md). Appearance
-becomes addressable below the level of a letter: a *part* is a tube run, a chunk, or the letter body,
-and one grammar mirroring `MotionPiece` animates all three. Step 1 is a frame-ownership fix that stands
-on its own — opacity has two authoring paths today and only one is wired, and every channel an effect
-drives has the same bug waiting.
+**Next, designed and planned: the effects pipeline** —
+[specs/2026-08-24-effects-pipeline-design.md](specs/2026-08-24-effects-pipeline-design.md), with
+[plans/2026-08-24-effects-pipeline.md](plans/2026-08-24-effects-pipeline.md) covering its first three
+steps in eight tasks. Appearance becomes addressable below the level of a letter: a *part* is a tube
+run, a chunk, or the letter body, and one grammar mirroring `MotionPiece` animates all three. `chunk`
+parts and `crawl` are deliberately out of that plan and each need their own.
+
+Two things the design says that a reader will otherwise re-derive the hard way. **`applyLook` and
+`Word` must not both write a material property** — that is the opacity trap generalized, and the plan's
+first two tasks split the ownership. **A per-part material is not needed for any of it**: a run's
+geometry already carries the `runColor` attribute its own shader reads, so gain and colour are a buffer
+write, `dark` is a swap between two materials that already exist, and transform is the mesh's own.
 
 **Also unplanned: the stage and repair registries, then the lab** —
 [specs/2026-08-23-pipeline-lab-design.md](specs/2026-08-23-pipeline-lab-design.md). The registries need

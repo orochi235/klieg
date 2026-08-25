@@ -48,3 +48,15 @@ export function mergeOffsets(offsets: readonly PartOffset[]): ResolvedOffset {
 
   return { gain, color, dark, position, rotation, scale, crawl };
 }
+
+/** Whether a piece is contributing nothing on this part — every channel it wrote at its identity. */
+export function isRest(o: PartOffset): boolean {
+  if (o.gain !== undefined && o.gain !== 1) return false;
+  if (o.scale !== undefined && o.scale !== 1) return false;
+  if (o.dark) return false;
+  if (o.crawl) return false;
+  if (o.color !== undefined) return false;
+  if (o.position?.some((n) => n !== 0)) return false;
+  if (o.rotation?.some((n) => n !== 0)) return false;
+  return true;
+}

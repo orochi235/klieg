@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergeOffsets, REST_OFFSET } from '../../src/effects/compositor.js';
+import { isRest, mergeOffsets, REST_OFFSET } from '../../src/effects/compositor.js';
 import type { Vec3 } from '../../src/pose.js';
 
 describe('mergeOffsets', () => {
@@ -67,5 +67,33 @@ describe('mergeOffsets', () => {
     out.rotation[0] = 99;
     expect(offset.position).toEqual([1, 2, 3]);
     expect(offset.rotation).toEqual([4, 5, 6]);
+  });
+});
+
+describe('isRest', () => {
+  it('calls an empty offset rest, which is what a piece with nothing to say returns', () => {
+    expect(isRest({})).toBe(true);
+  });
+
+  it('calls every channel at its identity rest', () => {
+    expect(
+      isRest({ gain: 1, scale: 1, dark: 0, crawl: 0, position: [0, 0, 0], rotation: [0, 0, 0] }),
+    ).toBe(true);
+  });
+
+  it('calls any channel off its identity not rest', () => {
+    expect(isRest({ gain: 0.5 })).toBe(false);
+    expect(isRest({ scale: 1.2 })).toBe(false);
+    expect(isRest({ dark: 0.1 })).toBe(false);
+    expect(isRest({ crawl: 0.01 })).toBe(false);
+    expect(isRest({ position: [0, 0.01, 0] })).toBe(false);
+    expect(isRest({ rotation: [0, 0, 0.01] })).toBe(false);
+  });
+
+  // A colour is a replacement, not a contribution, so there is no value of it that is "no change" —
+  // any colour at all is something a handover would snap away from.
+  it('calls a written colour not rest, at any value', () => {
+    expect(isRest({ color: 0x000000 })).toBe(false);
+    expect(isRest({ color: 0xffffff })).toBe(false);
   });
 });

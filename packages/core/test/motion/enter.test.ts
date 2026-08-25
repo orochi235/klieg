@@ -52,6 +52,31 @@ describe('enter pieces', () => {
     expect(ENTER.flip.offset(1, L).opacity).toBe(1);
   });
 
+  // The step exists to keep a half-turned letter — which reads as a stray edge — out of sight
+  // until it is nearly face-on. Endpoint checks pass whichever way the comparison runs, so these
+  // pin the angle it actually appears at.
+  it('flip appears only once it is nearly face-on', () => {
+    let appeared: number | null = null;
+    for (let i = 0; i <= 1000; i++) {
+      const t = i / 1000;
+      if (ENTER.flip.offset(t, L).opacity === 1) {
+        appeared = t;
+        break;
+      }
+    }
+    expect(appeared, 'flip never becomes visible').not.toBeNull();
+    const turn = (ENTER.flip.offset(appeared as number, L).rotation ?? [0, 0, 0])[0] as number;
+    expect(Math.abs((turn * 180) / Math.PI)).toBeLessThan(15);
+  });
+
+  it('flip stays hidden while it is edge-on or further', () => {
+    for (let i = 0; i <= 1000; i++) {
+      const o = ENTER.flip.offset(i / 1000, L);
+      const turn = Math.abs((((o.rotation ?? [0, 0, 0])[0] as number) * 180) / Math.PI);
+      if (turn >= 90) expect(o.opacity, `at ${turn.toFixed(0)} degrees from rest`).toBe(0);
+    }
+  });
+
   // (b) assemble's scatter must be deterministic and per-letter distinct: no RNG, no
   // Date.now — repeated calls with the same args are identical, and different indices scatter
   // to genuinely different places (not clustered).

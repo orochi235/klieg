@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### `flip` now appears face-on, not back-on
+
+`flip` hides the letter while it is edge-on, because a half-turned extrusion reads as a stray edge
+rather than a glyph. The step that did the hiding compared the *elapsed* ease against 0.05 where it
+meant the *remaining* turn, and `easeOutCubic` clears 0.05 in the first 1.7% of the pass — so the
+letter appeared 171 degrees from rest, nearly fully reversed, and turned the rest of the way in
+full view. It now appears at 9 degrees, having stayed hidden for the first 63% of the pass.
+
 ### A wide anchor no longer merges the glyphs
 
 An element placement lifts `FIT_CAP`, so the word scales up to fill its anchor. Against a masthead

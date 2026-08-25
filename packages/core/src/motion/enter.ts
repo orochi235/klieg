@@ -21,8 +21,8 @@ const flip = transition(1000, {
   from: { rotation: [-Math.PI, 0, 0], opacity: 0 },
   stagger: 0.6,
   // Steps rather than ramps: a half-turned letter reads as a stray edge, so it stays hidden
-  // until it is nearly face-on.
-  easeBy: { opacity: (s) => (easeOutCubic(s) < 0.05 ? 0 : 1) },
+  // until the turn it has left to travel is under a twentieth.
+  easeBy: { opacity: (s) => (1 - easeOutCubic(s) < 0.05 ? 1 : 0) },
 });
 
 const assemble = transition(1200, {

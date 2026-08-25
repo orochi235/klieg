@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { compose, fromAxisAngle, fromEuler } from '../src/transform.js';
+import { compose, fromAxisAngle, fromEuler, isIdentity } from '../src/transform.js';
 
 function apply(matrix: readonly number[], v: [number, number, number]): THREE.Vector3 {
   return new THREE.Vector3(...v).applyMatrix4(new THREE.Matrix4().fromArray(matrix as number[]));
@@ -41,5 +41,22 @@ describe('compose', () => {
     // Scale then rotate then translate: (1,0,0)*2 -> (2,0,0) -> rotate y90 -> (0,0,-2) -> +(5,0,0).
     expect(p.x).toBeCloseTo(5, 10);
     expect(p.z).toBeCloseTo(-2, 10);
+  });
+});
+
+describe('isIdentity', () => {
+  it('clears a transform that leaves the word alone', () => {
+    expect(isIdentity(fromEuler(0, 0, 0))).toBe(true);
+    expect(isIdentity(fromAxisAngle([0, 1, 0], 0))).toBe(true);
+  });
+
+  it('catches a rotation, a move and a scale', () => {
+    expect(isIdentity(fromEuler(0, 0.3, 0))).toBe(false);
+    expect(isIdentity(compose([1, 0, 0], [0, 0, 0, 1], [1, 1, 1]))).toBe(false);
+    expect(isIdentity(compose([0, 0, 0], [0, 0, 0, 1], [2, 2, 2]))).toBe(false);
+  });
+
+  it('rejects anything that is not sixteen numbers', () => {
+    expect(isIdentity([1, 0, 0, 1])).toBe(false);
   });
 });

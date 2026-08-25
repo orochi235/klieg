@@ -39,7 +39,11 @@ const sameKey = (a: LayerKey | null, b: LayerKey): boolean =>
 export class TextLayer {
   private built: LayerKey | null = null;
 
-  constructor(private readonly container: HTMLElement) {}
+  constructor(private readonly container: HTMLElement) {
+    // The letter spans are all absolutely positioned, so nothing in flow holds the '\n' between
+    // lines open: at the inherited `normal` it collapses and a two-line word copies as one.
+    container.style.whiteSpace = 'pre';
+  }
 
   /** The tier-1 node: the whole fired string, once, never rebuilt. */
   setHidden(text: string): void {

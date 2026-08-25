@@ -422,9 +422,6 @@ test('a letter in the layer takes the click the page would otherwise get', async
 });
 
 test('a two-line word copies with the break between its lines', async ({ page }) => {
-  // Fails today: the per-effect host div klieg appends inherits `white-space: normal`, which
-  // collapses away the '\n' text node the layer emits, so the word copies as 'BIGMONEY'.
-  test.fail();
   await fireSelectable(page, 'layer', 'BIG\nMONEY');
   expect((await dragAcrossLayer(page, await settledLayer(page))).trim()).toBe('BIG\nMONEY');
 });

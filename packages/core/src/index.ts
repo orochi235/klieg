@@ -31,7 +31,7 @@ import { measureBaselineRatio, registerFace } from './text/font-face.js';
 import { DEFAULT_GLYPH_OPTIONS } from './text/glyphs.js';
 import type { Arrangement } from './text/placement.js';
 import { projectLetters } from './text/projection.js';
-import type { Transform } from './transform.js';
+import { isIdentity, type Transform } from './transform.js';
 
 export { ManualClock } from './clock.js';
 export {
@@ -323,11 +323,14 @@ export function createKlieg(options: KliegOptions): Klieg {
     const enter = resolveSlot(opts.enter ?? 'slam', ENTER);
     const active = resolveSlot(opts.active ?? 'none', ACTIVE);
     const asked = opts.selectable ?? 'hidden';
-    const blocker = opts.transform
-      ? 'a transform'
-      : slotMovesLetters(active)
-        ? `the active motion (${describeSlot(opts.active ?? 'none')})`
-        : null;
+    // Whether it *moves* the word, not whether it was passed: a caller wiring rotation sliders
+    // sends an identity transform at 0°, and refusing that costs the layer for nothing.
+    const blocker =
+      opts.transform && !isIdentity(opts.transform)
+        ? 'a transform'
+        : slotMovesLetters(active)
+          ? `the active motion (${describeSlot(opts.active ?? 'none')})`
+          : null;
     if (asked === 'layer' && blocker) {
       console.warn(
         `klieg: selectable 'layer' needs the word still, and ${blocker} moves it — falling back to 'hidden'`,

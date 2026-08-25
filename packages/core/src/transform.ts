@@ -10,6 +10,12 @@ import type { Vec3 } from './pose.js';
 export type Transform = readonly number[];
 
 const scratch = new THREE.Matrix4();
+const IDENTITY = new THREE.Matrix4().toArray();
+
+/** Whether a transform leaves the word exactly where the layout put it. */
+export function isIdentity(transform: Transform): boolean {
+  return transform.length === 16 && IDENTITY.every((v, i) => transform[i] === v);
+}
 
 /** Rotation only, three's default XYZ Euler order, radians. */
 export function fromEuler(x: number, y: number, z: number): Transform {

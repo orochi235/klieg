@@ -18,7 +18,6 @@ import {
   type SelectableMode,
   type SurfaceKind,
   specOf,
-  type Transform,
 } from 'klieg';
 
 const DEG = Math.PI / 180;
@@ -338,19 +337,6 @@ let bk = create();
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-/**
- * The sliders' rotation, or nothing at all when the three of them are at rest. `selectable:
- * 'layer'` refuses any transform it is handed, so an identity one would cost the layer for free.
- */
-function chosenTransform(): Transform | undefined {
-  const pitch = number('pitch');
-  const yaw = number('yaw');
-  const roll = number('roll');
-  if (pitch === 0 && yaw === 0 && roll === 0) return undefined;
-  // Sliders are degrees for a human; fromEuler wants radians, three's XYZ order.
-  return fromEuler(pitch * DEG, yaw * DEG, roll * DEG);
-}
-
 function fire(text: string): void {
   log(`fire ${JSON.stringify(text)}`);
   bk.fire(text, {
@@ -361,7 +347,8 @@ function fire(text: string): void {
     effects: chosenEffects(),
     lighting: lighting.get(),
     tint: tintOnInput.checked ? Number.parseInt(tintInput.value.slice(1), 16) : undefined,
-    transform: chosenTransform(),
+    // Sliders are degrees for a human; fromEuler wants radians, three's XYZ order.
+    transform: fromEuler(number('pitch') * DEG, number('yaw') * DEG, number('roll') * DEG),
     hold: holdClickInput.checked ? 'click' : number('hold'),
     blendMs: number('blend'),
     // Three-way rather than a checkbox: FireOptions.bloom wins over a look's own request, so an

@@ -195,6 +195,13 @@ Roughly in order of value; the items are independent of each other.
 - **`flip` drops opacity 171° from rest**, so the letter fades in nearly back-on — the opposite of
   what the step's own comment claims. `easeOutCubic(s)` hits 0.05 far later than the author expected.
   Small, self-contained, and a real defect rather than a taste question.
+- **mulberry32 is copy-pasted verbatim in four modules** — `select.ts`, `render/tube/runs.ts`,
+  `render/decoration.ts` and `render/tube/wander.ts` — with no shared code between them. Every
+  seeded decision in the library depends on all four staying identical, and nothing enforces or
+  notices that: one edited constant silently repaints a look, and the visual baselines would show it
+  as "a look changed" rather than "the generator drifted." Hoisting it into one module is small, but
+  it is **not** a free refactor — it touches every seeded call site at once, so it wants its own
+  commit and its own baseline run rather than riding along with unrelated work.
 
 ## What was learned that is not in the plan
 

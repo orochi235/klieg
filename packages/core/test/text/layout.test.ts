@@ -155,7 +155,7 @@ describe('fitScale', () => {
   });
 
   it('never scales past the cap', () => {
-    expect(fitScale(1, 1, { width: 1000, height: 1000 }, 2.2)).toBe(2.2);
+    expect(fitScale(1, 1, { width: 1000, height: 1000 })).toBe(2.2);
   });
 
   it('returns the cap for an empty word rather than dividing by zero', () => {
@@ -164,6 +164,6 @@ describe('fitScale', () => {
 
   it('returns exactly the cap value for a zero-size word, custom cap included', () => {
     expect(fitScale(0, 0, { width: 10, height: 10 })).toBe(2.2);
-    expect(fitScale(0, 0, { width: 10, height: 10 }, 5)).toBe(5);
+    expect(fitScale(0, 0, { width: 10, height: 10, cap: 5 })).toBe(5);
   });
 });

@@ -50,15 +50,25 @@ export function layoutBlock(text: string, metrics: GlyphMetrics): Block {
 export interface Budget {
   width: number;
   height: number;
+  /**
+   * Ceiling on upscaling past the glyphs' natural size, defaulting to `FIT_CAP`. An anchored
+   * placement lifts it: the anchor's box is already the bound, and against a short wide strip
+   * the cap binds long before the budget does, holding the type well under its framing.
+   */
+  cap?: number;
 }
+
+/** Keeps one short word on a fullscreen overlay from blowing up to fill the viewport. */
+export const FIT_CAP = 2.2;
 
 /**
  * Uniform scale fitting the word inside the budget on both axes. Height matters as much as
  * width: idle rotation swings the word toward the camera, so a width-only fit overflows.
- * An empty word has no ratio to compute, so it falls back to `cap`, the same bound a normal
+ * An empty word has no ratio to compute, so it falls back to the cap, the same bound a normal
  * word is clamped to.
  */
-export function fitScale(width: number, height: number, budget: Budget, cap = 2.2): number {
+export function fitScale(width: number, height: number, budget: Budget): number {
+  const cap = budget.cap ?? FIT_CAP;
   const byWidth = width > 0 ? budget.width / width : Number.POSITIVE_INFINITY;
   const byHeight = height > 0 ? budget.height / height : Number.POSITIVE_INFINITY;
   return Math.min(byWidth, byHeight, cap);

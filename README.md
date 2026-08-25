@@ -296,11 +296,12 @@ const bounce = transition(700, { from: { scale: 0 }, ease: easeElasticOut });
 | field | default | |
 |---|---|---|
 | `fontUrl` | required | a TTF or OTF opentype.js can parse, fetched once per instance on the first fire |
-| `target` | `document.body` | element the overlay canvas is appended to |
+| `target` | `document.body` | element the overlay canvas is appended to; refused alongside an element `placement`, which is its own parent |
 | `clock` | `requestAnimationFrame` | time source; pass the exported `ManualClock` to drive effects by hand in tests |
 | `policy` | `'queue'` | what a fire does when one is already running (below) |
 | `idleTimeoutMs` | `8000` | idle milliseconds before the GL context is torn down; the next fire brings it back |
-| `framing` | `{ width: 0.62, height: 0.3 }` | share of the viewport the type may fill, per axis; raise it on a page that is nothing but the type |
+| `framing` | `{ width: 0.62, height: 0.3 }` | share of the box the type may fill, per axis — the viewport, or the anchor under an element `placement`; raise it on a page that is nothing but the type |
+| `placement` | `{ kind: 'fullscreen' }` | fullscreen overlay, or `{ kind: 'element', el }` to anchor the type inside one element; fixed for the instance's lifetime |
 
 `fire(text, options)`:
 
@@ -312,13 +313,12 @@ const bounce = transition(700, { from: { scale: 0 }, ease: easeElasticOut });
 | `look` | `'gold'` | the material — a name, or a spec of your own |
 | `lighting` | `'sweep'` | how the environment lights it |
 | `tint` | none | recolors the look, as `0xff2d6f`, or a rule consulted per letter |
-| `hold` | `1200` | milliseconds in the active phase, or `'click'` to hold until dismissed |
+| `hold` | `1200` | milliseconds in the active phase, or `'click'` to hold until dismissed; `'click'` is refused under an element `placement` |
 | `stages` | none | stages played after the enter, each regrouping what survives it |
 | `blendMs` | `120` | crossfade window straddling each phase boundary |
 | `bloom` | look's choice | adds a glow pass, at the cost of three render targets while the effect runs |
 | `wrap` | `false` | break long text into the arrangement that renders largest |
 | `modal` | `false` | while a `'click'` hold waits, let the overlay swallow the dismissing press |
-| `placement` | `{ kind: 'fullscreen' }` | accepted but unread in v0; the overlay is always fullscreen |
 
 ## Multiple lines
 

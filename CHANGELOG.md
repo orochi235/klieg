@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+### The type can be anchored inside a page element
+
+`createKlieg({ placement: { kind: 'element', el } })` puts the canvas inside one element of the
+page instead of over the whole viewport, so a masthead can carry the type with the rest of the
+page laid out around it rather than under it. The canvas is `position:absolute;inset:0` within the
+anchor, which carries it on every move for free, and a `ResizeObserver` reports the box changes no
+window resize event ever sees. `framing` needs no new units: it was always a share of what the
+camera sees, and the camera now frames the anchor.
+
+Placement is fixed for an instance's lifetime, so it moved to `createKlieg`; `FireOptions.placement`
+is deprecated and was never read. An element placement is its own parent, so passing `target`
+alongside it throws rather than silently picking one, and `hold: 'click'` is refused because every
+meaning it could carry can hang — a window listener dismisses on clicks unrelated to the strip, and
+one scoped to the anchor never fires once the anchor scrolls away.
+
+Anchored, the fit is no longer held to the 2.2x ceiling on upscaling past natural glyph size. That
+ceiling keeps one short word from swallowing a fullscreen overlay, but against a short wide strip it
+binds long before the framing does and starves the fit; the anchor's box is the bound instead.
+
+The `strip` route in the lab exercises it: an anchor deliberately left `position: static`, resizable
+by hand, with page content above and below.
+
 ## 0.5.0
 
 ### The light can follow the pointer

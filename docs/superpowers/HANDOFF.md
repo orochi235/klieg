@@ -259,6 +259,20 @@ Roughly in order of value; the items are independent of each other.
   the authored value live — and moves every visual baseline, which is why it is its own change and
   not a footnote to lighting.
 
+- **The extrusion walls read as cement because the studio is two-toned.** Faces and walls share one
+  material — `buildGlyphGeometry` makes a single `ExtrudeGeometry` and klieg passes one material, so
+  nothing differs in shading. A metal reflects `baseColor x envRadiance`, and `render/environment.ts`
+  puts blue bars on the left (`x: -14` at `[2.4, 4.0, 7]`, `x: -6` at `[2.4, 2.6, 3.4]`) against a
+  warm one on the right (`x: 14` at `[6, 4.4, 2.2]`). Gold is `0xffc44d`, so its left-facing walls
+  reflect warm-times-blue and go gray-lavender while the caps stay golden. Raising env intensity
+  brightens the cement without warming it. The fix is in the environment, not the material or any
+  lamp.
+
+- **klieg cannot author specular at all.** `specularIntensity`, `specularColor` and `reflectivity`
+  are absent from `LookKey`. `specularIntensity` tints specular reflection at normal incidence for
+  non-metals, which is the knob that would let `gem` keep its red as it brightens — the wash is
+  specular sitting on the attenuation. Untested; the next thing to try on the gem problem.
+
 - **Another pass on light-up letters — medium priority.** The design picks a blend and a channel; it
   does not finish the look. **`gem` cannot be lit with one knob.** At `env=0` it reads red, its
   `attenuationColor` working as authored; raising env lays specular reflection over that and washes

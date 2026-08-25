@@ -335,7 +335,10 @@ export function createKlieg(options: KliegOptions): Klieg {
     }
     const mode: SelectableMode = asked === 'layer' && blocker ? 'hidden' : asked;
 
-    const layer = stage.textLayer ? new TextLayer(stage.textLayer) : null;
+    // Its own node inside the shared container: under `policy: 'concurrent'` two live effects
+    // would otherwise clear each other's text, and the first to settle would wipe the survivor's.
+    const host = stage.textLayer?.appendChild(document.createElement('div')) ?? null;
+    const layer = host ? new TextLayer(host) : null;
     let family: string | null = null;
     let baselineRatio = 0;
     let built = false;
@@ -407,7 +410,7 @@ export function createKlieg(options: KliegOptions): Klieg {
         off();
         detachDismiss();
         stage.scene.remove(word.group);
-        layer?.clear();
+        host?.remove();
         word.dispose();
         bloom?.dispose();
         stage.scheduleIdleTeardown();

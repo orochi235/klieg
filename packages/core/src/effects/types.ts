@@ -42,6 +42,9 @@ export interface PartOffset {
   /** Shifts the colour ramp along the part. Needs a look with a `gradient`; without a
    * ramp there is nothing to shift. */
   crawl?: number;
+  /** Light landing on the part, added from zero. Lamps sum. A multiplier cannot express this:
+   * `emissive` defaults to black, so scaling it is a no-op on every look but `neon`. */
+  light?: { color: number; amount: number };
 }
 
 /** Everything a merge resolved. Multiplicative channels rest at 1, additive at 0. */
@@ -53,6 +56,8 @@ export interface ResolvedOffset {
   rotation: Vec3;
   scale: number;
   crawl: number;
+  /** Accumulated lamp colour, premultiplied by amount. Linear RGB, 0..n. */
+  light: Vec3;
 }
 
 export interface EffectPiece {

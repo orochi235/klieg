@@ -153,10 +153,13 @@ Each step has its own guard, checked at that step rather than only at the end.
 
 1. **Frame ownership.** The `FrameOwned` split and the widened `emissiveIntensity` write, with the
    effect factor pinned at 1. No behaviour change; the look snapshots are the guard.
-2. **The part model and per-part materials.** All lit runs of a letter share one material today, so
-   nothing per-part can be written at runtime. Give each part its own material instance and assemble
-   the word-wide pool. Draw calls do not change — runs are already separate meshes — and programs stay
-   shared through `customProgramCacheKey`. Still no behaviour change; same guard.
+2. **The part model.** Assemble the word-wide pool and give each part a write path. No new materials
+   are needed: a run's geometry already carries its own `runColor` attribute (`sweep.ts:170`) and
+   `tintByRunColor` drives the emissive from it, so `gain` and `color` are one small attribute
+   rewrite; `dark` swaps the mesh's material between the two that already exist; transform is the
+   mesh's own. A body has its own material per letter, so it takes `gain` through
+   `emissiveIntensity` instead. Material count, draw calls and programs are unchanged. Still no
+   behaviour change; same guard.
 3. **The grammar, for `run` and `body`.** `EffectPiece`, the compositor, the generalized `stagger`,
    and a first set of pieces. `flicker` is what the ask needs; `chase`, `buzz` and `warmup` are the
    seed of the list, not a closed one.
@@ -168,8 +171,8 @@ Each step has its own guard, checked at that step rather than only at the end.
 
 - Every shipped look renders byte-identical with no effects declared — `apps/lab/test/looks.spec.ts`,
   checked after step 1, after step 2, and again at the end.
-- Per-part materials produce the same pixels as one shared material, which is the claim that step 2
-  moved nothing.
+- Step 2 adds no material, no draw call and no compiled program: assert the counts against a word
+  built before it.
 - `applyLook` cannot write a frame-owned property — asserted by a type test on `AppliedKey`, not by
   review. `neon` and `tubing` still render at the `emissiveIntensity` they declare, which is the claim
   that moving the write moved no pixels.
@@ -194,5 +197,11 @@ is the addressable form; explicit indices are not offered.
 selection that targets most of 520 chunks per letter is a different cost class from one that targets
 three, and only targeted parts should be written.
 
-**Per-part materials must be disposed.** `Word.dispose` walks three material arrays today; the pool
-makes that a loop over parts, and a missed one leaks a GL program per fire.
+**An attribute write must compose from the part's base, not from what is in the buffer.** `runColor`
+holds last frame's composed value, so multiplying the buffer by this frame's gain compounds and the
+sign fades to black over a few seconds. Keep `run.color` as the base and write `base × gain` every
+time.
+
+**A run whose material was supplied by a debug hook has no run-colour contract.** `word.ts:311` already
+skips `tintByRunColor` for an override, and an effect writing `runColor` there writes into a shader
+that never reads it. Skip those parts rather than writing invisibly.

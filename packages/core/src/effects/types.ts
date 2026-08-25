@@ -33,7 +33,8 @@ export interface PartOffset {
   /** Multiplies the part's emissive. */
   gain?: number;
   color?: number;
-  /** 0..1 toward a tube decoration's `dark` material. */
+  /** 0..1 toward a tube decoration's `dark` material. Composited but not yet written: the swap
+   * between the lit and dark materials a tube decoration already builds is its own step. */
   dark?: number;
   position?: Vec3;
   rotation?: Vec3;

@@ -51,6 +51,7 @@ function stubFont(): LoadedFont {
     font,
     unitsPerEm: UPEM,
     metrics: { advanceOf: () => ADVANCE, kernOf: () => 0 },
+    bytes: new ArrayBuffer(0),
   };
 }
 

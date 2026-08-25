@@ -12,6 +12,8 @@ export interface LoadedFont {
   font: Font;
   unitsPerEm: number;
   metrics: GlyphMetrics;
+  /** The fetched file, kept so a CSS `FontFace` can reuse it instead of downloading again. */
+  bytes: ArrayBuffer;
 }
 
 export async function loadFont(url: string): Promise<LoadedFont> {
@@ -35,5 +37,5 @@ export async function loadFont(url: string): Promise<LoadedFont> {
     kernOf: (a, b) => font.getKerningValue(font.charToGlyph(a), font.charToGlyph(b)),
   };
 
-  return { font, unitsPerEm: font.unitsPerEm, metrics };
+  return { font, unitsPerEm: font.unitsPerEm, metrics, bytes };
 }

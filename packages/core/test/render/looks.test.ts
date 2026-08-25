@@ -6,6 +6,7 @@ import {
   COLOR_KEYS,
   createMaterial,
   DEFAULTS as DEFAULT_PARAMS,
+  frameOwnedBase,
   LOOKS,
   type LookName,
   type LookParams,
@@ -108,7 +109,7 @@ describe('LOOKS', () => {
   it('gives neon an emissive above the bloom threshold over a near-black base', () => {
     const neon = withLook('neon');
     expect(neon.emissive.getHex()).not.toBe(0x000000);
-    expect(neon.emissiveIntensity).toBeGreaterThan(1);
+    expect(frameOwnedBase('neon').emissiveIntensity).toBeGreaterThan(1);
     expect(neon.clearcoat).toBe(0);
   });
 });
@@ -140,7 +141,6 @@ describe('applyLook', () => {
     expect(gold.anisotropyRotation).toBe(0);
     expect(gold.dispersion).toBe(0);
     expect(gold.emissive.getHex()).toBe(0x000000);
-    expect(gold.emissiveIntensity).toBe(1);
   });
 
   it.each(NAMES)('%s applied over another look matches a fresh material', (name) => {
@@ -210,6 +210,17 @@ describe('applyLook', () => {
     applyLook(material, { opacity: 0.2 });
 
     expect(material.opacity).toBe(1);
+  });
+
+  it('leaves emissiveIntensity off the material, because Word owns it per frame', () => {
+    const material = createMaterial();
+
+    applyLook(material, 'neon');
+
+    // three's own default, not neon's 3.2: the value reaches the material through Word.
+    expect(material.emissiveIntensity).toBe(1);
+    // Everything else still lands, so this is an ownership split and not a dropped write.
+    expect(material.emissive.getHex()).not.toBe(0x000000);
   });
 });
 
@@ -529,5 +540,23 @@ describe('tint', () => {
     applyLook(material, 'gold');
 
     expect(hex(material.color)).toBe(0xffc44d);
+  });
+});
+
+describe('frameOwnedBase', () => {
+  it('carries a look own declared values', () => {
+    expect(frameOwnedBase('neon')).toEqual({ opacity: 1, emissiveIntensity: 3.2 });
+  });
+
+  it('falls back to the defaults when a look declares neither', () => {
+    expect(frameOwnedBase('gold')).toEqual({ opacity: 1, emissiveIntensity: 1 });
+  });
+
+  it('reads opacity, which is not a LookKey', () => {
+    expect(frameOwnedBase({ opacity: 0.08 }).opacity).toBe(0.08);
+  });
+
+  it('clamps a negative emissiveIntensity rather than passing it through', () => {
+    expect(frameOwnedBase({ emissiveIntensity: -5 }).emissiveIntensity).toBe(0);
   });
 });

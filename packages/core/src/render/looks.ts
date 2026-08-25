@@ -23,8 +23,6 @@ export type LookName =
   | 'sequin';
 
 /** Extract silently drops a name that is not a real material property, so a typo fails DEFAULTS. */
-// Never add 'opacity' here, tempting as it looks: Word rewrites material.opacity every frame from
-// the pose, so a value applied through this list is gone by the first tick.
 type LookKey = Extract<
   keyof THREE.MeshPhysicalMaterial,
   | 'color'
@@ -53,6 +51,14 @@ type LookKey = Extract<
 export type LookParams = {
   [K in LookKey]: K extends 'iridescenceThicknessRange' ? [number, number] : number;
 };
+
+/**
+ * Properties `Word` writes every frame from base x pose x effects. A look still declares its own
+ * base and `resolveParams` still clamps it; what must not happen is `applyLook` writing a value
+ * that the next frame overwrites, which is two writers for one property.
+ */
+type FrameOwned = 'opacity' | 'emissiveIntensity';
+type AppliedKey = Exclude<LookKey, FrameOwned>;
 
 export const DEFAULTS: LookParams = {
   color: 0xffffff,
@@ -325,6 +331,12 @@ const RANGES: Partial<Record<LookKey, [number, number]>> = {
 };
 
 const PARAM_KEYS = Object.keys(DEFAULTS) as LookKey[];
+const FRAME_OWNED = new Set<string>(['opacity', 'emissiveIntensity']);
+const APPLY_KEYS = PARAM_KEYS.filter((key): key is AppliedKey => !FRAME_OWNED.has(key));
+
+// A frame-owned key reaching applyLook is the two-writer bug; the compiler is what catches it.
+const _appliedKeysAreNotFrameOwned: Extract<AppliedKey, FrameOwned> extends never ? true : never =
+  true;
 
 export function specOf(look: Look): LookSpec {
   return typeof look === 'string' ? LOOKS[look] : look;
@@ -365,9 +377,9 @@ export function applyLook(material: THREE.MeshPhysicalMaterial, look: Look, tint
   if (tint !== undefined) params[tintTargetOf(params, spec.tintTarget)] = tint;
   const target = material as unknown as Record<string, unknown>;
 
-  // PARAM_KEYS rather than the resolved object's own keys: that is what drops a key a caller
-  // invented from ever reaching the material.
-  for (const key of PARAM_KEYS) {
+  // A fixed key list rather than the resolved object's own keys: that is what drops a key a
+  // caller invented from ever reaching the material.
+  for (const key of APPLY_KEYS) {
     const value = params[key];
     if (COLOR_KEYS.has(key)) (material[key] as THREE.Color).set(value as number);
     else if (Array.isArray(value)) target[key] = [...value];
@@ -375,4 +387,18 @@ export function applyLook(material: THREE.MeshPhysicalMaterial, look: Look, tint
   }
   writeFlakeUniforms(material.userData.flake as FlakeUniforms, spec.flake);
   material.needsUpdate = true;
+}
+
+/** The base a frame-owned property composes from. `Word` is the only caller. */
+export interface FrameOwnedBase {
+  opacity: number;
+  emissiveIntensity: number;
+}
+
+export function frameOwnedBase(look: Look): FrameOwnedBase {
+  const spec = specOf(look);
+  return {
+    opacity: spec.opacity ?? 1,
+    emissiveIntensity: resolveParams(spec).emissiveIntensity,
+  };
 }

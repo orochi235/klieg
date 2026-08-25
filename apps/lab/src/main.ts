@@ -1,6 +1,8 @@
 import {
   ACTIVE_NAMES,
+  type Clock,
   createKlieg,
+  type EffectSpec,
   ENTER_NAMES,
   EXIT_NAMES,
   type FireOptions,
@@ -56,6 +58,7 @@ const modalInput = el<HTMLInputElement>('modal');
 const grainInput = el<HTMLInputElement>('grain');
 const densityInput = el<HTMLInputElement>('density');
 const surfacesInput = el<HTMLSelectElement>('surfaces');
+const flickerInput = el<HTMLInputElement>('flicker');
 const number = (id: string) => Number(el<HTMLInputElement>(id).value);
 
 /** The four surface combinations the lab exposes; `connector` runs have no slider of their own. */
@@ -99,6 +102,7 @@ const CONTROL_IDS = [
   'runs',
   'minRun',
   'litAmount',
+  'flicker',
   'amplitude',
   'wallDepth',
   'wallRise',
@@ -255,11 +259,51 @@ function seedSliders(): void {
   }
 }
 
+/**
+ * One bad tube — the sign's first run, so a pinned shot always lands on the same glass. `amount`
+ * at 1 or below is a fraction of the pool, so a literal count of one has to exceed it.
+ */
+const FLICKER: EffectSpec[] = [
+  { piece: 'flicker', target: { kind: 'run', by: 'index', amount: 1.2 } },
+];
+
+/**
+ * Holds every frame at one elapsed time, so a shot of a time-varying effect is a function of the
+ * pin rather than of when it was taken. `?pin=<ms>` turns it on; the visual suite needs it.
+ */
+class PinnedClock implements Clock {
+  constructor(private readonly at: number) {}
+
+  now(): number {
+    return 0;
+  }
+
+  subscribe(fn: (nowMs: number) => void): () => void {
+    let raf = 0;
+    const loop = () => {
+      raf = requestAnimationFrame(loop);
+      fn(this.at);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }
+}
+
+const requestedPin = Number(new URLSearchParams(location.search).get('pin'));
+const PIN = Number.isFinite(requestedPin) && location.search.includes('pin=') ? requestedPin : null;
+
 const FONT_URL = `${import.meta.env.BASE_URL}font.ttf`;
 
 function create(): Klieg {
-  const instance = createKlieg({ fontUrl: FONT_URL, policy: policy.get() });
-  log(`instance up (policy ${policy.get()}${instance.supported ? '' : ', webgl2 UNSUPPORTED'})`);
+  const instance = createKlieg({
+    fontUrl: FONT_URL,
+    policy: policy.get(),
+    clock: PIN === null ? undefined : new PinnedClock(PIN),
+  });
+  const pinned = PIN === null ? '' : `, pinned at ${PIN}ms`;
+  log(
+    `instance up (policy ${policy.get()}${pinned}${instance.supported ? '' : ', webgl2 UNSUPPORTED'})`,
+  );
   return instance;
 }
 
@@ -274,6 +318,7 @@ function fire(text: string): void {
     active: active.get(),
     exit: exit.get(),
     look: chosenLook(),
+    effects: flickerInput.checked ? FLICKER : undefined,
     lighting: lighting.get(),
     tint: tintOnInput.checked ? Number.parseInt(tintInput.value.slice(1), 16) : undefined,
     // Sliders are degrees for a human; fromEuler wants radians, three's XYZ order.
@@ -439,7 +484,7 @@ function syncDisabled(): void {
   ]) {
     el<HTMLInputElement>(id).disabled = !tube;
   }
-  surfacesInput.disabled = !tube;
+  surfacesInput.disabled = flickerInput.disabled = !tube;
   for (const id of ['count', 'chunkSize', 'align', 'cluster', 'proud']) {
     el<HTMLInputElement>(id).disabled = !chunks;
   }

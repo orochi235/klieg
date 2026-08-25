@@ -896,6 +896,34 @@ describe('caller-supplied looks', () => {
   });
 });
 
+describe('caller-supplied effects', () => {
+  /** A body-wide gain, so the emissive the frame lands on says which list was used. */
+  const gain = (g: number) =>
+    ({
+      piece: { duration: 1000, at: () => ({ gain: g }) },
+      target: { kind: 'body', by: 'index', amount: 1 },
+    }) as const;
+
+  it('replaces the look own list rather than adding to it', async () => {
+    const bk = create();
+    void bk.fire('HI', {
+      ...INSTANT,
+      hold: 4000,
+      look: { emissive: 0xff2d95, emissiveIntensity: 4, effects: [gain(0.5)] },
+      effects: [gain(0.25)],
+    });
+    await flush();
+    clock.advance(16);
+
+    // 4 x 0.25. The look's own 0.5 layered on top would read 0.5, and ignoring the caller 2.
+    expect((firstMesh().material as THREE.MeshPhysicalMaterial).emissiveIntensity).toBeCloseTo(
+      1,
+      6,
+    );
+    bk.destroy();
+  });
+});
+
 describe('caller-supplied transform', () => {
   it('turns the word as one rigid object, never the camera', async () => {
     const bk = create();

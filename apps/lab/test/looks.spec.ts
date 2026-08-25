@@ -27,8 +27,8 @@ const LOOKS = [
 ] as const;
 
 /** Every source of frame-to-frame variation off, so a screenshot is a function of the look. */
-async function still(page: Page): Promise<void> {
-  await page.goto('/');
+async function still(page: Page, search = ''): Promise<void> {
+  await page.goto(`/${search}`);
   await page.fill('#text', 'JACKPOT!');
   await page.fill('#hold', '8000');
   await page.fill('#blend', '0');
@@ -105,5 +105,18 @@ test.describe('flake seeding', () => {
     // Four identical letters: an identical flake field across them is the failure this catches.
     await page.fill('#text', 'MMMM');
     await shoot(page, 'flake-seeding');
+  });
+});
+
+/**
+ * A flicker is a function of time, so this is the one shot that cannot be taken off a live clock:
+ * `?pin` holds every frame at one elapsed time, and the selection is seeded.
+ */
+test.describe('effects', () => {
+  test('flicker takes one run of the sign down', async ({ page }) => {
+    await still(page, '?pin=960');
+    await page.selectOption('#look', 'tubing');
+    await page.check('#flicker');
+    await shoot(page, 'effect-flicker');
   });
 });

@@ -1,13 +1,13 @@
 import type { Font, PathCommand } from 'opentype.js';
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import type { PartInfo } from '../../src/effects/types.js';
+import type { EffectPiece, PartInfo } from '../../src/effects/types.js';
 import { Timeline } from '../../src/motion/compositor.js';
 import type { LetterInfo, MotionPiece } from '../../src/motion/types.js';
 import { NONE, orderKey } from '../../src/motion/types.js';
 import type { PoseOffset } from '../../src/pose.js';
 import type { FlakeUniforms } from '../../src/render/flake.js';
-import type { LookSpec } from '../../src/render/looks.js';
+import { type LookSpec, specOf } from '../../src/render/looks.js';
 import type { GradientSpec } from '../../src/render/tube/gradient.js';
 import { Word } from '../../src/render/word.js';
 import type { LoadedFont } from '../../src/text/font.js';
@@ -1464,5 +1464,120 @@ describe('part pool', () => {
       orderKey(part, { from: 'center' }),
       5,
     );
+  });
+});
+
+describe('effects', () => {
+  const STILL = new Timeline({ enter: NONE, active: NONE, exit: NONE, hold: 0, blendMs: 0 });
+  /** A fixed gain on every part it is handed, so these assert routing rather than a waveform. */
+  const half: EffectPiece = { duration: 1000, at: () => ({ gain: 0.5 }) };
+  /** One part: `amount` at 1 or below is a fraction of the pool, so a literal count must exceed it. */
+  const FIRST = { by: 'index', amount: 1.2 } as const;
+
+  function tubingWith(effects: LookSpec['effects']): Word {
+    return new Word('AA', stubFont(), { ...specOf('tubing'), effects }, ROOMY);
+  }
+
+  /** Lit runs in pool order: they follow the body in each cell and share that cell's material. */
+  function runColorOf(word: Word, ordinal: number): number {
+    const meshes = groups(word).flatMap((cell) => {
+      const lit = (cell.children[1] as THREE.Mesh).material;
+      return (cell.children.slice(1) as THREE.Mesh[]).filter((m) => m.material === lit);
+    });
+    const mesh = meshes[ordinal];
+    if (!mesh) throw new Error(`the word has no run ${ordinal}`);
+    return mesh.geometry.getAttribute('runColor').getX(0);
+  }
+
+  it('leaves every part alone when a look declares no effects', () => {
+    const word = tubingWith(undefined);
+    const before = [runColorOf(word, 0), runColorOf(word, 1)];
+
+    word.apply(STILL, 0);
+
+    expect([runColorOf(word, 0), runColorOf(word, 1)]).toEqual(before);
+  });
+
+  it('scales a targeted run by the gain and leaves an untargeted one at its own colour', () => {
+    const word = tubingWith([{ piece: half, target: { kind: 'run', ...FIRST } }]);
+    const before = [runColorOf(word, 0), runColorOf(word, 1)];
+
+    word.apply(STILL, 0);
+
+    expect(runColorOf(word, 0)).toBeCloseTo((before[0] as number) * 0.5, 6);
+    expect(runColorOf(word, 1)).toBe(before[1]);
+  });
+
+  // Composing from the buffer instead of from the part's own colour passes the test above and
+  // fades the sign to black over a few seconds; this is the one that catches it.
+  it('does not compound across frames', () => {
+    const word = tubingWith([{ piece: half, target: { kind: 'run', ...FIRST } }]);
+
+    word.apply(STILL, 0);
+    const once = runColorOf(word, 0);
+    word.apply(STILL, 16);
+    word.apply(STILL, 32);
+
+    expect(runColorOf(word, 0)).toBe(once);
+  });
+
+  it('layers two effects onto the part they both target', () => {
+    const word = tubingWith([
+      { piece: half, target: { kind: 'run', ...FIRST } },
+      { piece: half, target: { kind: 'run', ...FIRST } },
+    ]);
+    const before = runColorOf(word, 0);
+
+    word.apply(STILL, 0);
+
+    expect(runColorOf(word, 0)).toBeCloseTo(before * 0.25, 6);
+  });
+
+  it('drives a body through emissiveIntensity rather than through the attribute', () => {
+    const word = new Word(
+      'A',
+      stubFont(),
+      { ...specOf('neon'), effects: [{ piece: half, target: { kind: 'body', ...FIRST } }] },
+      ROOMY,
+    );
+
+    word.apply(STILL, 0);
+
+    expect(materialOf(word).emissiveIntensity).toBeCloseTo(1.6, 6);
+  });
+
+  it('skips a run whose material came from a debug override and has no run-colour contract', () => {
+    const lit = new THREE.MeshBasicMaterial();
+    const word = new Word(
+      'AA',
+      stubFont(),
+      { ...specOf('tubing'), effects: [{ piece: half, target: { kind: 'run', ...FIRST } }] },
+      ROOMY,
+      false,
+      undefined,
+      { tubeMaterial: (which) => (which === 'lit' ? lit : new THREE.MeshBasicMaterial()) },
+    );
+    const before = runColorOf(word, 0);
+
+    word.apply(STILL, 0);
+
+    expect(runColorOf(word, 0)).toBe(before);
+  });
+
+  it('offsets a targeted part on the mesh, so it composes with the pose on the cell', () => {
+    const lift: EffectPiece = { duration: 1000, at: () => ({ position: [0, 0.25, 0] }) };
+    const word = tubingWith([{ piece: lift, target: { kind: 'run', ...FIRST } }]);
+
+    const cell = groups(word)[0] as THREE.Group;
+    const rest = cell.position.x;
+
+    word.apply(
+      timelineOf(() => ({ position: [1, 0, 0] })),
+      50,
+    );
+
+    const run = cell.children[1] as THREE.Mesh;
+    expect(cell.position.x).toBeCloseTo(rest + 1, 10);
+    expect([run.position.x, run.position.y]).toEqual([0, 0.25]);
   });
 });

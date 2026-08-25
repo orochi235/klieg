@@ -1,9 +1,20 @@
 import * as THREE from 'three';
-import type { PartInfo, PartKind } from '../effects/types.js';
+import { mergeOffsets } from '../effects/compositor.js';
+import { EFFECTS } from '../effects/pieces.js';
+import type {
+  EffectPiece,
+  EffectSpec,
+  PartInfo,
+  PartKind,
+  PartOffset,
+  ResolvedOffset,
+} from '../effects/types.js';
 import { blankPose } from '../motion/compositor.js';
 import type { RegroupResult } from '../motion/sequence.js';
-import type { LetterInfo } from '../motion/types.js';
+import type { LetterInfo, StaggerSpec } from '../motion/types.js';
+import { stagger } from '../motion/types.js';
 import type { Pose } from '../pose.js';
+import { selectIndices } from '../select.js';
 import type { LoadedFont } from '../text/font.js';
 import {
   buildGlyphGeometry,
@@ -43,6 +54,7 @@ import {
   GRADIENT_BOUNDS_UNIFORM,
   GRADIENT_ORIGIN_UNIFORM,
   positionalDomain,
+  RUN_COLOR_ATTRIBUTE,
   tintByRunColor,
   tintChannelOf,
 } from './tube/tint.js';
@@ -125,6 +137,11 @@ export class Word {
   private readonly bodyMeshes: (THREE.Mesh | null)[] = [];
   /** A tube letter's lit-run meshes in blueprint order; indexed by letter slot. */
   private readonly litMeshes: THREE.Mesh[][] = [];
+  /**
+   * Whether a letter's lit-run material reads the run-colour attribute. A debug override brings
+   * its own material and no such contract, so writing that buffer would write into nothing.
+   */
+  private readonly litReadsRunColor: boolean[] = [];
   /** The word-wide part pool, body parts first and then run parts. */
   private readonly parts: PartInfo[] = [];
   private readonly partMeshes: THREE.Mesh[] = [];
@@ -134,6 +151,21 @@ export class Word {
    * does read it gets the body untinted rather than black.
    */
   private readonly partBaseColor: number[] = [];
+  /** Per part, whether `writePart` may drive it through the run-colour buffer. */
+  private readonly partReadsRunColor: boolean[] = [];
+  /** Per effect: the resolved piece and the part indices it drives. Selection is not per frame. */
+  private readonly effects: {
+    piece: EffectPiece;
+    parts: number[];
+    stagger?: number | StaggerSpec;
+  }[] = [];
+  /**
+   * Layer buffers for the targeted parts only, keyed by part index. Held rather than rebuilt: the
+   * selection is seeded, so what a frame writes never changes, and an untargeted part costs nothing.
+   */
+  private readonly effectLayers = new Map<number, PartOffset[]>();
+  /** One scratch colour for the whole word; `writePart` runs per targeted part per frame. */
+  private readonly partColor = new THREE.Color();
   private readonly cache: GlyphCache;
   private readonly decorCache: GlyphCache<Blueprint> | null;
   /**
@@ -235,6 +267,7 @@ export class Word {
     }
     this.setGradientBounds();
     this.buildParts();
+    this.buildEffects(spec.effects ?? []);
   }
 
   /**
@@ -253,9 +286,16 @@ export class Word {
       );
       this.partMeshes.push(this.bodyMeshes[i] as THREE.Mesh);
       this.partBaseColor.push(0xffffff);
+      this.partReadsRunColor.push(false);
     }
 
-    const runs: { slot: number; mesh: THREE.Mesh; length: number; color: number }[] = [];
+    const runs: {
+      slot: number;
+      mesh: THREE.Mesh;
+      length: number;
+      color: number;
+      tinted: boolean;
+    }[] = [];
     for (let i = 0; i < this.charOf.length; i++) {
       const blueprint = this.tubeBlueprints[i];
       const meshes = this.litMeshes[i];
@@ -270,7 +310,13 @@ export class Word {
       }
       for (let r = 0; r < meshes.length; r++) {
         const run = lit[r] as (typeof lit)[number];
-        runs.push({ slot: i, mesh: meshes[r] as THREE.Mesh, length: run.length, color: run.color });
+        runs.push({
+          slot: i,
+          mesh: meshes[r] as THREE.Mesh,
+          length: run.length,
+          color: run.color,
+          tinted: this.litReadsRunColor[i] === true,
+        });
       }
     }
 
@@ -285,6 +331,7 @@ export class Word {
       this.parts.push(this.partInfo('run', n, runs.length, run.slot, at, span));
       this.partMeshes.push(run.mesh);
       this.partBaseColor.push(run.color);
+      this.partReadsRunColor.push(run.tinted);
       walked += run.length;
     }
   }
@@ -320,6 +367,92 @@ export class Word {
   /** The word's parts of one kind, in pool order. */
   partsOf(kind: PartKind): readonly PartInfo[] {
     return this.parts.filter((p) => p.kind === kind);
+  }
+
+  /**
+   * Resolves each effect against the pool once. Selection is seeded and stable, so doing it per
+   * frame would pick the same parts at the cost of re-selecting and re-allocating every frame.
+   */
+  private buildEffects(specs: readonly EffectSpec[]): void {
+    for (const spec of specs) {
+      // Pool positions carry their index into `this.parts`: a part's `index` numbers its own kind,
+      // and the two differ for every run part.
+      const pool = this.parts
+        .map((part, index) => ({ part, index }))
+        .filter(({ part }) => part.kind === spec.target.kind);
+      const chosen = selectIndices(
+        pool.map(({ part }) => ({ index: part.index, length: part.span })),
+        spec.target,
+        spec.seed ?? 0,
+      );
+      const parts = pool.filter(({ part }) => chosen.has(part.index)).map(({ index }) => index);
+      this.effects.push({
+        piece: typeof spec.piece === 'string' ? EFFECTS[spec.piece]() : spec.piece,
+        stagger: spec.stagger,
+        parts,
+      });
+      for (const index of parts) {
+        if (!this.effectLayers.has(index)) this.effectLayers.set(index, []);
+      }
+    }
+  }
+
+  /** Layers every effect that reached a part, then writes each targeted part once. */
+  private applyEffects(elapsed: number): void {
+    for (const layers of this.effectLayers.values()) layers.length = 0;
+
+    for (const effect of this.effects) {
+      const duration = effect.piece.duration;
+      const pass = duration > 0 ? (elapsed % duration) / duration : 0;
+      for (const index of effect.parts) {
+        const part = this.parts[index] as PartInfo;
+        const t = effect.stagger === undefined ? pass : stagger(pass, part, effect.stagger);
+        (this.effectLayers.get(index) as PartOffset[]).push(effect.piece.at(t, part));
+      }
+    }
+
+    for (const [index, layers] of this.effectLayers) this.writePart(index, mergeOffsets(layers));
+  }
+
+  /**
+   * A part's own share of its family's material. Transform lands on the mesh, which is a child of
+   * the letter cell the pose drives, so the two compose without either having to know about the
+   * other. Colour composes from `partBaseColor`, never from the buffer: reading back last frame's
+   * value and scaling it again compounds, and the sign fades to black in a few seconds.
+   */
+  private writePart(index: number, out: ResolvedOffset): void {
+    const part = this.parts[index] as PartInfo;
+    const mesh = this.partMeshes[index] as THREE.Mesh;
+
+    mesh.position.set(...out.position);
+    mesh.rotation.set(...out.rotation);
+    mesh.scale.setScalar(out.scale);
+
+    if (part.kind === 'body') {
+      setEmissiveIntensity(
+        mesh.material as THREE.Material,
+        this.bodyBase.emissiveIntensity * out.gain,
+      );
+      return;
+    }
+
+    // A run carries its colour on a per-vertex attribute the look's shader already reads, so gain
+    // and colour are one buffer write rather than a material of this run's own.
+    if (!this.partReadsRunColor[index]) return;
+    const attribute = mesh.geometry.getAttribute(RUN_COLOR_ATTRIBUTE) as
+      | THREE.BufferAttribute
+      | undefined;
+    if (!attribute) return;
+    const color = this.partColor
+      .setHex(out.color ?? (this.partBaseColor[index] as number))
+      .multiplyScalar(out.gain);
+    const array = attribute.array as Float32Array;
+    for (let v = 0; v < array.length; v += 3) {
+      array[v] = color.r;
+      array[v + 1] = color.g;
+      array[v + 2] = color.b;
+    }
+    attribute.needsUpdate = true;
   }
 
   /**
@@ -431,6 +564,7 @@ export class Word {
           tintMaterialOf(spec) === 'decoration' ? hue : undefined,
         );
       }
+      this.litReadsRunColor[i] = !litOverride;
       // Only when the look was applied: an override brings its own material and its own meaning
       // for every channel, and has no run-colour contract with us.
       if (!litOverride) {
@@ -680,6 +814,8 @@ export class Word {
         setEmissiveIntensity(dark, this.darkBase.emissiveIntensity);
       }
     }
+
+    if (this.effects.length > 0) this.applyEffects(elapsed);
   }
 
   dispose(): void {
@@ -697,6 +833,9 @@ export class Word {
     this.parts.length = 0;
     this.partMeshes.length = 0;
     this.partBaseColor.length = 0;
+    this.partReadsRunColor.length = 0;
+    this.effects.length = 0;
+    this.effectLayers.clear();
     this.bodyMeshes.length = 0;
     this.litMeshes.length = 0;
     this.gradientRamp?.dispose();

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { EffectSpec } from '../effects/types.js';
 import { ALL_CONNECT, type DecorationSpec } from './decoration.js';
 import {
   createFlakeUniforms,
@@ -311,6 +312,8 @@ export interface LookSpec extends Partial<LookParams> {
   /** Which material `tint` recolors. Default 'body'. */
   tintTo?: 'body' | 'decoration';
   decoration?: DecorationSpec;
+  /** Appearance driven over time, below the level of a letter. Absent or empty renders statically. */
+  effects?: EffectSpec[];
 }
 
 export type Look = LookName | LookSpec;

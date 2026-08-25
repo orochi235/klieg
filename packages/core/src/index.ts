@@ -1,5 +1,7 @@
 import { type Clock, RafClock } from './clock.js';
 import type { Easing } from './easing.js';
+import { EFFECTS } from './effects/pieces.js';
+import type { EffectName, EffectSpec } from './effects/types.js';
 import { ACTIVE } from './motion/active.js';
 import { type Slot, slotDrivesEnv, slotDuration, Timeline } from './motion/compositor.js';
 import { ENTER } from './motion/enter.js';
@@ -27,6 +29,15 @@ export {
   type SpringParams,
   spring,
 } from './easing.js';
+export { EFFECTS } from './effects/pieces.js';
+export type {
+  EffectName,
+  EffectPiece,
+  EffectSpec,
+  PartInfo,
+  PartKind,
+  PartOffset,
+} from './effects/types.js';
 export {
   type CycleSpec,
   cycle,
@@ -74,6 +85,7 @@ export const ACTIVE_NAMES: readonly ActiveName[] = Object.keys(ACTIVE) as Active
 export const EXIT_NAMES: readonly ExitName[] = Object.keys(EXIT) as ExitName[];
 export const LOOK_NAMES: readonly LookName[] = Object.keys(LOOKS) as LookName[];
 export const LIGHTING_NAMES: readonly LightingName[] = Object.keys(LIGHTING) as LightingName[];
+export const EFFECT_NAMES: readonly EffectName[] = Object.keys(EFFECTS) as EffectName[];
 
 const TAU = Math.PI * 2;
 
@@ -136,6 +148,11 @@ export interface FireOptions {
   exit?: ExitSlot;
   /** A built-in name, or a material of your own as plain numbers. */
   look?: Look;
+  /**
+   * Appearance driven over time, below the level of a letter. Replaces the look's own list rather
+   * than adding to it — spread `specOf(look).effects` to keep them.
+   */
+  effects?: EffectSpec[];
   /** How the environment lights the type. `sweep` rakes the highlight, `static` holds it still. */
   lighting?: LightingName;
   /**
@@ -234,13 +251,16 @@ export function createKlieg(options: KliegOptions): Klieg {
     if (signal.aborted) return;
 
     const renderer = stage.mount();
-    const bloom = wantsBloom(opts.bloom, opts.look ?? 'gold') ? new BloomPath(renderer) : null;
+    const chosen = opts.look ?? 'gold';
+    const bloom = wantsBloom(opts.bloom, chosen) ? new BloomPath(renderer) : null;
+    // A caller's list replaces the look's own rather than adding to it.
+    const look = opts.effects ? { ...specOf(chosen), effects: opts.effects } : chosen;
     let word: Word;
     try {
       word = new Word(
         text,
         loaded,
-        opts.look ?? 'gold',
+        look,
         stage.viewportBudget(options.framing?.width, options.framing?.height),
         opts.wrap,
         opts.tint,

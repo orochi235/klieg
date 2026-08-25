@@ -30,6 +30,8 @@ import type { FlakeUniforms } from './flake.js';
 import {
   applyLook,
   createMaterial,
+  type FrameOwnedBase,
+  frameOwnedBase,
   type Look,
   type LookSpec,
   specOf,
@@ -54,6 +56,13 @@ const EM = 1; // glyphs are built at 1 em; the group scale does the fitting
 function seedFlake(material: THREE.Material, i: number): void {
   const flake = material.userData.flake as FlakeUniforms | undefined;
   if (flake) flake.uFlakeSeed.value = i * 17.13;
+}
+
+/** Writes a frame-owned emissive onto a material that has one. A debug override may not. */
+function setEmissiveIntensity(material: THREE.Material | null, value: number): void {
+  if (material && 'emissiveIntensity' in material) {
+    (material as THREE.MeshPhysicalMaterial).emissiveIntensity = value;
+  }
 }
 
 /**
@@ -118,10 +127,11 @@ export class Word {
   private readonly gradientRamp: THREE.DataTexture | null;
   private readonly chunkGeo: THREE.BufferGeometry | null;
   private readonly pose = blankPose();
-  private readonly bodyOpacity: number;
-  private readonly decorOpacity: number;
-  /** Base opacity of a tube's unlit runs; irrelevant to every other decoration kind. */
-  private readonly darkOpacity: number;
+  /** Frame-owned bases, one per material family. `Word` is the only writer of these properties. */
+  private readonly bodyBase: FrameOwnedBase;
+  private readonly decorBase: FrameOwnedBase;
+  /** Base of a tube's unlit runs; irrelevant to every other decoration kind. */
+  private readonly darkBase: FrameOwnedBase;
   private disposed = false;
 
   constructor(
@@ -136,15 +146,15 @@ export class Word {
     this.group.add(this.inner);
 
     const spec = specOf(look);
-    this.bodyOpacity = spec.opacity ?? 1;
+    this.bodyBase = frameOwnedBase(spec);
 
     this.cache = new GlyphCache((char, depth) =>
       buildGlyphGeometry(font.font, char, EM, { ...DEFAULT_GLYPH_OPTIONS, depth }),
     );
 
     const decoration = spec.decoration;
-    this.decorOpacity = decoration?.look.opacity ?? 1;
-    this.darkOpacity = decoration?.kind === 'tube' ? (decoration.dark.opacity ?? 1) : 1;
+    this.decorBase = frameOwnedBase(decoration?.look ?? {});
+    this.darkBase = frameOwnedBase(decoration?.kind === 'tube' ? decoration.dark : {});
     this.chunkGeo = decoration?.kind === 'chunks' ? chunkGeometry(decoration.shape) : null;
     this.gradientRamp =
       decoration?.kind === 'tube' && decoration.gradient
@@ -289,8 +299,9 @@ export class Word {
     material.transparent = true;
     // A near-transparent backing still writes depth by default, which culls the tube drawn
     // behind it — the sign vanishes as the tube thins rather than being occluded by anything visible.
-    material.depthWrite = (spec.opacity ?? 1) >= 1;
+    material.depthWrite = this.bodyBase.opacity >= 1;
     seedFlake(material, i);
+    setEmissiveIntensity(material, this.bodyBase.emissiveIntensity);
     this.bodyMaterials.push(material);
 
     const cell = new THREE.Group();
@@ -328,6 +339,7 @@ export class Word {
       // would cull that invisible.
       decorMaterial.side = THREE.DoubleSide;
       seedFlake(decorMaterial, i);
+      setEmissiveIntensity(decorMaterial, this.decorBase.emissiveIntensity);
       this.decorMaterials.push(decorMaterial);
 
       const darkOverride = debug?.tubeMaterial?.('dark');
@@ -336,6 +348,7 @@ export class Word {
       darkMaterial.transparent = true;
       darkMaterial.side = THREE.DoubleSide;
       seedFlake(darkMaterial, i);
+      setEmissiveIntensity(darkMaterial, this.darkBase.emissiveIntensity);
       this.darkMaterials.push(darkMaterial);
 
       const shapes = glyphToShapes(font.font, char, EM);
@@ -360,6 +373,7 @@ export class Word {
       decorMaterial.transparent = true;
       if (decoration.kind === 'chunks') decorMaterial.side = chunkGeometrySide(decoration);
       seedFlake(decorMaterial, i);
+      setEmissiveIntensity(decorMaterial, this.decorBase.emissiveIntensity);
       this.decorMaterials.push(decorMaterial);
       this.darkMaterials.push(null);
       this.tubeBounds.push(null);
@@ -530,11 +544,20 @@ export class Word {
       cell.rotation.set(...pose.rotation);
       cell.scale.setScalar(pose.scale);
       const material = this.bodyMaterials[i];
-      if (material) material.opacity = pose.opacity * this.bodyOpacity;
+      if (material) {
+        material.opacity = pose.opacity * this.bodyBase.opacity;
+        material.emissiveIntensity = this.bodyBase.emissiveIntensity;
+      }
       const decor = this.decorMaterials[i];
-      if (decor) decor.opacity = pose.opacity * this.decorOpacity;
+      if (decor) {
+        decor.opacity = pose.opacity * this.decorBase.opacity;
+        setEmissiveIntensity(decor, this.decorBase.emissiveIntensity);
+      }
       const dark = this.darkMaterials[i];
-      if (dark) dark.opacity = pose.opacity * this.darkOpacity;
+      if (dark) {
+        dark.opacity = pose.opacity * this.darkBase.opacity;
+        setEmissiveIntensity(dark, this.darkBase.emissiveIntensity);
+      }
     }
   }
 

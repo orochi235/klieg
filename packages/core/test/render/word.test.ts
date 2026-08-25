@@ -1323,3 +1323,57 @@ describe('positional gradient bounds', () => {
     expect(uniforms.uGradBounds).toBeUndefined();
   });
 });
+
+describe('frame-owned material properties', () => {
+  /** The lit-run material of the first letter: the tube meshes follow the body in the cell. */
+  function litTubeMaterial(word: Word): THREE.MeshPhysicalMaterial {
+    const runs = (groups(word)[0] as THREE.Group).children.slice(1);
+    const materials = runs.map((run) => (run as THREE.Mesh).material as THREE.MeshPhysicalMaterial);
+    const lit = materials.find((material) => material.emissive.getHex() !== 0x000000);
+    if (!lit) throw new Error('the word has no lit tube run to measure');
+    return lit;
+  }
+
+  function runOneFrame(word: Word): void {
+    word.apply(
+      timelineOf(() => ({})),
+      50,
+    );
+  }
+
+  it('carries a look emissiveIntensity onto the material without any frame having run', () => {
+    const word = new Word('A', stubFont(), 'neon', ROOMY);
+
+    expect(materialOf(word).emissiveIntensity).toBe(3.2);
+  });
+
+  it('holds it across a frame', () => {
+    const word = new Word('A', stubFont(), 'neon', ROOMY);
+
+    runOneFrame(word);
+
+    expect(materialOf(word).emissiveIntensity).toBe(3.2);
+  });
+
+  it('leaves a look that declares none at the default', () => {
+    const word = new Word('A', stubFont(), 'gold', ROOMY);
+
+    expect(materialOf(word).emissiveIntensity).toBe(1);
+  });
+
+  // A tube is lit by white x runColor x emissiveIntensity and its body is a backing declaring no
+  // emissive at all, so resolving only the body base would leave the sign dark.
+  it('carries a decoration emissiveIntensity onto the lit tube material', () => {
+    const word = new Word('A', stubFont(), 'tubing', ROOMY);
+
+    expect(litTubeMaterial(word).emissiveIntensity).toBe(3.4);
+  });
+
+  it('holds the lit tube intensity across a frame', () => {
+    const word = new Word('A', stubFont(), 'tubing', ROOMY);
+
+    runOneFrame(word);
+
+    expect(litTubeMaterial(word).emissiveIntensity).toBe(3.4);
+  });
+});

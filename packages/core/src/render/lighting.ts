@@ -1,3 +1,14 @@
+/** What every lighting piece and light source reads for one frame. */
+export interface FrameCtx {
+  /** -1..1 over the canvas box, or null until the pointer has been inside it. */
+  pointer: { x: number; y: number } | null;
+  /** The same pointer in the word's layout space — the em, block-relative space `PartInfo.x/y`
+   * uses. Null whenever `pointer` is. */
+  pointerInWord: { x: number; y: number } | null;
+  /** Milliseconds since the previous frame. */
+  dt: number;
+}
+
 export type LightingName = 'sweep' | 'static' | 'pointer';
 
 export interface LightingMode {

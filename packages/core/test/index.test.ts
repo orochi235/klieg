@@ -1163,3 +1163,45 @@ describe('element placement', () => {
     });
   });
 });
+
+describe('selectable', () => {
+  it('warns and falls back to hidden when a transform would misalign the layer', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const bk = create();
+    void bk.fire('AB', { selectable: 'layer', transform: fromEuler(0, 0.3, 0) });
+    await flush();
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('a transform'));
+    bk.destroy();
+  });
+
+  it('warns and names the piece when the active motion moves the letters', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const bk = create();
+    void bk.fire('AB', { selectable: 'layer', active: 'float' });
+    await flush();
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('float'));
+    bk.destroy();
+  });
+
+  it('says nothing for a still word', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const bk = create();
+    void bk.fire('AB', { selectable: 'layer', enter: 'none', active: 'none' });
+    await flush();
+
+    expect(warn).not.toHaveBeenCalled();
+    bk.destroy();
+  });
+
+  it('says nothing when the caller did not ask for a layer', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const bk = create();
+    void bk.fire('AB', { active: 'float' });
+    await flush();
+
+    expect(warn).not.toHaveBeenCalled();
+    bk.destroy();
+  });
+});

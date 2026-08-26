@@ -139,6 +139,15 @@ describe('track', () => {
     expect(out.pitch).toBeCloseTo(-0.5);
   });
 
+  // The value FrameCtx.dt carries under reduced motion, where one frame stands for the whole run.
+  it('snaps rather than diverging on the infinite frame reduced motion renders', () => {
+    const piece = track({ yawRange: 1, pitchRange: 0.5 });
+    const ctx = { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: Number.POSITIVE_INFINITY };
+    const out = piece.env(0, ctx);
+    expect(out.yaw).toBeCloseTo(1);
+    expect(out.pitch).toBeCloseTo(-0.5);
+  });
+
   it('snaps rather than going NaN when the follow period is NaN', () => {
     const piece = track({ yawRange: 1, pitchRange: 0.5, followMs: Number.NaN });
     const out = piece.env(0, { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 16 });

@@ -244,6 +244,16 @@ rather than a name, because a name cannot carry the piece it wraps. Give it `{ a
 its holder from the whole pool of that kind, so against a subset the fault can land on a part the
 effect does not drive and nothing happens at all.
 
+**`lamp({ source, radius, strength, color, duration })`** — puts light on the parts near a position
+rather than changing what they are made of. `radius` is its reach in em of layout space, `strength`
+the light at the centre falling to nothing at that edge, and `color` the lamp's own, multiplied
+against the look's hue. `source` says where the light is on each pass: `fromPointer()` is the
+default and puts it under the cursor, `fixed(x, y)` pins it, `orbit({ radius, x, y })` circles it,
+and `along([...])` walks a polyline at constant time per segment rather than constant speed.
+`duration` is one pass for the sources that read the clock, `orbit` and `along`, and does nothing
+to `fixed` or `fromPointer`, which ignore it. A pointer source stays dark until the pointer has
+been inside the canvas, so an untouched page gets no lamp rather than one parked at the origin.
+
 Effects layer. Brightness multiplies and colour is replaced, so `flicker` and `hue` compose without
 either knowing about the other — but two pieces both writing colour fight, and the last one wins.
 A hue piece writes colour every frame, which overrides `tint`: `tubing` tints its decoration, so a

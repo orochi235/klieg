@@ -5,14 +5,22 @@ learned that its design doc does not carry, and what is worth doing next.
 
 ## Branch state
 
-**Nothing is in flight. `composable-lighting` and `flicker-spell` are both merged into `main`,
-along with `framing-align` (PR #3) and `show-fills-its-frame`.** `npm run check` is green at
-**1110 tests**. The sections below are what those branches learned; treat every claim about their
-*status* as historical.
+**`composable-lighting` and `flicker-spell` are both merged into `main` and pushed**, along with
+`framing-align` (PR #3) and `show-fills-its-frame`. `main` is `636241a`, green at **1110 tests** and
+**33** visual, CI passing. The sections below are what those branches learned; treat every claim
+about their *status* as historical.
 
-**`sign-wrapper` is a design doc and no code.** One commit off `main`, in its own worktree,
-proposing `sign()` and a `<klieg-sign>` element over a framework-free core — and a `hold: 'forever'`
-that core does not have yet. It was deliberately left unmerged.
+**`sign-wrapper` is the one branch still open, and `v0.8.0` waits for it.** One commit off `26fde30`
+in its own worktree, carrying [a design](specs/2026-08-26-sign-wrapper-design.md) and no code:
+`sign()` and a `<klieg-sign>` element over a framework-free core, plus a `hold: 'forever'` that core
+does not have yet. **The decision is to land it before tagging**, so 0.8.0 ships the sign wrapper
+with the lighting surface rather than making it 0.9.0 a week later.
+
+Two things whoever picks it up needs. Its base predates the lighting and flicker merges, so merge
+`main` into it first. And it was cut *after* `framing.align` landed and already accounts for it —
+the design's complaint that the portfolio masthead "compensates for centring in CSS" is answered by
+`align` defaulting to `'start'` under an element placement, which the design passes through rather
+than re-solving.
 
 **`flicker-spell` — three tasks, merged.** `flicker` gained `spell` and `calm`, and its step count
 is derived from the pass rather than fixed at 24. See
@@ -273,9 +281,10 @@ actually landed.
 **`main` is unpushed and carries an unreleased minor.** Everything under `## Unreleased` is post-0.7.0:
 the `lamp`/`EnvPiece` lighting surface, `framing.align`, `flicker`'s `spell` and `calm`. That is a
 minor rather than a patch — it adds public surface, changes what an element placement defaults to,
-and breaks `EffectPiece.at`'s signature — so the next tag is `v0.8.0`. **The portfolio session asked
-to be told before a tag goes up**, and since releases are tag-triggered there is a window between
-telling them and pushing it.
+and breaks `EffectPiece.at`'s signature — so the next tag is `v0.8.0`. **It is held for
+`sign-wrapper`**; see the branch state above. **The portfolio session asked to be told before a tag
+goes up**, and since releases are tag-triggered there is a window between telling them and pushing
+it.
 
 **`main` carries the tube lab, the tube geometry rewrite, the colour gradients, the junction
 reconciliation, direct paths by default, element-anchored placement and the effects pipeline, all

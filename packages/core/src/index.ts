@@ -165,10 +165,12 @@ export interface Framing {
   /** Defaults to 0.3. */
   height?: number;
   /**
-   * Where the word sits in the box, defaulting to `'center'`. It is placed at whatever size the
-   * fractions above chose, so aligning does not resize it, and the edge it meets is the painted
-   * one — the bevel included. An overlay has no edge to meet; this is for an element `placement`,
-   * whose anchor does.
+   * Where the word sits in the box, in reading order — `'start'` is the left edge of an `ltr` box
+   * and the right edge of an `rtl` one. An element placement defaults to `'start'`, because the
+   * page it sits in has a text edge and meeting it is usually the point of anchoring; an overlay
+   * has no edge to meet and defaults to `'center'`. The word is placed at whatever size the
+   * fractions above chose, so aligning never resizes it, and what meets the edge is the painted
+   * silhouette — bevel included.
    */
   align?: Align;
 }

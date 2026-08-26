@@ -5,6 +5,7 @@ import {
   BASE_Z,
   canHoldCanvas,
   canvasCss,
+  edgeFor,
   layerCss,
   lensFor,
   MAX_HALF_ANGLE_DEG,
@@ -337,14 +338,46 @@ it('reports the whole box as the extent the alignment measures against', () => {
   expect(budget.width).toBeCloseTo((budget.extent as number) * 0.94, 12);
 });
 
-it('carries the alignment through to the fit', () => {
-  const strip = new Stage({
-    idleTimeoutMs: 1000,
-    placement: { kind: 'element', el: anchor(800, 120) },
+describe('which edge an alignment names', () => {
+  const strip = () =>
+    new Stage({ idleTimeoutMs: 1000, placement: { kind: 'element', el: anchor(800, 120) } });
+
+  it('resolves start and end against the reading direction', () => {
+    expect(edgeFor('start', 'ltr')).toBe('left');
+    expect(edgeFor('end', 'ltr')).toBe('right');
+    expect(edgeFor('start', 'rtl')).toBe('right');
+    expect(edgeFor('end', 'rtl')).toBe('left');
   });
 
-  expect(strip.viewportBudget(0.94, 0.66, 'start').align).toBe('start');
-  expect(strip.viewportBudget(0.94, 0.66).align).toBeUndefined();
+  it('names no edge for a centred word', () => {
+    expect(edgeFor('center', 'ltr')).toBeUndefined();
+    expect(edgeFor('center', 'rtl')).toBeUndefined();
+  });
+
+  it('meets the anchor own edge unless the caller says otherwise', () => {
+    // The page an anchored word sits in has a text edge, and meeting it is the point of anchoring.
+    expect(strip().viewportBudget(0.94, 0.66).edge).toBe('left');
+    expect(strip().viewportBudget(0.94, 0.66, 'center').edge).toBeUndefined();
+    expect(strip().viewportBudget(0.94, 0.66, 'end').edge).toBe('right');
+  });
+
+  it('leaves a fullscreen overlay centred, which has no edge to meet', () => {
+    expect(headlessStage().viewportBudget().edge).toBeUndefined();
+    expect(headlessStage().viewportBudget(0.62, 0.3, 'start').edge).toBe('left');
+  });
+
+  it('mirrors the default in an anchor the page reads right to left', () => {
+    const rtl = { clientWidth: 800, clientHeight: 120, dir: 'rtl' } as unknown as HTMLElement;
+    const stage = new Stage({ idleTimeoutMs: 1000, placement: { kind: 'element', el: rtl } });
+    vi.stubGlobal('getComputedStyle', (el: HTMLElement) => ({
+      direction: (el as unknown as { dir?: string }).dir ?? 'ltr',
+    }));
+
+    expect(stage.viewportBudget(0.94, 0.66).edge).toBe('right');
+    expect(stage.viewportBudget(0.94, 0.66, 'end').edge).toBe('left');
+
+    vi.unstubAllGlobals();
+  });
 });
 
 describe('the lens against a wide anchor', () => {

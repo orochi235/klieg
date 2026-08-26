@@ -1817,13 +1817,13 @@ describe('layoutVersion', () => {
 
 describe('framing alignment', () => {
   /** 'AA' spans 1.2 em of advance; a 1.2-wide budget scales it by 1 and its outline ends at 0.5. */
-  const START: Budget = { width: 1.2, height: 100, extent: 4, align: 'start' };
-  const END: Budget = { width: 1.2, height: 100, extent: 4, align: 'end' };
+  const START: Budget = { width: 1.2, height: 100, extent: 4, edge: 'left' };
+  const END: Budget = { width: 1.2, height: 100, extent: 4, edge: 'right' };
   /**
    * Cap-bound, so the word is narrower than its budget. A width-bound fit lands the paint on
    * `-width / 2` whatever the letters are, which would leave a regroup nothing to move.
    */
-  const LOOSE: Budget = { width: 100, height: 100, extent: 4, align: 'start' };
+  const LOOSE: Budget = { width: 100, height: 100, extent: 4, edge: 'left' };
   /** The bevel is lit geometry, so the paint runs this much wider than the glyph outline. */
   const BEVEL = DEFAULT_GLYPH_OPTIONS.bevelSize;
 

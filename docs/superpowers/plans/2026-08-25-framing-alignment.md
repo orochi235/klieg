@@ -728,3 +728,10 @@ canvas with nothing clipped, and the fit is untouched (84px tall at every alignm
 
 The strip lab (`apps/lab/strip/`) grew an `align` selector, which is what those measurements were
 taken through.
+
+**The default changed after the plan was written.** `'center'` for everything preserved every
+existing caller, but it is the wrong default for the case the issue is about: an anchored word sits
+in a page that has a text edge. An element placement now defaults to `'start'` and only a
+fullscreen overlay stays centred. `'start'`/`'end'` are logical, resolved against the box's computed
+`direction`, so the public `Align` and the physical edge `fitOf` needs are separate types —
+`Budget.edge` is `'left' | 'right'`, and `edgeFor` in the stage is what maps between them.

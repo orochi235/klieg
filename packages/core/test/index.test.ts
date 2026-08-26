@@ -1002,8 +1002,12 @@ describe('framing', () => {
   }
 
   /** Where the word ended up, and how big, after one instant fire. */
-  async function placeOf(text: string, framing?: KliegOptions['framing']) {
-    const bk = create(framing ? { framing } : {});
+  async function placeOf(
+    text: string,
+    framing?: KliegOptions['framing'],
+    over: Partial<KliegOptions> = {},
+  ) {
+    const bk = create({ ...(framing ? { framing } : {}), ...over });
     const done = bk.fire(text, INSTANT);
     await flush();
     const group = words()[0] as THREE.Group;
@@ -1046,6 +1050,19 @@ describe('framing', () => {
     expect(narrow.scale).toBeLessThan(wide.scale);
     expect(edgeOf(narrow, narrow.left)).toBeCloseTo(-BOX_EDGE, 6);
     expect(edgeOf(wide, wide.left)).toBeCloseTo(-BOX_EDGE, 6);
+  });
+
+  it('meets the anchor edge by default, where an overlay stays centred', async () => {
+    const el = { clientWidth: 800, clientHeight: 120 } as HTMLElement;
+    // `target` is refused alongside an element placement, which is its own parent.
+    const anchored = await placeOf('HELLOTHERE', undefined, {
+      placement: { kind: 'element', el },
+      target: undefined,
+    });
+
+    expect(anchored.x).not.toBe(0);
+    expect(edgeOf(anchored, anchored.left)).toBeCloseTo(-BOX_EDGE, 6);
+    expect((await placeOf('HELLOTHERE')).x).toBe(0);
   });
 
   it('meets the right edge with the paint, not with the advance', async () => {

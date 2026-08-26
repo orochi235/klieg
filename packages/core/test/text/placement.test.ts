@@ -137,18 +137,15 @@ describe('fitOf alignment', () => {
 
   it('leaves a centred word at the origin', () => {
     expect(fitOf(place('AB'), bounds(2), { width: 1.2, height: 100, extent: 4 }).offsetX).toBe(0);
-    expect(
-      fitOf(place('AB'), bounds(2), { width: 1.2, height: 100, extent: 4, align: 'center' })
-        .offsetX,
-    ).toBe(0);
+    expect(fitOf(place('AB'), bounds(2), { width: 1.2, height: 100, extent: 4 }).offsetX).toBe(0);
   });
 
-  it('puts the leftmost paint on the box edge for start', () => {
+  it('puts the leftmost paint on the left edge', () => {
     const fit = fitOf(place('AB'), bounds(2), {
       width: 1.2,
       height: 100,
       extent: 4,
-      align: 'start',
+      edge: 'left',
     });
 
     // 'AB' spans 1.2 em of advance into a 1.2-wide budget, so scale is 1; the left origin is -0.6.
@@ -156,8 +153,13 @@ describe('fitOf alignment', () => {
     expect(fit.offsetX + -0.6 * fit.scale).toBeCloseTo(-2, 6);
   });
 
-  it('puts the rightmost paint on the box edge for end', () => {
-    const fit = fitOf(place('AB'), bounds(2), { width: 1.2, height: 100, extent: 4, align: 'end' });
+  it('puts the rightmost paint on the right edge', () => {
+    const fit = fitOf(place('AB'), bounds(2), {
+      width: 1.2,
+      height: 100,
+      extent: 4,
+      edge: 'right',
+    });
 
     // The last glyph's origin is 0 and its ink ends at 0.5 — not at the 0.6 its advance reaches.
     expect(fit.offsetX + 0.5 * fit.scale).toBeCloseTo(2, 6);
@@ -169,7 +171,7 @@ describe('fitOf alignment', () => {
       width: 0.6,
       height: 100,
       extent: 4,
-      align: 'start',
+      edge: 'left',
     });
 
     // Half the budget halves the scale, and the paint still lands on the box's own edge.
@@ -178,7 +180,7 @@ describe('fitOf alignment', () => {
   });
 
   it('stays at the origin when the box extent is unknown', () => {
-    expect(fitOf(place('AB'), bounds(2), { width: 1.2, height: 100, align: 'start' }).offsetX).toBe(
+    expect(fitOf(place('AB'), bounds(2), { width: 1.2, height: 100, edge: 'left' }).offsetX).toBe(
       0,
     );
   });
@@ -192,7 +194,7 @@ describe('fitOf alignment', () => {
     };
 
     expect(
-      fitOf(place('  '), blank, { width: 1, height: 1, extent: 4, align: 'start' }).offsetX,
+      fitOf(place('  '), blank, { width: 1, height: 1, extent: 4, edge: 'left' }).offsetX,
     ).toBe(0);
   });
 
@@ -200,7 +202,7 @@ describe('fitOf alignment', () => {
     const budget = { width: 1.2, height: 100, extent: 4 };
     const centred = fitOf(place('AB'), bounds(2), budget);
 
-    expect(fitOf(place('AB'), bounds(2), { ...budget, align: 'start' }).scale).toBe(centred.scale);
-    expect(fitOf(place('AB'), bounds(2), { ...budget, align: 'end' }).midY).toBe(centred.midY);
+    expect(fitOf(place('AB'), bounds(2), { ...budget, edge: 'left' }).scale).toBe(centred.scale);
+    expect(fitOf(place('AB'), bounds(2), { ...budget, edge: 'right' }).midY).toBe(centred.midY);
   });
 });

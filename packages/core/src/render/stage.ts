@@ -40,6 +40,16 @@ export function needsContainingBlock(position: string): boolean {
   return position === 'static';
 }
 
+/**
+ * The edge an alignment names, resolved against the reading direction: `start` is the left edge of
+ * an `ltr` box and the right edge of an `rtl` one. `center` names no edge.
+ */
+export function edgeFor(align: Align, direction: string): 'left' | 'right' | undefined {
+  if (align === 'center') return undefined;
+  const ltr = direction !== 'rtl';
+  return (align === 'start') === ltr ? 'left' : 'right';
+}
+
 /** Displays with no box of their own to position the canvas against. */
 export function canHoldCanvas(display: string): boolean {
   return display !== 'contents' && display !== 'inline';
@@ -217,10 +227,26 @@ export class Stage {
       height: vh * heightFrac,
       extent: vh * this.camera.aspect,
       cameraZ: this.camera.position.z,
-      align,
+      edge: edgeFor(align ?? this.defaultAlign(), this.direction()),
       // The anchor's box is the bound already, and filling it is the whole point of anchoring.
       cap: this.placement.kind === 'element' ? Number.POSITIVE_INFINITY : undefined,
     };
+  }
+
+  /**
+   * An anchored word sits in a page that has its own text edge, and meeting it is usually the
+   * point of anchoring. An overlay has no edge to meet, so it stays centred.
+   */
+  private defaultAlign(): Align {
+    return this.placement.kind === 'element' ? 'start' : 'center';
+  }
+
+  /** The box's own reading direction; a document-less environment has none, and reads as `ltr`. */
+  private direction(): string {
+    const box =
+      this.placement.kind === 'element' ? this.placement.el : globalThis.document?.documentElement;
+    if (!box) return 'ltr';
+    return globalThis.getComputedStyle?.(box).direction ?? 'ltr';
   }
 
   /** A modal hold is the only thing that stops the canvas itself being click-through. */

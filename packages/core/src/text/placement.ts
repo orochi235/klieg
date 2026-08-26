@@ -1,4 +1,4 @@
-import type { Align, Block, Budget, GlyphMetrics, Line } from './layout.js';
+import type { Block, Budget, GlyphMetrics, Line } from './layout.js';
 import { fitScale, LINE_HEIGHT_EM } from './layout.js';
 
 /** How a regrouped word is laid out: one line, or one glyph per line. */
@@ -144,13 +144,12 @@ function alignOffset(
   depth: number,
   budget: Budget,
 ): number {
-  const align: Align | undefined = budget.align;
-  const { extent, cameraZ } = budget;
-  if (!align || align === 'center' || extent === undefined) return 0;
+  const { edge, extent, cameraZ } = budget;
+  if (!edge || extent === undefined) return 0;
   if (!Number.isFinite(minX)) return 0;
 
   // The frustum narrows toward the camera, so the box's edge at the near cap's depth is inside
   // its edge at the word's. Aligning on the nearer one is what keeps the extrusion out of the clip.
   const half = (extent / 2) * (cameraZ ? (cameraZ - depth * scale) / cameraZ : 1);
-  return align === 'start' ? -half - minX * scale : half - maxX * scale;
+  return edge === 'left' ? -half - minX * scale : half - maxX * scale;
 }

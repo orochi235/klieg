@@ -47,7 +47,7 @@ export function layoutBlock(text: string, metrics: GlyphMetrics): Block {
   return { lines, width: Math.max(0, ...lines.map((l) => l.width)) };
 }
 
-/** Where the word sits in the box. `'start'` is its left edge; klieg has no text direction. */
+/** Where the word sits in the box, in reading order — which edge that is depends on direction. */
 export type Align = 'start' | 'center' | 'end';
 
 export interface Budget {
@@ -71,7 +71,8 @@ export interface Budget {
    * so a word aligned in the plane alone overhangs the box and the canvas clips it.
    */
   cameraZ?: number;
-  align?: Align;
+  /** The physical edge the word meets, direction already resolved. Absent leaves it centred. */
+  edge?: 'left' | 'right';
 }
 
 /** Keeps one short word on a fullscreen overlay from blowing up to fill the viewport. */

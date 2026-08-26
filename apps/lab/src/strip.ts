@@ -19,17 +19,18 @@ const HOLD_MS = 8000;
 
 let klieg: Klieg | null = null;
 // Framing is fixed for an instance's lifetime, so changing the alignment rebuilds it.
-let built: Align | null = null;
+let built: string | null = null;
 
 function instance(): Klieg {
-  const wanted = align.value as Align;
+  const wanted = align.value as Align | '';
   if (klieg && built === wanted) return klieg;
   klieg?.destroy();
   built = wanted;
   klieg = createKlieg({
     fontUrl: '/font.ttf',
     placement: { kind: 'element', el: masthead },
-    framing: { width: 0.94, height: 0.66, align: wanted },
+    // Unset on purpose when the page asks for it: the default is what a consumer gets.
+    framing: { width: 0.94, height: 0.66, ...(wanted ? { align: wanted } : {}) },
   });
   return klieg;
 }
@@ -45,7 +46,7 @@ async function fire(text: string): Promise<void> {
     return;
   }
   masthead.classList.add('masthead--lit');
-  notes.textContent = `anchor box ${masthead.clientWidth}×${masthead.clientHeight}, align ${align.value}`;
+  notes.textContent = `anchor box ${masthead.clientWidth}×${masthead.clientHeight}, align ${align.value || '(default)'}`;
   await k.fire(text, { look: 'gold', hold: HOLD_MS });
   masthead.classList.remove('masthead--lit');
 }

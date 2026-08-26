@@ -20,6 +20,9 @@ beforeEach(() => {
   // Clearing the DOM first: emptying the body disconnects the previous test's element, and that
   // disconnect calls `destroy` — after `clearAllMocks` it would be counted against this test.
   document.body.innerHTML = '';
+  // The head outlives the body reset, and a stylesheet left there short-circuits the install
+  // guard — every stylesheet test would then assert against a leftover rather than a fresh one.
+  document.head.innerHTML = '';
   vi.clearAllMocks();
   sign.mockImplementation((_anchor: HTMLElement, opts: { onLit?: (l: boolean) => void }) => {
     onLit = opts.onLit ?? (() => {});
@@ -54,6 +57,23 @@ describe('<klieg-sign>', () => {
     const styles = document.head.querySelectorAll('style[data-klieg-sign]');
     expect(styles).toHaveLength(1);
     expect(styles[0]?.textContent).toContain('@layer klieg');
+  });
+
+  it('installs one stylesheet for two elements connecting together', async () => {
+    // `installStyle` runs above the `readyState` branch, so both elements connect in one task
+    // with no dynamic import ever starting.
+    Object.defineProperty(document, 'readyState', { value: 'loading', configurable: true });
+    try {
+      document.body.innerHTML =
+        '<klieg-sign font="/f.ttf"><h1>A</h1></klieg-sign>' +
+        '<klieg-sign font="/f.ttf"><h1>B</h1></klieg-sign>';
+      await settled();
+
+      expect(sign).not.toHaveBeenCalled();
+      expect(document.head.querySelectorAll('style[data-klieg-sign]')).toHaveLength(1);
+    } finally {
+      Object.defineProperty(document, 'readyState', { value: 'complete', configurable: true });
+    }
   });
 
   it('marks every child the page supplied, a canvas of its own included', async () => {

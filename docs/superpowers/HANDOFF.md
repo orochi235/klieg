@@ -270,16 +270,19 @@ and `release.yml` publishes through npm trusted publishing, checking first that 
 stale version straight after a publish — read `https://registry.npmjs.org/klieg` to see what
 actually landed.
 
-`origin/main` is the 0.7.0 commit with nothing unreleased on it. **The portfolio session asked to be
-told before a tag goes up**, and since releases are tag-triggered there is a window between telling
-them and pushing it.
+**`main` is unpushed and carries an unreleased minor.** Everything under `## Unreleased` is post-0.7.0:
+the `lamp`/`EnvPiece` lighting surface, `framing.align`, `flicker`'s `spell` and `calm`. That is a
+minor rather than a patch — it adds public surface, changes what an element placement defaults to,
+and breaks `EffectPiece.at`'s signature — so the next tag is `v0.8.0`. **The portfolio session asked
+to be told before a tag goes up**, and since releases are tag-triggered there is a window between
+telling them and pushing it.
 
 **`main` carries the tube lab, the tube geometry rewrite, the colour gradients, the junction
 reconciliation, direct paths by default, element-anchored placement and the effects pipeline, all
-merged.** On `main`, `npm run check` is green at **977 tests across 52 files**, measured at
-`d15979c`; `npx playwright test` was **26 across 2 files** at `967408e` and has not been re-run
-since. Every count in this doc is measured, not carried over — it has twice claimed a playwright
-number one higher than `--list` reports.
+merged.** On `main`, `npm run check` is green at **1110 tests across 55 files** and
+`npx playwright test` at **33 across 2 files**, both measured at `8c4758e`.
+Every count in this doc is measured, not carried over — it has twice claimed a playwright number
+one higher than `--list` reports.
 
 **`enter pieces > every piece is finite everywhere` flaked once** in a full `npm test` at `d15979c`
 and passed alone and on the next full run. Order-dependent or seeded; not chased.

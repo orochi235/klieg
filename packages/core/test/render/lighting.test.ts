@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ENV_PIECES,
+  type EnvPiece,
   envRotationAt,
   LIGHTING,
   type LightingName,
   mergeEnv,
   PointerLight,
   type ResolvedEnv,
+  resolveLighting,
   still,
   sweep,
   track,
@@ -314,5 +316,41 @@ describe('ENV_PIECES', () => {
     const ctx = { pointer: { x: 1, y: 0 }, pointerInWord: null, dt: 100_000 };
     pointer.env(0, ctx);
     expect(mergeEnv([pointer.env(0, ctx)]).yaw).toBeGreaterThan(0);
+  });
+});
+
+describe('resolveLighting', () => {
+  const mine: EnvPiece = { duration: 0, env: () => ({ pitch: 0.5 }) };
+
+  it('resolves a bare name through the piece its factory builds', () => {
+    const [piece] = resolveLighting('sweep');
+
+    expect(piece?.duration).toBe(sweep().duration);
+    expect(piece?.env(0.25, CTX)).toEqual(sweep().env(0.25, CTX));
+  });
+
+  it('hands back a bare piece untouched rather than rebuilding it', () => {
+    expect(resolveLighting(mine)).toEqual([mine]);
+    expect(resolveLighting(mine)[0]).toBe(mine);
+  });
+
+  it('keeps an array of names and pieces in the order it was given', () => {
+    const resolved = resolveLighting(['static', mine, 'sweep']);
+
+    expect(resolved).toHaveLength(3);
+    expect(resolved[0]?.duration).toBe(still().duration);
+    expect(resolved[1]).toBe(mine);
+    expect(resolved[2]?.duration).toBe(sweep().duration);
+  });
+
+  it('resolves every name in the union', () => {
+    for (const name of NAMES) expect(resolveLighting(name)).toHaveLength(1);
+  });
+
+  it('gives each resolution its own piece, so two runs cannot share tracked state', () => {
+    const [first] = resolveLighting('pointer');
+    const [second] = resolveLighting('pointer');
+
+    expect(first).not.toBe(second);
   });
 });

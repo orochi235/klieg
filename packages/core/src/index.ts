@@ -1,22 +1,22 @@
 import { type Clock, RafClock } from './clock.js';
 import type { Easing } from './easing.js';
 import { EFFECTS } from './effects/pieces.js';
-import type { EffectName, EffectSpec } from './effects/types.js';
+import type { EffectName, EffectSpec, FrameCtx } from './effects/types.js';
 import { ACTIVE } from './motion/active.js';
-import {
-  type Slot,
-  slotDrivesEnv,
-  slotDuration,
-  slotMovesLetters,
-  Timeline,
-} from './motion/compositor.js';
+import { type Slot, slotDuration, slotMovesLetters, Timeline } from './motion/compositor.js';
 import { ENTER } from './motion/enter.js';
 import { EXIT } from './motion/exit.js';
 import { Sequence } from './motion/sequence.js';
 import type { ActiveName, EnterName, ExitName, LetterInfo, MotionPiece } from './motion/types.js';
 import { EffectQueue, type QueuePolicy } from './queue.js';
 import { BloomPath } from './render/bloom.js';
-import { envRotationAt, LIGHTING, type LightingName, PointerLight } from './render/lighting.js';
+import {
+  LIGHTING,
+  type LightingName,
+  type LightingSlot,
+  mergeEnv,
+  resolveLighting,
+} from './render/lighting.js';
 import { LOOKS, type Look, type LookName, type LookSpec, specOf } from './render/looks.js';
 import {
   type Placement,
@@ -104,8 +104,6 @@ export const LOOK_NAMES: readonly LookName[] = Object.keys(LOOKS) as LookName[];
 export const LIGHTING_NAMES: readonly LightingName[] = Object.keys(LIGHTING) as LightingName[];
 export const EFFECT_NAMES: readonly EffectName[] = Object.keys(EFFECTS) as EffectName[];
 
-const TAU = Math.PI * 2;
-
 /** An explicit `bloom` always wins; a look may only ask when the caller said nothing. */
 export function wantsBloom(explicit: boolean | undefined, look: Look): boolean {
   return explicit ?? specOf(look).bloom ?? false;
@@ -170,6 +168,7 @@ export type { Placement } from './render/stage.js';
 export type EnterSlot = EnterName | MotionPiece | (EnterName | MotionPiece)[];
 export type ActiveSlot = ActiveName | MotionPiece | (ActiveName | MotionPiece)[];
 export type ExitSlot = ExitName | MotionPiece | (ExitName | MotionPiece)[];
+export type { LightingSlot };
 
 export interface FireOptions {
   enter?: EnterSlot;
@@ -182,8 +181,9 @@ export interface FireOptions {
    * than adding to it — spread `specOf(look).effects` to keep them.
    */
   effects?: EffectSpec[];
-  /** How the environment lights the type. `sweep` rakes the highlight, `static` holds it still. */
-  lighting?: LightingName;
+  /** How the environment lights the type. `sweep` rakes the highlight, `static` holds it still.
+   * Layers compose: `['sweep', track({ pitchRange: 0.1 })]`. */
+  lighting?: LightingSlot;
   /**
    * Recolors the look, as `0xff2d6f`. A function is consulted per letter and may return
    * `undefined` for "not mine", leaving that letter the look's own colour.
@@ -280,8 +280,6 @@ export function createKlieg(options: KliegOptions): Klieg {
     placement,
   });
 
-  const pointerLight = new PointerLight();
-
   let fontPromise: Promise<LoadedFont> | null = null;
   function font(): Promise<LoadedFont> {
     if (fontPromise) return fontPromise;
@@ -356,10 +354,7 @@ export function createKlieg(options: KliegOptions): Klieg {
       });
     }
 
-    const lighting = opts.lighting ?? 'sweep';
-    const tracksPointer = LIGHTING[lighting].tracksPointer === true;
-    if (tracksPointer) pointerLight.attach();
-    const envDriven = slotDrivesEnv(active);
+    const envPieces = resolveLighting(opts.lighting ?? 'sweep');
     const hold = opts.hold ?? 1200;
     const untilClick = hold === 'click';
     const exit = resolveSlot(opts.exit ?? 'fade', EXIT);
@@ -402,6 +397,12 @@ export function createKlieg(options: KliegOptions): Klieg {
     const driver: Sequence | Timeline = sequence ?? timeline;
     const startedAt = clock.now();
 
+    let pointerClient: { x: number; y: number } | null = null;
+    const onMove = (event: PointerEvent) => {
+      pointerClient = { x: event.clientX, y: event.clientY };
+    };
+    globalThis.addEventListener('pointermove', onMove, { passive: true });
+
     await new Promise<void>((resolve, reject) => {
       let settled = false;
       let released = false;
@@ -411,6 +412,7 @@ export function createKlieg(options: KliegOptions): Klieg {
         if (settled) return;
         settled = true;
         off();
+        globalThis.removeEventListener('pointermove', onMove);
         detachDismiss();
         stage.scene.remove(word.group);
         host?.remove();
@@ -466,7 +468,31 @@ export function createKlieg(options: KliegOptions): Klieg {
           const elapsed = sequence ? raw : Math.min(raw, timeline.duration);
           // Ahead of the pose, or the fit and the phase advance both lag it by a frame.
           sequence?.tick(elapsed);
-          word.apply(driver, elapsed, { pointer: null, pointerInWord: null, dt });
+
+          let pointer: FrameCtx['pointer'] = null;
+          let pointerInWord: FrameCtx['pointerInWord'] = null;
+          const box = stage.canvas?.getBoundingClientRect();
+          if (pointerClient && box && box.width > 0 && box.height > 0) {
+            const nx = ((pointerClient.x - box.left) / box.width) * 2 - 1;
+            const ny = ((pointerClient.y - box.top) / box.height) * 2 - 1;
+            // FrameCtx promises -1..1, and the listener is document-wide: a pointer beside a small
+            // anchored canvas would otherwise aim past every range that scales it.
+            pointer = { x: Math.max(-1, Math.min(1, nx)), y: Math.max(-1, Math.min(1, ny)) };
+            const extent = word.partExtent();
+            if (extent && extent.maxX > extent.minX && extent.maxY > extent.minY) {
+              // The word is not centred on zero, so map into its real extent rather than scaling.
+              pointerInWord = {
+                x: extent.minX + ((pointer.x + 1) / 2) * (extent.maxX - extent.minX),
+                y: extent.minY + ((pointer.y + 1) / 2) * (extent.maxY - extent.minY),
+              };
+            }
+          }
+          const ctx: FrameCtx = {
+            pointer,
+            pointerInWord,
+            dt: still ? Number.POSITIVE_INFINITY : dt,
+          };
+          word.apply(driver, elapsed, ctx);
 
           if (layer && mode === 'layer' && family) {
             if (word.atRest()) {
@@ -500,19 +526,13 @@ export function createKlieg(options: KliegOptions): Klieg {
             }
           }
 
-          // A caller piece declaring envRotation wins: it is the more specific choice, and it
-          // carries its own duration as the period.
-          // Reduced motion snaps rather than eases: following the viewer's own finger is asked
-          // for, but the 90ms glide after it is the one part of this nobody asked for.
-          if (tracksPointer && !envDriven) pointerLight.step(still ? Number.POSITIVE_INFINITY : dt);
-          // Both axes every frame: only the pointer mode tilts x, and leaving a tilt behind would
-          // follow the viewer into the next effect.
-          stage.scene.environmentRotation.x = tracksPointer && !envDriven ? pointerLight.pitch : 0;
-          stage.scene.environmentRotation.y = envDriven
-            ? (elapsed / Math.max(1, slotDuration(active))) * TAU
-            : tracksPointer
-              ? pointerLight.yaw
-              : envRotationAt(lighting, elapsed);
+          const env = mergeEnv(
+            envPieces.map((piece) =>
+              piece.env(piece.duration > 0 ? (elapsed % piece.duration) / piece.duration : 0, ctx),
+            ),
+          );
+          stage.scene.environmentRotation.x = env.pitch;
+          stage.scene.environmentRotation.y = env.yaw;
 
           if (bloom) {
             bloom.render(stage.scene, stage.camera);
@@ -555,7 +575,6 @@ export function createKlieg(options: KliegOptions): Klieg {
     },
     destroy() {
       destroyed = true;
-      pointerLight.release();
       // A running effect only notices the abort on its next tick, and tearing down first would
       // leave it re-arming idle teardown against a stage that is already gone.
       void queue.cancelAll().then(() => stage.unmount());

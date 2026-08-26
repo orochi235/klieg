@@ -152,3 +152,11 @@ export const ENV_PIECES = {
   static: still,
   pointer: track,
 } satisfies Record<LightingName, () => EnvPiece>;
+
+export type LightingSlot = LightingName | EnvPiece | (LightingName | EnvPiece)[];
+
+export function resolveLighting(slot: LightingSlot): EnvPiece[] {
+  const one = (s: LightingName | EnvPiece): EnvPiece =>
+    typeof s === 'string' ? ENV_PIECES[s]() : s;
+  return Array.isArray(slot) ? slot.map(one) : [one(slot)];
+}

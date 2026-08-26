@@ -10,17 +10,24 @@ learned that its design doc does not carry, and what is worth doing next.
 green at **1114 tests**. The sections below are what those branches learned; treat every claim about
 their *status* as historical.
 
-**The next task is the corner stage, and it is not a small one.** `spikes/svg-tube/` proved `tubing`
-works on arbitrary vector art and, in doing so, found that a sequence of sharp corners throws away a
-fifth of a letter. [The design doc](specs/2026-08-26-tube-layout-strategies-design.md) carries the
-measurement, the cause and the four layout strategies this opened up; read it before touching
-`bend.ts` or `runs.ts`.
+**The corner stage was the next task and it is largely closed — the defect was mostly not one.**
+Branch `corner-carry-through`, 1120 tests green, baselines unmoved. What a letter is missing is the
+sharp interior apexes, where an arc at the material's minimum bend radius cannot reach the tip; it
+scales with tube radius rather than with anything the stage decides. `TubeSpec.rejoin` now offers
+four answers to a fillet that cannot rejoin its leg — `drop` (today, and still the default),
+`bridge`, `widen`, `relax` — with each one's number in
+[the rejoin design](specs/2026-08-26-corner-rejoin-design.md). Read it before reopening this.
 
-Why it is delicate: `filletAt` returning null is a *correct* local answer — there is genuinely no
-room for that arc. The defect is what the caller does next, which is remove the whole corner stretch
-(`dropHead`/`dropTail`) rather than carry the tube through at whatever radius the room allows or
-shorten what it removes. Changing that moves every `tubing` and `piping` baseline, so it wants its
-own branch and a baseline check.
+Two earlier accounts of the loss were wrong, and re-deriving them costs a session each. It is not
+`dropHead`/`dropTail` after `filletAt` returns null: break drops are 0.85 em across A–Z. It is not
+`resumeAt` giving up a leg either — it discards 15.80 em, but make it never walk and `W`'s holes do
+not move, because what it gives up it replaces with a chord. `spikes/corner-coverage.mjs` is the
+measure, and `OUT=page.html` draws where the bare contour actually is.
+
+**The one thing that would cover an apex is a hairpin past it** — run the tube beyond the tip and
+back, standing slightly outside the letter, the way a bender does. That is a new corner strategy
+beside `break`, `connect` and `return`, not a `rejoin`, and it is the only move measured that would
+change `W`.
 
 **The visual suite is failing three tests on `main` right now, and it is not this branch.** At load
 average 12, `visual.spec.ts` fails the bloom-path, two-line-block and wrap tests. Stashing the run

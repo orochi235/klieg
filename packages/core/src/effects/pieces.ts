@@ -8,6 +8,10 @@ export interface FlickerSpec {
   depth?: number;
   /** Share of the pass spent stuttering. The rest is held lit. */
   unrest?: number;
+  /** Milliseconds of one flickering bout. Needs a `calm` to mean anything. */
+  spell?: number;
+  /** Milliseconds held steady between bouts. 0, the default, flickers for the whole pass. */
+  calm?: number;
 }
 
 /** One step is ~58ms, so the shortest drop covers about three frames at 60fps; a one-frame drop
@@ -28,14 +32,27 @@ function clamp01(n: number): number {
 
 /** A tube on its way out: mostly lit, with short irregular stutters. */
 export function flicker(spec: FlickerSpec = {}): EffectPiece {
-  const duration = spec.duration ?? 1400;
   const depth = clamp01(spec.depth ?? 0);
   const unrest = clamp01(spec.unrest ?? 0.18);
-  const steps = stepsFor(duration);
+  const wanted = spec.duration ?? 1400;
+  const calm = Math.max(0, spec.calm ?? 0);
+  const spell = Math.max(0, spec.spell ?? 0);
+
+  // Both scales snap to whole steps, which is what puts every gate boundary on a step edge: a
+  // boundary inside a step clips that drop to a frame or two and it reads as noise.
+  const spellSteps = Math.max(1, Math.round(spell / STEP_MS));
+  const calmSteps = Math.round(calm / STEP_MS);
+  const gated = calm > 0 && calmSteps > 0;
+  const cycleSteps = spellSteps + calmSteps;
+  const cycles = gated ? Math.max(1, Math.round(wanted / (cycleSteps * STEP_MS))) : 1;
+  const duration = gated ? cycles * cycleSteps * STEP_MS : wanted;
+  const steps = gated ? cycles * cycleSteps : stepsFor(duration);
+  const duty = spellSteps / cycleSteps;
 
   return {
     duration,
     at(t, part) {
+      if (gated && (t * cycles) % 1 >= duty) return { gain: 1 };
       const step = Math.floor(t * steps) % steps;
       if (hash01(step + part.index * 977.3) > unrest) return { gain: 1 };
       const bite = hash01(step * 3.7 + part.index * 131.1);

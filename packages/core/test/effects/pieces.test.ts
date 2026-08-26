@@ -104,6 +104,49 @@ describe('flicker', () => {
     expect(shortestDropMs(flicker())).toBeLessThan(80);
     expect(shortestDropMs(flicker({ duration: 30000 }))).toBeLessThan(80);
   });
+
+  /** Longest continuously-lit stretch in milliseconds — the calm, when there is one. */
+  function longestCalmMs(piece: EffectPiece, samples = 4000): number {
+    const gains = gainsAcrossOnePass(piece, part, samples);
+    let best = 0;
+    let run = 0;
+    for (const g of gains) {
+      if (g >= 0.5) {
+        run++;
+        best = Math.max(best, run);
+      } else run = 0;
+    }
+    return best * (piece.duration / samples);
+  }
+
+  it('leaves the pass alone when no calm is asked for', () => {
+    expect(flicker({ spell: 4000 }).duration).toBe(1400);
+    expect(gainsAcrossOnePass(flicker({ spell: 4000 }))).toEqual(gainsAcrossOnePass(flicker()));
+  });
+
+  // 4000ms is 69 steps and 15000ms is 257, so a cycle is 326 steps and three of them fit 60s.
+  it('fits the pass to a whole number of spells', () => {
+    expect(flicker({ duration: 60000, spell: 4000, calm: 15000 }).duration).toBe(57050);
+  });
+
+  // The tube goes quiet for the calm, which is the whole point of the macro scale.
+  it('holds the tube lit for the calm between spells', () => {
+    const piece = flicker({ duration: 60000, spell: 4000, calm: 15000 });
+    expect(longestCalmMs(piece)).toBeGreaterThan(13000);
+    expect(longestCalmMs(piece)).toBeLessThan(17000);
+  });
+
+  // A gate boundary landing mid-step clips a drop to a single frame, which reads as noise rather
+  // than as a failing tube — the thing the step length exists to prevent.
+  it('lands every gate boundary on a step edge', () => {
+    const piece = flicker({ duration: 60000, spell: 4000, calm: 15000 });
+    expect(shortestDropMs(piece, 20000)).toBeGreaterThan(40);
+  });
+
+  it('still stutters inside a spell', () => {
+    const piece = flicker({ duration: 60000, spell: 4000, calm: 15000 });
+    expect(darkRuns(gainsAcrossOnePass(piece, part, 4000)).length).toBeGreaterThan(3);
+  });
 });
 
 describe('hue', () => {

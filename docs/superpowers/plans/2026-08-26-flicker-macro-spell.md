@@ -72,7 +72,7 @@ step, which is why a long pass strobes.
 - Modify: `packages/core/src/effects/pieces.ts`
 - Test: `packages/core/test/effects/pieces.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append inside the existing `describe('flicker', …)` block:
 
@@ -93,14 +93,14 @@ Append inside the existing `describe('flicker', …)` block:
   });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/core/test/effects/pieces.test.ts -t "holds a step near 58ms"`
 Expected: FAIL on the 30000ms case — 24 steps over 30000ms is 1250ms a step, so the received value
 is around 1250, not under 80. The two default-duration assertions pass already; that is the point of
 including them.
 
-- [ ] **Step 3: Derive the count**
+- [x] **Step 3: Derive the count**
 
 In `packages/core/src/effects/pieces.ts`, replace the `STEPS` constant and its doc comment:
 
@@ -131,19 +131,19 @@ In `flicker`, take the count once from the resolved duration and use it in `at`:
 
 `stepsFor(1400)` is exactly 24, so every caller at the default renders as it did.
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 Run: `npx vitest run packages/core/test/effects/pieces.test.ts`
 Expected: PASS, including the file's existing `flicker` cases.
 
-- [ ] **Step 5: Confirm the default really did not move**
+- [x] **Step 5: Confirm the default really did not move**
 
 Run: `npx vitest run packages/core/test/effects/roving.test.ts`
 Expected: PASS. `roving.test.ts:104` builds `flicker({ duration: 900 })` and asserts the wrapper's
 duration is a whole multiple of 900 — `stepsFor` does not touch `duration`, so this holds. If it
 fails, something changed the pass length, which this task must not do.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/core/src/effects/pieces.ts packages/core/test/effects/pieces.test.ts
@@ -158,7 +158,7 @@ git commit -m "derive a flicker step from its pass rather than fixing it at 24"
 - Modify: `packages/core/src/effects/pieces.ts`
 - Test: `packages/core/test/effects/pieces.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append inside `describe('flicker', …)`:
 
@@ -226,14 +226,14 @@ Append inside `describe('flicker', …)`:
   });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/core/test/effects/pieces.test.ts -t "flicker"`
 Expected: FAIL. `spell`/`calm` are not in `FlickerSpec`, so TypeScript rejects the literals; vitest
 transpiles without typechecking, so at runtime the extra keys are ignored and the failures are value
 mismatches — `duration` 60000 rather than 57000, and no calm stretch. Both are the right failure.
 
-- [ ] **Step 3: Add the fields**
+- [x] **Step 3: Add the fields**
 
 In `FlickerSpec`, below `unrest`:
 
@@ -245,7 +245,7 @@ In `FlickerSpec`, below `unrest`:
   calm?: number;
 ```
 
-- [ ] **Step 4: Fit the pass and gate the stutter**
+- [x] **Step 4: Fit the pass and gate the stutter**
 
 Replace `flicker`'s body:
 
@@ -303,12 +303,12 @@ The step index runs across the whole pass rather than restarting per spell, so e
 different stretch of the hash and no two bouts are identical. That is the resonance `roving`'s comment
 warns about, avoided by construction rather than by arithmetic.
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 Run: `npx vitest run packages/core/test/effects/pieces.test.ts`
 Expected: PASS, all five new cases and every existing one.
 
-- [ ] **Step 5b: Prove the resonance test is load-bearing**
+- [x] **Step 5b: Prove the resonance test is load-bearing**
 
 This is the one that guards the plan's central argument, and a review found that without it the
 defect passes the whole suite. Temporarily restart the step index per bout on the gated path:
@@ -331,7 +331,7 @@ subtracts back to a hair under it, so `floor` returns one step lower at 16 of 97
 discriminate; the filter to drops removes the ~771 gate-held `1`s per bout that carry no information,
 and the `> 20` guard stops the comparison passing vacuously if both sides come back empty.
 
-- [ ] **Step 6: Prove the snapping is load-bearing**
+- [x] **Step 6: Prove the snapping is load-bearing**
 
 Temporarily replace `const spellSteps = Math.max(1, Math.round(spell / STEP_MS));` with
 `const spellSteps = spell / STEP_MS;` — the unsnapped version.
@@ -341,12 +341,12 @@ Expected: FAIL, with a shortest drop well under 40ms. The prototype measured 29m
 the snapped line and confirm the test passes again. **Quote both outputs in your report** — a test
 that has never been red against the defect it names is not evidence.
 
-- [ ] **Step 7: Run everything**
+- [x] **Step 7: Run everything**
 
 Run: `npm run check`
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/core/src/effects/pieces.ts packages/core/test/effects/pieces.test.ts
@@ -361,7 +361,7 @@ git commit -m "give flicker a spell and a calm on top of its stutter"
 - Modify: `CHANGELOG.md`
 - Modify: `README.md`
 
-- [ ] **Step 1: Write the CHANGELOG entry**
+- [x] **Step 1: Write the CHANGELOG entry**
 
 Look at the top of the file first — the last three releases use a narrative headline section with a
 prose paragraph rather than bare bullets, and the file has **no code fences anywhere in its history**,
@@ -384,7 +384,7 @@ fit whole bouts, the way `roving` already rounds its epochs, so the asked-for 60
   strobes.
 ```
 
-- [ ] **Step 1b: Document two surprises Task 2 measured**
+- [x] **Step 1b: Document two surprises Task 2 measured**
 
 Both are the arithmetic behaving as designed and neither is derivable from the field docs as written.
 One line each, on the fields themselves:
@@ -397,13 +397,13 @@ One line each, on the fields themselves:
   asked, because `cycles` floors at 1. It shrinks too: 60000 asked returns 57050.
   **`FlickerSpec.duration` has no docstring at all** — this is the first one, not an amendment.
 
-- [ ] **Step 2: Update the README**
+- [x] **Step 2: Update the README**
 
 `README.md:222` documents `flicker`. Widen it to name `spell` and `calm` and say the pass fits whole
 bouts. Keep it proportionate to the `hue` and `chase` entries beside it — they are one paragraph each,
 and the section carries one shared example block at the top rather than an example per piece.
 
-- [ ] **Step 3: Check the README name list still holds**
+- [x] **Step 3: Check the README name list still holds**
 
 Run: `npx vitest run packages/core/test/readme.test.ts`
 Expected: PASS. That test asserts the names the README tells people to import; `flicker` is already in
@@ -411,12 +411,12 @@ it, and `spell`/`calm` are spec fields rather than exports, so nothing new is ne
 extract or compile code from the README, so it does not check your prose — verify any example
 yourself.
 
-- [ ] **Step 4: Run everything**
+- [x] **Step 4: Run everything**
 
 Run: `npm run check`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add CHANGELOG.md README.md

@@ -70,12 +70,20 @@ describe('a block that draws no ink', () => {
   });
 
   it('is skipped by the fit rather than counted as ink at its own y', () => {
-    const blank = fitOf(place('  '), [null, null], [null, null], { width: 1, height: 1 });
+    const blank = fitOf(
+      place('  '),
+      { minX: [null, null], maxX: [null, null], minY: [null, null], maxY: [null, null] },
+      { width: 1, height: 1 },
+    );
     expect(blank.scale).toBe(2.2);
     expect(blank.midY).toBe(0);
 
     // A blank line counted as ink would drag the centre down to the middle of the two lines.
-    const mixed = fitOf(place('A\n '), [0, null], [0.7, null], { width: 100, height: 100 });
+    const mixed = fitOf(
+      place('A\n '),
+      { minX: [0, null], maxX: [0.5, null], minY: [0, null], maxY: [0.7, null] },
+      { width: 100, height: 100 },
+    );
     expect(mixed.midY).toBeCloseTo(0.35);
   });
 });
@@ -93,14 +101,108 @@ describe('arrange', () => {
 describe('fitOf', () => {
   it('scales a wide block down to the budget width', () => {
     const p = place('AAAA');
-    const fit = fitOf(p, [0, 0, 0, 0], [0.7, 0.7, 0.7, 0.7], { width: 1, height: 10 });
+    const fit = fitOf(
+      p,
+      {
+        minX: [0, 0, 0, 0],
+        maxX: [0.5, 0.5, 0.5, 0.5],
+        minY: [0, 0, 0, 0],
+        maxY: [0.7, 0.7, 0.7, 0.7],
+      },
+      { width: 1, height: 10 },
+    );
     // Four 0.6em advances span 2.4em of ink; a 1-wide budget scales that by 1/2.4.
     expect(fit.scale).toBeCloseTo(1 / 2.4, 4);
   });
 
   it('puts the vertical centre of the ink at midY', () => {
     const p = place('A');
-    const fit = fitOf(p, [-0.2], [0.7], { width: 100, height: 100 });
+    const fit = fitOf(
+      p,
+      { minX: [0], maxX: [0.5], minY: [-0.2], maxY: [0.7] },
+      { width: 100, height: 100 },
+    );
     expect(fit.midY).toBeCloseTo(0.25);
+  });
+});
+
+describe('fitOf alignment', () => {
+  /** Boxes 0.5 em wide on a 0.6 em advance, so paint and advance disagree by one side bearing. */
+  const bounds = (n: number) => ({
+    minX: Array(n).fill(0),
+    maxX: Array(n).fill(0.5),
+    minY: Array(n).fill(0),
+    maxY: Array(n).fill(0.7),
+  });
+
+  it('leaves a centred word at the origin', () => {
+    expect(fitOf(place('AB'), bounds(2), { width: 1.2, height: 100, extent: 4 }).offsetX).toBe(0);
+    expect(fitOf(place('AB'), bounds(2), { width: 1.2, height: 100, extent: 4 }).offsetX).toBe(0);
+  });
+
+  it('puts the leftmost paint on the left edge', () => {
+    const fit = fitOf(place('AB'), bounds(2), {
+      width: 1.2,
+      height: 100,
+      extent: 4,
+      edge: 'left',
+    });
+
+    // 'AB' spans 1.2 em of advance into a 1.2-wide budget, so scale is 1; the left origin is -0.6.
+    expect(fit.scale).toBeCloseTo(1, 6);
+    expect(fit.offsetX + -0.6 * fit.scale).toBeCloseTo(-2, 6);
+  });
+
+  it('puts the rightmost paint on the right edge', () => {
+    const fit = fitOf(place('AB'), bounds(2), {
+      width: 1.2,
+      height: 100,
+      extent: 4,
+      edge: 'right',
+    });
+
+    // The last glyph's origin is 0 and its ink ends at 0.5 — not at the 0.6 its advance reaches.
+    expect(fit.offsetX + 0.5 * fit.scale).toBeCloseTo(2, 6);
+    expect(fit.offsetX).not.toBeCloseTo(2 - 0.6, 6);
+  });
+
+  it('aligns against the box, not the budget the fractions cut out of it', () => {
+    const narrow = fitOf(place('AB'), bounds(2), {
+      width: 0.6,
+      height: 100,
+      extent: 4,
+      edge: 'left',
+    });
+
+    // Half the budget halves the scale, and the paint still lands on the box's own edge.
+    expect(narrow.scale).toBeCloseTo(0.5, 6);
+    expect(narrow.offsetX + -0.6 * narrow.scale).toBeCloseTo(-2, 6);
+  });
+
+  it('stays at the origin when the box extent is unknown', () => {
+    expect(fitOf(place('AB'), bounds(2), { width: 1.2, height: 100, edge: 'left' }).offsetX).toBe(
+      0,
+    );
+  });
+
+  it('stays at the origin when nothing draws', () => {
+    const blank = {
+      minX: [null, null],
+      maxX: [null, null],
+      minY: [null, null],
+      maxY: [null, null],
+    };
+
+    expect(
+      fitOf(place('  '), blank, { width: 1, height: 1, extent: 4, edge: 'left' }).offsetX,
+    ).toBe(0);
+  });
+
+  it('does not move the scale or the vertical centring', () => {
+    const budget = { width: 1.2, height: 100, extent: 4 };
+    const centred = fitOf(place('AB'), bounds(2), budget);
+
+    expect(fitOf(place('AB'), bounds(2), { ...budget, edge: 'left' }).scale).toBe(centred.scale);
+    expect(fitOf(place('AB'), bounds(2), { ...budget, edge: 'right' }).midY).toBe(centred.midY);
   });
 });

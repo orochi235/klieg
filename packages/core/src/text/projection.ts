@@ -15,7 +15,7 @@ export interface ProjectionInput {
   y: readonly number[];
   /** Layout line per letter, as `Word` holds it. */
   line: readonly number[];
-  fit: { scale: number; midY: number };
+  fit: { scale: number; midY: number; offsetX: number };
   /** Vertical field of view, in degrees. */
   fov: number;
   cameraZ: number;
@@ -50,7 +50,7 @@ export function projectLetters(input: ProjectionInput): Projection {
   const baselineFromTop = input.baselineRatio * fontSize;
 
   const boxes = input.chars.map((char, i) => {
-    const worldX = (input.x[i] ?? 0) * input.fit.scale;
+    const worldX = (input.x[i] ?? 0) * input.fit.scale + input.fit.offsetX;
     const worldY = ((input.y[i] ?? 0) - input.fit.midY) * input.fit.scale;
     return {
       char,

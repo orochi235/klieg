@@ -47,6 +47,9 @@ export function layoutBlock(text: string, metrics: GlyphMetrics): Block {
   return { lines, width: Math.max(0, ...lines.map((l) => l.width)) };
 }
 
+/** Where the word sits in the box, in reading order — which edge that is depends on direction. */
+export type Align = 'start' | 'center' | 'end';
+
 export interface Budget {
   width: number;
   height: number;
@@ -56,6 +59,20 @@ export interface Budget {
    * the cap binds long before the budget does, holding the type well under its framing.
    */
   cap?: number;
+  /**
+   * Full visible width at the word's depth. Alignment measures against the whole box, where
+   * `width` is only the share of it the type may fill — aligning inside that share would leave
+   * the word inset by exactly the slack the fraction cut out.
+   */
+  extent?: number;
+  /**
+   * Camera distance to the word's plane. Alignment needs it because the type is extruded: the
+   * near cap of a glyph off the frustum's axis projects wider than the plane the extent measures,
+   * so a word aligned in the plane alone overhangs the box and the canvas clips it.
+   */
+  cameraZ?: number;
+  /** The physical edge the word meets, direction already resolved. Absent leaves it centred. */
+  edge?: 'left' | 'right';
 }
 
 /** Keeps one short word on a fullscreen overlay from blowing up to fill the viewport. */

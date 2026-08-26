@@ -40,9 +40,12 @@ const BOX = (size: number) => [
 function stubFont(): Font {
   return {
     unitsPerEm: UPEM,
-    charToGlyph: () => ({
+    // A space advances and draws nothing, as a real face does: it is how a word gets no parts.
+    charToGlyph: (char: string) => ({
       advanceWidth: ADVANCE,
-      getPath: (_x: number, _y: number, size: number) => ({ commands: BOX(size) }),
+      getPath: (_x: number, _y: number, size: number) => ({
+        commands: char === ' ' ? [] : BOX(size),
+      }),
     }),
     getKerningValue: () => 0,
   } as unknown as Font;
@@ -200,6 +203,8 @@ afterEach(() => {
 
 /** Enter, active and exit all zero-length, so the effect finishes on its first tick. */
 const INSTANT = { enter: 'none', active: 'none', exit: 'none', hold: 0 } as const;
+/** The same, but held long enough to tick under a pointer. */
+const LIT = { ...INSTANT, hold: 5000 } as const;
 
 describe('createKlieg', () => {
   it('mounts, renders and tears the word down when the timeline finishes', async () => {
@@ -1046,8 +1051,6 @@ describe('caller-supplied motion', () => {
 });
 
 describe('the lighting slot', () => {
-  const LIT = { enter: 'none', active: 'none', exit: 'none', hold: 5000 } as const;
-
   const envY = () => stage().scene.environmentRotation.y;
 
   it('drives the environment from a caller-supplied piece', async () => {
@@ -1318,6 +1321,64 @@ describe('the pointer in the frame context', () => {
 
     expect(last(seen.frames).pointer).not.toBeNull();
     expect(last(seen.frames).pointerInWord).toBeNull();
+    bk.destroy();
+  });
+
+  it('remembers where the pointer was for an effect that opens under a still cursor', async () => {
+    const bk = create();
+    const first = bk.fire('HI', INSTANT);
+    await flush();
+    stubCanvas(BOX);
+    dispatch('pointermove', { clientX: 100, clientY: 50 });
+    clock.advance(16);
+    await first;
+
+    // The cursor never moves again: a hover- or click-triggered sign opens under a still pointer.
+    const seen = capture();
+    void bk.fire('HI', LOOKING(seen.spec));
+    await flush();
+    clock.advance(16);
+
+    expect(last(seen.frames).pointer).not.toBeNull();
+    expect(last(seen.frames).pointer?.x).toBeCloseTo(1, 6);
+    bk.destroy();
+  });
+
+  it('shares one listener across concurrent effects and drops it exactly once', async () => {
+    const bk = create({ policy: 'concurrent' });
+    const a = bk.fire('HI', { ...LIT });
+    const b = bk.fire('HI', { ...LIT });
+    await flush();
+
+    expect(listeners.get('pointermove')).toHaveLength(1);
+
+    bk.destroy();
+    await Promise.all([a, b]);
+
+    expect(listeners.get('pointermove') ?? []).toHaveLength(0);
+  });
+
+  it('never measures the canvas for a page whose pointer has not moved', async () => {
+    let reads = 0;
+    const bk = create();
+    void bk.fire('HI', LIT);
+    await flush();
+    stage().canvas = {
+      getBoundingClientRect: () => {
+        reads++;
+        return { ...BOX, right: 100, bottom: 100 };
+      },
+    } as unknown as HTMLCanvasElement;
+    clock.advance(16);
+    clock.advance(16);
+
+    // A forced layout read every frame, for a box nothing is going to be measured against.
+    expect(reads).toBe(0);
+
+    dispatch('pointermove', { clientX: 40, clientY: 40 });
+    clock.advance(16);
+
+    expect(reads).toBe(1);
     bk.destroy();
   });
 

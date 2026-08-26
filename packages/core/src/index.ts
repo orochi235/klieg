@@ -280,6 +280,24 @@ export function createKlieg(options: KliegOptions): Klieg {
     placement,
   });
 
+  let pointerClient: { x: number; y: number } | null = null;
+  let pointerHolds = 0;
+  const onMove = (event: PointerEvent) => {
+    pointerClient = { x: event.clientX, y: event.clientY };
+  };
+
+  /** Instance-wide: the cursor's position outlives any one effect, so a sign fired under a still
+   * pointer opens where the pointer already is rather than at rest. */
+  function holdPointer(): () => void {
+    if (pointerHolds++ === 0) globalThis.addEventListener('pointermove', onMove, { passive: true });
+    let held = true;
+    return () => {
+      if (!held) return;
+      held = false;
+      if (--pointerHolds === 0) globalThis.removeEventListener('pointermove', onMove);
+    };
+  }
+
   let fontPromise: Promise<LoadedFont> | null = null;
   function font(): Promise<LoadedFont> {
     if (fontPromise) return fontPromise;
@@ -355,6 +373,9 @@ export function createKlieg(options: KliegOptions): Klieg {
     }
 
     const envPieces = resolveLighting(opts.lighting ?? 'sweep');
+    // A construction-time snapshot, as `partExtent` documents: a regroup re-lays the letters and
+    // leaves the pool alone, so this cannot change under a running effect.
+    const extent = word.partExtent();
     const hold = opts.hold ?? 1200;
     const untilClick = hold === 'click';
     const exit = resolveSlot(opts.exit ?? 'fade', EXIT);
@@ -397,11 +418,7 @@ export function createKlieg(options: KliegOptions): Klieg {
     const driver: Sequence | Timeline = sequence ?? timeline;
     const startedAt = clock.now();
 
-    let pointerClient: { x: number; y: number } | null = null;
-    const onMove = (event: PointerEvent) => {
-      pointerClient = { x: event.clientX, y: event.clientY };
-    };
-    globalThis.addEventListener('pointermove', onMove, { passive: true });
+    const releasePointer = holdPointer();
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
@@ -412,7 +429,7 @@ export function createKlieg(options: KliegOptions): Klieg {
         if (settled) return;
         settled = true;
         off();
-        globalThis.removeEventListener('pointermove', onMove);
+        releasePointer();
         detachDismiss();
         stage.scene.remove(word.group);
         host?.remove();
@@ -471,14 +488,13 @@ export function createKlieg(options: KliegOptions): Klieg {
 
           let pointer: FrameCtx['pointer'] = null;
           let pointerInWord: FrameCtx['pointerInWord'] = null;
-          const box = stage.canvas?.getBoundingClientRect();
+          const box = pointerClient ? stage.canvas?.getBoundingClientRect() : undefined;
           if (pointerClient && box && box.width > 0 && box.height > 0) {
             const nx = ((pointerClient.x - box.left) / box.width) * 2 - 1;
             const ny = ((pointerClient.y - box.top) / box.height) * 2 - 1;
             // FrameCtx promises -1..1, and the listener is document-wide: a pointer beside a small
             // anchored canvas would otherwise aim past every range that scales it.
             pointer = { x: Math.max(-1, Math.min(1, nx)), y: Math.max(-1, Math.min(1, ny)) };
-            const extent = word.partExtent();
             if (extent && extent.maxX > extent.minX && extent.maxY > extent.minY) {
               // The word is not centred on zero, so map into its real extent rather than scaling.
               pointerInWord = {

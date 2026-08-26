@@ -68,11 +68,21 @@ export const ALL_BREAK: CornerWeights = { break: 1, connect: 0 };
 /** Every corner bends through instead of cutting — a continuous cord, what `piping` wants. */
 export const ALL_CONNECT: CornerWeights = { break: 0, connect: 1 };
 
+/** What a contour that cannot afford its requested run count does. */
+export type ShortRun = 'fit' | 'drop';
+
 export interface CutOptions {
   /** Requested run count per glyph. Cannot go below the corner count. */
   runs: number;
   /** Runs shorter than this are dropped and left dark, in em. */
   minRun: number;
+  /**
+   * What a contour too short to carry `runs` does. `fit` cuts it into as many runs as clear
+   * `minRun`, and is the default. `drop` spends the whole budget and drops every piece under the
+   * floor, which leaves a contour shorter than `runs * minRun` empty — small detail falls out of
+   * the sign rather than being drawn coarsely.
+   */
+  shortRun?: ShortRun;
   /** Weight distribution over what each corner does. Defaults to every corner breaking. */
   corners?: CornerWeights;
   /** Requested tube radius in em. */
@@ -750,12 +760,21 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
   const extra = Math.max(0, opts.runs - spans.length);
   // A dark span is one piece of blockout, never several: slicing it would light its middle.
   const want = lengths.map((l, i) => (total > 0 && !spans[i]?.dark ? (extra * l) / total : 0));
-  const base = want.map(Math.floor);
+  // Extra cuts a span cannot afford: every piece has to clear `minRun` or it is dropped below,
+  // and a span sliced past its own budget loses all of them rather than some.
+  const fitting = (opts.shortRun ?? 'fit') === 'fit';
+  const room = lengths.map((l, i) =>
+    !fitting || spans[i]?.dark || !(opts.minRun > 0)
+      ? Number.POSITIVE_INFINITY
+      : Math.floor(l / opts.minRun) - 1,
+  );
+  const base = want.map((w, i) => Math.max(0, Math.min(Math.floor(w), room[i] as number)));
   let left = extra - base.reduce((a, b) => a + b, 0);
   for (const [, i] of want
     .map((w, i) => [w - (base[i] as number), i] as const)
     .sort((a, b) => b[0] - a[0])) {
     if (left <= 0) break;
+    if ((base[i] as number) >= (room[i] as number)) continue;
     base[i] = (base[i] as number) + 1;
     left--;
   }

@@ -44,6 +44,14 @@ function circlePath(): THREE.Vector3[] {
   });
 }
 
+/** A closed circle of a given radius, sampled fine enough that its perimeter is the real one. */
+function circleOf(radius: number): THREE.Vector3[] {
+  return Array.from({ length: 720 }, (_, i) => {
+    const t = (i / 720) * Math.PI * 2;
+    return new THREE.Vector3(Math.cos(t) * radius, Math.sin(t) * radius, 0);
+  });
+}
+
 /** An open L-shaped polyline: one interior 90 degree corner, straight legs on either side. */
 function openLPath(): THREE.Vector3[] {
   const pts: THREE.Vector3[] = [];
@@ -104,6 +112,41 @@ describe('cutIntoRuns', () => {
       const { runs } = cutIntoRuns([PATH(circlePath())], { runs: requested, minRun: 0 });
       expect(runs.length, `requested ${requested}, got ${runs.length}`).toBe(requested);
     }
+  });
+
+  // `TubeSpec.runs` is documented as bounded above by `minRun`. It was not: the budget was
+  // allocated first and any piece under the floor dropped afterwards, so a contour too short to
+  // carry the requested count lost every piece and rendered nothing at all.
+  it('cuts a short loop into as many runs as it can carry rather than none', () => {
+    const perimeter = 2 * Math.PI * 0.153;
+    const { runs } = cutIntoRuns([PATH(circleOf(0.153))], { runs: 7, minRun: 0.15 });
+
+    expect(runs.length).toBe(Math.floor(perimeter / 0.15));
+    for (const run of runs) expect(run.length).toBeGreaterThanOrEqual(0.15);
+  });
+
+  // The old behaviour, kept deliberately: small detail falls out of a sign rather than being
+  // drawn coarsely. It is opt-in because it renders nothing, which reads as a defect by default.
+  it('drops every piece of a short loop when asked to spend the budget anyway', () => {
+    const { runs } = cutIntoRuns([PATH(circleOf(0.153))], {
+      runs: 7,
+      minRun: 0.15,
+      shortRun: 'drop',
+    });
+
+    expect(runs).toHaveLength(0);
+  });
+
+  it('leaves a loop that cannot carry even one run empty rather than emitting a stub', () => {
+    const { runs } = cutIntoRuns([PATH(circleOf(0.01))], { runs: 7, minRun: 0.15 });
+
+    expect(runs).toHaveLength(0);
+  });
+
+  it('spends a budget it can afford exactly as before', () => {
+    const { runs } = cutIntoRuns([PATH(circleOf(0.5))], { runs: 7, minRun: 0.15 });
+
+    expect(runs).toHaveLength(7);
   });
 
   it('never returns fewer runs than there are corners', () => {

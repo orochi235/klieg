@@ -103,6 +103,7 @@ export type {
   PathSource,
   Run,
   SelectSpec,
+  ShortRun,
   SurfaceKind,
   TubeSpec,
 } from './render/tube/index.js';

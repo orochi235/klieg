@@ -62,15 +62,11 @@ function build(shapeGroups, tune) {
   let starved = 0;
 
   shapeGroups.forEach((shapes, i) => {
-    // `runs` is a budget the cut allocates before it drops any piece under `minRun`, so a short
-    // contour can lose every piece and render nothing (klieg's runs.ts:768). Ask for a count the
-    // contour can actually carry. Remove once core bounds the budget itself, as TubeSpec promises.
     const affordable = Math.max(1, Math.floor(perimeterOf(shapes) / tune.minRun));
     if (affordable < tune.runs) starved++;
     const spec = {
       ...decoration,
       ...tune,
-      runs: Math.min(tune.runs, affordable),
       look: { ...decoration.look, emissiveIntensity: tune.emissive, rim: tune.rim || undefined },
       colors: [tune.color],
       dark: { ...decoration.dark, color: tune.dark },
@@ -169,6 +165,8 @@ const CONTROLS = [
   { id: 'bend', min: 1.25, max: 6, step: 0.25, value: D.bend ?? 2 },
   { id: 'connect', min: 0, max: 1, step: 0.05, value: D.corners?.connect ?? 0, hint: 'corners bent vs cut' },
   { id: 'blockout', min: 0, max: 1, step: 0.05, value: D.blockout ?? 0, hint: 'cuts carried unlit' },
+  { id: 'shortRun', type: 'select', value: 'fit', options: ['fit', 'drop'],
+    hint: 'a contour too short for `runs`' },
 
   { group: 'lit' },
   { id: 'amount', min: 0, max: 1, step: 0.02, value: D.select.amount ?? 1, hint: 'fraction of runs lit' },
@@ -270,6 +268,7 @@ function tuneFromUi() {
     bend: val('bend'),
     corners: { break: 1 - val('connect'), connect: val('connect') },
     blockout: val('blockout'),
+    shortRun: ui.shortRun.value,
     select: { by: ui.by.value, amount: val('amount') },
     surfaces,
     wallDepth: val('wallDepth'),

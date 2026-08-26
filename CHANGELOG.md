@@ -63,6 +63,20 @@ small element only ever saw the slice of the yaw range its own box covered — t
 moved while the cursor crossed the type. It reads the canvas box now, and the swing that was a
 module constant is `track({ yawRange, pitchRange })`.
 
+### A short contour now renders as fewer tubes rather than none
+
+`runs` is a budget, and the cut used to spend all of it before dropping any piece under `minRun` —
+so a contour too short to carry the requested count lost every piece and rendered nothing at all.
+`TubeSpec.runs` already documented itself as bounded above by `minRun`; now it is. A contour is cut
+into as many runs as clear the floor.
+
+Text almost never reached this: a period is not a perfect circle, so it gains corners and survives
+at 0.82 em of perimeter. A smooth closed contour did, and vanished below about 0.96 em — which
+vector art hits immediately, since logo marks are full of true circles.
+
+The old behaviour is `TubeSpec.shortRun: 'drop'`, because it has a use: small detail falls out of a
+sign rather than being drawn coarsely. `'fit'` is the default.
+
 ### Changed
 
 - A `flicker` step is now derived from the pass rather than fixed at 24 a pass, holding it near 58ms —

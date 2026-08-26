@@ -67,26 +67,27 @@ detected (`runs.ts:160`), so a perfect circle is a seamless ring.
 An option forcing at least one cut on a corner-free closed span fixes the realism. It also lands on
 the same code path as the defect below, which is the argument for doing them together.
 
-## A defect to fix first
+## Two defects the spike found
 
-**A smooth closed contour under roughly 1 em of perimeter renders nothing at all.**
+**A short smooth contour rendered nothing — fixed.** `runs` is a budget the cut spent in full
+before dropping any piece under `minRun`, so a contour too short to carry the requested count lost
+every piece. Measured on `tubing`'s own spec, a circle rendered 7 runs at 1.26 em of perimeter, 4 at
+1.13, 1 at 1.01, and **0 at 0.96 and below**. Text rarely reaches it; a logo mark's true circles do.
+The cut now fits the count to what the contour can carry, and the old behaviour is
+`TubeSpec.shortRun: 'drop'` — it has a use, which is small detail falling out of a sign rather than
+being drawn coarsely.
 
-`runs.ts:768` drops any lit piece shorter than `minRun` — *after* the run budget has been allocated.
-A corner-free circle is a single whole-loop span, so at `runs: 7` and `minRun: 0.15` a 0.96 em circle
-becomes seven 0.137 em pieces and every one is dropped. `TubeSpec.runs` documents itself as "bounded
-above by `minRun`", so the intent is already written down and this path does not honor it.
+**A sequence of sharp corners loses a fifth of the letter — open.** When a corner's legs are shorter
+than the fillet's setback, `filletAt` returns null (`bend.ts:152`) and the corner breaks instead;
+a break then cuts the whole corner stretch out (`dropHead`/`dropTail`), leaving a gap. Corners close
+together share their legs, so a run of them starves each other and each failure compounds.
 
-Measured on `tubing`'s own shipped spec: a circle renders 7 runs at 1.26 em of perimeter, 4 at 1.13,
-1 at 1.01, and **0 at 0.96 and below**.
-
-Text rarely reaches it — a period is not a perfect circle and gets corners, so it survives at 0.82 em
-— which is why it has never been seen. Vector art reaches it immediately: the first mark tried had
-a pip that is a perfect circle, and it vanished. Fix by bounding the requested count to
-`floor(length / minRun)` before slicing. `spikes/svg-tube/main.js` works around it per path; that
-workaround should be deleted when this is fixed.
-
-This is a bug in shipped `tubing`, independent of everything else here. It moves rendering, so it
-wants a baseline check.
+Measured with every corner forced to `connect`, so a break is the stage failing rather than choosing:
+the `t` of a geometric sans has 12 corners, 8 of them sharper than 60°, and **drops 0.485 em of about
+2.44 — a fifth of the letter**. The `W` drops 11%. Bailing out is the wrong response: the tube should
+carry through at whatever radius the room allows, or the corner stretch should be shortened rather
+than removed. This is the next thing to fix, and it is more visible on art than on text because art
+has more right angles.
 
 ## Decisions this needs
 

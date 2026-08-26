@@ -52,7 +52,8 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -b tsconfig.json --force",
+    "build": "rm -rf dist && tsc -b tsconfig.json --force && npm run build:standalone",
+    "build:standalone": "vite build --config standalone.vite.config.ts",
     "dev:tube-lab": "vite dev/tube-lab",
     "prepack": "npm run build && cp ../../README.md README.md",
     "prepublishOnly": "npm --prefix ../.. run check",

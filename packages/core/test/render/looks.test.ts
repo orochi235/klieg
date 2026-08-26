@@ -11,6 +11,7 @@ import {
   type LookName,
   type LookParams,
   type LookSpec,
+  lightBase,
   specOf,
   type TintTarget,
   tintMaterialOf,
@@ -572,5 +573,31 @@ describe('frameOwnedBase', () => {
   it('clamps opacity to 0..1, which resolveParams never sees', () => {
     expect(frameOwnedBase({ opacity: 5 }).opacity).toBe(1);
     expect(frameOwnedBase({ opacity: -1 }).opacity).toBe(0);
+  });
+});
+
+describe('lightBase', () => {
+  it('reads a plain look off its colour', () => {
+    expect(lightBase('gold').hue).toBe(0xffc44d);
+  });
+
+  // gem is clear stone at color 0xffffff; its red is what light picks up passing through it.
+  it('reads a transmissive look off its attenuation', () => {
+    expect(lightBase('gem').hue).toBe(LOOKS.gem.attenuationColor);
+  });
+
+  it('reads an emissive look off its emissive', () => {
+    expect(lightBase('neon').hue).toBe(LOOKS.neon.emissive);
+  });
+
+  it('carries the base emissive a lamp adds onto', () => {
+    expect(lightBase('gold').emissive).toBe(0x000000);
+    expect(lightBase('neon').emissive).toBe(LOOKS.neon.emissive);
+  });
+
+  it('honours a declared tintTarget over the inferred one', () => {
+    expect(lightBase({ color: 0x112233, sheenColor: 0x445566, tintTarget: 'sheenColor' }).hue).toBe(
+      0x445566,
+    );
   });
 });

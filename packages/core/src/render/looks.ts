@@ -427,3 +427,19 @@ export function frameOwnedBase(look: Look): FrameOwnedBase {
     emissiveIntensity: resolveParams(spec).emissiveIntensity,
   };
 }
+
+export interface LightBase {
+  /** The look's own emissive, which lamp light adds onto rather than replacing. */
+  emissive: number;
+  /** The colour the look reads as, whichever property carries it. What a lamp multiplies against. */
+  hue: number;
+}
+
+export function lightBase(look: Look): LightBase {
+  const spec = specOf(look);
+  const params = resolveParams(spec);
+  return {
+    emissive: params.emissive,
+    hue: params[tintTargetOf(params, spec.tintTarget)] as number,
+  };
+}

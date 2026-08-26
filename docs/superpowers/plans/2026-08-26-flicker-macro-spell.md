@@ -202,7 +202,21 @@ Append inside `describe('flicker', …)`:
 
   it('still stutters inside a spell', () => {
     const piece = flicker({ duration: 60000, spell: 4000, calm: 15000 });
-    expect(darkRuns(gainsAcrossOnePass(piece, part, 4000)).length).toBeGreaterThan(3);
+    expect(darkRuns(gainsAcrossOnePass(piece, part, 4000)).length).toBeGreaterThan(15);
+  });
+
+  // The gate and the stutter share one clock, so each bout samples a different stretch of the hash.
+  // A second clock — or a step index that restarts per bout — makes every bout identical instead.
+  it('gives each spell its own stutter rather than repeating one', () => {
+    const piece = flicker({ duration: 60000, spell: 4000, calm: 15000 });
+    const gains = gainsAcrossOnePass(piece, part, 2934); // 978 steps x 3 samples
+    const third = gains.length / 3;
+    expect(gains.slice(0, third)).not.toEqual(gains.slice(third, third * 2));
+  });
+
+  // cycles rounds rather than floors, so a pass that is nearer three bouts than two gets three.
+  it('rounds the pass to the nearest whole number of spells rather than down', () => {
+    expect(flicker({ duration: 50000, spell: 4000, calm: 15000 }).duration).toBe(57050);
   });
 ```
 
@@ -271,6 +285,22 @@ warns about, avoided by construction rather than by arithmetic.
 
 Run: `npx vitest run packages/core/test/effects/pieces.test.ts`
 Expected: PASS, all five new cases and every existing one.
+
+- [ ] **Step 5b: Prove the resonance test is load-bearing**
+
+This is the one that guards the plan's central argument, and a review found that without it the
+defect passes the whole suite. Temporarily restart the step index per bout on the gated path:
+
+```ts
+      const step = gated
+        ? Math.floor(((t * cycles) % 1) * cycleSteps) % cycleSteps
+        : Math.floor(t * steps) % steps;
+```
+
+Run: `npx vitest run packages/core/test/effects/pieces.test.ts`
+Expected: FAIL on `gives each spell its own stutter` **and on that alone** — the duration stays
+57050, the calm stays ~15167ms and the shortest drop stays 57.05ms, which is exactly why the rest of
+the suite cannot see it. Restore and confirm green. Quote both outputs.
 
 - [ ] **Step 6: Prove the snapping is load-bearing**
 

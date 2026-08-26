@@ -17,7 +17,7 @@ SwiftShader, so results do not depend on the machine. **Run `npm run build -w kl
 |---|---|
 | `spikes/lamp-falloff.mjs` | Does a per-part brightness change reach the screen on each look? Renders lamp-on and lamp-off and compares md5. Flags: `--kind body\|run`, `--looks`, `--radius`, `--strength`, `--em`, `--ei`, `--out`. |
 | `spikes/lamp-blend.mjs` | How should a lamp combine with the material under it? Flags: `--blends`, `--looks`, `--strength`, `--lamp <hex>`, `--env`, `--out`. |
-| `spikes/lamp-proof.mjs` | Does `lamp()` reach the screen on every look and every source it claims? A lamp-on/lamp-off pair per look, `orbit` at eight driven phases, and a real pointer swept across a full sign, a small one and a regrouped one. Exits non-zero on a byte-identical pair or on a frame that had to be lit and was not. Writes a contact sheet per group. Flags: `--looks`, `--text`, `--only`, `--orbit-radii`, `--out`. |
+| `spikes/lamp-proof.mjs` | Does `lamp()` reach the screen on every look and every source it claims? A lamp-on/lamp-off pair per look, `orbit` at eight driven phases, and a real pointer swept across a full sign, a small one and a regrouped one. Exits non-zero on a byte-identical pair, on a frame that had to be lit and was not, and on a pointer sweep whose light does not move the way the cursor did. Writes a contact sheet per group. Flags: `--looks`, `--text`, `--only`, `--orbit-radii`, `--out`. |
 
 `--blends` takes `none`, `add`, `albedo`, `hue`, `screen`, `env`, `envown`, `envtest`, `roughtest`.
 They all write PNGs and print a table; identical md5s across two rows mean the change never reached
@@ -148,16 +148,17 @@ keep on multi-line blocks.
 
 ## 9. A lamp sits under the cursor only when the word's ink fills the canvas
 
-`pointerInWord` maps the canvas's whole −1..1 onto the word's ink box per axis. The README promises
-the light is under the cursor on "a word that fills the frame", which is too generous: the fit is
-aspect-limited, so a sign can fill its framing box and still leave most of the canvas empty.
-`framing: { width: 0.9, height: 0.6 }` on a 1000×220 strip puts `KLIEG` into 612 of the 1000 px,
-and the light leads the cursor by up to 139 px.
+`pointerInWord` maps the canvas's whole −1..1 onto the word's ink box per axis, so the cursor's
+whole travel compresses onto the letters: the light leads the cursor at the left of the sign and
+lags it at the right, and matches only where the ink fills the canvas. The fit is aspect-limited, so
+a sign can fill its framing box and still leave most of the canvas empty — on a 1000×220 strip
+`framing: { width: 0.9, height: 0.6 }` is limited by the height and puts `KLIEG` into 612 of the
+1000 px.
 
 | cursor x | 250 | 500 | 750 |
 |---|---|---|---|
-| light centroid, `framing 0.9 × 0.6` (ink 195..807) | 389 | 579 | 734 |
-| light centroid, `framing 0.3 × 0.3` (ink 354..647) | 446 | 538 | 613 |
+| light centroid, `framing 0.9 × 0.6` (ink 195..807) | 389 (+139) | 579 (+79) | 734 (−16) |
+| light centroid, `framing 0.3 × 0.3` (ink 354..647) | 446 (+196) | 538 (+38) | 613 (−137) |
 
 On the small sign the sweep starts and ends off the letters entirely and the light still crosses the
 whole word — that is the stretch, and it is the larger of two offsets.
@@ -189,9 +190,15 @@ rebuilding the pool and the extent when a stage re-lays the letters; it is its o
 `mode: 'replace'` samples the ramp in the tube shader and never reads the run-colour vertex
 attribute, so nothing that writes that attribute survives. A lamp on every run of a `tubing`
 `KLIEG` renders byte-identical to no lamp, and `hue` on the same runs is byte-identical too — the
-control that shows this is not lamp-specific. `color` and `gain` land in the same place.
-`mode: 'modulate'` reads the attribute and both come through. Fixing it is a change to the tube
-shader.
+control that shows this is not lamp-specific. `color` and `gain` land in the same place. Fixing it
+is a change to the tube shader.
+
+`mode: 'modulate'` reads the attribute, and the lamp comes through — but not as one hotspot under
+it. The light multiplies a blueprint stop while the pixel colour comes from the ramp, so it arrives
+as a different colour at each ramp position: on `tubing` `KLIEG` the pink-stop segments take their
+light almost entirely in blue (mean +17 counts, against +4 green and 0 red) and the blue-violet ones
+take theirs in green (+5, against +2 blue). It reads as a hue shift spread along the word rather
+than a light on part of it.
 
 ## 12. `orbit`'s default radius is six tenths of a lamp's reach
 
@@ -217,10 +224,26 @@ node spikes/lamp-proof.mjs --only orbit,orbitr --orbit-radii 2,1,0.5,0.4,0.3
 is the one with margin — at its dimmest phase it delivers 23% of the lamp's centre strength against
 4.8% for 0.4.
 
-**Correcting `369b328`.** That commit moved the default on a table built by settling a second apart,
-which leaves the absolute phase uncontrolled; its four samples landed on four diagonals and never
-came near 0° or 180°. Two of its claims are false against the data above: 0.3 is not "the only one
-lit at every phase" (0.4 is too — 0.3 is the brightest at its dimmest phase), and radius 2 did not
-"clear them everywhere" (at 180° it passes 0.278 em from the K, inside a 0.5 em reach, and lights it
-once per pass). The tell was in the table it printed: with every part on one line, 45° and 315° must
-render identically, and its radius-1 row reported 9.6 and 0. The move from 2 to 0.3 stands.
+**Correcting `369b328`.** Its table sampled an uncontrolled absolute phase, and two of its claims
+are false against the data above. 0.3 is not "the only one lit at every phase" — 0.4 is lit at every
+phase too, and 0.3's distinction is being brightest at its dimmest one. And radius 2 does not "clear
+them everywhere": at 180° it passes 0.278 em from the K, inside a 0.5 em reach, and lights it once
+per pass. The move from 2 to 0.3 stands.
+
+## 13. What the seam and the recoloured run look like
+
+`node spikes/lamp-proof.mjs --only seam,run` renders both; the sheets are `sheet-seam.png` and
+`sheet-run.png` under `--out`.
+
+**Two half lamps crossing is not a seam with a notch in it.** One lamp at strength 0.9 on
+`ILLUMINATION` against two at 0.45 placed ±0.5 em either side: where the pools cross each half lamp
+is at half its reach and so gives half its strength, and the pair lands at 7.8 mean per-channel lift
+on the ink against the single lamp's 15.1 at its centre — half, as the arithmetic says. It also
+spreads that light over about twice the width. Over the whole frame the two differ by a mean of 0.49
+per channel and a worst of 25, in an 87 px band about the word's centre.
+
+**A lamp on a `hue()`-recoloured run reflects the colour the run started with.** `hue({ span: 0,
+from: 0.45 })` turns `tubing` `KLIEG` cyan, and the lamp's spot on it comes out white-magenta rather
+than brighter cyan: the added light averages rgb 164/60/78, which is the blueprint's magenta and not
+anything on screen. A lamp on a run passes the run's own colour as the hue, and `hue` writes that
+same attribute without changing what the blueprint says.

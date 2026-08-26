@@ -248,9 +248,9 @@ effect does not drive and nothing happens at all.
 rather than changing what they are made of. `radius` is its reach in em of layout space, `strength`
 the light at the centre falling to nothing at that edge, and `color` the lamp's own, multiplied
 against the look's hue. `source` says where the light is on each pass: `fromPointer()` is the
-default and follows the cursor — the canvas's whole extent maps onto the word's, so the pool sits
-under the cursor only where the ink fills the canvas, and leads it everywhere else. Measured on a
-`framing` of 0.9 the lead still reaches 139px, because the fit is height-limited.
+default and follows the cursor — the canvas's whole extent maps onto the word's ink, so the
+cursor's whole travel is compressed onto the letters: the light runs ahead of the cursor at one end
+of the sign and behind it at the other, and sits under it only where the ink fills the canvas.
 `fixed(x, y)` pins the light, `orbit({ radius, x, y })` circles it, and `along([...])` walks a
 polyline at constant time per segment rather than constant speed.
 `duration` is one pass for the sources that read the clock, `orbit` and `along`, and does nothing

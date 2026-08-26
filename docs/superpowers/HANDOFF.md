@@ -19,8 +19,8 @@ run's colour buffer, threaded the `ctx`, and added `partExtent()`. Task 6 (`b883
 (`8a778f9`, `3b69ca8`, `6d3b3d3`, `ad60629`, `5589976`) made `lighting` a slot, built the per-frame
 `FrameCtx`, and moved the pointer arithmetic into a new pure `src/pointer.ts`. Task 8 (`4a68519`,
 `9bc93a1`, `c50c5b1`, `88aeb0c`) exported the surface, retired `envRotation` and `PointerLight`, and
-wrote the CHANGELOG and README. Task 9 (`369b328`, `116fa4f`, `785a475`, `cfbf02b`) is the render
-proof. `npm run check` is green at **1071 tests**, up from 977 at the branch point.
+wrote the CHANGELOG and README. Task 9 (`369b328`, `116fa4f`, `785a475`, `cfbf02b`, `0a4fbd8`) is
+the render proof. `npm run check` is green at **1071 tests**, up from 977 at the branch point.
 
 **Task 9 proved it reaches the screen.** `spikes/lamp-proof.mjs` drives a real page for 49 shots and
 8 contact sheets: **the lamp reads on all six looks, including `tubing` on `{ kind: 'run' }`**, so the
@@ -28,12 +28,19 @@ vertex-buffer path is live and this is not another `gain`. The light channel sum
 labelled it, verified byte-exactly by the one comparison that can tell — a mid-grey lamp at full
 strength against a white one at `128/255`, which are the same float and must render identically.
 Results and every open question it settled are in
-[the findings note](specs/2026-08-25-material-lighting-findings.md), sections 9-12.
+[the findings note](specs/2026-08-25-material-lighting-findings.md), sections 9-13.
+
+**Two things the render proof does not cover.** There is no per-frame cost anywhere in it —
+SwiftShader flattens it, so the plan's worry that a lamp on `by: 'all'` re-uploads every run's
+vertex buffer each frame is still unmeasured. And every shot is a single-line sign, so `part.y` is 0
+on every part in all 49: the y-axis convention Task 7 fixed (`clientY` grows down, layout y grows
+up — `effects/types.ts:72-75`) is exercised by no pixel on this branch. The script now asserts that
+the light's x centroid rises with the cursor rather than merely differing; the vertical half of that
+check wants a multi-line sign, which nothing renders yet.
 
 **What is left is the decision to merge.** Nothing is pushed; `main` is 11 ahead of `origin/main`.
-Task 9's spec gate ran and its code-quality gate did not — the only gate skipped across nine tasks,
-and worth knowing before this is called finished. Three findings below are recorded and deliberately
-unfixed.
+Task 9's code-quality gate has since run, and its findings are folded in. Three findings below are
+recorded and deliberately unfixed.
 
 The execution method was subagent-driven — one implementer per task, then a spec-compliance review,
 then a code-quality review. Read the plan rather than the design doc: review rounds amended Tasks 5,
@@ -52,15 +59,13 @@ sign lights nothing: the part pool is frozen at construction, so the light lives
 used to be, and only a cursor past the right edge lights a centred `NOW`. A lamp on a
 `mode: 'replace'` **gradient** is a total no-op — that shader branch never reads the attribute a lamp
 writes — and `hue` rendered as a control is equally dead, so it is pre-existing and not lamp-specific.
-And the pointer stretch **leads the cursor by up to 139px even at `framing: 0.9`**, because that fit
-is height-limited; the README claimed "fills the frame" and now says what is true.
+And the pointer mapping compresses the cursor's whole travel onto the ink, so the light **leads the
+cursor at one end of the sign and lags it at the other** — §9 measures both ends on two framings, and
+the README now describes that shape instead of promising a match.
 
-**`orbit`'s default moved 2 → 0.3, and the first justification for it was wrong.** Sampling four
-phases by settling a second apart never controlled the absolute phase — all four landed on diagonals,
-and with every part of a single-line sign at `y = 0` the 45°/315° pair must render identically while
-the data said 9.6 and 0. Phase-controlled across 16: radius 2 lights the K once per pass at 180°, 0.4
-is lit at every phase, 0.5 is *not* (zero at 90°/270°). 0.3 is chosen on margin at the dimmest phase,
-23% of centre strength against 4.8% for 0.4.
+**`orbit`'s default moved 2 → 0.3, and the first justification for it was wrong.** Its table was
+sampled at an uncontrolled phase. §12 of the findings note carries the eight-phase replacement, the
+two claims of `369b328` it falsifies, and why 0.3 rather than 0.4; the move stands.
 
 **What Task 8 learned: verify your own prose against the built package.** Two claims written in this
 task were false and both were caught by a throwaway script that imported `dist` and asserted each

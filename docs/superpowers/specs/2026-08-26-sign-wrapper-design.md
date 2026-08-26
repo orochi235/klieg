@@ -92,11 +92,13 @@ attribute cannot serialize, `.options` being the full `FireOptions` escape hatch
 grows later reaches consumers without an element release.
 
 **The module imports nothing from core statically.** `connectedCallback` does `await
-import('./sign.js')`. The element is DOM plumbing measured in kilobytes and three.js arrives only
-when an element actually connects, so a page that ships the tag on one route does not pay for it on
-the others.
+import('./sign/index.js')`. The element is DOM plumbing measured in kilobytes and three.js arrives
+only when an element actually connects, so a page that ships the tag on one route does not pay for
+it on the others.
 
-One `<style data-klieg-sign>` is appended to `document.head` at registration, once:
+Each connect appends one `<style data-klieg-sign>` to the element's own `document.head`, behind a
+guard that finds an existing one — registration is the wrong moment, since the element may be
+registered in one document and connected in another:
 
 ```css
 @layer klieg {
@@ -108,9 +110,10 @@ One `<style data-klieg-sign>` is appended to `document.head` at registration, on
 `display` and `position` are not taste: `claimAnchor` rejects `display: contents|inline` and needs a
 containing block. `@layer` means a consumer rule beats these without specificity games.
 
-**The element marks its element children `data-klieg-fallback` at connect, before klieg appends
-anything.** An element placement appends the canvas and the text layer *into the anchor*, so a
-`> *` rule would catch them too.
+**The element marks its children `data-klieg-fallback` at connect, before klieg appends anything.**
+An element placement appends the canvas and the text layer *into the anchor*, so a `> *` rule would
+catch them too. A bare text child is wrapped in a `<span>` first: only an element can carry the
+attribute, and unwrapped it would render over the sign at full opacity.
 
 `[lit]` is set with `setAttribute`, never through a framework's state, for the reason `onLit` gives.
 

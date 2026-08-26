@@ -422,10 +422,16 @@ the page needs no framework and no code of its own:
 
 Your heading stays in the page — readable before any script runs, selectable, findable, and in
 the markup a crawler reads. The element anchors a canvas over its own box and turns the heading
-transparent when the sign lights; with no WebGL, no JavaScript or a failed load, nothing happens
-to it at all. It adds no DOM text of its own: the heading is the copy, and a second one would be
-announced twice and match Ctrl+F twice. Give it a `text` attribute instead of a heading and it
-carries a hidden copy, since then nothing else does.
+transparent when the sign lights; with no WebGL, or no JavaScript at all, nothing happens to it.
+It adds no DOM text of its own: the heading is the copy, and a second one would be announced twice
+and match Ctrl+F twice. Give it a `text` attribute instead of a heading and it carries a hidden
+copy, since then nothing else does.
+
+One `<style>` in `@layer klieg` does that: `display: block; position: relative` on the element,
+which anchoring needs, and `klieg-sign[lit] [data-klieg-fallback] { color: transparent }`, where
+`[lit]` lands on the element and `data-klieg-fallback` on every child it took from you. Being
+layered, the rule loses to *any* unlayered author rule — a plain `color` on your heading leaves it
+standing over the lit sign, so put your own rule in a layer too.
 
 Attributes: `font`, `text`, `look`, `tint`, `framing-width`, `framing-height`, `align`,
 `lighting`, `bloom`. `tint` takes any CSS color, `currentColor` and `var(--x)` included, resolved
@@ -434,7 +440,9 @@ off and anything else, the bare attribute included, is on. Removing an attribute
 set rather than leaving the last value standing.
 
 The `.look`, `.effects` and `.options` properties carry what an attribute cannot, `.options` being
-a whole `FireOptions` merged over the rest. Setting `.look` opts the element out of the `look`
+a whole `FireOptions` merged over the rest. All three are read when the sign is built and again on
+every attribute change, so set them before the element connects — assigning one to a standing sign
+changes nothing until an attribute moves. Setting `.look` also opts the element out of the `look`
 attribute: a later attribute change re-fires, still with the property's value.
 
 The element imports klieg dynamically, so three.js arrives only when one connects.
@@ -462,6 +470,7 @@ its consumers.
 
 For a static page with no bundler, `klieg/element/standalone` — `dist/standalone/klieg-sign.js` —
 is the element, klieg and three inlined in one file a `<script type="module">` can load by itself.
+It ships no declarations: it is a script tag's build, not one to import from TypeScript.
 
 ## Multiple lines
 
@@ -537,7 +546,7 @@ Under `prefers-reduced-motion: reduce` the word holds the pose its enter settles
   pickers, plus canned sequences.
 - `npm run dev:tube-lab -w klieg` — the tube lab: several letters at several angles at once
   with the tube pipeline's own numbers beside the render. Dev-only tooling, never published.
-- `npm run check` — biome, tsc and the unit suite (1180 tests).
+- `npm run check` — biome, tsc and the unit suite.
 - `npm run test:visual` — Playwright specs asserting the overlay composites over a live page
   without tinting or blocking it.
 - `npm run build:pages -w @klieg/lab && npm run preview:pages -w @klieg/lab` — the

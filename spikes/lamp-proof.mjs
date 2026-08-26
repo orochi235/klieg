@@ -25,7 +25,10 @@
  * that wants a lamp to have landed also asserts the probe counted a lit part.
  *
  * Exits non-zero when a pair that must differ is byte-identical, when a frame that must be lit
- * counted no lit part, or when the sRGB pair is not the closer of the two candidates.
+ * counted no lit part, when a pointer sweep's light does not move the same way as the cursor, or
+ * when the sRGB pair is not byte-identical. The check table's `gates` column separates those from
+ * measurements that are only recorded; on a full run a missing shot fails rather than skips, so a
+ * renamed job cannot quietly delete a check.
  */
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
@@ -236,7 +239,11 @@ const L = (o) => JSON.stringify(o);
 const runKind = (look) => (look === 'tubing' ? 'run' : 'body');
 
 const jobs = [];
+/** Every phase the script declares, whether or not `--only` kept it, so the summary can say
+ * which checks the run never had the shots for. */
+const declared = new Set();
 const job = (phase, name, query, extra = {}) => {
+  declared.add(phase);
   if (ONLY.length && !ONLY.includes(phase)) return;
   jobs.push({ phase, name, query, mouse: null, look: false, ...extra });
 };
@@ -433,10 +440,11 @@ const analyze = async (a, b) =>
     [pixels(shots.get(a).png), pixels(shots.get(b).png), W],
   );
 
-/** Centre of the letters actually on screen, from an unlit frame, in CSS pixels. Where the
- * regrouped word ended up is a layout answer, and reading it beats assuming it. */
-const centreOfInk = async (key) =>
-  util.evaluate(
+/** How much of the frame is lit and where its centre is: `mass` as a fraction of all pixels,
+ * `cx`/`cy` in CSS pixels. Where a regrouped word ended up is a layout answer, and reading it
+ * beats assuming it; `mass` is the control that a page drew anything at all. */
+const inkOf = async (key) => {
+  const out = await util.evaluate(
     async ([d, scale]) => {
       const get = (u) =>
         new Promise((res, rej) => {
@@ -453,6 +461,7 @@ const centreOfInk = async (key) =>
       g.drawImage(img, 0, 0);
       const D = g.getImageData(0, 0, c.width, c.height).data;
       let weight = 0;
+      let lit = 0;
       let wx = 0;
       let wy = 0;
       for (let i = 0; i < D.length; i += 4) {
@@ -461,14 +470,27 @@ const centreOfInk = async (key) =>
         const px = (i / 4) % c.width;
         const py = Math.floor(i / 4 / c.width);
         weight += lum;
+        lit += 1;
         wx += px * lum;
         wy += py * lum;
       }
       const s = c.width / scale;
-      return weight === 0 ? [scale / 2, 0] : [wx / weight / s, wy / weight / s];
+      return weight === 0
+        ? null
+        : { mass: lit / (c.width * c.height), cx: wx / weight / s, cy: wy / weight / s };
     },
     [pixels(shots.get(key).png), W],
   );
+  // A blank control is a broken run, not a datum: falling back to the canvas centre would put the
+  // cursor on the top edge and let a finding be recorded for the wrong reason.
+  if (!out) throw new Error(`${key} rendered no ink`);
+  return out;
+};
+
+const centreOfInk = async (key) => {
+  const { cx, cy } = await inkOf(key);
+  return [cx, cy];
+};
 
 let n = 0;
 for (const j of jobs) {
@@ -517,10 +539,13 @@ if (shots.has('orbit/off')) {
 // word's ink box while a lamp measures from each part's origin, so the two need not agree.
 const CONTROL = { pointer: 'pointer/rest', small: 'small/dark', regroup: 'regroup/dark' };
 const aim = {};
+/** The same measurements unrounded, for the checks that assert on the order of the centroids. */
+const aimRaw = {};
 for (const [key, s] of shots) {
   const control = CONTROL[key.split('/')[0]];
   if (!s.mouse || !control || !shots.has(control)) continue;
   const d = await analyze(control, key);
+  aimRaw[key] = d;
   aim[key] = {
     cursor: `${s.mouse[0]},${s.mouse[1]}`,
     light: d.moved ? `${d.cx.toFixed(0)},${d.cy.toFixed(0)}` : '',
@@ -534,12 +559,25 @@ for (const [key, s] of shots) {
 const at = (key) => shots.get(key) ?? { md5: 'missing', probe: null };
 const isLit = (key) => (at(key).probe?.lit ?? 0) > 0;
 const checks = [];
-const add = (check, want, verdict, ok) => checks.push({ check, want, verdict, ok });
+/** `gates` says whether the row can fail the run. A recorded measurement never can, and without
+ * the column a recorded row reads exactly like a passing assertion. */
+const add = (check, want, verdict, ok, gates = true) =>
+  checks.push({ check, want, verdict, ok, gates });
+const record = (check, verdict) => add(check, 'record', verdict, true, false);
+
+/** Shots a check needs. On a full run a missing one is a failure — otherwise renaming a job
+ * deletes its check and the summary still says everything held. Under `--only` it is a skip. */
+const have = (check, want, keys) => {
+  const gone = keys.filter((k) => !shots.has(k));
+  if (!gone.length) return true;
+  if (!ONLY.length) add(check, want, `no shot for ${gone.join(', ')}`, false);
+  return false;
+};
 
 /** A pair must differ AND every frame in `lit` must have contributed light: the crosshair used
  * to be inside the clip, and a pair that differs only by cursor position is not a lamp. */
 const differ = (check, a, b, opts = {}) => {
-  if (!shots.has(a) || !shots.has(b)) return;
+  if (!have(check, 'differ', [a, b])) return;
   const dark = (opts.lit ?? [b]).filter((k) => !isLit(k));
   const bright = (opts.dark ?? []).filter((k) => isLit(k));
   const verdict =
@@ -553,29 +591,44 @@ const differ = (check, a, b, opts = {}) => {
   add(check, 'differ', verdict, verdict === 'reads');
 };
 
+/** A differing pair proves the light moved; only the order proves which way. Task 7 found the y
+ * mapping inverted, and an inverted x mapping differs on every pointer pair just as happily. */
+const rises = (check, keys) => {
+  if (!have(check, 'cx rises', keys)) return;
+  const got = keys.map((k) => aimRaw[k]);
+  if (got.some((d) => !d?.moved)) {
+    add(check, 'cx rises', 'no light moved in one of the frames', false);
+    return;
+  }
+  const xs = got.map((d) => d.cx);
+  const ok = xs.every((v, i) => i === 0 || v > xs[i - 1]);
+  add(check, 'cx rises', `${xs.map((v) => v.toFixed(0)).join(ok ? ' < ' : ' / ')}`, ok);
+};
+
 for (const look of LOOKS) {
   differ(`${look} (${runKind(look)})`, `looks/${look}-off`, `looks/${look}-on`, {
     lit: [`looks/${look}-on`],
   });
 }
-if (shots.has('orbit/off')) {
+const ORBIT_KEYS = ['orbit/off', ...PHASES.map((p) => `orbit/bare-${deg(p)}`)];
+const ORBIT_CHECK = `orbit bare defaults, all ${PHASES.length} phases`;
+if (have(ORBIT_CHECK, 'differ', ORBIT_KEYS)) {
   const dark = PHASES.filter(
     (p) => at(`orbit/bare-${deg(p)}`).md5 === at('orbit/off').md5 || !isLit(`orbit/bare-${deg(p)}`),
   ).map(deg);
-  add(
-    `orbit bare defaults, all ${PHASES.length} phases`,
-    'differ',
-    dark.length ? `NO-OP at ${dark.join(', ')}` : 'reads',
-    dark.length === 0,
-  );
+  add(ORBIT_CHECK, 'differ', dark.length ? `NO-OP at ${dark.join(', ')}` : 'reads', !dark.length);
 }
 differ('srgb control: lamp lands', 'srgb/off', 'srgb/grey-full', { lit: ['srgb/grey-full'] });
-if (dSrgb && dLinear) {
+// The two are the same float under an sRGB sum, so the frames have to be byte-identical, not
+// merely close. The distance to the linear candidate stays as the printed diagnostic.
+const SRGB_CHECK = 'grey@1 and white@0.5020 are one light';
+if (have(SRGB_CHECK, 'identical', ['srgb/grey-full', 'srgb/white-srgb'])) {
+  const same = at('srgb/grey-full').md5 === at('srgb/white-srgb').md5;
   add(
-    `grey@1 nearer white@0.5020 (${dSrgb.mean.toFixed(3)}) than white@0.2159 (${dLinear.mean.toFixed(3)})`,
-    'sRGB',
-    dSrgb.mean * 10 < dLinear.mean ? 'sRGB' : 'LINEAR',
-    dSrgb.mean * 10 < dLinear.mean,
+    SRGB_CHECK,
+    'identical',
+    same ? 'byte-identical: sRGB' : `differ by mean ${dSrgb.mean.toFixed(3)}: not an sRGB sum`,
+    same,
   );
 }
 differ('fromPointer wakes', 'pointer/rest', 'pointer/mid', {
@@ -585,39 +638,51 @@ differ('fromPointer wakes', 'pointer/rest', 'pointer/mid', {
 differ('fromPointer tracks', 'pointer/left', 'pointer/right', {
   lit: ['pointer/left', 'pointer/right'],
 });
+rises('fromPointer tracks the right way', ['pointer/left', 'pointer/mid', 'pointer/right']);
 differ('fromPointer on a small sign', 'small/dark', 'small/mid', { lit: ['small/mid'] });
 differ('fromPointer tracks on a small sign', 'small/left', 'small/right', {
   lit: ['small/left', 'small/right'],
 });
-differ('fromPointer after a regroup', 'regroup/dark', 'regroup/right', {
+rises('fromPointer tracks the right way, small sign', ['small/left', 'small/mid', 'small/right']);
+differ('a cursor on the pre-regroup NOW (x=800) lights it', 'regroup/dark', 'regroup/right', {
   lit: ['regroup/right'],
 });
 // Where the light goes after a regroup is a measurement, not a promise this branch makes: the
 // part pool is a construction-time snapshot and `FrameCtx` says so. `over` puts the cursor on the
 // ink the regroup left on screen, so a lit frame would mean the pool had followed the letters.
-if (shots.has('regroup/over')) {
-  add(
+if (have('a regroup leaves the light on the old layout', 'record', ['regroup/over'])) {
+  record(
     'a regroup leaves the light on the old layout',
-    'record',
     isLit('regroup/over')
       ? 'the light follows the letters'
       : 'dark under the cursor: the pool is still the original layout',
-    true,
   );
 }
 differ('a lamp on runs under hue', 'run/hue-only', 'run/hue-lamp', { lit: ['run/hue-lamp'] });
 // `replace` samples the ramp and never reads the run-colour attribute, so nothing that writes
-// that attribute survives — a lamp, `color` and `gain` alike. Recorded, not failed: it predates
-// this branch and fixing it is a change to the tube shader.
-if (shots.has('run/replace-off')) {
+// that attribute survives — a lamp, `color` and `gain` alike. Recorded rather than asserted: it
+// predates this branch, and a hard assertion on it turns green into red when the shader is fixed.
+const REPLACE_KEYS = ['run/replace-off', 'run/replace-on', 'run/replace-hue'];
+const INK_CHECK = 'replace-gradient control: the page drew ink';
+if (have(INK_CHECK, 'ink', [...REPLACE_KEYS, 'run/lamp-only'])) {
+  // Three identical frames are also three blank frames, and nothing else here would notice.
+  const base = (await inkOf('run/lamp-only')).mass;
+  const masses = await Promise.all(REPLACE_KEYS.map((k) => inkOf(k)));
+  const worst = Math.min(...masses.map((m) => m.mass));
+  add(
+    INK_CHECK,
+    'ink',
+    `${(worst * 100).toFixed(2)}% lit against lamp-only's ${(base * 100).toFixed(2)}%`,
+    // A quarter is a blankness floor, not a fidelity bound: a gradient recolours the tubes and
+    // legitimately lights fewer pixels than a lamp does.
+    worst > base * 0.25,
+  );
   const noop =
     at('run/replace-off').md5 === at('run/replace-on').md5 &&
     at('run/replace-off').md5 === at('run/replace-hue').md5;
-  add(
+  record(
     'a replace gradient drops the run-colour attribute (pre-existing)',
-    'NO-OP',
-    noop ? 'NO-OP, lamp and hue alike' : 'reads',
-    noop,
+    noop ? 'NO-OP, lamp and hue alike' : 'the shader now reads the attribute',
   );
 }
 differ('a lamp on a modulate gradient', 'run/modulate-off', 'run/modulate-on', {
@@ -711,6 +776,19 @@ writeFileSync(
 );
 console.log(`\nshots, contact sheets and report.json in ${OUT}`);
 
-const failed = checks.filter((c) => !c.ok);
-console.log(failed.length ? `failed: ${failed.map((c) => c.check).join(', ')}` : 'every check held');
+const gating = checks.filter((c) => c.gates);
+const failed = gating.filter((c) => !c.ok);
+const skipped = [...declared].filter((p) => ONLY.length && !ONLY.includes(p));
+const scope = [
+  `${gating.length} gating checks`,
+  `${checks.length - gating.length} recorded`,
+  skipped.length ? `phases not run: ${skipped.join(',')}` : null,
+]
+  .filter(Boolean)
+  .join(', ');
+console.log(
+  failed.length
+    ? `failed: ${failed.map((c) => c.check).join(', ')}  (${scope})`
+    : `every gating check held — ${scope}`,
+);
 process.exitCode = failed.length ? 1 : 0;

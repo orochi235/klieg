@@ -39,12 +39,14 @@ describe('orbit', () => {
   // The default radius and a lamp's default reach have to meet, and only the pair proves it:
   // orbit at 2 em cleared a lamp's 0.5 em reach and `lamp({ source: orbit() })` lit nothing at
   // most of its pass, with every unit test on this file green. Any amount above zero is the
-  // property; a floor would encode which radius was picked instead.
+  // property; a floor would encode which radius was picked instead. The part sits 0.17 em off the
+  // orbit's centre, where the render found the nearest real one — a part at the centre itself is
+  // inside every radius below 0.5 and the assertion says nothing.
   it('stays inside a default lamp all the way around its pass', () => {
     const piece = lamp({ source: orbit() });
     for (let i = 0; i < 16; i++) {
       const t = i / 16;
-      expect(piece.at(t, partAt(0), NO_CTX).light?.amount ?? 0, `t=${t}`).toBeGreaterThan(0);
+      expect(piece.at(t, partAt(0.17), NO_CTX).light?.amount ?? 0, `t=${t}`).toBeGreaterThan(0);
     }
   });
 

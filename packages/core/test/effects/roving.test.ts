@@ -155,7 +155,7 @@ describe('roving', () => {
       pointerInWord: { x: 0.3, y: 0.4 },
       dt: 42,
     };
-    roving(recorder).at(0.5, partAt(0), ctx);
+    for (const p of PARTS) roving(recorder).at(0.5, p, ctx);
     expect(seen.length).toBeGreaterThan(0);
     expect(seen.every((c) => c === ctx)).toBe(true);
   });

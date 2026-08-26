@@ -1280,6 +1280,12 @@ reach is 0.5 em, so the two defaults compose into a lamp that lights nothing. A 
 exactly that, and a `NO-OP` row here is a real finding about the API rather than a bug in the render
 — decide whether the defaults move, and record which.
 
+**Do not let the docstring be the resolution.** `orbit` has never shipped, so moving its default
+costs a token now and a breaking change after release; a doc saying "these two defaults do not meet"
+documents the bug and then freezes it. If the render confirms the `NO-OP`, move `orbit`'s radius —
+not the lamp's reach, which is tuned and works with the other three sources — and delete the clause
+from `OrbitSpec`, which is the only place it is written.
+
 `sequin` will not pass and is out of scope — it has zero `run` parts and a near-black body. See
 the findings note.
 
@@ -1332,8 +1338,8 @@ canvas onto the word's extent per axis rather than projecting through the camera
 does not fill the frame the lamp travels further than the cursor. Render a small anchored sign and
 look at whether the light sits where the cursor is. If it reads wrong, `projectLetters` in
 `text/projection.ts` is a true inverse and `index.ts` already drives it for the DOM layer. Record the
-answer either way — the README currently promises the light is under the cursor, and nothing has
-measured that.
+answer either way: the README now states the stretch and promises the light is under the cursor only
+for a word that fills the frame, and nothing has measured either case.
 
 Then sweep the pointer across a sign that has **regrouped**. The part pool is a construction-time
 snapshot, so a pointer at fraction *f* lights whatever was at *f* in the original layout. The handoff

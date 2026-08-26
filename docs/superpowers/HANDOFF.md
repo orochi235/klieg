@@ -8,7 +8,7 @@ what is worth doing next.
 **`flicker-spell`, all three tasks done, unmerged.** Cut from `main` at `f670adf`, nothing pushed.
 Implements [the plan](plans/2026-08-26-flicker-macro-spell.md): `flicker` gained `spell` and `calm`,
 and its step count is now derived from the pass rather than fixed at 24. `npm run check` is green at
-**986 tests**, up from 977 at the branch point.
+**987 tests**, up from 977 at the branch point.
 
 **This branch does not contain `composable-lighting`.** That is a separate nine-task branch on the
 `/Users/mike/src/klieg` checkout, complete and also unmerged, and its own handoff section lives
@@ -29,6 +29,21 @@ vacuously.
 bout for a caller who named none, so `flicker({ calm: 15000 })` returned a 15050ms pass — ten times
 the default — in which eleven of twelve tubes never dropped once. `spell: NaN` poisoned every gain
 for the life of the piece by the same route. Both closed by requiring each step count above zero.
+
+**The last four commits had no independent reviewer.** Five consecutive API 529s made dispatching
+unreliable, so the coordinator applied the review's fixes and wrote Task 3's prose itself. The
+mechanical half was still done, and mutation results do not care who runs them: `STEP_MS = 1400/25`
+now turns three tests red including the newly-pinned one, which stayed green before the pin; the
+pre-fix gate turns two red at `expected 15050 to be 1400`; `stepsFor(duration)` equals
+`cycles * cycleSteps` across 240 gated combinations with no mismatch; and every CHANGELOG figure was
+recomputed. **What has had no second pair of eyes is the prose and the shape of the fix** — whether
+`finiteMs` is the right seam, whether the CHANGELOG reads well to someone deciding to upgrade.
+
+**One hole the self-check found and closed.** `calm: Infinity` engaged the gate and returned an
+infinite pass in which the tube never flickered; `spell: Infinity` took every gain to NaN. Both
+fields are new here, so both holes were. `finiteMs` reads a non-finite scale as absent, matching the
+guards `track`'s `followMs` and `lamp`'s falloff already carry. `duration: NaN` still poisons, as it
+did before this branch — house style in this struct, and left alone.
 
 **Two things left undecided, both cheap and both pre-release.** A reviewer argued `spell` should be
 `bout`, since every piece of prose calls it a bout and only the API calls it a spell — kept as

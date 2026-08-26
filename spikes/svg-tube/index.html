@@ -1,0 +1,47 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>klieg — tubing on vector art</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #0b0d12; overflow: hidden; }
+  #stage { position: fixed; inset: 0; touch-action: none; cursor: grab; }
+  #stage.dragging { cursor: grabbing; }
+  #hud {
+    position: fixed; left: 12px; top: 12px; z-index: 2;
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #9aa4b2; background: #11141ccc; padding: 10px 12px; border-radius: 8px;
+    max-width: 320px;
+  }
+  #hud b { color: #e6ebf2; font-weight: 600; }
+  #hud label { display: block; margin-top: 6px; }
+  #hud input[type=range] { width: 160px; vertical-align: middle; }
+  #hud .row { margin-top: 8px; }
+  #silhouette {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none; display: none;
+    align-items: center; justify-content: center;
+  }
+  #silhouette.on { display: flex; }
+  #silhouette img { width: 70vw; opacity: 0.45; filter: invert(1); }
+  #err { position: fixed; left: 12px; bottom: 12px; z-index: 3; color: #ff8a8a;
+         font: 12px ui-monospace, monospace; white-space: pre-wrap; }
+</style>
+<div id="stage"></div>
+<div id="silhouette"><img id="ref" alt=""></div>
+<div id="hud">
+  <div><b>tubing on vector art</b></div>
+  <div id="stats">loading…</div>
+  <div class="row">drag to pivot · double-click to reset</div>
+  <label><input type="checkbox" id="showRef"> overlay source SVG</label>
+  <label>contract <input type="range" id="contract" min="0" max="0.09" step="0.002" value="0"><span id="contractV">0.000</span></label>
+  <label>radius <input type="range" id="radius" min="0.006" max="0.05" step="0.002" value="0.022"><span id="radiusV">0.022</span></label>
+  <label>runs <input type="range" id="runs" min="1" max="24" step="1" value="7"><span id="runsV">7</span></label>
+  <label>paths
+    <select id="source">
+      <option value="direct">direct (offset)</option>
+      <option value="field">field (SDF)</option>
+      <option value="exact">exact</option>
+    </select>
+  </label>
+</div>
+<div id="err"></div>
+<script type="module" src="./main.js"></script>

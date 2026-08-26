@@ -44,7 +44,9 @@ nesting by containment depth rather than winding, which is what lets it take art
 One `<path>` is treated as one letter — that is what keeps `runs` and `seed` meaning what they mean
 for text, and it is the shape a real feature would take.
 
-**`sign-wrapper` is the one branch still open, and `v0.8.0` waits for it.** Worktree
+**`sign-wrapper` is complete and unpushed, and `v0.8.0` waits for it.** All twelve tasks are
+built and reviewed, `origin/main` is merged in, and `npm run check` / `npx playwright test` /
+`npm run test:dist` are green at 1182 / 39 / 3. The next step is a PR; nothing is half-done. Worktree
 `~/src/klieg-worktrees/sign-wrapper`, nine of twelve tasks done, unpushed, with `main` merged in.
 It builds two entry points over `createKlieg` for a **sign** — type standing in for a page heading,
 lit once, held until removed. **The decision is to land it before tagging**, so 0.8.0 ships the sign

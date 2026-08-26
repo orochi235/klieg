@@ -1062,11 +1062,16 @@ Replace the whole `envDriven` / `tracksPointer` block at `:507-515` with:
 Pass `ctx` to `word.apply(driver, elapsed, ctx)` at `:469`, and remove the `onMove` listener
 wherever the effect settles, beside the other teardown.
 
-- [ ] **Step 5: Retire `slotDrivesEnv`**
+- [ ] **Step 5: Leave `slotDrivesEnv` to Task 8**
 
-Delete `slotDrivesEnv` from `packages/core/src/motion/compositor.ts` and its export from
-`index.ts`. Delete `envRotation?: boolean` from `MotionPiece` in `packages/core/src/motion/types.ts`
-and its doc line. Delete any test asserting on it.
+Stop *reading* `slotDrivesEnv` here — Step 4 already does — but delete nothing. The removal reaches
+further than this task's files: `CycleSpec.envRotation` (`motion/build.ts`) is a documented public
+option, so deleting `MotionPiece.envRotation` is a `tsc` error there and a README change. Task 8
+owns the public surface and does it in one piece.
+
+Between this task and that one, `cycle(3400, { envRotation: true })` sets a flag nothing reads. That
+is a public option silently doing nothing — the exact defect class this branch exists to fix — so it
+must not outlive Task 8.
 
 - [ ] **Step 6: Run everything**
 
@@ -1094,8 +1099,11 @@ git commit -m "drive the environment from a composable lighting slot"
 ```ts
 export { type LampSpec, along, fixed, fromPointer, lamp, type LightPose, type LightSource, orbit, type OrbitSpec } from './effects/lamp.js';
 export { ENV_PIECES, type EnvOffset, type EnvPiece, mergeEnv, type ResolvedEnv, still, sweep, track, type TrackSpec } from './render/lighting.js';
-export type { LightingSlot };
 ```
+
+`LightingSlot` is already exported at `index.ts:171` and `resolveLighting` lives in
+`render/lighting.ts` beside it — exported for its test, and deliberately not in the barrel. Do not
+add a second `export type { LightingSlot }`.
 
 Delete `PointerLight` and `envRotationAt` from `render/lighting.ts`, their exports, and their tests.
 `track` carries its own follow and `sweep` its own period, so once Task 7 rewrites the render loop
@@ -1126,6 +1134,24 @@ Task 1 added it as a named interface following the `FlakeSpec` precedent but del
 barrel alone, since `PartOffset` already re-exports and consumers get the shape structurally. It
 wants the name once callers are writing lamps.
 
+
+- [ ] **Step 1b: Retire `envRotation` in one piece**
+
+Task 7 stopped reading it and deleted nothing, because the field reaches public API. The whole set:
+
+- `motion/types.ts` — drop `envRotation?: boolean` from `MotionPiece` and its doc line.
+- `motion/compositor.ts` — drop `slotDrivesEnv`. It is not in the barrel; `index.ts` was its only
+  caller and no longer reads it.
+- `motion/build.ts` — drop `CycleSpec.envRotation` (`:121`) and the flag it threads (`:156`), where
+  `cycle` collapses to a single `return`.
+- Delete the assertions at `test/motion/compositor.test.ts:243-245`, `test/motion/build.test.ts:172`
+  and `test/readme.test.ts:45`.
+- `README.md:330` — rewrite the sentence beginning "`envRotation: true` rakes the environment
+  highlight", which documents an option that no longer exists. The replacement is `lighting`.
+
+One of the tests Task 7 found here (`lets a caller-supplied active piece rake the highlight`) was a
+false green even before this change: the default `sweep` turns the environment anyway, so it passed
+without `envRotation` doing anything. Do not port its assertion forward.
 
 - [ ] **Step 2: Write the CHANGELOG entry**
 

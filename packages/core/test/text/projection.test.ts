@@ -8,7 +8,7 @@ function input(over: Partial<ProjectionInput> = {}): ProjectionInput {
     x: [0],
     y: [0],
     line: [0],
-    fit: { scale: 1, midY: 0 },
+    fit: { scale: 1, midY: 0, offsetX: 0 },
     fov: 90,
     cameraZ: 1,
     depth: 0,
@@ -24,7 +24,7 @@ describe('projectLetters', () => {
   it('scales one em to the pixels one world unit covers', () => {
     // vh = 2 * tan(45°) * 1 = 2; pxPerWorld = 400 / 2 = 200. One em is fit.scale world units.
     expect(projectLetters(input()).fontSize).toBeCloseTo(200, 6);
-    expect(projectLetters(input({ fit: { scale: 0.5, midY: 0 } })).fontSize).toBeCloseTo(100, 6);
+    expect(projectLetters(input({ fit: { scale: 0.5, midY: 0, offsetX: 0 } })).fontSize).toBeCloseTo(100, 6);
   });
 
   it('puts a letter at the layout origin on the canvas centre line', () => {
@@ -55,7 +55,7 @@ describe('projectLetters', () => {
   });
 
   it('centres the block vertically through fit.midY, as applyFit does', () => {
-    const centred = projectLetters(input({ y: [0.5], fit: { scale: 1, midY: 0.5 } })).boxes[0];
+    const centred = projectLetters(input({ y: [0.5], fit: { scale: 1, midY: 0.5, offsetX: 0 } })).boxes[0];
     const origin = projectLetters(input()).boxes[0];
     expect(centred?.top).toBeCloseTo(origin?.top ?? 0, 6);
   });
@@ -68,7 +68,7 @@ describe('projectLetters', () => {
 
   it('scales the baseline offset with the font size', () => {
     // Half the fit is half the font size, so the same ratio is an 80px drop.
-    const box = projectLetters(input({ fit: { scale: 0.5, midY: 0 } })).boxes[0];
+    const box = projectLetters(input({ fit: { scale: 0.5, midY: 0, offsetX: 0 } })).boxes[0];
     expect(box?.top).toBeCloseTo(200 - 80, 6);
   });
 
@@ -85,5 +85,26 @@ describe('projectLetters', () => {
     ).boxes;
     expect(boxes[0]?.char).toBe('Q');
     expect([boxes[0]?.line, boxes[1]?.line]).toEqual([0, 1]);
+  });
+});
+
+describe('a word the framing has aligned', () => {
+  it('shifts every box by the fit offset, in the pixels one world unit covers', () => {
+    // pxPerWorldX is 800 / (2 * 2) = 200, so half a world unit is 100px.
+    const boxes = projectLetters(
+      input({
+        chars: ['A', 'B'],
+        x: [0, 0.5],
+        y: [0, 0],
+        fit: { scale: 1, midY: 0, offsetX: 0.5 },
+      }),
+    ).boxes;
+
+    expect(boxes[0]?.left).toBeCloseTo(500, 6);
+    expect(boxes[1]?.left).toBeCloseTo(600, 6);
+  });
+
+  it('leaves an unaligned word where it was', () => {
+    expect(projectLetters(input()).boxes[0]?.left).toBeCloseTo(400, 6);
   });
 });

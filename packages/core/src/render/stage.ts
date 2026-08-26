@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Budget } from '../text/layout.js';
+import type { Align, Budget } from '../text/layout.js';
 import { buildEnvironment } from './environment.js';
 
 /** Where the canvas lives: over the whole viewport, or inside one element of the page. */
@@ -210,11 +210,13 @@ export class Stage {
    * `resize` measured — the viewport, or the anchor's box — because `aspect` comes from it and
    * the frustum height at this depth is fixed.
    */
-  viewportBudget(widthFrac = 0.62, heightFrac = 0.3): Budget {
+  viewportBudget(widthFrac = 0.62, heightFrac = 0.3, align?: Align): Budget {
     const vh = 2 * Math.tan((this.camera.fov * Math.PI) / 360) * this.camera.position.z;
     return {
       width: vh * this.camera.aspect * widthFrac,
       height: vh * heightFrac,
+      extent: vh * this.camera.aspect,
+      align,
       // The anchor's box is the bound already, and filling it is the whole point of anchoring.
       cap: this.placement.kind === 'element' ? Number.POSITIVE_INFINITY : undefined,
     };

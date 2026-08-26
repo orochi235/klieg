@@ -427,11 +427,11 @@ It adds no DOM text of its own: the heading is the copy, and a second one would 
 and match Ctrl+F twice. Give it a `text` attribute instead of a heading and it carries a hidden
 copy, since then nothing else does.
 
-One `<style>` in `@layer klieg` does that: `display: block; position: relative` on the element,
-which anchoring needs, and `klieg-sign[lit] [data-klieg-fallback] { color: transparent }`, where
-`[lit]` lands on the element and `data-klieg-fallback` on every child it took from you. Being
-layered, the rule loses to *any* unlayered author rule — a plain `color` on your heading leaves it
-standing over the lit sign, so put your own rule in a layer too.
+One `<style>` in `@layer klieg` turns the heading transparent: `display: block; position: relative`
+on the element, which anchoring needs, and `klieg-sign[lit] [data-klieg-fallback] { color:
+transparent }`, where `[lit]` lands on the element and `data-klieg-fallback` on every child you
+supplied. Being layered, that rule loses to *any* unlayered author rule — a plain `color` on your
+heading leaves it standing over the lit sign, so put your own rule in a layer too.
 
 Attributes: `font`, `text`, `look`, `tint`, `framing-width`, `framing-height`, `align`,
 `lighting`, `bloom`. `tint` takes any CSS color, `currentColor` and `var(--x)` included, resolved

@@ -9,7 +9,7 @@ const { sign, update, destroy } = vi.hoisted(() => ({
 
 vi.mock('../src/sign/index.js', () => ({ sign }));
 
-const { KliegSign } = await import('../src/element.js');
+await import('../src/element.js');
 
 /** The custom element upgrade and the dynamic import of `sign` are both async. */
 const settled = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -41,18 +41,26 @@ describe('<klieg-sign>', () => {
     expect(customElements.get('klieg-sign')).toBeDefined();
   });
 
-  it('observes every attribute it reads', () => {
-    expect(KliegSign.observedAttributes).toEqual([
-      'font',
-      'text',
-      'look',
-      'tint',
-      'framing-width',
-      'framing-height',
-      'align',
-      'lighting',
-      'bloom',
-    ]);
+  it('re-fires for every attribute it observes', async () => {
+    const el = await mount('<klieg-sign font="/f.ttf"><h1>A</h1></klieg-sign>');
+    const written = {
+      font: '/g.ttf',
+      text: 'Sign',
+      look: 'tubing',
+      tint: 'red',
+      'framing-width': '0.94',
+      'framing-height': '0.66',
+      align: 'center',
+      lighting: 'static',
+      bloom: 'false',
+    };
+
+    for (const [name, value] of Object.entries(written)) {
+      update.mockClear();
+      el.setAttribute(name, value);
+      await settled();
+      expect(update, `${name} changed and nothing re-fired`).toHaveBeenCalledOnce();
+    }
   });
 
   it('installs exactly one stylesheet however many elements connect', async () => {
@@ -97,6 +105,21 @@ describe('<klieg-sign>', () => {
 
     expect(el.querySelector('h1')?.hasAttribute('data-klieg-fallback')).toBe(true);
     expect(el.querySelector('canvas')?.hasAttribute('data-klieg-fallback')).toBe(true);
+  });
+
+  it('wraps a bare text child, since only an element can go transparent', async () => {
+    const el = await mount('<klieg-sign font="/f.ttf">BARETEXT</klieg-sign>');
+
+    expect(el.querySelector('span[data-klieg-fallback]')?.textContent).toBe('BARETEXT');
+    // The word the sign reads off the anchor survives the wrapping.
+    expect(el.textContent).toBe('BARETEXT');
+  });
+
+  it('leaves the whitespace around a child alone', async () => {
+    const el = await mount('<klieg-sign font="/f.ttf">\n  <h1>A Name</h1>\n</klieg-sign>');
+
+    expect(el.querySelectorAll('[data-klieg-fallback]')).toHaveLength(1);
+    expect(el.querySelector('h1')?.hasAttribute('data-klieg-fallback')).toBe(true);
   });
 
   it('leaves what klieg appends after connect unmarked', async () => {
@@ -204,9 +227,23 @@ describe('<klieg-sign>', () => {
     expect(Object.keys(opts).sort()).toEqual(['font', 'onLit']);
   });
 
-  it('sends an empty font rather than none when the page named no font', async () => {
-    await mount('<klieg-sign><h1>A</h1></klieg-sign>');
-    expect(sign.mock.calls[0]?.[1]).toHaveProperty('font', '');
+  it('warns and lights nothing where the page named no font', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const el = await mount('<klieg-sign><h1>A</h1></klieg-sign>');
+
+      // `fetch('')` fetches the page itself, and opentype's throw names no URL to go looking for.
+      expect(sign).not.toHaveBeenCalled();
+      expect(el.hasAttribute('lit')).toBe(false);
+      expect(warn).toHaveBeenCalledOnce();
+      expect(warn.mock.calls[0]?.[0]).toContain('<klieg-sign>');
+
+      el.setAttribute('tint', 'red');
+      await settled();
+      expect(warn, 'a sign that cannot light repeated its warning').toHaveBeenCalledOnce();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('reads a bare bloom as on and an explicit false as off', async () => {

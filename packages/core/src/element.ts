@@ -1,5 +1,5 @@
+import type { Align } from './index.js';
 import type { Sign, SignOptions } from './sign/index.js';
-import type { Align } from './text/layout.js';
 
 const TAG = 'klieg-sign';
 const STYLE_MARK = 'data-klieg-sign';
@@ -68,6 +68,7 @@ class KliegSign extends HTMLElement {
   #queued = false;
   /** The keys of the last settings sent, to tell a dropped one from one never written. */
   #sent: string[] = [];
+  #warnedNoFont = false;
 
   connectedCallback(): void {
     installStyle(this.ownerDocument);
@@ -80,8 +81,10 @@ class KliegSign extends HTMLElement {
       this.#markFallback();
       void import('./sign/index.js').then(({ sign }) => {
         if (token !== this.#token || !this.isConnected) return;
+        const settings = this.#settings();
+        if (!settings) return;
         this.#sign = sign(this, {
-          ...this.#settings(),
+          ...settings,
           onLit: (on) => this.toggleAttribute('lit', on),
         });
       });
@@ -111,25 +114,46 @@ class KliegSign extends HTMLElement {
     void Promise.resolve().then(() => {
       this.#queued = false;
       if (token !== this.#token || !this.isConnected) return;
-      this.#sign?.update(this.#settings());
+      const patch = this.#settings();
+      if (patch) this.#sign?.update(patch);
     });
   }
 
-  /** Runs before klieg appends anything, so every child here is the page's own. */
+  /** Runs before klieg appends anything, so every node here is the page's own. A bare text child
+   * is wrapped, since only an element can carry the attribute the stylesheet matches. */
   #markFallback(): void {
-    for (const child of [...this.children]) child.setAttribute(FALLBACK, '');
+    for (const node of [...this.childNodes]) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        (node as Element).setAttribute(FALLBACK, '');
+      } else if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim()) {
+        const span = this.ownerDocument.createElement('span');
+        span.setAttribute(FALLBACK, '');
+        node.replaceWith(span);
+        span.appendChild(node);
+      }
+    }
   }
 
   /** Everything the sign is told: the element's whole state, plus a tombstone for each setting the
    * last call sent and this one omits, since `Sign.update()` merges rather than replaces. */
-  #settings(): SignOptions {
+  #settings(): SignOptions | null {
     const options = this.#options();
+    if (!options) return null;
     const gone = this.#sent.filter((key) => !(key in options));
     this.#sent = Object.keys(options);
     return Object.assign(Object.fromEntries(gone.map((key) => [key, undefined])), options);
   }
 
-  #options(): SignOptions {
+  #options(): SignOptions | null {
+    const font = this.getAttribute('font');
+    // Without it `fetch('')` returns the page itself and opentype throws on the HTML, naming no URL.
+    if (font === null) {
+      if (!this.#warnedNoFont) {
+        this.#warnedNoFont = true;
+        console.warn(`klieg: <${TAG}> needs a font attribute, and lights nothing without one`);
+      }
+      return null;
+    }
     const framing = {
       ...optional('width', fraction(this.getAttribute('framing-width'))),
       ...optional('height', fraction(this.getAttribute('framing-height'))),
@@ -143,7 +167,7 @@ class KliegSign extends HTMLElement {
     const bloom = this.getAttribute('bloom');
 
     return {
-      font: this.getAttribute('font') ?? '',
+      font,
       ...optional('text', this.getAttribute('text') ?? undefined),
       ...optional('look', look),
       ...optional('tint', this.getAttribute('tint') ?? undefined),

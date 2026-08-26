@@ -26,7 +26,14 @@ import {
 } from '../text/glyphs.js';
 import type { Budget, GlyphMetrics } from '../text/layout.js';
 import { layoutBlock, wrapBlock } from '../text/layout.js';
-import { type Arrangement, arrange, type Fit, fitOf, placeBlock } from '../text/placement.js';
+import {
+  type Arrangement,
+  arrange,
+  type Fit,
+  fitOf,
+  type GlyphBounds,
+  placeBlock,
+} from '../text/placement.js';
 import type { Transform } from '../transform.js';
 import {
   type Blueprint,
@@ -294,13 +301,13 @@ export class Word {
       this.columnOf.push(placed.column[i] as number);
       this.idxOf.push(i);
       this.frozenInfo.push(null);
-      this.geoMinY.push(drawn ? drawn.min.y : null);
-      this.geoMaxY.push(drawn ? drawn.max.y : null);
       this.geoMinX.push(drawn ? drawn.min.x : null);
       this.geoMaxX.push(drawn ? drawn.max.x : null);
+      this.geoMinY.push(drawn ? drawn.min.y : null);
+      this.geoMaxY.push(drawn ? drawn.max.y : null);
     }
     this.liveCount = placed.x.length;
-    this.fit = fitOf(placed, this.geoMinY, this.geoMaxY, budget);
+    this.fit = fitOf(placed, this.glyphBounds(), budget);
     this.fitFrom = this.fit;
     this.fitTo = this.fit;
     this.applyFit(this.fit);
@@ -604,9 +611,21 @@ export class Word {
     });
   }
 
+  /** Every glyph's bounds, or just those `pick` names, in the order a regroup re-lays them. */
+  private glyphBounds(pick?: readonly number[]): GlyphBounds {
+    const at = (src: (number | null)[]) => (pick ? pick.map((i) => src[i] ?? null) : src);
+    return {
+      depth: DEFAULT_GLYPH_OPTIONS.depth,
+      minX: at(this.geoMinX),
+      maxX: at(this.geoMaxX),
+      minY: at(this.geoMinY),
+      maxY: at(this.geoMaxY),
+    };
+  }
+
   private applyFit(fit: Fit): void {
     this.group.scale.setScalar(fit.scale);
-    this.group.position.set(0, -fit.midY * fit.scale, 0);
+    this.group.position.set(fit.offsetX, -fit.midY * fit.scale, 0);
   }
 
   private buildCell(
@@ -808,7 +827,12 @@ export class Word {
    * layer is only aligned while this holds — through an enter, an exit or a stage tween it does not.
    */
   atRest(): boolean {
-    if (this.fit.scale !== this.fitTo.scale || this.fit.midY !== this.fitTo.midY) return false;
+    if (
+      this.fit.scale !== this.fitTo.scale ||
+      this.fit.midY !== this.fitTo.midY ||
+      this.fit.offsetX !== this.fitTo.offsetX
+    )
+      return false;
     for (let i = 0; i < this.letters.length; i++) {
       const cell = this.letters[i];
       if (!cell || this.leavingAt(i)) continue;
@@ -881,12 +905,7 @@ export class Word {
     }
 
     this.fitFrom = this.fit;
-    this.fitTo = fitOf(
-      placed,
-      kept.map((i) => this.geoMinY[i] ?? null),
-      kept.map((i) => this.geoMaxY[i] ?? null),
-      this.budget,
-    );
+    this.fitTo = fitOf(placed, this.glyphBounds(kept), this.budget);
     this.setGradientBounds();
     this.layoutVersion++;
 
@@ -915,6 +934,7 @@ export class Word {
         : {
             scale: this.fitFrom.scale + (this.fitTo.scale - this.fitFrom.scale) * w,
             midY: this.fitFrom.midY + (this.fitTo.midY - this.fitFrom.midY) * w,
+            offsetX: this.fitFrom.offsetX + (this.fitTo.offsetX - this.fitFrom.offsetX) * w,
           };
     this.applyFit(this.fit);
   }

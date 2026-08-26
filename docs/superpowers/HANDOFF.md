@@ -203,25 +203,26 @@ artifact is immutable and the script regenerates them exactly.
 
 ## State
 
-**0.6.0 is published and is `latest`**, carrying the wide-anchor lens fix and the `flip` opacity
-fix. Releases are automatic: push a `v*` tag and `release.yml` publishes through npm trusted
-publishing, checking first that the tag matches `packages/core/package.json` and skipping a version
-already on the registry. `npm view` reports a stale version straight after a publish — read
-`https://registry.npmjs.org/klieg` to see what actually landed.
+**0.7.0 is published and is `latest`**, carrying the `selectable` option, the `tubing` tint fix, the
+`LookKey` literal union, and `crawl` with the `chase` piece. Releases are automatic: push a `v*` tag
+and `release.yml` publishes through npm trusted publishing, checking first that the tag matches
+`packages/core/package.json` and skipping a version already on the registry. `npm view` reports a
+stale version straight after a publish — read `https://registry.npmjs.org/klieg` to see what
+actually landed.
 
-**`main` is four changes ahead of 0.6.0 and untagged**, all under `## Unreleased` in the CHANGELOG:
-`crawl` and the `chase` piece, the `LookKey` literal union, and the `tubing` tint fix. **That wants
-a minor, not a patch** — `chase` adds a name to `EFFECT_NAMES` and `ChaseSpec` to the public surface,
-and the tint fix changes what renders for anyone tinting `tubing`. Not tagged: the call had not been
-made. The portfolio session asked to be told before a tag goes up, and since releases are
-tag-triggered there is a window between telling them and pushing it.
+`origin/main` is the 0.7.0 commit with nothing unreleased on it. **The portfolio session asked to be
+told before a tag goes up**, and since releases are tag-triggered there is a window between telling
+them and pushing it.
 
 **`main` carries the tube lab, the tube geometry rewrite, the colour gradients, the junction
 reconciliation, direct paths by default, element-anchored placement and the effects pipeline, all
-merged.** On `main`, `npm run check` is green at **938 tests across 50 files** and `npx playwright
-test` at **26 across 2 files**, both measured at `967408e`. Every count in this doc is
-measured, not carried over — it has twice claimed a playwright number one higher than `--list`
-reports.
+merged.** On `main`, `npm run check` is green at **977 tests across 52 files**, measured at
+`d15979c`; `npx playwright test` was **26 across 2 files** at `967408e` and has not been re-run
+since. Every count in this doc is measured, not carried over — it has twice claimed a playwright
+number one higher than `--list` reports.
+
+**`enter pieces > every piece is finite everywhere` flaked once** in a full `npm test` at `d15979c`
+and passed alone and on the next full run. Order-dependent or seeded; not chased.
 
 **A wide anchor takes a longer lens.** An element placement lifts `FIT_CAP` so the word fills its
 anchor, and against a masthead strip that put the outer glyphs past 70 degrees off-axis — far enough
@@ -230,7 +231,14 @@ mass. `lensFor` in `render/stage.ts` grows `z` until the frustum edge falls with
 `MAX_HALF_ANGLE_DEG` (35) and narrows `fov` to hold the frustum height at the word's depth, so every
 framing fraction keeps its meaning and the type keeps its on-screen size. A box already inside that
 angle keeps the base lens exactly, so a fullscreen overlay is byte-identical and no baseline moved.
-Unreleased — it is in the CHANGELOG under `## Unreleased`.
+Shipped in 0.6.0.
+
+**`framing` does nothing a fullscreen overlay has not already hit `FIT_CAP` on.** The fit takes the
+smaller of the two budget axes and the cap, and `FIT_CAP` (2.2) is what binds for a short word — so
+raising `framing` on a fullscreen placement changes nothing, silently. Only `placement: element`
+lifts the cap (`viewportBudget` in `render/stage.ts`). The show page was fullscreen over a
+`inset: 0` stage and rendered `klieg` at 46% of viewport width against a 0.84 budget; anchored to
+that same stage it renders at 77%, bound by the framing at last.
 
 **[Direct tube paths](specs/2026-08-20-direct-tube-paths-design.md) ships, and is the default.**
 `TubeSpec.pathSource` (`field` | `exact` | `direct`) defaults to `direct`, which traces the glyph's

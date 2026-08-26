@@ -6,6 +6,14 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: /^klieg\/sign$/,
+        replacement: fileURLToPath(new URL('./packages/core/src/sign/index.ts', import.meta.url)),
+      },
+      {
+        find: /^klieg\/element$/,
+        replacement: fileURLToPath(new URL('./packages/core/src/element.ts', import.meta.url)),
+      },
+      {
         find: /^klieg$/,
         replacement: fileURLToPath(new URL('./packages/core/src/index.ts', import.meta.url)),
       },

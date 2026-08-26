@@ -507,7 +507,7 @@ describe('lightBase', () => {
   });
 
   it('reads the tint the material was actually built with', () => {
-    expect(lightBase('gold', 0xff2d6f).hue).toBe(0xff2d6f);
+    expect(lightBase('gold', 0xff2d6f)).toEqual({ emissive: 0x000000, hue: 0xff2d6f });
   });
 
   // A tinted neon's emissive IS the tint; reading the look's own would reset it every frame.
@@ -682,12 +682,13 @@ empty-glyph path that pushes `null` to the others:
 Clear it in `dispose` where `bodyMaterials.length = 0`.
 
 Import `lightBase` and `type LightBase` from `./looks.js` alongside the existing `frameOwnedBase`.
-Then in the `body` branch, where `part.letter.index` picks the letter out:
+Then in the `body` branch. Key it on `partSlot`, not on `part.letter.index`: `LetterInfo.index` is
+the letter's place in the word, which `regroup` renumbers, while `bodyLights` is filled per slot.
 
 ```ts
     if (part.kind === 'body') {
       const material = mesh.material as THREE.MeshPhysicalMaterial;
-      const light = this.bodyLights[part.letter.index];
+      const light = this.bodyLights[this.partSlot[index] as number];
       if (light) material.emissive.setHex(litEmissive(light.emissive, light.hue, out.light));
       setEmissiveIntensity(material, this.bodyBase.emissiveIntensity * out.gain);
       return;

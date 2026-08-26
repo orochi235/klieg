@@ -970,7 +970,7 @@ git commit -m "make lighting pieces that compose"
 - Modify: `packages/core/src/motion/types.ts`, `packages/core/src/motion/compositor.ts:53-54`
 - Test: `packages/core/test/render/lighting.test.ts`
 
-- [ ] **Step 1: Widen the option**
+- [x] **Step 1: Widen the option**
 
 In `packages/core/src/index.ts`:
 
@@ -982,7 +982,7 @@ export type LightingSlot = LightingName | EnvPiece | (LightingName | EnvPiece)[]
   lighting?: LightingSlot;
 ```
 
-- [ ] **Step 2: Resolve it**
+- [x] **Step 2: Resolve it**
 
 ```ts
 function resolveLighting(slot: LightingSlot): EnvPiece[] {
@@ -999,7 +999,7 @@ and in `run`, replace the `const lighting = …` / `tracksPointer` lines with
 closure, so rebuilding it every frame pins it at `1 - e^(-16/90)` — about 16% of the way to the
 pointer, forever. It reads as a damping bug rather than a lifecycle one.
 
-- [ ] **Step 3: Build the context each frame**
+- [x] **Step 3: Build the context each frame**
 
 Replace the `PointerLight` instance at `:283` with a canvas-relative pointer. The bug this fixes is
 that `aimAt` normalized against `globalThis.innerWidth/innerHeight` — the viewport, never the box.
@@ -1048,7 +1048,7 @@ and it is not this task's to make — `stagger`'s positional ordering reads the 
 change behavior on every regroup. Leave it; Task 9 should sweep the pointer across a regrouped sign
 and record what it looks like.
 
-- [ ] **Step 4: Drive the environment from the merged pieces**
+- [x] **Step 4: Drive the environment from the merged pieces**
 
 Replace the whole `envDriven` / `tracksPointer` block at `:507-515` with:
 
@@ -1065,7 +1065,7 @@ Replace the whole `envDriven` / `tracksPointer` block at `:507-515` with:
 Pass `ctx` to `word.apply(driver, elapsed, ctx)` at `:469`, and remove the `onMove` listener
 wherever the effect settles, beside the other teardown.
 
-- [ ] **Step 5: Leave `slotDrivesEnv` to Task 8**
+- [x] **Step 5: Leave `slotDrivesEnv` to Task 8**
 
 Stop *reading* `slotDrivesEnv` here — Step 4 already does — but delete nothing. The removal reaches
 further than this task's files: `CycleSpec.envRotation` (`motion/build.ts`) is a documented public
@@ -1076,12 +1076,12 @@ Between this task and that one, `cycle(3400, { envRotation: true })` sets a flag
 is a public option silently doing nothing — the exact defect class this branch exists to fix — so it
 must not outlive Task 8.
 
-- [ ] **Step 6: Run everything**
+- [x] **Step 6: Run everything**
 
 Run: `npm run check`
 Expected: PASS. Any failure naming `slotDrivesEnv` or `envRotation` is a leftover reference.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/core/src packages/core/test
@@ -1217,9 +1217,17 @@ phase-lock and needs telling.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add packages/core/src/index.ts CHANGELOG.md README.md
+git add packages/core/src packages/core/test CHANGELOG.md README.md
 git commit -m "export the lighting surface and record the change"
 ```
+
+The staging list covers more than the three files at the top of this task: Step 1b reaches
+`motion/types.ts`, `motion/compositor.ts`, `motion/build.ts` and three test files, and Steps 1 and 1c
+reach `render/lighting.ts` and `effects/types.ts`.
+
+Add `CycleSpec.envRotation` to the Removed block beside `MotionPiece.envRotation` — it is the half of
+that removal a caller actually wrote. `PointerLight` and `envRotationAt` need no entry: neither was
+ever in the barrel.
 
 ---
 

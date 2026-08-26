@@ -5,7 +5,7 @@ what is worth doing next.
 
 ## In flight
 
-**`composable-lighting`, six tasks of nine done.** Branch cut from `fb058fe`, nothing pushed.
+**`composable-lighting`, seven tasks of nine done.** Branch cut from `fb058fe`, nothing pushed.
 Every task passed both gates — spec compliance clean on the first pass, code quality after one fix
 round each. Task 1 (`9425be1`, `e637b33`) added the additive `light` channel on `PartOffset` and
 summed it in the effects compositor. Task 2 (`13d1c62`, `4a61f72`) added the four light sources —
@@ -15,10 +15,12 @@ required `ctx`, and moved `FrameCtx` into `effects/types.ts`. Task 4 (`61cbfb0`,
 `ee63418`) exported `lightBase`, the emissive and hue a lamp resolves against. Task 5 (`a39aaed`,
 `03f59d4`, `789d83b`) landed `litEmissive` and wrote the light onto both a body's emissive and a
 run's colour buffer, threaded the `ctx`, and added `partExtent()`. Task 6 (`b883659`, `295bce7`,
-`f3d4f5e`) added `EnvPiece`, `mergeEnv` and the `sweep`/`still`/`track` factories. `npm run check`
-is green at **1047 tests**, up from 977 at the branch point.
+`f3d4f5e`) added `EnvPiece`, `mergeEnv` and the `sweep`/`still`/`track` factories. Task 7
+(`8a778f9`, `3b69ca8`, `6d3b3d3`, `ad60629`, `5589976`) made `lighting` a slot, built the per-frame
+`FrameCtx`, and moved the pointer arithmetic into a new pure `src/pointer.ts`. `npm run check` is
+green at **1081 tests**, up from 977 at the branch point.
 
-Pick up at **Task 7** of [the plan](plans/2026-08-25-composable-lighting.md), which is
+Pick up at **Task 8** of [the plan](plans/2026-08-25-composable-lighting.md), which is
 self-contained: every signature, test body and command is in it. **Read the plan, not the design
 doc** — review rounds have amended Tasks 5, 7 and 9 (`0baa15e`, `f53d233`, `b5f6a49`, `874a9e7`,
 `fec9a2d`), and the design predates all of it. The execution method was subagent-driven — one implementer
@@ -71,6 +73,21 @@ forever.
 **`ENV_PIECES` uses `satisfies`, not an annotation**, matching `EFFECTS` in `effects/pieces.ts`,
 which carries the comment arguing for it. An annotation erases each factory's own spec parameter, so
 `ENV_PIECES.sweep({ periodMs: 1000 })` stops compiling while still working at runtime.
+
+**What Task 7 learned: the two pointer spaces run opposite ways on y.** `clientY` grows downward and
+layout y grows upward (`placement.ts` sets `y = -line * LINE_HEIGHT_EM`), so the plan's own mapping
+sent a cursor at the top of the canvas to the bottom line of the word, and `fromPointer` passed it
+through unchanged as a lamp position. `FrameCtx` now carries both conventions on one object —
+`pointer` is +y down, `pointerInWord` is +y up — which is worth reading twice before touching either.
+**Only a multi-line word can catch this**; a single line has almost no vertical extent to be wrong
+about.
+
+**And: "detach the listener when no effect is live" is a trap.** It sounds obviously right and it
+converts a dark lamp into a confidently misaimed one — the position stops updating between effects
+but is never cleared, so the next fire opens aimed wherever the cursor was when the last one ended.
+The listener attaches on the first `fire()` and lives until `destroy()`, which is what `PointerLight`
+did before this branch. The test that catches it has to move the pointer **in the gap between two
+fires**.
 
 **Two things Task 2 learned that the plan did not say.** The plan's supplied tests are vacuous on
 the two things worth testing. `along` is only exercised on a 2-point path, where `last === 1` so the

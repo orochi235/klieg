@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### A flickering tube can now rest
+
+`flicker` gained `spell` and `calm`: the milliseconds of one flickering bout, and the milliseconds it
+holds steady between them. `EFFECTS.flicker({ duration: 60000, spell: 4000, calm: 15000 })` stutters
+for four seconds, sits quiet for fifteen, and does that three times a minute. Both scales snap to a
+whole number of the ~58ms steps the stutter already runs on, and the pass becomes the nearest whole
+number of bouts-plus-calms — so the 60s asked for above comes back as 57.05s, and a pass shorter than
+one cycle grows to fit it. Either scale on its own does nothing: a `calm` without a `spell` leaves the
+tube flickering throughout, as before.
+
+### Changed
+
+- A `flicker` step is now derived from the pass rather than fixed at 24 a pass, holding it near 58ms —
+  about three frames, which is what keeps a drop reading as a failing tube rather than as noise.
+  `flicker()` at the default 1400ms duration is unchanged. A custom `duration` renders differently,
+  and a long one no longer strobes: 30s used to mean 24 steps of 1250ms each.
+
 ## 0.7.0
 
 ### The rendered word now exists in the DOM

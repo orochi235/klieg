@@ -15,7 +15,7 @@ export default defineConfig({
     rollupOptions: {
       // The element imports `sign()` dynamically so a bundler can split it out. Here that would
       // produce a second file the script tag never fetches.
-      output: { inlineDynamicImports: true },
+      output: { codeSplitting: false },
     },
   },
 });

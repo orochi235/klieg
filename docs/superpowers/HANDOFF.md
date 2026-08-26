@@ -5,6 +5,22 @@ learned that its design doc does not carry, and what is worth doing next.
 
 ## Branch state
 
+**`acronym` shipped.** `acronym(text, opts)` returns the arguments to `fire()` for a block whose
+capitals are picked out, held, then gathered into a line once the lower case has left — the
+README's hand-assembled acrostic, pre-baked. It needed two additive things: `char` on `LetterInfo`
+(optional, because a piece can be sampled with no block behind it) and `Arrangement: 'place'`, which
+drops letters without moving or refitting the survivors, so the lower case leaving is its own beat.
+`caps` and `body` are `LetterStyle` objects rather than colours because per-letter styling is meant
+to grow — a per-letter `look` is the intended growth and does not fit yet, `look` being per-fire and
+reaching the material pipeline long before a letter is addressable. See
+[the design](specs/2026-08-26-acronym-routine-design.md).
+
+**Open request: bundle `spikes/svg-tube/` into a standalone HTML with a wallpaper download.** Not
+started. Two constraints: that lab reads a **gitignored** `art.svg` which is a client mark, so the
+bundled file must not be committed to this public repo — it is work, and belongs under the `ccw`
+harness. And a page-initiated download only works when the file is opened locally.
+
+
 **`composable-lighting` and `flicker-spell` are both merged into `main` and pushed**, along with
 `framing-align` (PR #3), `show-fills-its-frame`, and the tube run-budget fix. `main` is `bab480a`,
 green at **1114 tests**. The sections below are what those branches learned; treat every claim about

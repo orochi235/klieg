@@ -8,7 +8,7 @@ running app — and the wrong shape for a **sign**: type that stands in for a he
 stays. A sign consumer writes the same integration every time, and the portfolio masthead that
 prompted this got three things wrong on the way: it holds for 24h because nothing means
 "indefinitely", it leaves `selectable` at its default and so puts the word in the accessibility tree
-twice, and it compensates for centring in CSS.
+twice, and it compensates for centering in CSS.
 
 Two units ship, plus one addition to core.
 

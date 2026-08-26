@@ -260,6 +260,9 @@ export function flicker(spec: FlickerSpec = {}): EffectPiece {
 }
 ```
 
+Biome rejects the redundant parens in `((t * cycles) % 1) >= duty` — write it as
+`(t * cycles) % 1 >= duty`, which `%` binding tighter than `>=` makes identical.
+
 The step index runs across the whole pass rather than restarting per spell, so each spell samples a
 different stretch of the hash and no two bouts are identical. That is the resonance `roving`'s comment
 warns about, avoided by construction rather than by arithmetic.
@@ -321,6 +324,19 @@ fit whole bouts, the way `roving` already rounds its epochs, so the asked-for 60
   1400ms duration is unchanged; a custom `duration` renders differently, and a long one no longer
   strobes.
 ```
+
+- [ ] **Step 1b: Document two surprises Task 2 measured**
+
+Both are the arithmetic behaving as designed and neither is derivable from the field docs as written.
+One line each, on the fields themselves:
+
+- **A `calm` under half a step rounds to nothing.** `calmSteps` is `round(calm / 58.3)`, so a `calm`
+  below ~29ms leaves the piece ungated and flickering for the whole pass. Silent, and the right
+  behaviour — but say that a calm shorter than a step is no calm.
+- **The pass can grow, not only shrink.** `cycles` floors at 1, so `flicker({ spell: 4000, calm:
+  15000 })` at the default 1400ms duration returns a **19016ms** pass — one whole cycle, thirteen
+  times what was asked. `roving`'s epoch fitting has the same shape. The `duration` doc currently
+  implies the pass is what you asked for; it is the nearest whole number of cycles to it.
 
 - [ ] **Step 2: Update the README**
 

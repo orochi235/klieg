@@ -72,7 +72,8 @@ function build(shapeGroups, tune) {
       ...tune,
       runs: Math.min(tune.runs, affordable),
       look: { ...decoration.look, emissiveIntensity: tune.emissive, rim: tune.rim || undefined },
-      colors: decoration.colors.map((c) => rotate(c, tune.hue)),
+      colors: [tune.color],
+      dark: { ...decoration.dark, color: tune.dark },
     };
     if (!spec.surfaces.length) return;
     const blueprint = buildTubeBlueprint(shapes, spec, 0.3, i);
@@ -151,6 +152,8 @@ const { groups, width, height } = svgToShapeGroups(svgText, 1);
  * of. Defaults are `tubing`'s own, so the page opens on the shipped look.
  */
 const D = decoration;
+const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
+const unhex = (s) => Number.parseInt(s.slice(1), 16);
 const CONTROLS = [
   { group: 'shape' },
   { id: 'contract', min: 0, max: 0.09, step: 0.002, value: 0, hint: 'inset before tracing' },
@@ -181,17 +184,24 @@ const CONTROLS = [
   { group: 'material' },
   { id: 'emissive', min: 0, max: 8, step: 0.1, value: D.look.emissiveIntensity ?? 1 },
   { id: 'rim', min: 0, max: 1, step: 0.05, value: D.look.rim ?? 0, hint: 'limb brightening' },
-  { id: 'hue', min: 0, max: 360, step: 4, value: 0, hint: 'rotate the palette' },
+  // The palette the runs are dealt from, which is where a tube look's colour actually lives:
+  // `tintByRunColor` forces the material's own channel white so the per-vertex colour survives.
+  { id: 'color', type: 'color', value: hex(D.colors[0] ?? 0xffffff), hint: 'run palette' },
+  { id: 'dark', type: 'color', value: hex(D.dark.color ?? 0x222228), hint: 'unlit tube' },
 ];
 
 const ui = {};
-const host2 = document.getElementById('controls');
+const panel = document.getElementById('controls');
+let column = null;
 for (const c of CONTROLS) {
   if (c.group) {
+    column = document.createElement('div');
+    column.className = 'col';
     const h = document.createElement('div');
     h.className = 'group';
     h.textContent = c.group;
-    host2.appendChild(h);
+    column.appendChild(h);
+    panel.appendChild(column);
     continue;
   }
   const label = document.createElement('label');
@@ -215,36 +225,31 @@ for (const c of CONTROLS) {
     input = document.createElement('input');
     input.type = 'checkbox';
     input.checked = c.value;
-    label.insertBefore(input, name);
+  } else if (c.type === 'color') {
+    input = document.createElement('input');
+    input.type = 'color';
+    input.value = c.value;
   } else {
     input = document.createElement('input');
     input.type = 'range';
     Object.assign(input, { min: c.min, max: c.max, step: c.step, value: c.value });
   }
   input.id = `c-${c.id}`;
-  if (c.type !== 'check') label.appendChild(input);
+  label.appendChild(input);
 
   if (!c.type) {
     const out = document.createElement('output');
     out.id = `v-${c.id}`;
     label.appendChild(out);
   }
-  host2.appendChild(label);
+  column.appendChild(label);
   ui[c.id] = input;
 }
 
 const val = (id) => Number(ui[id].value);
 const on = (id) => ui[id].checked;
 
-/** A palette rotation, so the look can be re-coloured without editing the spec. */
-function rotate(hex, deg) {
-  if (!deg) return hex;
-  const c = new THREE.Color(hex);
-  const hsl = { h: 0, s: 0, l: 0 };
-  c.getHSL(hsl);
-  c.setHSL((hsl.h + deg / 360) % 1, hsl.s, hsl.l);
-  return c.getHex();
-}
+
 
 const stats = document.getElementById('stats');
 
@@ -271,7 +276,8 @@ function tuneFromUi() {
     connectors: val('connectors'),
     emissive: val('emissive'),
     rim: val('rim'),
-    hue: val('hue'),
+    color: unhex(ui.color.value),
+    dark: unhex(ui.dark.value),
   };
 }
 

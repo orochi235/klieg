@@ -46,8 +46,10 @@ import {
   createMaterial,
   type FrameOwnedBase,
   frameOwnedBase,
+  type LightBase,
   type Look,
   type LookSpec,
+  lightBase,
   specOf,
   tintMaterialOf,
 } from './looks.js';
@@ -62,9 +64,6 @@ import {
 } from './tube/tint.js';
 
 const EM = 1; // glyphs are built at 1 em; the group scale does the fitting
-
-/** Stands in until the render loop builds a real ctx from the canvas rect and pointer. */
-const NO_CTX: FrameCtx = { pointer: null, pointerInWord: null, dt: 0 };
 
 /**
  * A tube look carries its colour on the per-vertex run attribute, not on the material: the material
@@ -96,6 +95,25 @@ function setEmissiveIntensity(material: THREE.Material | null, value: number): v
   if (material && 'emissiveIntensity' in material) {
     (material as THREE.MeshPhysicalMaterial).emissiveIntensity = value;
   }
+}
+
+const clamp255 = (n: number): number => Math.min(255, Math.max(0, Math.round(n)));
+
+/**
+ * Lamp light landing on a part: `base + lamp x hue`. Multiplying by the hue is what keeps a
+ * material's identity — a white lamp on gold reflects gold, and adding white reflects cream.
+ * @internal exported for test; not part of the public surface.
+ */
+export function litEmissive(base: number, hue: number, light: readonly number[]): number {
+  if (!light[0] && !light[1] && !light[2]) return base;
+  const out: number[] = [];
+  for (let i = 0; i < 3; i++) {
+    const shift = 16 - i * 8;
+    const b = (base >> shift) & 0xff;
+    const h = ((hue >> shift) & 0xff) / 255;
+    out.push(clamp255(b + (light[i] as number) * h * 255));
+  }
+  return ((out[0] as number) << 16) | ((out[1] as number) << 8) | (out[2] as number);
 }
 
 /**
@@ -148,6 +166,7 @@ export class Word {
   private liveCount = 0;
   /** Indexed by letter slot, null where the glyph drew no outline. */
   private readonly bodyMaterials: (THREE.MeshPhysicalMaterial | null)[] = [];
+  private readonly bodyLights: (LightBase | null)[] = [];
   /** A debug hook may swap in a non-physical material, so these are typed to the material base. */
   private readonly decorMaterials: (THREE.Material | null)[] = [];
   /** A tube decoration's unlit-run material, one per letter; null for every non-tube letter. */
@@ -397,6 +416,22 @@ export class Word {
     return this.parts.filter((p) => p.kind === kind);
   }
 
+  /** The bounding box of the part pool in layout space, or null before any part exists. */
+  partExtent(): { minX: number; maxX: number; minY: number; maxY: number } | null {
+    if (this.parts.length === 0) return null;
+    let minX = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+    for (const part of this.parts) {
+      minX = Math.min(minX, part.x);
+      maxX = Math.max(maxX, part.x);
+      minY = Math.min(minY, part.y);
+      maxY = Math.max(maxY, part.y);
+    }
+    return { minX, maxX, minY, maxY };
+  }
+
   /**
    * Resolves each effect against the pool once. Selection is seeded and stable, so doing it per
    * frame would pick the same parts at the cost of re-selecting and re-allocating every frame.
@@ -430,7 +465,7 @@ export class Word {
    * letter a regroup dropped is skipped: it is playing its exit against a pool position that no
    * longer describes it, and the mesh it would write is on its way off screen.
    */
-  private applyEffects(elapsed: number): void {
+  private applyEffects(elapsed: number, ctx: FrameCtx): void {
     for (const layers of this.effectLayers.values()) layers.length = 0;
 
     for (const effect of this.effects) {
@@ -440,7 +475,7 @@ export class Word {
         if (this.retiredPart(index)) continue;
         const part = this.parts[index] as PartInfo;
         const t = effect.stagger === undefined ? pass : stagger(pass, part, effect.stagger);
-        (this.effectLayers.get(index) as PartOffset[]).push(effect.piece.at(t, part, NO_CTX));
+        (this.effectLayers.get(index) as PartOffset[]).push(effect.piece.at(t, part, ctx));
       }
     }
 
@@ -469,10 +504,10 @@ export class Word {
     mesh.scale.setScalar(out.scale);
 
     if (part.kind === 'body') {
-      setEmissiveIntensity(
-        mesh.material as THREE.Material,
-        this.bodyBase.emissiveIntensity * out.gain,
-      );
+      const material = mesh.material as THREE.MeshPhysicalMaterial;
+      const light = this.bodyLights[this.partSlot[index] as number];
+      if (light) material.emissive.setHex(litEmissive(light.emissive, light.hue, out.light));
+      setEmissiveIntensity(material, this.bodyBase.emissiveIntensity * out.gain);
       return;
     }
 
@@ -483,8 +518,9 @@ export class Word {
       | THREE.BufferAttribute
       | undefined;
     if (!attribute) return;
+    const base = this.partBaseColor[index] as number;
     const color = this.partColor
-      .setHex(out.color ?? (this.partBaseColor[index] as number))
+      .setHex(litEmissive(out.color ?? base, base, out.light))
       .multiplyScalar(out.gain);
     const array = attribute.array as Float32Array;
     for (let v = 0; v < array.length; v += 3) {
@@ -576,6 +612,7 @@ export class Word {
     if (!geo.attributes.position?.count) {
       this.letters.push(null);
       this.bodyMaterials.push(null);
+      this.bodyLights.push(null);
       this.decorMaterials.push(null);
       this.darkMaterials.push(null);
       this.tubeBounds.push(null);
@@ -595,6 +632,7 @@ export class Word {
     material.opacity = this.bodyBase.opacity;
     material.emissiveIntensity = this.bodyBase.emissiveIntensity;
     this.bodyMaterials.push(material);
+    this.bodyLights.push(lightBase(look, tintMaterialOf(spec) === 'body' ? hue : undefined));
 
     const cell = new THREE.Group();
     const bodyMesh = new THREE.Mesh(geo, material);
@@ -872,6 +910,7 @@ export class Word {
   apply(
     source: { poseAt(elapsed: number, letter: LetterInfo, out?: Pose): Pose },
     elapsed: number,
+    ctx: FrameCtx,
   ): void {
     if (this.disposed) return;
 
@@ -903,7 +942,7 @@ export class Word {
       }
     }
 
-    if (this.effects.length > 0) this.applyEffects(elapsed);
+    if (this.effects.length > 0) this.applyEffects(elapsed, ctx);
   }
 
   dispose(): void {
@@ -911,6 +950,7 @@ export class Word {
     this.cache.dispose();
     for (const material of this.bodyMaterials) material?.dispose();
     this.bodyMaterials.length = 0;
+    this.bodyLights.length = 0;
     for (const material of this.decorMaterials) material?.dispose();
     this.decorMaterials.length = 0;
     for (const material of this.darkMaterials) material?.dispose();

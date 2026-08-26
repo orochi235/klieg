@@ -466,7 +466,7 @@ export function createKlieg(options: KliegOptions): Klieg {
           const elapsed = sequence ? raw : Math.min(raw, timeline.duration);
           // Ahead of the pose, or the fit and the phase advance both lag it by a frame.
           sequence?.tick(elapsed);
-          word.apply(driver, elapsed);
+          word.apply(driver, elapsed, { pointer: null, pointerInWord: null, dt });
 
           if (layer && mode === 'layer' && family) {
             if (word.atRest()) {

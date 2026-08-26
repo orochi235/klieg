@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { FrameCtx } from '../../../../src/effects/types.js';
 import { Timeline } from '../../../../src/motion/compositor.js';
 import { NONE } from '../../../../src/motion/types.js';
 import type { LookSpec } from '../../../../src/render/looks.js';
@@ -27,6 +28,7 @@ export function labCamera(): THREE.PerspectiveCamera {
  * which renders tubing's 0.08 backing as a solid wall over its own tube.
  */
 const REST = new Timeline({ enter: NONE, active: NONE, exit: NONE, hold: 0, blendMs: 0 });
+const NO_CTX: FrameCtx = { pointer: null, pointerInWord: null, dt: 0 };
 
 /**
  * A square budget rather than the panel's own aspect: the fit is baked at construction, so
@@ -134,7 +136,7 @@ export function buildCell(input: CellInput): Cell {
     undefined,
     input.tubeMaterial ? { tubeMaterial: input.tubeMaterial } : undefined,
   );
-  word.apply(REST, 0);
+  word.apply(REST, 0, NO_CTX);
   pivot.add(word.group);
 
   return {

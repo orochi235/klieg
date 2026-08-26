@@ -5,20 +5,22 @@ what is worth doing next.
 
 ## In flight
 
-**`composable-lighting`, four tasks of nine done.** Branch cut from `fb058fe`, nothing pushed.
+**`composable-lighting`, five tasks of nine done.** Branch cut from `fb058fe`, nothing pushed.
 Every task passed both gates — spec compliance clean on the first pass, code quality after one fix
 round each. Task 1 (`9425be1`, `e637b33`) added the additive `light` channel on `PartOffset` and
 summed it in the effects compositor. Task 2 (`13d1c62`, `4a61f72`) added the four light sources —
 `fixed`, `fromPointer`, `orbit`, `along` — in the new `effects/lamp.ts`, plus `FrameCtx`. Task 3
 (`36511b9`, `7dadd2d`, `1a59f88`, `822afe4`) added the `lamp()` piece, gave `EffectPiece.at` a
 required `ctx`, and moved `FrameCtx` into `effects/types.ts`. Task 4 (`61cbfb0`, `0e6f9a0`,
-`ee63418`) exported `lightBase`, the emissive and hue a lamp resolves against. `npm run check` is
-green at **1011 tests**, up from 977 at the branch point.
+`ee63418`) exported `lightBase`, the emissive and hue a lamp resolves against. Task 5 (`a39aaed`,
+`03f59d4`, `789d83b`) landed `litEmissive` and wrote the light onto both a body's emissive and a
+run's colour buffer, threaded the `ctx`, and added `partExtent()`. `npm run check` is green at
+**1024 tests**, up from 977 at the branch point.
 
-Pick up at **Task 5** of [the plan](plans/2026-08-25-composable-lighting.md), which is
-self-contained: every signature, test body and command is in it. **Read Task 5 from the plan, not
-from the design doc** — Task 4's review round rewrote how it stores the light (`0baa15e`,
-`f53d233`), and the design predates that. The execution method was subagent-driven — one implementer
+Pick up at **Task 6** of [the plan](plans/2026-08-25-composable-lighting.md), which is
+self-contained: every signature, test body and command is in it. **Read the plan, not the design
+doc** — review rounds have amended Tasks 5, 7 and 9 (`0baa15e`, `f53d233`, `b5f6a49`, `874a9e7`,
+`fec9a2d`), and the design predates all of it. The execution method was subagent-driven — one implementer
 per task, then a spec-compliance review, then a code-quality review, no skipping and no reordering.
 
 **Three things Task 1 learned that the plan did not say.** Making `ResolvedOffset.light` a required
@@ -39,6 +41,22 @@ tint, and Task 5 now stores its result per letter rather than per word, because 
 per-letter function. Key that array on `partSlot`: `LetterInfo.index` is the letter's place in the
 word and `regroup` renumbers it, so the two agree only while the part pool is the one the
 constructor built.
+
+**What Task 5 learned: a spatial query against this pool needs the ink, not the origins.**
+`partExtent()` first built its box from `part.x`/`part.y` — the glyph origin and the baseline — and
+`placement.ts` gives every letter on a line the same `y`. So the box had **zero height on any
+single-line sign**, and Task 7's pointer mapping would have handed every pointer position the same
+`y`: `fromPointer` tracking horizontally and never vertically, with nothing failing. It now folds
+each glyph's own bounds in the way `fitOf` does. Two further traps came out of testing it. A test on
+a single-line word cannot catch a dropped baseline, because every `part.y` is zero there. And a
+purely *relational* test — this extent versus that one — cancels any constant per-glyph error: three
+of five defects passed one. The file carries both an absolute anchor and the relations.
+
+**The extent is still a construction-time snapshot.** `regroup` re-lays the letters and deliberately
+leaves the part pool alone, so after one, a pointer at fraction *f* lights whatever was at *f* in the
+original layout. Recomputing `PartInfo.x`/`y` per frame is the real fix and it is not Task 7's to
+make — `stagger`'s positional ordering reads the same fields. Task 7 guards the degenerate box;
+Task 9 should sweep a regrouped sign and record what it looks like.
 
 **Two things Task 2 learned that the plan did not say.** The plan's supplied tests are vacuous on
 the two things worth testing. `along` is only exercised on a 2-point path, where `last === 1` so the

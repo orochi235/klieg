@@ -593,7 +593,7 @@ it on screen in Task 9.
 - Modify: `packages/core/src/render/word.ts`
 - Test: `packages/core/test/render/word-light.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `packages/core/test/render/word-light.test.ts`:
 
@@ -628,12 +628,12 @@ describe('litEmissive', () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/core/test/render/word-light.test.ts`
 Expected: FAIL — `litEmissive` is not exported.
 
-- [ ] **Step 3: Write the resolver**
+- [x] **Step 3: Write the resolver**
 
 In `packages/core/src/render/word.ts`, near `setEmissiveIntensity`:
 
@@ -658,12 +658,12 @@ export function litEmissive(base: number, hue: number, light: Vec3): number {
 
 The hue byte is not divided by 255 and re-multiplied — `light` is already a 0..n multiplier.
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 Run: `npx vitest run packages/core/test/render/word-light.test.ts`
 Expected: PASS, 4 tests.
 
-- [ ] **Step 5: Apply it in `writePart`**
+- [x] **Step 5: Apply it in `writePart`**
 
 `writePart` currently branches on `part.kind`. Give each branch the light.
 
@@ -721,12 +721,12 @@ already being written. Replace the colour computation with:
       .multiplyScalar(out.gain);
 ```
 
-- [ ] **Step 6: Thread the context through `applyEffects`**
+- [x] **Step 6: Thread the context through `applyEffects`**
 
 Change `apply(driver, elapsed)` to `apply(driver, elapsed, ctx: FrameCtx)`, pass `ctx` down to
 `applyEffects(elapsed, ctx)`, and pass it to the piece: `effect.piece.at(t, part, ctx)`.
 
-- [ ] **Step 7: Add the extent accessor**
+- [x] **Step 7: Add the extent accessor**
 
 `fromPointer` needs the word's real extent to map into, and the design records that it is not
 centred on zero — `KLIEG` gives `x ∈ [-1.72, 0.89]`.
@@ -771,13 +771,13 @@ span of the origins alone.
   }
 ```
 
-- [ ] **Step 8: Typecheck and run everything**
+- [x] **Step 8: Typecheck and run everything**
 
 Run: `npm run check`
 Expected: PASS. `index.ts` will not compile until it passes a ctx — fix it by passing
 `{ pointer: null, pointerInWord: null, dt }` at the call site for now; Task 7 fills it in.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add packages/core/src/render/word.ts packages/core/test/render/word-light.test.ts packages/core/src/index.ts

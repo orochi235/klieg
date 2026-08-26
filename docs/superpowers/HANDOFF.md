@@ -6,9 +6,34 @@ learned that its design doc does not carry, and what is worth doing next.
 ## Branch state
 
 **`composable-lighting` and `flicker-spell` are both merged into `main` and pushed**, along with
-`framing-align` (PR #3) and `show-fills-its-frame`. `main` is `636241a`, green at **1110 tests** and
-**33** visual, CI passing. The sections below are what those branches learned; treat every claim
-about their *status* as historical.
+`framing-align` (PR #3), `show-fills-its-frame`, and the tube run-budget fix. `main` is `bab480a`,
+green at **1114 tests**. The sections below are what those branches learned; treat every claim about
+their *status* as historical.
+
+**The next task is the corner stage, and it is not a small one.** `spikes/svg-tube/` proved `tubing`
+works on arbitrary vector art and, in doing so, found that a sequence of sharp corners throws away a
+fifth of a letter. [The design doc](specs/2026-08-26-tube-layout-strategies-design.md) carries the
+measurement, the cause and the four layout strategies this opened up; read it before touching
+`bend.ts` or `runs.ts`.
+
+Why it is delicate: `filletAt` returning null is a *correct* local answer — there is genuinely no
+room for that arc. The defect is what the caller does next, which is remove the whole corner stretch
+(`dropHead`/`dropTail`) rather than carry the tube through at whatever radius the room allows or
+shorten what it removes. Changing that moves every `tubing` and `piping` baseline, so it wants its
+own branch and a baseline check.
+
+**The visual suite is failing three tests on `main` right now, and it is not this branch.** At load
+average 12, `visual.spec.ts` fails the bloom-path, two-line-block and wrap tests. Stashing the run
+budget change and re-running failed the identical three, so they are pre-existing under load. Do not
+read them as a regression; check `uptime` first, as this doc says twice elsewhere.
+
+**`spikes/svg-tube/` is the lab for all of this.** `npx vite --port 5199` from the repo root, then
+`/spikes/svg-tube/`. It reads a **gitignored `art.svg`** from its own directory — bring your own, or
+pass `?svg=name.svg`. Drag to pivot, double-click to reset, and the top bar carries every knob
+`buildTubeBlueprint` reads. `svg-shapes.mjs` mirrors `text/glyphs.ts`: same y negation, and hole
+nesting by containment depth rather than winding, which is what lets it take art from any tool.
+One `<path>` is treated as one letter — that is what keeps `runs` and `seed` meaning what they mean
+for text, and it is the shape a real feature would take.
 
 **`sign-wrapper` is the one branch still open, and `v0.8.0` waits for it.** One commit off `26fde30`
 in its own worktree, carrying [a design](specs/2026-08-26-sign-wrapper-design.md) and no code:

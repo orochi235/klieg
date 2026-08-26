@@ -77,40 +77,9 @@ The cut now fits the count to what the contour can carry, and the old behaviour 
 `TubeSpec.shortRun: 'drop'` — it has a use, which is small detail falling out of a sign rather than
 being drawn coarsely.
 
-**A sequence of sharp corners loses a fifth of the letter — open.** When a corner's legs are shorter
-than the fillet's setback, `filletAt` returns null (`bend.ts:152`) and the corner breaks instead;
-a break then cuts the whole corner stretch out (`dropHead`/`dropTail`), leaving a gap. Corners close
-together share their legs, so a run of them starves each other and each failure compounds.
-
-Measured with every corner forced to `connect`, so a break is the stage failing rather than choosing:
-the `t` of a geometric sans has 12 corners, 8 of them sharper than 60°, and **drops 0.485 em of about
-2.44 — a fifth of the letter**. The `W` drops 11%. Bailing out is the wrong response: the tube should
-carry through at whatever radius the room allows, or the corner stretch should be shortened rather
-than removed. This is the next thing to fix, and it is more visible on art than on text because art
-has more right angles.
-
-## Decisions this needs
-
-**Where does `strategy` live?** On `TubeSpec` beside `pathSource` is the small move, and it fits —
-both choose what curves come out. Against: `TubeSpec` is already 23 fields and a look declares one,
-so a caller cannot pick a strategy without redeclaring the look.
-
-**Is art a first-class input?** The spike treats one `<path>` as one letter, which is what keeps
-`runs` and `seed` meaning what they mean for text, and makes the effects part pool work unchanged.
-Committing to that shapes the eventual public API more than any strategy does. It is also the
-question `sign-wrapper` will ask from the other direction.
-
-**Does `spine` ship as a real medial axis or as deep contraction?** They differ on strokes of uneven
-weight. Deep contraction is a parameter change; a real axis is a new extraction. Decide before
-promising the name.
-
-## What the spike does and does not show
-
-`spikes/svg-tube/` renders any SVG's paths as `tubing`, with drag-to-pivot and live `contract`,
-`radius`, `runs` and path-source controls. `svg-shapes.mjs` mirrors `text/glyphs.ts` — same y
-negation, and hole nesting by containment depth rather than winding, which is what lets it take
-art from any authoring tool.
-
-It shows outline-tracing on real art, that contraction separates abutting solids under `field`, and
-the two costs above. It shows **nothing** about the three unbuilt strategies, and it renders no
-letterform through the same page, so no comparison against text has been made.
+**Letters ship with tube missing from them — diagnosed, and not where this doc first said.** The
+suspect was `filletAt` returning null (`bend.ts:152`) and a break then cutting the whole corner
+stretch out. Measured, that accounts for 0.85 em across A–Z against 15.80 em discarded by `resumeAt`
+walking off the end of a leg it cannot join to the fillet. `W` loses 17% of itself with all 13
+corners connected and no break in it at all. See
+[the rejoin design](2026-08-26-corner-rejoin-design.md); `spikes/corner-coverage.mjs` is the measure.

@@ -505,6 +505,19 @@ describe('lightBase', () => {
       0x445566,
     );
   });
+
+  it('reads the tint the material was actually built with', () => {
+    expect(lightBase('gold', 0xff2d6f).hue).toBe(0xff2d6f);
+  });
+
+  // A tinted neon's emissive IS the tint; reading the look's own would reset it every frame.
+  it('moves the base emissive too when the tint landed on it', () => {
+    expect(lightBase('neon', 0xff2d6f)).toEqual({ emissive: 0xff2d6f, hue: 0xff2d6f });
+  });
+
+  it('falls back to the defaults for a look that declares no colour', () => {
+    expect(lightBase({ metalness: 1 })).toEqual({ emissive: 0x000000, hue: 0xffffff });
+  });
 });
 ```
 
@@ -529,17 +542,21 @@ export interface LightBase {
   hue: number;
 }
 
-export function lightBase(look: Look): LightBase {
+export function lightBase(look: Look, tint?: number): LightBase {
   const spec = specOf(look);
   const params = resolveParams(spec);
-  return {
-    emissive: params.emissive,
-    hue: params[tintTargetOf(params, spec.tintTarget)] as number,
-  };
+  const target = tintTargetOf(params, spec.tintTarget);
+  if (tint !== undefined) params[target] = tint;
+  return { emissive: params.emissive, hue: params[target] };
 }
 ```
 
 The declared override is `spec.tintTarget` — `LookSpec` has no `tint` field.
+
+It takes `tint` for the same reason `applyLook` does: `applyLook` writes the tint over
+`params[tintTargetOf(...)]`, so on a tinted word the hue on the material is the tint and the look's
+own colour is not on screen anywhere. Reading the untinted one would light a pink letter gold, and
+on a look whose tint target is `emissive` it would reset the tint on every frame.
 
 - [ ] **Step 4: Run the test**
 
@@ -650,23 +667,28 @@ Expected: PASS, 4 tests.
 
 `writePart` currently branches on `part.kind`. Give each branch the light.
 
-For a `body` part, the light lands on the material's emissive. Add one field beside `bodyBase`,
-and set it on the line after `this.bodyBase = frameOwnedBase(spec);` (`word.ts:221`):
+For a `body` part, the light lands on the material's emissive. The hue belongs to the letter rather
+than the word — `tint` takes a per-letter function — so this is an array pushed in `buildCell`
+beside `bodyMaterials`, reusing the `hue` already resolved there and pushing `null` on the
+empty-glyph path that pushes `null` to the others:
 
 ```ts
-  private readonly bodyLight: LightBase;
+  private readonly bodyLights: (LightBase | null)[] = [];
 ```
 ```ts
-    this.bodyLight = lightBase(spec);
+    this.bodyLights.push(lightBase(look, tintMaterialOf(spec) === 'body' ? hue : undefined));
 ```
+
+Clear it in `dispose` where `bodyMaterials.length = 0`.
 
 Import `lightBase` and `type LightBase` from `./looks.js` alongside the existing `frameOwnedBase`.
-Then in the `body` branch:
+Then in the `body` branch, where `part.letter.index` picks the letter out:
 
 ```ts
     if (part.kind === 'body') {
       const material = mesh.material as THREE.MeshPhysicalMaterial;
-      material.emissive.setHex(litEmissive(this.bodyLight.emissive, this.bodyLight.hue, out.light));
+      const light = this.bodyLights[part.letter.index];
+      if (light) material.emissive.setHex(litEmissive(light.emissive, light.hue, out.light));
       setEmissiveIntensity(material, this.bodyBase.emissiveIntensity * out.gain);
       return;
     }

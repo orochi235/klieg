@@ -1248,7 +1248,7 @@ the compositor merged, the material was written, and the image did not change.
 - Create: `spikes/lamp-proof.mjs`
 - Modify: `spikes/.gitignore`
 
-- [ ] **Step 1: Write the proof script**
+- [x] **Step 1: Write the proof script**
 
 Copy `spikes/lamp-blend.mjs` to `spikes/lamp-proof.mjs` and replace its render loop body with a
 lamp-on/lamp-off pair per look, driving the real `lamp()` through `effects` rather than a hand-rolled
@@ -1261,7 +1261,7 @@ effects: [{ piece: lamp({ source: fixed(0, 0), radius: 0.6, strength: 2.5 }), ta
 Exit non-zero when any look renders lamp-on and lamp-off to the same md5, the way
 `tint-matrix.mjs` does for tints.
 
-- [ ] **Step 2: Build and run it**
+- [x] **Step 2: Build and run it**
 
 Run: `npm run build -w klieg && node spikes/lamp-proof.mjs --looks gold,chrome,gem,velvet,neon,tubing`
 Expected: every look reports `reads`. A `NO-OP` row means the lamp never reached the GPU on that
@@ -1297,7 +1297,7 @@ so lit and unlit stops disagree; this is pre-existing for `gain` and `color` and
 it. And a lamp targeting **every** run rewrites and re-uploads each run's vertex buffer every frame —
 already true of `gain` and `chase`, but a lamp is the first effect that invites `by: 'all'`.
 
-- [ ] **Step 3: Render the overlap**
+- [x] **Step 3: Render the overlap**
 
 Task 5 ships the light channel summing in sRGB rather than in linear radiance. **Do not try to judge
 this from an offset seam.** Two half-strength lamps whose pools cross will read darker at the seam
@@ -1321,7 +1321,7 @@ assertion, and it either holds or the channel is not doing what Task 5 says.
 Then render the offset seam as the thing you **look at** rather than assert on, and attach it — a
 seam nobody looked at is the same evidence `gain` had.
 
-- [ ] **Step 3b: Render the pointer, and a regrouped sign**
+- [x] **Step 3b: Render the pointer, and a regrouped sign**
 
 The md5 proof drives `fixed(0, 0)`, so `fromPointer` — the default source, and the headline of the
 whole feature — is never rendered by any of this. The script already drives a real page, so
@@ -1340,11 +1340,11 @@ snapshot, so a pointer at fraction *f* lights whatever was at *f* in the origina
 has promised this render since Task 5 and nothing has produced it. If it reads acceptably, say so and
 close it; if not, it is its own change, not this branch's.
 
-- [ ] **Step 4: Ignore its output**
+- [x] **Step 4: Ignore its output**
 
 `spikes/.gitignore` already carries `lamp-*/`, which covers it. Confirm with `git status`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add spikes/lamp-proof.mjs

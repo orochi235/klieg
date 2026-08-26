@@ -5,7 +5,7 @@ what is worth doing next.
 
 ## In flight
 
-**`composable-lighting`, eight tasks of nine done.** Branch cut from `fb058fe`, nothing pushed.
+**`composable-lighting`, all nine tasks done, not merged.** Branch cut from `fb058fe`, nothing pushed.
 Every task passed both gates — spec compliance clean on the first pass, code quality after one fix
 round each. Task 1 (`9425be1`, `e637b33`) added the additive `light` channel on `PartOffset` and
 summed it in the effects compositor. Task 2 (`13d1c62`, `4a61f72`) added the four light sources —
@@ -19,77 +19,48 @@ run's colour buffer, threaded the `ctx`, and added `partExtent()`. Task 6 (`b883
 (`8a778f9`, `3b69ca8`, `6d3b3d3`, `ad60629`, `5589976`) made `lighting` a slot, built the per-frame
 `FrameCtx`, and moved the pointer arithmetic into a new pure `src/pointer.ts`. Task 8 (`4a68519`,
 `9bc93a1`, `c50c5b1`, `88aeb0c`) exported the surface, retired `envRotation` and `PointerLight`, and
-wrote the CHANGELOG and README. `npm run check` is green at **1070 tests**, up from 977 at the branch
-point — down from 1081 because 13 tests went with the API they covered.
+wrote the CHANGELOG and README. Task 9 (`369b328`, `116fa4f`, `785a475`, `cfbf02b`) is the render
+proof. `npm run check` is green at **1071 tests**, up from 977 at the branch point.
 
-Pick up at **Task 9** of [the plan](plans/2026-08-25-composable-lighting.md), which is
-self-contained: every signature, test body and command is in it. **Read the plan, not the design
-doc** — review rounds have amended Tasks 5, 7 and 9 (`0baa15e`, `f53d233`, `b5f6a49`, `874a9e7`,
-`fec9a2d`), and the design predates all of it. The execution method was subagent-driven — one implementer
-per task, then a spec-compliance review, then a code-quality review, no skipping and no reordering.
+**Task 9 proved it reaches the screen.** `spikes/lamp-proof.mjs` drives a real page for 49 shots and
+8 contact sheets: **the lamp reads on all six looks, including `tubing` on `{ kind: 'run' }`**, so the
+vertex-buffer path is live and this is not another `gain`. The light channel sums in sRGB as Task 5
+labelled it, verified byte-exactly by the one comparison that can tell — a mid-grey lamp at full
+strength against a white one at `128/255`, which are the same float and must render identically.
+Results and every open question it settled are in
+[the findings note](specs/2026-08-25-material-lighting-findings.md), sections 9-12.
 
-**Three things Task 1 learned that the plan did not say.** Making `ResolvedOffset.light` a required
-field breaks any literal that constructs one — there was one in `compositor.test.ts` itself, fixed
-by adding `light: [0, 0, 0]`. `render/word.ts` is the only other `ResolvedOffset` consumer; it takes
-the type as a parameter and needed no change.
+**What is left is the decision to merge.** Nothing is pushed; `main` is 11 ahead of `origin/main`.
+Task 9's spec gate ran and its code-quality gate did not — the only gate skipped across nine tasks,
+and worth knowing before this is called finished. Three findings below are recorded and deliberately
+unfixed.
 
-And **the channel accumulates sRGB, not linear radiance** — which is self-consistent with how
-`litEmissive` will consume it, but means two overlapping lamps do not sum to the brightness one lamp
-at full strength gives. Task 5 now opens by deciding this, and Task 9 renders the overlap either
-way. The label was corrected; the maths was deliberately left alone.
+The execution method was subagent-driven — one implementer per task, then a spec-compliance review,
+then a code-quality review. Read the plan rather than the design doc: review rounds amended Tasks 5,
+7, 8 and 9, and the design predates all of it.
 
-**What Task 4 learned that the plan did not say: `tint` overwrites the hue a lamp reads.**
-`applyLook` writes a word's `tint` over `params[tintTargetOf(...)]`, so on a tinted letter the
-look's own colour is on screen nowhere — and on a look whose tint target is `emissive`, a per-frame
-`emissive.setHex` resets the tint every frame, lamp or no lamp. `lightBase` therefore takes the
-tint, and Task 5 now stores its result per letter rather than per word, because `tint` accepts a
-per-letter function. Key that array on `partSlot`: `LetterInfo.index` is the letter's place in the
-word and `regroup` renumbers it, so the two agree only while the part pool is the one the
-constructor built.
+**The lesson of the whole branch: a proof script can reproduce the defect it was written to catch.**
+Task 9's first version drew a cursor crosshair into the same clip it md5'd, so four pointer checks
+compared frames differing only by where the crosshair sat. Two frames in which the lamp contributed
+*nothing* — `lit=0` on both — hashed differently and were reported as `reads`, on `fromPointer`, the
+headline source. With the crosshair moved out of the hashed clip those frames collapse to
+byte-identical with the unlit frame. **Anything drawn for a human to look at must sit outside
+anything a machine compares.**
 
-**What Task 5 learned: a spatial query against this pool needs the ink, not the origins.**
-`partExtent()` first built its box from `part.x`/`part.y` — the glyph origin and the baseline — and
-`placement.ts` gives every letter on a line the same `y`. So the box had **zero height on any
-single-line sign**, and Task 7's pointer mapping would have handed every pointer position the same
-`y`: `fromPointer` tracking horizontally and never vertically, with nothing failing. It now folds
-each glyph's own bounds in the way `fitOf` does. Two further traps came out of testing it. A test on
-a single-line word cannot catch a dropped baseline, because every `part.y` is zero there. And a
-purely *relational* test — this extent versus that one — cancels any constant per-glyph error: three
-of five defects passed one. The file carries both an absolute anchor and the relations.
+**Three findings the renders settled, recorded and unfixed.** A cursor anywhere on a **regrouped**
+sign lights nothing: the part pool is frozen at construction, so the light lives where the letters
+used to be, and only a cursor past the right edge lights a centred `NOW`. A lamp on a
+`mode: 'replace'` **gradient** is a total no-op — that shader branch never reads the attribute a lamp
+writes — and `hue` rendered as a control is equally dead, so it is pre-existing and not lamp-specific.
+And the pointer stretch **leads the cursor by up to 139px even at `framing: 0.9`**, because that fit
+is height-limited; the README claimed "fills the frame" and now says what is true.
 
-**The extent is still a construction-time snapshot.** `regroup` re-lays the letters and deliberately
-leaves the part pool alone, so after one, a pointer at fraction *f* lights whatever was at *f* in the
-original layout. Recomputing `PartInfo.x`/`y` per frame is the real fix and it is not Task 7's to
-make — `stagger`'s positional ordering reads the same fields. Task 7 guards the degenerate box;
-Task 9 should sweep a regrouped sign and record what it looks like.
-
-**What Task 6 learned: a piece that accumulates state can be poisoned once and never recover.**
-`track` eases toward the pointer by mutating closed-over `yaw`/`pitch`, so any frame that produces a
-`NaN` leaves it returning `NaN` for the rest of its life — straight into `environmentRotation`. A
-caller-supplied `followMs` of 0 does it on a `dt: 0` frame (`exp(-0/0)`), `NaN` does it always, and a
-negative one diverges past 4000 radians in five frames. Guarded with `followMs > 0 ? … : 1`, zero
-reading as "snap". **The test that catches this has to assert the value, not that the value is
-finite** — sanitizing the return while leaving the accumulator poisoned passes a finiteness check
-forever.
-
-**`ENV_PIECES` uses `satisfies`, not an annotation**, matching `EFFECTS` in `effects/pieces.ts`,
-which carries the comment arguing for it. An annotation erases each factory's own spec parameter, so
-`ENV_PIECES.sweep({ periodMs: 1000 })` stops compiling while still working at runtime.
-
-**What Task 7 learned: the two pointer spaces run opposite ways on y.** `clientY` grows downward and
-layout y grows upward (`placement.ts` sets `y = -line * LINE_HEIGHT_EM`), so the plan's own mapping
-sent a cursor at the top of the canvas to the bottom line of the word, and `fromPointer` passed it
-through unchanged as a lamp position. `FrameCtx` now carries both conventions on one object —
-`pointer` is +y down, `pointerInWord` is +y up — which is worth reading twice before touching either.
-**Only a multi-line word can catch this**; a single line has almost no vertical extent to be wrong
-about.
-
-**And: "detach the listener when no effect is live" is a trap.** It sounds obviously right and it
-converts a dark lamp into a confidently misaimed one — the position stops updating between effects
-but is never cleared, so the next fire opens aimed wherever the cursor was when the last one ended.
-The listener attaches on the first `fire()` and lives until `destroy()`, which is what `PointerLight`
-did before this branch. The test that catches it has to move the pointer **in the gap between two
-fires**.
+**`orbit`'s default moved 2 → 0.3, and the first justification for it was wrong.** Sampling four
+phases by settling a second apart never controlled the absolute phase — all four landed on diagonals,
+and with every part of a single-line sign at `y = 0` the 45°/315° pair must render identically while
+the data said 9.6 and 0. Phase-controlled across 16: radius 2 lights the K once per pass at 180°, 0.4
+is lit at every phase, 0.5 is *not* (zero at 90°/270°). 0.3 is chosen on margin at the dimmest phase,
+23% of centre strength against 4.8% for 0.4.
 
 **What Task 8 learned: verify your own prose against the built package.** Two claims written in this
 task were false and both were caught by a throwaway script that imported `dist` and asserted each

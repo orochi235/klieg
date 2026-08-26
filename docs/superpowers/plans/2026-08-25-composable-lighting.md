@@ -872,6 +872,7 @@ export interface EnvPiece {
   env(t: number, ctx: FrameCtx): EnvOffset;
 }
 
+/** Everything `mergeEnv` resolved. Both axes rest at 0. */
 export interface ResolvedEnv {
   yaw: number;
   pitch: number;
@@ -900,7 +901,7 @@ export function still(): EnvPiece {
 export interface TrackSpec {
   /** Radians the environment swings between opposite edges of the canvas. */
   yawRange?: number;
-  /** Radians on the other axis. Shallower than yaw by default; see the note on `PITCH_RANGE`. */
+  /** Radians on the other axis. Shallower than yaw: tipping the studio far swings its floor into frame. */
   pitchRange?: number;
   /** Milliseconds to cover ~63% of the way to a new pointer position. Zero snaps. */
   followMs?: number;
@@ -1092,8 +1093,7 @@ git commit -m "drive the environment from a composable lighting slot"
 
 ```ts
 export { type LampSpec, along, fixed, fromPointer, lamp, type LightPose, type LightSource, orbit, type OrbitSpec } from './effects/lamp.js';
-export { type EnvOffset, type EnvPiece, mergeEnv, type ResolvedEnv, still, sweep, track, type TrackSpec } from './render/lighting.js';
-export { ENV_PIECES } from './render/lighting.js';
+export { ENV_PIECES, type EnvOffset, type EnvPiece, mergeEnv, type ResolvedEnv, still, sweep, track, type TrackSpec } from './render/lighting.js';
 export type { LightingSlot };
 ```
 
@@ -1105,7 +1105,10 @@ it must not survive as a second, wrong way to do this.
 **Three things must survive that deletion**, and two of them sit inside the block a reader would
 take for the `PointerLight` section. Keep `YAW_RANGE`, `PITCH_RANGE` and `FOLLOW_MS` with their doc
 comments — they are `track`'s defaults, and `PITCH_RANGE`'s note about a studio's floor swinging
-into frame is not derivable from anything else. Move `envRotationAt`'s "effect-relative: absolute
+into frame is not derivable from anything else — but fix `YAW_RANGE`'s doc, which still says
+"viewport" where it means the canvas box. That is the exact word the Fixed note below calls a bug,
+and the public `TrackSpec.yawRange` beside it already says "canvas". Move `envRotationAt`'s
+"effect-relative: absolute
 clock time would start every effect at an arbitrary angle" onto `sweep`, whose `t` still carries
 that constraint. `tsc` catches a deleted binding; it does not catch a deleted reason.
 

@@ -1169,7 +1169,13 @@ describe('the lighting slot', () => {
     bk.destroy();
   });
 
-  it('drops the pointermove listener when the effect settles', async () => {
+  it('attaches no listener until something has been fired', () => {
+    create();
+
+    expect(listeners.get('pointermove') ?? []).toHaveLength(0);
+  });
+
+  it('keeps the listener past a settled effect and drops it on destroy', async () => {
     const bk = create();
     const done = bk.fire('HI', INSTANT);
     await flush();
@@ -1178,12 +1184,30 @@ describe('the lighting slot', () => {
     clock.advance(16);
     await done;
 
+    expect(listeners.get('pointermove')).toHaveLength(1);
+
+    bk.destroy();
+
     expect(listeners.get('pointermove') ?? []).toHaveLength(0);
   });
 
-  it('drops it on an abort too, which never reaches the end of the timeline', async () => {
+  it('adds no second listener for a second fire', async () => {
     const bk = create();
-    const done = bk.fire('HI', { ...LIT });
+    const done = bk.fire('HI', INSTANT);
+    await flush();
+    clock.advance(16);
+    await done;
+
+    void bk.fire('HI', LIT);
+    await flush();
+
+    expect(listeners.get('pointermove')).toHaveLength(1);
+    bk.destroy();
+  });
+
+  it('drops it on a destroy that aborts an effect mid-flight', async () => {
+    const bk = create();
+    const done = bk.fire('HI', LIT);
     await flush();
     expect(listeners.get('pointermove')).toHaveLength(1);
 
@@ -1287,6 +1311,28 @@ describe('the pointer in the frame context', () => {
     clock.advance(16);
 
     expect(last(seen.frames).pointer).not.toBeNull();
+    expect(last(seen.frames).pointer?.x).toBeCloseTo(1, 6);
+    bk.destroy();
+  });
+
+  it('sees a pointer that moved between two fires, not the one from before', async () => {
+    const bk = create();
+    const first = bk.fire('HI', INSTANT);
+    await flush();
+    stubCanvas(BOX);
+    dispatch('pointermove', { clientX: 0, clientY: 50 });
+    clock.advance(16);
+    await first;
+
+    // Nothing is on screen, but the cursor keeps moving. A listener that comes and goes with the
+    // effect would miss this and reopen the next one aimed where the pointer used to be.
+    dispatch('pointermove', { clientX: 100, clientY: 50 });
+
+    const seen = capture();
+    void bk.fire('HI', LOOKING(seen.spec));
+    await flush();
+    clock.advance(16);
+
     expect(last(seen.frames).pointer?.x).toBeCloseTo(1, 6);
     bk.destroy();
   });

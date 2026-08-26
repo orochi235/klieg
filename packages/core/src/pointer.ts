@@ -1,4 +1,5 @@
-/** The ink bounding box of a word's part pool, in its own layout space. */
+/** The ink bounding box of a word's part pool, in its own layout space. `Word.partExtent`
+ * returns this; it lives here so the mapping below has no render dependency. */
 export interface WordExtent {
   minX: number;
   maxX: number;

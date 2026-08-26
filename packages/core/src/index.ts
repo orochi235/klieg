@@ -282,21 +282,23 @@ export function createKlieg(options: KliegOptions): Klieg {
   });
 
   let pointerClient: { x: number; y: number } | null = null;
-  let pointerHolds = 0;
+  let pointerAttached = false;
   const onMove = (event: PointerEvent) => {
     pointerClient = { x: event.clientX, y: event.clientY };
   };
 
-  /** Instance-wide: the cursor's position outlives any one effect, so a sign fired under a still
-   * pointer opens where the pointer already is rather than at rest. */
-  function holdPointer(): () => void {
-    if (pointerHolds++ === 0) globalThis.addEventListener('pointermove', onMove, { passive: true });
-    let held = true;
-    return () => {
-      if (!held) return;
-      held = false;
-      if (--pointerHolds === 0) globalThis.removeEventListener('pointermove', onMove);
-    };
+  /** Once attached it stays for the instance's life. The cursor goes on moving between effects,
+   * so a listener that came and went would open the next one aimed where the pointer used to be. */
+  function holdPointer(): void {
+    if (pointerAttached) return;
+    pointerAttached = true;
+    globalThis.addEventListener('pointermove', onMove, { passive: true });
+  }
+
+  function releasePointer(): void {
+    if (!pointerAttached) return;
+    pointerAttached = false;
+    globalThis.removeEventListener('pointermove', onMove);
   }
 
   let fontPromise: Promise<LoadedFont> | null = null;
@@ -419,7 +421,7 @@ export function createKlieg(options: KliegOptions): Klieg {
     const driver: Sequence | Timeline = sequence ?? timeline;
     const startedAt = clock.now();
 
-    const releasePointer = holdPointer();
+    holdPointer();
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
@@ -430,7 +432,6 @@ export function createKlieg(options: KliegOptions): Klieg {
         if (settled) return;
         settled = true;
         off();
-        releasePointer();
         detachDismiss();
         stage.scene.remove(word.group);
         host?.remove();
@@ -580,6 +581,7 @@ export function createKlieg(options: KliegOptions): Klieg {
     },
     destroy() {
       destroyed = true;
+      releasePointer();
       // A running effect only notices the abort on its next tick, and tearing down first would
       // leave it re-arming idle teardown against a stage that is already gone.
       void queue.cancelAll().then(() => stage.unmount());

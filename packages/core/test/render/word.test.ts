@@ -1674,6 +1674,10 @@ describe('effects', () => {
     return extent;
   }
 
+  it('has no part extent at all for a word with nothing to draw', () => {
+    expect(new Word('  ', stubFont(), 'gold', ROOMY).partExtent()).toBeNull();
+  });
+
   // Origins alone give a single-line sign a box of zero height: placement puts every letter on a
   // line at the same baseline, and a pointer mapped into that box could never move vertically.
   it('measures the part extent by a glyph ink rather than by its origin or its advance', () => {

@@ -14,6 +14,7 @@ import { blankPose } from '../motion/compositor.js';
 import type { RegroupResult } from '../motion/sequence.js';
 import type { LetterInfo, StaggerSpec } from '../motion/types.js';
 import { stagger } from '../motion/types.js';
+import type { WordExtent } from '../pointer.js';
 import type { Pose, Vec3 } from '../pose.js';
 import { selectIndices } from '../select.js';
 import type { LoadedFont } from '../text/font.js';
@@ -425,7 +426,7 @@ export class Word {
    * Each glyph's own bounds are folded in the way `fitOf` does. A box of origins alone would have
    * zero height on a single-line sign, since every letter on a line shares its baseline.
    */
-  partExtent(): { minX: number; maxX: number; minY: number; maxY: number } | null {
+  partExtent(): WordExtent | null {
     if (this.parts.length === 0) return null;
     let minX = Number.POSITIVE_INFINITY;
     let maxX = Number.NEGATIVE_INFINITY;

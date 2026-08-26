@@ -1026,9 +1026,11 @@ and per frame, before `word.apply`:
         const extent = word.partExtent();
         if (extent && extent.maxX > extent.minX && extent.maxY > extent.minY) {
           // The word is not centred on zero, so map into its real extent rather than scaling.
+          // y flips: clientY grows downward and layout y grows upward, so passing the pointer
+          // straight through moves the lamp opposite the cursor on a multi-line sign.
           pointerInWord = {
             x: extent.minX + ((pointer.x + 1) / 2) * (extent.maxX - extent.minX),
-            y: extent.minY + ((pointer.y + 1) / 2) * (extent.maxY - extent.minY),
+            y: extent.maxY - ((pointer.y + 1) / 2) * (extent.maxY - extent.minY),
           };
         }
       }

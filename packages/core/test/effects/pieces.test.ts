@@ -100,8 +100,9 @@ describe('flicker', () => {
   // A step is ~58ms so a drop covers about three frames. Holding 24 steps against a long pass turns
   // that into a multi-second strobe, which is a different effect wearing the same name.
   it('holds a step near 58ms however long the pass is', () => {
-    expect(shortestDropMs(flicker())).toBeGreaterThan(40);
-    expect(shortestDropMs(flicker())).toBeLessThan(80);
+    // Pinned, not banded: a 40-80ms band admits 1400/25, which moves every frame of every shipped
+    // flicker() while staying green.
+    expect(shortestDropMs(flicker(), 40000)).toBeCloseTo(1400 / 24, 0);
     expect(shortestDropMs(flicker({ duration: 30000 }))).toBeLessThan(80);
   });
 
@@ -118,6 +119,14 @@ describe('flicker', () => {
     }
     return best * (piece.duration / samples);
   }
+
+  // A calm alone used to invent a one-step spell, inflating the pass tenfold for an effect
+  // indistinguishable from a steady tube.
+  it('leaves the pass alone when only one of the two scales is given', () => {
+    expect(flicker({ calm: 15000 }).duration).toBe(1400);
+    expect(gainsAcrossOnePass(flicker({ calm: 15000 }))).toEqual(gainsAcrossOnePass(flicker()));
+    expect(flicker({ spell: Number.NaN, calm: 15000 }).duration).toBe(1400);
+  });
 
   it('leaves the pass alone when no calm is asked for', () => {
     expect(flicker({ spell: 4000 }).duration).toBe(1400);

@@ -3,14 +3,17 @@ import { hueColor } from './luminance.js';
 import type { EffectName, EffectPiece } from './types.js';
 
 export interface FlickerSpec {
+  /** Milliseconds for one pass. With a `spell` and a `calm` the pass becomes the nearest whole
+   * number of cycles of the two, which can be longer than this or shorter. */
   duration?: number;
   /** How dark the stutter goes, as the floor of `gain`. 0 is fully out. */
   depth?: number;
   /** Share of the pass spent stuttering. The rest is held lit. */
   unrest?: number;
-  /** Milliseconds of one flickering bout. Needs a `calm` to mean anything. */
+  /** Milliseconds of one flickering bout. Needs a `calm`, and both must exceed one step. */
   spell?: number;
-  /** Milliseconds held steady between bouts. 0, the default, flickers for the whole pass. */
+  /** Milliseconds held steady between bouts. Needs a `spell`, and lengthens the pass to fit whole
+   * cycles of the two. 0, the default, flickers throughout. */
   calm?: number;
 }
 
@@ -40,19 +43,19 @@ export function flicker(spec: FlickerSpec = {}): EffectPiece {
 
   // Both scales snap to whole steps, which is what puts every gate boundary on a step edge: a
   // boundary inside a step clips that drop to a frame or two and it reads as noise.
-  const spellSteps = Math.max(1, Math.round(spell / STEP_MS));
+  const spellSteps = Math.round(spell / STEP_MS);
   const calmSteps = Math.round(calm / STEP_MS);
-  const gated = calm > 0 && calmSteps > 0;
+  const gated = spellSteps > 0 && calmSteps > 0;
   const cycleSteps = spellSteps + calmSteps;
   const cycles = gated ? Math.max(1, Math.round(wanted / (cycleSteps * STEP_MS))) : 1;
   const duration = gated ? cycles * cycleSteps * STEP_MS : wanted;
-  const steps = gated ? cycles * cycleSteps : stepsFor(duration);
-  const duty = spellSteps / cycleSteps;
+  const steps = stepsFor(duration);
+  const spellShare = spellSteps / cycleSteps;
 
   return {
     duration,
     at(t, part) {
-      if (gated && (t * cycles) % 1 >= duty) return { gain: 1 };
+      if (gated && (t * cycles) % 1 >= spellShare) return { gain: 1 };
       const step = Math.floor(t * steps) % steps;
       if (hash01(step + part.index * 977.3) > unrest) return { gain: 1 };
       const bite = hash01(step * 3.7 + part.index * 131.1);

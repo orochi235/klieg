@@ -1,10 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  ENV_PIECES,
   envRotationAt,
   LIGHTING,
   type LightingName,
+  mergeEnv,
   PointerLight,
+  still,
+  sweep,
+  track,
 } from '../../src/render/lighting.js';
+
+const CTX = { pointer: null, pointerInWord: null, dt: 16 };
 
 const NAMES: LightingName[] = ['sweep', 'static', 'pointer'];
 const TAU = Math.PI * 2;
@@ -110,5 +117,132 @@ describe('PointerLight', () => {
     light.step(100_000);
 
     expect(light.yaw).toBeCloseTo(settled, 10);
+  });
+});
+
+describe('sweep', () => {
+  it('turns a full rotation over its own period', () => {
+    const piece = sweep({ periodMs: 1000 });
+    expect(piece.duration).toBe(1000);
+    expect(piece.env(0, CTX).yaw).toBeCloseTo(0);
+    expect(piece.env(0.5, CTX).yaw).toBeCloseTo(Math.PI);
+  });
+
+  it('falls back to the sweep preset period', () => {
+    const piece = sweep();
+    expect(piece.duration).toBe(LIGHTING.sweep.periodMs);
+    expect(piece.env(0.25, CTX).yaw).toBeCloseTo(TAU / 4);
+    expect(piece.env(1, CTX).yaw).toBeCloseTo(TAU);
+  });
+
+  it('turns yaw only, leaving pitch to other layers', () => {
+    expect(mergeEnv([sweep().env(0.375, CTX)])).toEqual({ yaw: TAU * 0.375, pitch: 0 });
+  });
+});
+
+describe('still', () => {
+  it('holds flat forever and everywhere', () => {
+    const piece = still();
+    expect(piece.duration).toBe(0);
+    expect(mergeEnv([piece.env(0, CTX)])).toEqual({ yaw: 0, pitch: 0 });
+    expect(mergeEnv([piece.env(0.7, CTX)])).toEqual({ yaw: 0, pitch: 0 });
+  });
+});
+
+describe('mergeEnv', () => {
+  it('rests flat', () => {
+    expect(mergeEnv([])).toEqual({ yaw: 0, pitch: 0 });
+  });
+
+  // Additive, like the pose compositor: two layers must both be visible in the result.
+  it('sums yaw and pitch across layers', () => {
+    const merged = mergeEnv([{ yaw: 1, pitch: 0.2 }, { yaw: 0.5 }, { pitch: -0.1 }]);
+    expect(merged.yaw).toBeCloseTo(1.5);
+    expect(merged.pitch).toBeCloseTo(0.1);
+  });
+
+  it('keeps each axis out of the other', () => {
+    expect(mergeEnv([{ yaw: 3 }])).toEqual({ yaw: 3, pitch: 0 });
+    expect(mergeEnv([{ pitch: 3 }])).toEqual({ yaw: 0, pitch: 3 });
+  });
+});
+
+describe('track', () => {
+  it('holds the static pose until a pointer has been seen', () => {
+    const piece = track();
+    piece.env(0, CTX);
+    expect(piece.env(0, CTX)).toEqual({ yaw: 0, pitch: 0 });
+  });
+
+  it('leaves the static pose once a pointer arrives', () => {
+    const piece = track();
+    piece.env(0, CTX);
+    expect(piece.env(0, CTX)).toEqual({ yaw: 0, pitch: 0 });
+
+    const ctx = { pointer: { x: 1, y: 1 }, pointerInWord: null, dt: 16 };
+    const out = piece.env(0, ctx);
+    expect(out.yaw as number).toBeGreaterThan(0);
+    expect(out.pitch as number).toBeGreaterThan(0);
+  });
+
+  it('swings less on pitch than on yaw', () => {
+    const piece = track();
+    const ctx = { pointer: { x: -1, y: -1 }, pointerInWord: null, dt: 100_000 };
+    piece.env(0, ctx);
+    const out = piece.env(0, ctx);
+    expect(Math.abs(out.pitch as number)).toBeLessThan(Math.abs(out.yaw as number));
+  });
+
+  it('takes its ranges from the caller', () => {
+    const piece = track({ yawRange: 1, pitchRange: 0.5, followMs: 1 });
+    const ctx = { pointer: { x: 1, y: 1 }, pointerInWord: null, dt: 100_000 };
+    piece.env(0, ctx);
+    const out = piece.env(0, ctx);
+    expect(out.yaw).toBeCloseTo(1);
+    expect(out.pitch).toBeCloseTo(0.5);
+  });
+
+  // A symmetric pointer cannot tell yaw-from-x apart from yaw-from-y.
+  it('drives yaw from x and pitch from y', () => {
+    const piece = track({ yawRange: 1, pitchRange: 0.5, followMs: 1 });
+    const ctx = { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 100_000 };
+    piece.env(0, ctx);
+    const out = piece.env(0, ctx);
+    expect(out.yaw).toBeCloseTo(1);
+    expect(out.pitch).toBeCloseTo(-0.5);
+  });
+
+  it('follows the pointer partway in a single short frame', () => {
+    const piece = track({ yawRange: 1, pitchRange: 1, followMs: 100 });
+    const ctx = { pointer: { x: 1, y: 1 }, pointerInWord: null, dt: 100 };
+    const out = piece.env(0, ctx);
+    expect(out.yaw).toBeCloseTo(1 - Math.exp(-1), 6);
+  });
+
+  it('never turns on the clock', () => {
+    const piece = track();
+    expect(piece.duration).toBe(0);
+    const ctx = { pointer: { x: 1, y: 0 }, pointerInWord: null, dt: 100_000 };
+    piece.env(0, ctx);
+    const settled = piece.env(0.6, ctx).yaw;
+    expect(piece.env(0.9, ctx).yaw).toBeCloseTo(settled as number, 10);
+  });
+});
+
+describe('ENV_PIECES', () => {
+  it('has an entry for every lighting name', () => {
+    expect(Object.keys(ENV_PIECES).sort()).toEqual([...NAMES].sort());
+  });
+
+  it('maps each name to the piece that mode describes', () => {
+    expect(ENV_PIECES.sweep().duration).toBe(LIGHTING.sweep.periodMs);
+    expect(ENV_PIECES.sweep().env(0.5, CTX).yaw).toBeCloseTo(Math.PI);
+
+    expect(mergeEnv([ENV_PIECES.static().env(0.5, CTX)])).toEqual({ yaw: 0, pitch: 0 });
+
+    const pointer = ENV_PIECES.pointer();
+    const ctx = { pointer: { x: 1, y: 0 }, pointerInWord: null, dt: 100_000 };
+    pointer.env(0, ctx);
+    expect(pointer.env(0, ctx).yaw as number).toBeGreaterThan(0);
   });
 });

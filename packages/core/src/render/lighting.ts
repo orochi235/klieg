@@ -1,3 +1,5 @@
+import type { FrameCtx } from '../effects/types.js';
+
 export type LightingName = 'sweep' | 'static' | 'pointer';
 
 export interface LightingMode {
@@ -73,3 +75,71 @@ export class PointerLight {
     this.pitch += (this.targetPitch - this.pitch) * k;
   }
 }
+
+export interface EnvOffset {
+  yaw?: number;
+  pitch?: number;
+}
+
+export interface EnvPiece {
+  /** Milliseconds for one pass. Zero holds still. */
+  duration: number;
+  /** `t` is normalized 0..1 within this pass. */
+  env(t: number, ctx: FrameCtx): EnvOffset;
+}
+
+/** Additive, matching the pose compositor: layering two pieces must show both. */
+export function mergeEnv(offsets: readonly EnvOffset[]): { yaw: number; pitch: number } {
+  let yaw = 0;
+  let pitch = 0;
+  for (const o of offsets) {
+    yaw += o.yaw ?? 0;
+    pitch += o.pitch ?? 0;
+  }
+  return { yaw, pitch };
+}
+
+export function sweep(spec: { periodMs?: number } = {}): EnvPiece {
+  const periodMs = spec.periodMs ?? LIGHTING.sweep.periodMs;
+  return { duration: periodMs, env: (t) => ({ yaw: t * TAU }) };
+}
+
+export function still(): EnvPiece {
+  return { duration: 0, env: () => ({}) };
+}
+
+export interface TrackSpec {
+  yawRange?: number;
+  pitchRange?: number;
+  followMs?: number;
+}
+
+/**
+ * Aims the environment at the pointer. Not a light anywhere: it turns the same scene-wide knob
+ * `sweep` turns, from position instead of time. For a cursor that lights the letter under it,
+ * see `lamp`.
+ */
+export function track(spec: TrackSpec = {}): EnvPiece {
+  const yawRange = spec.yawRange ?? YAW_RANGE;
+  const pitchRange = spec.pitchRange ?? PITCH_RANGE;
+  const followMs = spec.followMs ?? FOLLOW_MS;
+  let yaw = 0;
+  let pitch = 0;
+  return {
+    duration: 0,
+    env(_t, ctx) {
+      if (ctx.pointer) {
+        const k = 1 - Math.exp(-Math.max(0, ctx.dt) / followMs);
+        yaw += (ctx.pointer.x * yawRange - yaw) * k;
+        pitch += (ctx.pointer.y * pitchRange - pitch) * k;
+      }
+      return { yaw, pitch };
+    },
+  };
+}
+
+export const ENV_PIECES: Record<LightingName, () => EnvPiece> = {
+  sweep,
+  static: still,
+  pointer: track,
+};

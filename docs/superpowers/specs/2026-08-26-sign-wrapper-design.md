@@ -96,7 +96,7 @@ import('./sign.js')`. The element is DOM plumbing measured in kilobytes and thre
 when an element actually connects, so a page that ships the tag on one route does not pay for it on
 the others.
 
-One stylesheet is adopted into `document.adoptedStyleSheets` at registration:
+One `<style data-klieg-sign>` is appended to `document.head` at registration, once:
 
 ```css
 @layer klieg {
@@ -114,7 +114,7 @@ anything.** An element placement appends the canvas and the text layer *into the
 
 `[lit]` is set with `setAttribute`, never through a framework's state, for the reason `onLit` gives.
 
-Two builds: `klieg/element` for a bundler, and a prebuilt `klieg/element/standalone.js` with three
+Two builds: `klieg/element` for a bundler, and a prebuilt `klieg/element/standalone` subpath with three
 inlined for a `<script type="module">` on a static page. Both subpaths declare their own
 `sideEffects` — registering a custom element is one, and core declares `sideEffects: false`.
 
@@ -177,3 +177,7 @@ asking for it; the `sign()`/adapter split is the seam it would arrive through.
   the first fire and releases it only on `destroy()`, so a fire that never settles keeps it — one
   per sign, freed on disconnect. Verified not to leak, but it is a cost this design did not
   account for.
+
+- **The stylesheet is a `<style>` tag, not `adoptedStyleSheets`.** Constructable-stylesheet support
+  is uneven enough that the alternative was a capability branch plus this fallback anyway — two code
+  paths to prove instead of one. One rule either way, and `@layer` still puts it under the consumer's.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { chase, EFFECTS, flicker, hue } from '../../src/effects/pieces.js';
-import type { EffectPiece, FrameCtx, PartInfo } from '../../src/effects/types.js';
+import type { EffectPiece, PartInfo } from '../../src/effects/types.js';
+import { NO_CTX } from './ctx.js';
 
 const part: PartInfo = {
   kind: 'run',
@@ -12,8 +13,6 @@ const part: PartInfo = {
   at: 0,
   span: 1,
 };
-
-const NO_CTX: FrameCtx = { pointer: null, pointerInWord: null, dt: 0 };
 
 const SAMPLES = 200;
 

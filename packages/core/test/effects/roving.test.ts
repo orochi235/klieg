@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { flicker } from '../../src/effects/pieces.js';
 import { roving } from '../../src/effects/roving.js';
 import type { EffectPiece, FrameCtx, PartInfo } from '../../src/effects/types.js';
+import { NO_CTX } from './ctx.js';
 
 const COUNT = 6;
 
@@ -19,8 +20,6 @@ function partAt(index: number): PartInfo {
 }
 
 const PARTS = Array.from({ length: COUNT }, (_, i) => partAt(i));
-
-const NO_CTX: FrameCtx = { pointer: null, pointerInWord: null, dt: 0 };
 
 /** Which part indices are contributing anything at `t`. */
 function afflicted(piece: EffectPiece, t: number): number[] {
@@ -140,5 +139,24 @@ describe('roving', () => {
     const piece = roving(instant);
     expect(piece.duration).toBeGreaterThan(0);
     expect(afflicted(piece, 0.5)).toHaveLength(1);
+  });
+
+  it('forwards the ctx it receives to the inner piece, rather than dropping or inventing one', () => {
+    const seen: unknown[] = [];
+    const recorder: EffectPiece = {
+      duration: 100,
+      at: (_t, _part, ctx) => {
+        seen.push(ctx);
+        return { gain: 1 };
+      },
+    };
+    const ctx: FrameCtx = {
+      pointer: { x: 0.1, y: 0.2 },
+      pointerInWord: { x: 0.3, y: 0.4 },
+      dt: 42,
+    };
+    roving(recorder).at(0.5, partAt(0), ctx);
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((c) => c === ctx)).toBe(true);
   });
 });

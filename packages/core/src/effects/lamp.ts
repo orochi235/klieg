@@ -58,7 +58,8 @@ export function along(points: readonly { x: number; y: number }[]): LightSource 
 export interface LampSpec {
   /** Where the light is. Defaults to the cursor. */
   source?: LightSource;
-  /** Milliseconds for one pass of a time-driven source. */
+  /** Milliseconds for one pass of a time-driven source. Inert against the default
+   * `fromPointer` source, which ignores `t`. */
   duration?: number;
   /** How far the light reaches, in em of layout space. */
   radius?: number;
@@ -72,7 +73,7 @@ const REST: PartOffset = {};
 
 /** Flat at the centre and zero at the edge, so a lamp reads as a pool rather than a cone point. */
 function falloff(d: number, radius: number): number {
-  if (radius <= 0) return 0;
+  if (!Number.isFinite(d) || !Number.isFinite(radius) || radius <= 0) return 0;
   const u = clamp01(d / radius);
   return (1 - u) * (1 - u) * (1 + 2 * u);
 }

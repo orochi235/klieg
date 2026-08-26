@@ -63,7 +63,7 @@ import {
 
 const EM = 1; // glyphs are built at 1 em; the group scale does the fitting
 
-/** Replaced in Task 7, when the render loop builds a real ctx from the canvas rect. */
+/** Stands in until the render loop builds a real ctx from the canvas rect and pointer. */
 const NO_CTX: FrameCtx = { pointer: null, pointerInWord: null, dt: 0 };
 
 /**

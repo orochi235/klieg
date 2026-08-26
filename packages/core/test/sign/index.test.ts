@@ -149,6 +149,8 @@ describe('sign', () => {
 
     expect(destroy).toHaveBeenCalledOnce();
     expect(fire).toHaveBeenLastCalledWith('A New Name', expect.anything());
+    // The patch carried `text` alone; everything it did not name survives the rebuild.
+    expect(built().fontUrl).toBe('/f.ttf');
     // Down while the replacement blocks the main thread building its word, then up again.
     expect(onLit.mock.calls).toEqual([[true], [false], [true]]);
 
@@ -165,6 +167,8 @@ describe('sign', () => {
     it_.destroy();
     expect(destroy).toHaveBeenCalledOnce();
     expect(it_.lit).toBe(false);
+    // The sign borrows the anchor; taking it down leaves the page's own markup as it found it.
+    expect(anchor.textContent).toBe('A Name');
 
     settle();
     await Promise.resolve();

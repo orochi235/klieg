@@ -8,6 +8,7 @@ import { ENTER } from './motion/enter.js';
 import { EXIT } from './motion/exit.js';
 import { Sequence } from './motion/sequence.js';
 import type { ActiveName, EnterName, ExitName, LetterInfo, MotionPiece } from './motion/types.js';
+import { pointerFrame } from './pointer.js';
 import { EffectQueue, type QueuePolicy } from './queue.js';
 import { BloomPath } from './render/bloom.js';
 import {
@@ -486,23 +487,11 @@ export function createKlieg(options: KliegOptions): Klieg {
           // Ahead of the pose, or the fit and the phase advance both lag it by a frame.
           sequence?.tick(elapsed);
 
-          let pointer: FrameCtx['pointer'] = null;
-          let pointerInWord: FrameCtx['pointerInWord'] = null;
-          const box = pointerClient ? stage.canvas?.getBoundingClientRect() : undefined;
-          if (pointerClient && box && box.width > 0 && box.height > 0) {
-            const nx = ((pointerClient.x - box.left) / box.width) * 2 - 1;
-            const ny = ((pointerClient.y - box.top) / box.height) * 2 - 1;
-            // FrameCtx promises -1..1, and the listener is document-wide: a pointer beside a small
-            // anchored canvas would otherwise aim past every range that scales it.
-            pointer = { x: Math.max(-1, Math.min(1, nx)), y: Math.max(-1, Math.min(1, ny)) };
-            if (extent && extent.maxX > extent.minX && extent.maxY > extent.minY) {
-              // The word is not centred on zero, so map into its real extent rather than scaling.
-              pointerInWord = {
-                x: extent.minX + ((pointer.x + 1) / 2) * (extent.maxX - extent.minX),
-                y: extent.maxY - ((pointer.y + 1) / 2) * (extent.maxY - extent.minY),
-              };
-            }
-          }
+          const { pointer, pointerInWord } = pointerFrame(
+            pointerClient ? stage.canvas?.getBoundingClientRect() : null,
+            pointerClient,
+            extent,
+          );
           const ctx: FrameCtx = {
             pointer,
             pointerInWord,

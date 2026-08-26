@@ -20,7 +20,6 @@ import type { Vec3 } from '../src/pose.js';
 import { BloomPath } from '../src/render/bloom.js';
 import { type EnvPiece, sweep, track } from '../src/render/lighting.js';
 import { Stage } from '../src/render/stage.js';
-import { Word } from '../src/render/word.js';
 import { fromEuler } from '../src/transform.js';
 
 const { parse } = vi.hoisted(() => ({ parse: vi.fn() }));
@@ -1269,58 +1268,6 @@ describe('the pointer in the frame context', () => {
     // clientY grows downward and layout y grows upward, so the top of the canvas is the top line.
     expect(topLeft?.y).toBeGreaterThanOrEqual(Math.max(...ys));
     expect(bottomRight?.y).toBeLessThanOrEqual(Math.min(...ys));
-    bk.destroy();
-  });
-
-  it('reads no pointer at all from a canvas that has been collapsed to nothing', async () => {
-    const seen = capture();
-    const bk = create();
-    void bk.fire('HI', LOOKING(seen.spec));
-    await flush();
-    // A display:none ancestor, or a frame before layout has run: the box is real but has no area.
-    stubCanvas({ left: 0, top: 0, width: 0, height: 0 });
-    dispatch('pointermove', { clientX: 40, clientY: 40 });
-    clock.advance(16);
-
-    expect(last(seen.frames).pointer).toBeNull();
-    expect(last(seen.frames).pointerInWord).toBeNull();
-    bk.destroy();
-  });
-
-  it('keeps the canvas pointer but drops pointerInWord when the word has no extent', async () => {
-    // The stub font gives every glyph a real box, so a degenerate pool has to be stood in for.
-    vi.spyOn(Word.prototype, 'partExtent').mockReturnValue({
-      minX: 0,
-      maxX: 0,
-      minY: 0,
-      maxY: 0,
-    });
-    const seen = capture();
-    const bk = create();
-    void bk.fire('HI', LOOKING(seen.spec));
-    await flush();
-    stubCanvas(BOX);
-    dispatch('pointermove', { clientX: 40, clientY: 40 });
-    clock.advance(16);
-
-    expect(last(seen.frames).pointer).not.toBeNull();
-    // fromPointer reads null as rest, which beats mapping every position onto one constant.
-    expect(last(seen.frames).pointerInWord).toBeNull();
-    bk.destroy();
-  });
-
-  it('drops pointerInWord for a pool with no parts in it yet', async () => {
-    vi.spyOn(Word.prototype, 'partExtent').mockReturnValue(null);
-    const seen = capture();
-    const bk = create();
-    void bk.fire('HI', LOOKING(seen.spec));
-    await flush();
-    stubCanvas(BOX);
-    dispatch('pointermove', { clientX: 40, clientY: 40 });
-    clock.advance(16);
-
-    expect(last(seen.frames).pointer).not.toBeNull();
-    expect(last(seen.frames).pointerInWord).toBeNull();
     bk.destroy();
   });
 

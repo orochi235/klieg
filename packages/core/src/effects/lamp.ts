@@ -18,8 +18,7 @@ export function fixed(x: number, y: number): LightSource {
   return () => ({ x, y });
 }
 
-/** The cursor where `FrameCtx.pointerInWord` puts it — stretched onto the word's extent rather
- * than projected onto it, so it sits under the cursor only when the word fills the canvas. */
+/** The cursor, exactly as `FrameCtx.pointerInWord` places it. */
 export function fromPointer(map?: (p: { x: number; y: number }) => LightPose): LightSource {
   return (_t, ctx) => {
     const p = ctx.pointerInWord;
@@ -29,8 +28,8 @@ export function fromPointer(map?: (p: { x: number; y: number }) => LightPose): L
 }
 
 export interface OrbitSpec {
-  /** Em of layout space. Defaults to 2, four times a lamp's own default reach, so
-   * `lamp({ source: orbit() })` circles a short sign wholly outside it and never lights it. */
+  /** Em of layout space. Defaults to 2, outside the parts of a short sign, which a lamp's 0.5 em
+   * default reach does not close: `lamp({ source: orbit() })` on bare defaults lights nothing. */
   radius?: number;
   /** Centre of the circle, in layout space. Both default to 0, the middle of the word. */
   x?: number;

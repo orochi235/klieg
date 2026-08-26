@@ -145,7 +145,26 @@ describe('flicker', () => {
 
   it('still stutters inside a spell', () => {
     const piece = flicker({ duration: 60000, spell: 4000, calm: 15000 });
-    expect(darkRuns(gainsAcrossOnePass(piece, part, 4000)).length).toBeGreaterThan(3);
+    expect(darkRuns(gainsAcrossOnePass(piece, part, 4000)).length).toBeGreaterThan(15);
+  });
+
+  // The gate and the stutter share one clock, so each bout samples a different stretch of the hash.
+  // A second clock — or a step index that restarts per bout — makes every bout identical instead.
+  // The sample count must not be a multiple of the pass's step count: sampling on the step grid
+  // lands every third sample on an edge, where float residue alone makes identical bouts compare
+  // unequal and the test stops seeing the defect.
+  it('gives each spell its own stutter rather than repeating one', () => {
+    const piece = flicker({ duration: 60000, spell: 4000, calm: 15000 });
+    const gains = gainsAcrossOnePass(piece, part, 2937);
+    const third = gains.length / 3;
+    const drops = (from: number) => gains.slice(from, from + third).filter((g) => g < 1);
+    expect(drops(0).length).toBeGreaterThan(20);
+    expect(drops(0)).not.toEqual(drops(third));
+  });
+
+  // cycles rounds rather than floors, so a pass that is nearer three bouts than two gets three.
+  it('rounds the pass to the nearest whole number of spells rather than down', () => {
+    expect(flicker({ duration: 50000, spell: 4000, calm: 15000 }).duration).toBe(57050);
   });
 });
 

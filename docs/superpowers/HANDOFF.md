@@ -5,6 +5,60 @@ what is worth doing next.
 
 ## In flight
 
+**`flicker-spell`, all three tasks done, unmerged.** Cut from `main` at `f670adf`, nothing pushed.
+Implements [the plan](plans/2026-08-26-flicker-macro-spell.md): `flicker` gained `spell` and `calm`,
+and its step count is now derived from the pass rather than fixed at 24. `npm run check` is green at
+**987 tests**, up from 977 at the branch point.
+
+**This branch does not contain `composable-lighting`.** That is a separate nine-task branch on the
+`/Users/mike/src/klieg` checkout, complete and also unmerged, and its own handoff section lives
+there. Neither depends on the other; `flicker-spell` was cut from `main` deliberately so they could
+land in either order.
+
+**What the two review gates found, and it is the same lesson twice.** Both were tests that pass
+against the defect they name. The design's central claim — that folding the gate into `flicker`
+rather than wrapping it means every bout samples a different stretch of the hash — had **no test at
+all**: restarting the step index per bout leaves the duration, the calm length and the drop length
+all correct, so nothing in a 983-test suite could see it. And the test written to close that gap
+sampled at exactly three per step, landing every third sample on a step edge where float residue
+alone made byte-identical bouts compare unequal — so it passed against the very defect it named.
+Fixed at 2937 samples, filtered to the drops that carry information, with a floor so it cannot pass
+vacuously.
+
+**A calm alone used to invent a spell.** `Math.max(1, round(spell / STEP_MS))` conjured a one-step
+bout for a caller who named none, so `flicker({ calm: 15000 })` returned a 15050ms pass — ten times
+the default — in which eleven of twelve tubes never dropped once. `spell: NaN` poisoned every gain
+for the life of the piece by the same route. Both closed by requiring each step count above zero.
+
+**The last four commits had no independent reviewer.** Five consecutive API 529s made dispatching
+unreliable, so the coordinator applied the review's fixes and wrote Task 3's prose itself. The
+mechanical half was still done, and mutation results do not care who runs them: `STEP_MS = 1400/25`
+now turns three tests red including the newly-pinned one, which stayed green before the pin; the
+pre-fix gate turns two red at `expected 15050 to be 1400`; `stepsFor(duration)` equals
+`cycles * cycleSteps` across 240 gated combinations with no mismatch; and every CHANGELOG figure was
+recomputed. **What has had no second pair of eyes is the prose and the shape of the fix** — whether
+`finiteMs` is the right seam, whether the CHANGELOG reads well to someone deciding to upgrade.
+
+**One hole the self-check found and closed.** `calm: Infinity` engaged the gate and returned an
+infinite pass in which the tube never flickered; `spell: Infinity` took every gain to NaN. Both
+fields are new here, so both holes were. `finiteMs` reads a non-finite scale as absent, matching the
+guards `track`'s `followMs` and `lamp`'s falloff already carry. `duration: NaN` still poisons, as it
+did before this branch — house style in this struct, and left alone.
+
+**Two things left undecided, both cheap and both pre-release.** A reviewer argued `spell` should be
+`bout`, since every piece of prose calls it a bout and only the API calls it a spell — kept as
+`spell` because that is the name the original ask used, and free to change until this ships. And
+`roving(flicker({ spell, calm }))` now nests two quiet effects: `roving`'s epoch floor means its
+duration equals the inner pass for any inner over ~17s, so one afflicted tube resting 95% of the
+time means nothing in the sign flickers for 15 of every 19 seconds. Legitimate, but not what
+"one bad tube that jumps every few seconds" prepares a reader for.
+
+## Landed since this section was written
+
+**`selectable-text` shipped in 0.7.0.** The text below described it as complete and unmerged, and it
+is neither now — it is on `main` and released. Kept only for the three things it learned that its
+design doc does not carry; treat every claim about its *status* as historical.
+
 **`selectable-text`, complete and unmerged.** 14 commits off `main`, nothing uncommitted, not
 pushed. `npm run check` is green at 977 unit tests and `npm run test:visual` at 33. It implements
 [the design](specs/2026-08-25-selectable-text-design.md) in full — one `FireOptions.selectable` of

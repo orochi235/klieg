@@ -90,6 +90,96 @@ describe('flicker', () => {
   it('is reachable by name', () => {
     expect(typeof EFFECTS.flicker).toBe('function');
   });
+
+  /** Shortest dark stretch in milliseconds, which is what a step length actually means on screen. */
+  function shortestDropMs(piece: EffectPiece, samples = 4000): number {
+    const runs = darkRuns(gainsAcrossOnePass(piece, part, samples));
+    return Math.min(...runs) * (piece.duration / samples);
+  }
+
+  // A step is ~58ms so a drop covers about three frames. Holding 24 steps against a long pass turns
+  // that into a multi-second strobe, which is a different effect wearing the same name.
+  it('holds a step near 58ms however long the pass is', () => {
+    // Pinned, not banded: a 40-80ms band admits 1400/25, which moves every frame of every shipped
+    // flicker() while staying green.
+    expect(shortestDropMs(flicker(), 40000)).toBeCloseTo(1400 / 24, 0);
+    expect(shortestDropMs(flicker({ duration: 30000 }))).toBeLessThan(80);
+  });
+
+  /** Longest continuously-lit stretch in milliseconds — the calm, when there is one. */
+  function longestCalmMs(piece: EffectPiece, samples = 4000): number {
+    const gains = gainsAcrossOnePass(piece, part, samples);
+    let best = 0;
+    let run = 0;
+    for (const g of gains) {
+      if (g >= 0.5) {
+        run++;
+        best = Math.max(best, run);
+      } else run = 0;
+    }
+    return best * (piece.duration / samples);
+  }
+
+  // A calm alone used to invent a one-step spell, inflating the pass tenfold for an effect
+  // indistinguishable from a steady tube.
+  it('treats a non-finite scale as absent rather than as an endless pass', () => {
+    expect(flicker({ spell: 4000, calm: Number.POSITIVE_INFINITY }).duration).toBe(1400);
+    expect(flicker({ spell: Number.POSITIVE_INFINITY, calm: 15000 }).duration).toBe(1400);
+  });
+
+  it('leaves the pass alone when only one of the two scales is given', () => {
+    expect(flicker({ calm: 15000 }).duration).toBe(1400);
+    expect(gainsAcrossOnePass(flicker({ calm: 15000 }))).toEqual(gainsAcrossOnePass(flicker()));
+    expect(flicker({ spell: Number.NaN, calm: 15000 }).duration).toBe(1400);
+  });
+
+  it('leaves the pass alone when no calm is asked for', () => {
+    expect(flicker({ spell: 4000 }).duration).toBe(1400);
+    expect(gainsAcrossOnePass(flicker({ spell: 4000 }))).toEqual(gainsAcrossOnePass(flicker()));
+  });
+
+  // 4000ms is 69 steps and 15000ms is 257, so a cycle is 326 steps and three of them fit 60s.
+  it('fits the pass to a whole number of spells', () => {
+    expect(flicker({ duration: 60000, spell: 4000, calm: 15000 }).duration).toBe(57050);
+  });
+
+  // The tube goes quiet for the calm, which is the whole point of the macro scale.
+  it('holds the tube lit for the calm between spells', () => {
+    const piece = flicker({ duration: 60000, spell: 4000, calm: 15000 });
+    expect(longestCalmMs(piece)).toBeGreaterThan(13000);
+    expect(longestCalmMs(piece)).toBeLessThan(17000);
+  });
+
+  // A gate boundary landing mid-step clips a drop to a single frame, which reads as noise rather
+  // than as a failing tube — the thing the step length exists to prevent.
+  it('lands every gate boundary on a step edge', () => {
+    const piece = flicker({ duration: 60000, spell: 4000, calm: 15000 });
+    expect(shortestDropMs(piece, 20000)).toBeGreaterThan(40);
+  });
+
+  it('still stutters inside a spell', () => {
+    const piece = flicker({ duration: 60000, spell: 4000, calm: 15000 });
+    expect(darkRuns(gainsAcrossOnePass(piece, part, 4000)).length).toBeGreaterThan(15);
+  });
+
+  // The gate and the stutter share one clock, so each bout samples a different stretch of the hash.
+  // A second clock — or a step index that restarts per bout — makes every bout identical instead.
+  // The sample count must not be a multiple of the pass's step count: sampling on the step grid
+  // lands every third sample on an edge, where float residue alone makes identical bouts compare
+  // unequal and the test stops seeing the defect.
+  it('gives each spell its own stutter rather than repeating one', () => {
+    const piece = flicker({ duration: 60000, spell: 4000, calm: 15000 });
+    const gains = gainsAcrossOnePass(piece, part, 2937);
+    const third = gains.length / 3;
+    const drops = (from: number) => gains.slice(from, from + third).filter((g) => g < 1);
+    expect(drops(0).length).toBeGreaterThan(20);
+    expect(drops(0)).not.toEqual(drops(third));
+  });
+
+  // cycles rounds rather than floors, so a pass that is nearer three bouts than two gets three.
+  it('rounds the pass to the nearest whole number of spells rather than down', () => {
+    expect(flicker({ duration: 50000, spell: 4000, calm: 15000 }).duration).toBe(57050);
+  });
 });
 
 describe('hue', () => {

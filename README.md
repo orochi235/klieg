@@ -219,8 +219,12 @@ fire('JACKPOT!', {
 The pool is word-wide, so `{ count: 1 }` picks one bad tube in the sign rather than one in every
 letter. A `body` part only reads brightness; colour reaches `run` parts only.
 
-**`flicker`** — a tube on its way out. `EFFECTS.flicker({ depth, unrest, duration })`: `depth` is the
-floor of its brightness, `unrest` the share of the pass spent stuttering.
+**`flicker`** — a tube on its way out. `EFFECTS.flicker({ depth, unrest, spell, calm, duration })`:
+`depth` is the floor of its brightness, `unrest` the share of the pass spent stuttering. `spell` and
+`calm` add the long scale — the milliseconds of one flickering bout and the milliseconds held steady
+between them, so a tube can stutter for four seconds and sit quiet for fifteen. Both need the other,
+and both snap to whole stutter steps; the pass then becomes the nearest whole number of cycles, which
+may be longer than the `duration` asked for or shorter.
 
 **`hue`** — a colour sweep across the sign. `EFFECTS.hue({ from, span, spread, luminance, duration })`,
 in turns: `span` of 1 is the whole wheel and the only value that meets itself at the loop seam, and

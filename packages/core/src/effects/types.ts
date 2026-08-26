@@ -74,7 +74,9 @@ export interface FrameCtx {
   /** The same pointer stretched onto the word's layout space — the em, block-relative space
    * `PartInfo.x/y` uses, +y up. The canvas's whole -1..1 covers the word's extent per axis
    * rather than projecting onto it, so on a sign that does not fill the canvas the point
-   * travels further than the cursor. Null whenever `pointer` is. */
+   * travels further than the cursor. The extent is the one the word was built with, so after a
+   * `stages` regroup this addresses the original layout rather than where the letters now are.
+   * Null whenever `pointer` is. */
   pointerInWord: { x: number; y: number } | null;
   /** Milliseconds since the previous frame, and `Infinity` under reduced motion. Read it to snap
    * to a target, never to integrate: one infinite frame leaves an accumulator `NaN` for good. */
@@ -82,7 +84,8 @@ export interface FrameCtx {
 }
 
 export interface EffectPiece {
-  /** Milliseconds for one pass. Loops. */
+  /** Milliseconds for one pass. Loops. Zero does not hold a piece still — the pass never advances,
+   * which pins a time-driven source such as `orbit` at its starting angle for good. */
   duration: number;
   /** `t` is normalized 0..1 within this pass. */
   at(t: number, part: PartInfo, ctx: FrameCtx): PartOffset;

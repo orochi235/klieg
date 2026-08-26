@@ -17,11 +17,11 @@ describe('fromPointer', () => {
     expect(fromPointer()(0, NO_CTX)).toBeNull();
   });
 
-  it('reads the pointer already projected into the word', () => {
+  it('reads the pointer already mapped into the word', () => {
     expect(fromPointer()(0, AT)).toEqual({ x: 1.2, y: 0.3 });
   });
 
-  it('passes the projected point through a supplied map', () => {
+  it('passes the mapped point through a supplied map', () => {
     const source = fromPointer((p) => ({ x: p.x * 2, y: 0 }));
     expect(source(0, AT)).toEqual({ x: 2.4, y: 0 });
   });

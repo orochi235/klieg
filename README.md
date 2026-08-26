@@ -111,7 +111,7 @@ The slot takes a piece instead of a name, or an array mixing both — `sweep({ p
 between them.
 
 All of these turn the one shared environment. For light on the letters near a position instead —
-a pool under the cursor — put a `lamp` in `effects`.
+a pool the cursor carries across the word — put a `lamp` in `effects`.
 
 Each list is also exported as a runtime array — `ENTER_NAMES`, `ACTIVE_NAMES`, `EXIT_NAMES`,
 `LOOK_NAMES`, `LIGHTING_NAMES`, `POLICY_NAMES` — for building a picker.
@@ -248,8 +248,10 @@ effect does not drive and nothing happens at all.
 rather than changing what they are made of. `radius` is its reach in em of layout space, `strength`
 the light at the centre falling to nothing at that edge, and `color` the lamp's own, multiplied
 against the look's hue. `source` says where the light is on each pass: `fromPointer()` is the
-default and puts it under the cursor, `fixed(x, y)` pins it, `orbit({ radius, x, y })` circles it,
-and `along([...])` walks a polyline at constant time per segment rather than constant speed.
+default and follows the cursor — the canvas's whole extent maps onto the word's, so the pool sits
+under the cursor on a word that fills the frame and ranges wider than it on one that does not.
+`fixed(x, y)` pins the light, `orbit({ radius, x, y })` circles it, and `along([...])` walks a
+polyline at constant time per segment rather than constant speed.
 `duration` is one pass for the sources that read the clock, `orbit` and `along`, and does nothing
 to `fixed` or `fromPointer`, which ignore it. A pointer source stays dark until the pointer has
 been inside the canvas, so an untouched page gets no lamp rather than one parked at the origin.

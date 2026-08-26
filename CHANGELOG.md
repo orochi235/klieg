@@ -2,20 +2,44 @@
 
 ## Unreleased
 
-### Added
-- `lighting` accepts a piece or an array of them, not only a name. `sweep({ periodMs })`,
-  `still()` and `track({ yawRange, pitchRange, followMs })` expose what were module constants.
-- `lamp()`, an effect piece that puts light on the parts near a position, with `fixed`, `orbit`,
-  `along` and `fromPointer` as sources.
-- `PartOffset.light`, an additive channel carrying a lamp's colour and amount.
+### Lighting composes, and light can land on one letter
 
-### Fixed
-- A tracked pointer normalized against the viewport rather than the canvas box, so an anchored
-  sign in a small box only ever saw a slice of the yaw range.
+`lighting` takes a piece, or an array of them, wherever it took a name — the shape `enter`,
+`active` and `exit` already had. `sweep({ periodMs })`, `still()` and
+`track({ yawRange, pitchRange, followMs })` build one, so the periods and swing ranges that were
+module constants are arguments now. The layering is not the motion slots', though: each piece runs
+on its own `duration` rather than sharing the slot's, so `['sweep', sweep({ periodMs: 1000 })]`
+turns two periods at once with nothing holding a phase between them.
 
-### Removed
-- `MotionPiece.envRotation` and `CycleSpec.envRotation`. Declare an env piece in `lighting`
-  instead.
+Every one of those turns the whole environment at once. `lamp()` is the other half — an effect
+piece that puts light on the parts near a position and leaves the rest of the sign alone, so the
+cursor can light the letters it passes. `fixed(x, y)`, `orbit({ radius })`, `along([...])` and
+`fromPointer()` say where the light is; `fromPointer` is the default, and it contributes nothing
+until the pointer has been inside the canvas rather than parking a lamp in the middle of an
+untouched page.
+
+Light lands on `PartOffset.light`, a new additive channel carrying a lamp's colour and amount. A
+multiplier could not carry it: `emissive` defaults to black, so scaling it is a no-op on every look
+but `neon`.
+
+### `lighting: 'pointer'` now sees the canvas rather than the window
+
+It normalized the cursor against the viewport instead of the canvas box, so an anchored sign in a
+small element only ever saw the slice of the yaw range its own box covered — the highlight barely
+moved while the cursor crossed the type. It reads the canvas box now, and the swing that was a
+module constant is `track({ yawRange, pitchRange })`.
+
+### Breaking
+
+`EffectPiece.at` takes a third parameter: `at(t, part, ctx)`, where `ctx` carries the pointer and
+the milliseconds since the last frame. Implementing the interface is unaffected, since a piece that
+ignores the parameter is still assignable — but code that *calls* `.at(t, part)`, which is what
+wrapping or unit-testing a piece of your own looks like, no longer typechecks. `FrameCtx` and
+`LightOffset` are exported for it.
+
+`MotionPiece.envRotation` and `CycleSpec.envRotation` are gone. Hijacking a motion piece was the
+old way to rake the highlight, and the slot says it directly now. An `active` of
+`cycle(3000, { envRotation: true })` becomes `lighting: sweep({ periodMs: 3000 })`.
 
 ## 0.7.0
 

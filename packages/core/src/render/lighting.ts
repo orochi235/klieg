@@ -105,6 +105,8 @@ export const ENV_PIECES = {
   pointer: track,
 } satisfies Record<LightingName, () => EnvPiece>;
 
+/** A built-in name, your own env piece, or several layered — each running on its own period,
+ * unlike a motion slot, whose members share one. */
 export type LightingSlot = LightingName | EnvPiece | (LightingName | EnvPiece)[];
 
 export function resolveLighting(slot: LightingSlot): EnvPiece[] {

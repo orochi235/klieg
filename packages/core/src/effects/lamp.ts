@@ -18,7 +18,8 @@ export function fixed(x: number, y: number): LightSource {
   return () => ({ x, y });
 }
 
-/** The cursor, already projected into the word. */
+/** The cursor where `FrameCtx.pointerInWord` puts it — stretched onto the word's extent rather
+ * than projected onto it, so it sits under the cursor only when the word fills the canvas. */
 export function fromPointer(map?: (p: { x: number; y: number }) => LightPose): LightSource {
   return (_t, ctx) => {
     const p = ctx.pointerInWord;
@@ -28,7 +29,10 @@ export function fromPointer(map?: (p: { x: number; y: number }) => LightPose): L
 }
 
 export interface OrbitSpec {
+  /** Em of layout space. Defaults to 2, four times a lamp's own default reach, so
+   * `lamp({ source: orbit() })` circles a short sign wholly outside it and never lights it. */
   radius?: number;
+  /** Centre of the circle, in layout space. Both default to 0, the middle of the word. */
   x?: number;
   y?: number;
 }
@@ -40,7 +44,8 @@ export function orbit(spec: OrbitSpec = {}): LightSource {
   return (t) => ({ x: cx + Math.cos(t * TAU) * radius, y: cy + Math.sin(t * TAU) * radius });
 }
 
-/** Walks a polyline once per pass, by segment count rather than by arc length. */
+/** Walks a polyline once per pass, by segment count rather than by arc length: every segment
+ * gets the same share of the pass, whatever its length. Throws on fewer than two points. */
 export function along(points: readonly { x: number; y: number }[]): LightSource {
   if (points.length < 2) throw new Error('klieg: along() needs at least two points');
   const pts = points.slice();
@@ -58,8 +63,8 @@ export function along(points: readonly { x: number; y: number }[]): LightSource 
 export interface LampSpec {
   /** Where the light is. Defaults to the cursor. */
   source?: LightSource;
-  /** Milliseconds for one pass of a time-driven source. Inert against the default
-   * `fromPointer` source, which ignores `t`. */
+  /** Milliseconds for one pass. Read only by the sources that follow the clock, `orbit` and
+   * `along`; `fixed` and `fromPointer` ignore `t`. */
   duration?: number;
   /** How far the light reaches, in em of layout space. */
   radius?: number;
@@ -78,6 +83,11 @@ function falloff(d: number, radius: number): number {
   return (1 - u) * (1 - u) * (1 + 2 * u);
 }
 
+/**
+ * Light on the parts near a position, rather than a change to what they are made of. Under the
+ * default `fromPointer` source it contributes nothing until the pointer has been inside the
+ * canvas, so an untouched page shows no lamp rather than one parked in the middle of the word.
+ */
 export function lamp(spec: LampSpec = {}): EffectPiece {
   const source = spec.source ?? fromPointer();
   const duration = spec.duration ?? 4000;

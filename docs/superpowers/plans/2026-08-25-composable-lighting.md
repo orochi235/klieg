@@ -747,19 +747,25 @@ Test it on a single-line word: the extent must have non-zero height, and must be
 span of the origins alone.
 
 ```ts
-  /** The ink bounding box of the part pool in layout space, or null before any part exists.
-   * Describes the pool as built: `regroup` re-lays the letters and leaves the pool alone. */
+  /**
+   * The ink bounding box of the part pool in layout space, or null before any part exists.
+   * Describes the pool as built: `regroup` re-lays the letters and leaves the pool alone.
+   * Each glyph's own bounds are folded in the way `fitOf` does. A box of origins alone would have
+   * zero height on a single-line sign, since every letter on a line shares its baseline.
+   */
   partExtent(): { minX: number; maxX: number; minY: number; maxY: number } | null {
     if (this.parts.length === 0) return null;
     let minX = Number.POSITIVE_INFINITY;
     let maxX = Number.NEGATIVE_INFINITY;
     let minY = Number.POSITIVE_INFINITY;
     let maxY = Number.NEGATIVE_INFINITY;
-    for (const part of this.parts) {
-      minX = Math.min(minX, part.x);
-      maxX = Math.max(maxX, part.x);
-      minY = Math.min(minY, part.y);
-      maxY = Math.max(maxY, part.y);
+    for (let i = 0; i < this.parts.length; i++) {
+      const part = this.parts[i] as PartInfo;
+      const slot = this.partSlot[i] as number;
+      minX = Math.min(minX, part.x + (this.geoMinX[slot] ?? 0));
+      maxX = Math.max(maxX, part.x + (this.geoMaxX[slot] ?? 0));
+      minY = Math.min(minY, part.y + (this.geoMinY[slot] ?? 0));
+      maxY = Math.max(maxY, part.y + (this.geoMaxY[slot] ?? 0));
     }
     return { minX, maxX, minY, maxY };
   }

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### A sign wrapper, and a hold that does not end
+
+`createKlieg` + `fire` is shaped for a burst over a running app, and every consumer wanting a
+**sign** — type standing in for a heading, lit once and left there — wrote the same integration
+around it. Two new entry points carry it instead. `klieg/sign` exports `sign(anchor, options)`,
+framework-free; `klieg/element` registers `<klieg-sign>`, which takes the page's own heading as its
+content so the word stays readable, selectable and in the accessibility tree whether or not
+anything renders. The element imports klieg dynamically, so three.js arrives only when one connects,
+and `dist/standalone/klieg-sign.js` is the whole thing in one file for a page with no bundler.
+
+`tint` on a sign takes any CSS color, `currentColor` and `var(--x)` included, resolved against the
+anchor — so a sign tracks the page's palette rather than repeating a number from it.
+
+**`FireOptions.hold` gains `'forever'`**, which holds until `destroy()`. `'click'` is refused for an
+element placement and there was no other way to say "indefinitely", so an anchored sign had to name
+a number it did not mean. Unlike `'click'` it attaches no listener, and it is legal on every
+placement — but not alongside `stages`, which it would never advance past.
+
 ### An anchored word now meets the page's text edge
 
 `framing` said how much of the anchor the type could fill and not where in it the word sat, so an

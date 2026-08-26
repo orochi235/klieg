@@ -165,3 +165,15 @@ asking for it; the `sign()`/adapter split is the seam it would arrive through.
 - **`lighting` is `LightingSlot`, so a sign composes env pieces exactly as a fire does.** Reduced
   motion still replaces the whole slot with `'static'`, which resolves to `still()` — the sign is
   shown and only what moves is stilled.
+
+- **`sideEffects` must name the source path as well as the built one.** The array listed only
+  `./dist/element.js`, so a consumer whose bundler resolves klieg to source — a monorepo alias, the
+  lab's own — had rollup read the element as pure and delete the import entirely, shipping a page
+  that lit nothing. `./src/element.ts` is listed too; it costs published consumers nothing, since
+  `files` never ships `src/`. A unit test asserting the array exactly was what held the bug in
+  place.
+
+- **A sign holds a global `pointermove` listener for its lifetime.** `createKlieg` attaches one on
+  the first fire and releases it only on `destroy()`, so a fire that never settles keeps it — one
+  per sign, freed on disconnect. Verified not to leak, but it is a cost this design did not
+  account for.

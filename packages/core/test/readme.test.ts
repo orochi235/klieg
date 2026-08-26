@@ -38,6 +38,11 @@ describe('documented surface', () => {
     }
   });
 
+  it('exports the sign the README teaches', async () => {
+    const mod = await import('../src/sign/index.js');
+    expect(mod).toHaveProperty('sign');
+  });
+
   it('builds the README motion example', () => {
     const swoop = bk.transition(800, {
       from: { position: [0, -6, 0], opacity: 0 },

@@ -400,13 +400,68 @@ const bounce = transition(700, { from: { scale: 0 }, ease: easeElasticOut });
 | `look` | `'gold'` | the material — a name, or a spec of your own |
 | `lighting` | `'sweep'` | how the environment lights it — a name, an env piece, or an array of them; a `lamp` effect lights the letters instead of the scene |
 | `tint` | none | recolors the look, as `0xff2d6f`, or a rule consulted per letter |
-| `hold` | `1200` | milliseconds in the active phase, or `'click'` to hold until dismissed; `'click'` is refused under an element `placement` |
+| `hold` | `1200` | milliseconds in the active phase, `'click'` to hold until dismissed, or `'forever'` to hold until `destroy()`; `'click'` is refused under an element `placement`, and `'forever'` is refused alongside `stages`, which it would never advance past |
 | `stages` | none | stages played after the enter, each regrouping what survives it |
 | `blendMs` | `120` | crossfade window straddling each phase boundary |
 | `bloom` | look's choice | adds a glow pass, at the cost of three render targets while the effect runs |
 | `wrap` | `false` | break long text into the arrangement that renders largest |
 | `modal` | `false` | while a `'click'` hold waits, let the overlay swallow the dismissing press |
 | `selectable` | `'hidden'` | how the fired word appears in the DOM — copyable, findable and readable, or selectable (below) |
+
+## A sign
+
+Type that stands in for a heading, lights once and stays. `klieg/element` is a custom element, so
+the page needs no framework and no code of its own:
+
+```html
+<klieg-sign font="/font.ttf" look="tubing" tint="currentColor">
+  <h1>Your Name</h1>
+</klieg-sign>
+<script type="module">import 'klieg/element'</script>
+```
+
+Your heading stays in the page — readable before any script runs, selectable, findable, and in
+the markup a crawler reads. The element anchors a canvas over its own box and turns the heading
+transparent when the sign lights; with no WebGL, no JavaScript or a failed load, nothing happens
+to it at all. It adds no DOM text of its own: the heading is the copy, and a second one would be
+announced twice and match Ctrl+F twice. Give it a `text` attribute instead of a heading and it
+carries a hidden copy, since then nothing else does.
+
+Attributes: `font`, `text`, `look`, `tint`, `framing-width`, `framing-height`, `align`,
+`lighting`, `bloom`. `tint` takes any CSS color, `currentColor` and `var(--x)` included, resolved
+against the element, so a sign inherits your palette rather than repeating it. `bloom="false"` is
+off and anything else, the bare attribute included, is on. Removing an attribute unsets what it
+set rather than leaving the last value standing.
+
+The `.look`, `.effects` and `.options` properties carry what an attribute cannot, `.options` being
+a whole `FireOptions` merged over the rest. Setting `.look` opts the element out of the `look`
+attribute: a later attribute change re-fires, still with the property's value.
+
+The element imports klieg dynamically, so three.js arrives only when one connects.
+
+For a page that would rather call a function, `klieg/sign` is the same behavior without the
+registry, returning `{ lit, update, destroy }`:
+
+```js
+import { sign } from 'klieg/sign';
+
+const heading = document.querySelector('h1');
+
+sign(heading, {
+  font: '/font.ttf',
+  tint: 'currentColor',
+  onLit: (lit) => heading.classList.toggle('lit', lit),
+});
+```
+
+`onLit(true)` arrives **before** the word is built, not after: building blocks the main thread and
+nothing paints during it, so a class added afterwards lands seconds late.
+
+`font` has no default. Bundling a typeface is a licensing decision the library does not make for
+its consumers.
+
+For a static page with no bundler, `klieg/element/standalone` — `dist/standalone/klieg-sign.js` —
+is the element, klieg and three inlined in one file a `<script type="module">` can load by itself.
 
 ## Multiple lines
 
@@ -482,7 +537,7 @@ Under `prefers-reduced-motion: reduce` the word holds the pose its enter settles
   pickers, plus canned sequences.
 - `npm run dev:tube-lab -w klieg` — the tube lab: several letters at several angles at once
   with the tube pipeline's own numbers beside the render. Dev-only tooling, never published.
-- `npm run check` — biome, tsc and the unit suite (723 tests).
+- `npm run check` — biome, tsc and the unit suite (1180 tests).
 - `npm run test:visual` — Playwright specs asserting the overlay composites over a live page
   without tinting or blocking it.
 - `npm run build:pages -w @klieg/lab && npm run preview:pages -w @klieg/lab` — the

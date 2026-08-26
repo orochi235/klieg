@@ -86,8 +86,9 @@ Append inside the existing `describe('flicker', …)` block:
   // A step is ~58ms so a drop covers about three frames. Holding 24 steps against a long pass turns
   // that into a multi-second strobe, which is a different effect wearing the same name.
   it('holds a step near 58ms however long the pass is', () => {
-    expect(shortestDropMs(flicker())).toBeGreaterThan(40);
-    expect(shortestDropMs(flicker())).toBeLessThan(80);
+    // Pinned, not banded: a 40-80ms band admits 1400/25, which moves every frame of every shipped
+    // flicker() and leaves this task's whole guarantee resting on a Task 2 constant.
+    expect(shortestDropMs(flicker(), 40000)).toBeCloseTo(1400 / 24, 0);
     expect(shortestDropMs(flicker({ duration: 30000 }))).toBeLessThan(80);
   });
 ```
@@ -237,9 +238,10 @@ mismatches — `duration` 60000 rather than 57000, and no calm stretch. Both are
 In `FlickerSpec`, below `unrest`:
 
 ```ts
-  /** Milliseconds of one flickering bout. Needs a `calm` to mean anything. */
+  /** Milliseconds of one flickering bout. Needs a `calm`, and both must exceed one step. */
   spell?: number;
-  /** Milliseconds held steady between bouts. 0, the default, flickers for the whole pass. */
+  /** Milliseconds held steady between bouts. Needs a `spell`, and lengthens the pass to fit whole
+   * cycles of the two. 0, the default, flickers throughout. */
   calm?: number;
 ```
 
@@ -257,19 +259,19 @@ export function flicker(spec: FlickerSpec = {}): EffectPiece {
 
   // Both scales snap to whole steps, which is what puts every gate boundary on a step edge: a
   // boundary inside a step clips that drop to a frame or two and it reads as noise.
-  const spellSteps = Math.max(1, Math.round(spell / STEP_MS));
+  const spellSteps = Math.round(spell / STEP_MS);
   const calmSteps = Math.round(calm / STEP_MS);
-  const gated = calm > 0 && calmSteps > 0;
+  const gated = spellSteps > 0 && calmSteps > 0;
   const cycleSteps = spellSteps + calmSteps;
   const cycles = gated ? Math.max(1, Math.round(wanted / (cycleSteps * STEP_MS))) : 1;
   const duration = gated ? cycles * cycleSteps * STEP_MS : wanted;
-  const steps = gated ? cycles * cycleSteps : stepsFor(duration);
-  const duty = spellSteps / cycleSteps;
+  const steps = stepsFor(duration);
+  const spellShare = spellSteps / cycleSteps;
 
   return {
     duration,
     at(t, part) {
-      if (gated && ((t * cycles) % 1) >= duty) return { gain: 1 };
+      if (gated && ((t * cycles) % 1) >= spellShare) return { gain: 1 };
       const step = Math.floor(t * steps) % steps;
       if (hash01(step + part.index * 977.3) > unrest) return { gain: 1 };
       const bite = hash01(step * 3.7 + part.index * 131.1);
@@ -279,8 +281,23 @@ export function flicker(spec: FlickerSpec = {}): EffectPiece {
 }
 ```
 
-Biome rejects the redundant parens in `((t * cycles) % 1) >= duty` — write it as
-`(t * cycles) % 1 >= duty`, which `%` binding tighter than `>=` makes identical.
+Biome rejects the redundant parens in `((t * cycles) % 1) >= spellShare` — write it as
+`(t * cycles) % 1 >= spellShare`, which `%` binding tighter than `>=` makes identical.
+
+**Both scales must be real for the gate to engage, and neither gets invented.** An earlier draft read
+`Math.max(1, Math.round(spell / STEP_MS))`, which conjured a one-step spell for a caller who named
+none: `flicker({ calm: 15000 })` then returned a 15050ms pass — ten times the default — in which 11 of
+12 tubes never dropped once. It also made `spell: NaN` poison every gain for the life of the piece,
+since `Math.max(1, NaN)` is `NaN`. Requiring both step counts above zero closes both: `NaN > 0` is
+false, so a bad value leaves the piece ungated at its asked-for duration rather than silently
+reshaping it.
+
+`steps` needs no branch. On the gated path `duration` is `cycles * cycleSteps * STEP_MS`, so
+`stepsFor(duration)` returns exactly `cycles * cycleSteps` — verified across ~730 spec combinations
+with zero mismatches. One definition of "steps" is one thing a reader need not reconcile.
+
+`spellShare` rather than `duty`: `unrest` is already documented as a share of the pass, and a second
+unexplained share in PWM vocabulary reads as a different quantity than it is.
 
 The step index runs across the whole pass rather than restarting per spell, so each spell samples a
 different stretch of the hash and no two bouts are identical. That is the resonance `roving`'s comment
@@ -372,13 +389,13 @@ fit whole bouts, the way `roving` already rounds its epochs, so the asked-for 60
 Both are the arithmetic behaving as designed and neither is derivable from the field docs as written.
 One line each, on the fields themselves:
 
-- **A `calm` under half a step rounds to nothing.** `calmSteps` is `round(calm / 58.3)`, so a `calm`
-  below ~29ms leaves the piece ungated and flickering for the whole pass. Silent, and the right
-  behaviour — but say that a calm shorter than a step is no calm.
-- **The pass can grow, not only shrink.** `cycles` floors at 1, so `flicker({ spell: 4000, calm:
-  15000 })` at the default 1400ms duration returns a **19016ms** pass — one whole cycle, thirteen
-  times what was asked. `roving`'s epoch fitting has the same shape. The `duration` doc currently
-  implies the pass is what you asked for; it is the nearest whole number of cycles to it.
+- **Both scales must be real.** Either one under half a step rounds to zero and leaves the piece
+  ungated, flickering for the whole pass at its asked-for duration. Symmetric, and the right
+  behaviour — say that a spell or a calm shorter than one step is neither.
+- **The pass becomes the nearest whole number of cycles, up or down.** `flicker({ spell: 4000, calm:
+  15000 })` at the default 1400ms returns **19016.67ms** — one whole cycle, thirteen times what was
+  asked, because `cycles` floors at 1. It shrinks too: 60000 asked returns 57050.
+  **`FlickerSpec.duration` has no docstring at all** — this is the first one, not an amendment.
 
 - [ ] **Step 2: Update the README**
 

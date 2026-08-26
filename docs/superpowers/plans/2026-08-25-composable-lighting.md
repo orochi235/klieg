@@ -476,7 +476,7 @@ that for `tint`; this exposes the resolved value.
 - Modify: `packages/core/src/render/looks.ts`
 - Test: `packages/core/test/render/looks.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/core/test/render/looks.test.ts`:
 
@@ -523,12 +523,12 @@ describe('lightBase', () => {
 
 Add `lightBase` to the file's existing import from `../../src/render/looks.js`.
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/core/test/render/looks.test.ts -t "lightBase"`
 Expected: FAIL — `lightBase` is not exported.
 
-- [ ] **Step 3: Export it**
+- [x] **Step 3: Export it**
 
 In `packages/core/src/render/looks.ts`, below `tintTargetOf`. It takes a `Look` and resolves
 against `DEFAULTS`, mirroring `frameOwnedBase` — which is the function `word.ts` already calls for
@@ -558,12 +558,12 @@ It takes `tint` for the same reason `applyLook` does: `applyLook` writes the tin
 own colour is not on screen anywhere. Reading the untinted one would light a pink letter gold, and
 on a look whose tint target is `emissive` it would reset the tint on every frame.
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 Run: `npx vitest run packages/core/test/render/looks.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/render/looks.ts packages/core/test/render/looks.test.ts

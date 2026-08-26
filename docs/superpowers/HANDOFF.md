@@ -5,19 +5,21 @@ what is worth doing next.
 
 ## In flight
 
-**`composable-lighting`, three tasks of nine done.** Branch cut from `fb058fe`, nothing pushed.
-Both tasks passed both gates — spec compliance clean on the first pass, code quality after one fix
+**`composable-lighting`, four tasks of nine done.** Branch cut from `fb058fe`, nothing pushed.
+Every task passed both gates — spec compliance clean on the first pass, code quality after one fix
 round each. Task 1 (`9425be1`, `e637b33`) added the additive `light` channel on `PartOffset` and
 summed it in the effects compositor. Task 2 (`13d1c62`, `4a61f72`) added the four light sources —
 `fixed`, `fromPointer`, `orbit`, `along` — in the new `effects/lamp.ts`, plus `FrameCtx`. Task 3
 (`36511b9`, `7dadd2d`, `1a59f88`, `822afe4`) added the `lamp()` piece, gave `EffectPiece.at` a
-required `ctx`, and moved `FrameCtx` into `effects/types.ts`. `npm run check` is green at
-**1003 tests**, up from 977 at the branch point.
+required `ctx`, and moved `FrameCtx` into `effects/types.ts`. Task 4 (`61cbfb0`, `0e6f9a0`,
+`ee63418`) exported `lightBase`, the emissive and hue a lamp resolves against. `npm run check` is
+green at **1011 tests**, up from 977 at the branch point.
 
-Pick up at **Task 4** of [the plan](plans/2026-08-25-composable-lighting.md), which is
-self-contained: every signature, test body and command is in it. The execution method was
-subagent-driven — one implementer per task, then a spec-compliance review, then a code-quality
-review, no skipping and no reordering.
+Pick up at **Task 5** of [the plan](plans/2026-08-25-composable-lighting.md), which is
+self-contained: every signature, test body and command is in it. **Read Task 5 from the plan, not
+from the design doc** — Task 4's review round rewrote how it stores the light (`0baa15e`,
+`f53d233`), and the design predates that. The execution method was subagent-driven — one implementer
+per task, then a spec-compliance review, then a code-quality review, no skipping and no reordering.
 
 **Three things Task 1 learned that the plan did not say.** Making `ResolvedOffset.light` a required
 field breaks any literal that constructs one — there was one in `compositor.test.ts` itself, fixed
@@ -28,6 +30,15 @@ And **the channel accumulates sRGB, not linear radiance** — which is self-cons
 `litEmissive` will consume it, but means two overlapping lamps do not sum to the brightness one lamp
 at full strength gives. Task 5 now opens by deciding this, and Task 9 renders the overlap either
 way. The label was corrected; the maths was deliberately left alone.
+
+**What Task 4 learned that the plan did not say: `tint` overwrites the hue a lamp reads.**
+`applyLook` writes a word's `tint` over `params[tintTargetOf(...)]`, so on a tinted letter the
+look's own colour is on screen nowhere — and on a look whose tint target is `emissive`, a per-frame
+`emissive.setHex` resets the tint every frame, lamp or no lamp. `lightBase` therefore takes the
+tint, and Task 5 now stores its result per letter rather than per word, because `tint` accepts a
+per-letter function. Key that array on `partSlot`: `LetterInfo.index` is the letter's place in the
+word and `regroup` renumbers it, so the two agree only while the part pool is the one the
+constructor built.
 
 **Two things Task 2 learned that the plan did not say.** The plan's supplied tests are vacuous on
 the two things worth testing. `along` is only exercised on a 2-point path, where `last === 1` so the

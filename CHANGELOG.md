@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### An anchored word now meets the page's text edge
+
+`framing` said how much of the anchor the type could fill and not where in it the word sat, so an
+anchored masthead floated off the page's text edge — a gap a consumer could only close by padding
+the anchor asymmetrically, in a number measured to one name at one size. `framing.align` places it,
+in reading order: `'start'` is the left edge of an `ltr` box and the right edge of an `rtl` one.
+
+**An element placement now defaults to `'start'`**, because a page has a text edge and meeting it is
+usually the point of anchoring; pass `align: 'center'` for the old behaviour. A fullscreen overlay
+has no edge to meet, and is centred as before.
+
+Three things worth knowing about what it measures. It aligns at the size `width` and `height`
+already chose, against the whole box rather than the share those fractions cut out of it — so
+reaching an edge does not mean widening the framing and resizing the sign to get there. It measures
+the **painted** silhouette rather than the advance span the fit is scored on, bevel included and at
+the depth of the nearest paint, so what meets the edge is the lit edge of the glyph and the
+extrusion never lands outside the box for the canvas to clip. And it survives a regroup, tweening
+with the fit rather than jumping when the letters re-lay.
+
 ## 0.7.0
 
 ### The rendered word now exists in the DOM

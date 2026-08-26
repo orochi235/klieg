@@ -29,6 +29,7 @@ import { type SelectableMode, TextLayer } from './text/dom-layer.js';
 import { type LoadedFont, loadFont } from './text/font.js';
 import { measureBaselineRatio, registerFace } from './text/font-face.js';
 import { DEFAULT_GLYPH_OPTIONS } from './text/glyphs.js';
+import type { Align } from './text/layout.js';
 import type { Arrangement } from './text/placement.js';
 import { projectLetters } from './text/projection.js';
 import { isIdentity, type Transform } from './transform.js';
@@ -156,15 +157,26 @@ export interface KliegOptions {
  * The share of the viewport the type is allowed to fill on each axis, as a fraction of what the
  * camera sees at the word's depth. An omitted axis keeps its default; 1 runs the type to that edge.
  * Height stays the tighter of the two by default because turning the word swings it taller.
+ * The fractions cap the type's size; `align` is what places it in the box.
  */
 export interface Framing {
   /** Defaults to 0.62. */
   width?: number;
   /** Defaults to 0.3. */
   height?: number;
+  /**
+   * Where the word sits in the box, in reading order — `'start'` is the left edge of an `ltr` box
+   * and the right edge of an `rtl` one. An element placement defaults to `'start'`, because the
+   * page it sits in has a text edge and meeting it is usually the point of anchoring; an overlay
+   * has no edge to meet and defaults to `'center'`. The word is placed at whatever size the
+   * fractions above chose, so aligning never resizes it, and what meets the edge is the painted
+   * silhouette — bevel included.
+   */
+  align?: Align;
 }
 
 export type { Placement } from './render/stage.js';
+export type { Align } from './text/layout.js';
 
 /** A built-in name, your own piece, or several layered together — names and pieces may mix. */
 export type EnterSlot = EnterName | MotionPiece | (EnterName | MotionPiece)[];
@@ -308,7 +320,11 @@ export function createKlieg(options: KliegOptions): Klieg {
         text,
         loaded,
         look,
-        stage.viewportBudget(options.framing?.width, options.framing?.height),
+        stage.viewportBudget(
+          options.framing?.width,
+          options.framing?.height,
+          options.framing?.align,
+        ),
         opts.wrap,
         opts.tint,
       );

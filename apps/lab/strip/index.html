@@ -50,12 +50,22 @@
       </div>
 
       <div class="controls">
+        <label for="align">align</label>
+        <select id="align">
+          <option value="">(unset — the anchored default)</option>
+          <option value="start">start</option>
+          <option value="center">center</option>
+          <option value="end">end</option>
+        </select>
         <button id="fire" type="button">fire</button>
         <button id="fireLong" type="button">fire (long text)</button>
         <button id="destroy" type="button">destroy</button>
       </div>
 
       <p id="notes"></p>
+      <p>The dashed box is the anchor's own edge: under <code>align: start</code> the painted
+        edge of the type meets it, and under <code>center</code> it floats inside by whatever the
+        framing fractions left over.</p>
       <p>Drag the dashed box's bottom-right corner to resize the anchor. The type re-fits to the
         strip's box, which no window resize event reports.</p>
       <p>Page content below the strip, to show it is in the flow rather than over it.</p>

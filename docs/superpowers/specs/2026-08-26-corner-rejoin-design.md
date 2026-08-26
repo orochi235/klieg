@@ -56,9 +56,36 @@ positional copy of the arc's first point instead of the point itself loses the l
 stretch silently grows from one corner to most of the run. It cost 109 of 111 returns and read as a
 41% coverage win until the dark tube was counted. `runs.test.ts` pins it for every strategy.
 
-## If the apexes are worth covering
+## The hairpin, prototyped
 
-Nothing here covers a sharp apex, because a tube of radius `r` bending at `2r` cannot enter one. The
-move that would is a **hairpin**: run the tube past the apex and back, the way a bender does, letting
-it stand slightly outside the letter's outline. That is a new corner strategy beside `break`,
-`connect` and `return` — not a `rejoin` — and it is the only thing measured here that would move `W`.
+Nothing above covers a sharp apex, because a tube of radius `r` bending at `2r` cannot enter one.
+The move that would is a **hairpin**: run the tube past the point and turn around outside it, the way
+a bender does, so the apex is covered twice. It is a new corner strategy beside `break`, `connect`
+and `return`, not a `rejoin`. `spikes/hairpin-view.mjs` draws it.
+
+It is the **major** arc of the circle of radius `rhoMin` inscribed in the wedge *opposite* the
+corner — tangent points are the fillet's own setback mirrored through the apex. `biarcBlend` cannot
+build it: a blend takes the short way between two directed points, which is the fillet's side of the
+apex, and at a sharp corner that is tighter than the floor. It refuses precisely the corners a
+hairpin is for.
+
+Where it lands it draws the right thing — a U dipping into the point of a `W` stroke or a `V`.
+
+**What stops it is the footprint.** The arc stands
+`rhoMin / cos(turn/2) + rhoMin` proud of the letter, so it grows without bound as the corner
+sharpens — worst exactly where it is most needed. Measured on `tubing`:
+
+| turn | 71° | 91° | 102° | 116° | 135° |
+|---|---|---|---|---|---|
+| stands proud | 0.12 em | 0.12 em | 0.29 em | 0.24 em | 0.27 em |
+
+A quarter of an em of tube bulging out of a 1 em letter is a different letterform, not a covered
+apex. A cap on the excursion refuses the hairpin at `W`'s notches, which is the case it exists for.
+
+So it needs either a construction whose footprint does not blow up — two arcs of different radii, or
+an asymmetric turnaround that leans along one leg rather than straight out the bisector — or the
+judgement that a bulge at the sharpest corners is what neon looks like. That is an aesthetic call
+and it has not been made.
+
+The gate is also crude. `SHARP` is a raw turn threshold; the honest trigger is how much apex the
+fillet would cut, which is `2 * rhoMin * tan(turn/2) - rhoMin * turn`.

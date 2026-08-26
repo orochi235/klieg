@@ -24,7 +24,8 @@ why `gain` is not the channel, which is the single most important thing to not r
 | `packages/core/src/effects/compositor.ts` | Sums the light channel. Stays pure — no three import. |
 | `packages/core/src/render/looks.ts` | Exports `lightBase(look)` — the emissive a lamp adds onto, and the hue it multiplies. |
 | `packages/core/src/render/word.ts` | Resolves the light channel onto materials; `partExtent()`; threads `ctx`. |
-| `packages/core/src/index.ts` | `LightingSlot`, the ctx build from the canvas rect, and the render loop. |
+| `packages/core/src/index.ts` | The render loop and the `lighting` option. `LightingSlot` and `resolveLighting` live in `render/lighting.ts` instead, so the resolver stays testable without going public. |
+| `packages/core/src/pointer.ts` | **New in Task 7.** `pointerFrame(box, client, extent)` — the canvas rect and the word extent to a `FrameCtx` pointer pair, pure and unit-tested. Not in the barrel. |
 | `packages/core/src/motion/types.ts`, `motion/compositor.ts` | `envRotation` and `slotDrivesEnv` are removed. |
 
 ---

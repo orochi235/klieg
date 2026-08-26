@@ -73,7 +73,9 @@ export type LookParams = {
  * touches: body, lit decoration and dark decoration each resolve their own base and each get
  * their own per-frame write. A look still declares the base and `resolveParams` still clamps it;
  * what must not happen is `applyLook` writing a value that the next frame overwrites, which is
- * two writers for one property.
+ * two writers for one property. `emissive` is the deliberate exception: `Word` rewrites it per
+ * frame on the body alone, through a `lightBase` the same `resolveParams` and tint resolved, so
+ * the two writers cannot disagree.
  */
 const FRAME_OWNED = ['opacity', 'emissiveIntensity'] as const;
 type FrameOwned = (typeof FRAME_OWNED)[number];

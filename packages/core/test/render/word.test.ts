@@ -12,6 +12,7 @@ import type { GradientSpec } from '../../src/render/tube/gradient.js';
 import { Word } from '../../src/render/word.js';
 import type { LoadedFont } from '../../src/text/font.js';
 import type { Budget } from '../../src/text/layout.js';
+import { LINE_HEIGHT_EM } from '../../src/text/layout.js';
 import { fromEuler } from '../../src/transform.js';
 import { NO_CTX } from '../effects/ctx.js';
 
@@ -1667,16 +1668,31 @@ describe('effects', () => {
     at: () => ({ light: { color: 0xffffff, amount: 0.5 } }),
   };
 
+  function extentOf(text: string): { minX: number; maxX: number; minY: number; maxY: number } {
+    const extent = new Word(text, stubFont(), 'gold', ROOMY).partExtent();
+    if (!extent) throw new Error(`'${text}' has no parts`);
+    return extent;
+  }
+
   // Origins alone give a single-line sign a box of zero height: placement puts every letter on a
   // line at the same baseline, and a pointer mapped into that box could never move vertically.
-  it('measures the part extent by the letters ink rather than by their origins', () => {
-    const word = new Word('AA', stubFont(), 'gold', ROOMY);
-    const extent = word.partExtent();
-    if (!extent) throw new Error('the word has no parts');
+  it('measures the part extent by a glyph ink rather than by its origin or its advance', () => {
+    const one = extentOf('A');
 
-    // The stub glyph rises 0.7 em; the extrusion's bevel makes the real box a little taller.
-    expect(extent.maxY - extent.minY).toBeGreaterThanOrEqual(0.7);
-    expect(extent.maxX - extent.minX).toBeGreaterThan(STEP);
+    expect(one.maxY - one.minY).toBeGreaterThan(0);
+    expect(one.maxY - one.minY).toBeLessThan(LINE_HEIGHT_EM);
+    expect(one.maxX - one.minX).toBeLessThan(STEP);
+  });
+
+  // Relating the shapes pins the baseline and the advance without pinning the extrusion's bevel.
+  it('grows the part extent by an advance for a letter and a line height for a line', () => {
+    const one = extentOf('A');
+    const row = extentOf('AA');
+    const stack = extentOf('A\nA');
+
+    expect(row.maxX - row.minX).toBeCloseTo(one.maxX - one.minX + STEP, 6);
+    expect(row.maxY - row.minY).toBeCloseTo(one.maxY - one.minY, 6);
+    expect(stack.maxY - stack.minY).toBeCloseTo(one.maxY - one.minY + LINE_HEIGHT_EM, 6);
   });
 
   it('lights every body part off its own letter, blanks in the word included', () => {

@@ -792,7 +792,7 @@ git commit -m "resolve lamp light onto a part's material"
 - Modify: `packages/core/src/render/lighting.ts`
 - Test: `packages/core/test/render/lighting.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/core/test/render/lighting.test.ts`:
 
@@ -849,12 +849,12 @@ describe('track', () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/core/test/render/lighting.test.ts`
 Expected: FAIL — `sweep`, `track` and `mergeEnv` are not exported.
 
-- [ ] **Step 3: Rewrite `lighting.ts`**
+- [x] **Step 3: Rewrite `lighting.ts`**
 
 Keep `LightingName`, `LIGHTING` and `envRotationAt` exactly as they are — the existing tests cover
 them and the names stay as presets. Add:
@@ -948,12 +948,12 @@ comment arguing for it. An annotation erases each factory's own spec parameter, 
 ease in a closure rather than recomputing it, one `NaN` frame means the piece never returns a number
 again for its whole life. Zero reads as "snap", which is the only sensible meaning.
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 Run: `npx vitest run packages/core/test/render/lighting.test.ts`
 Expected: PASS — the new cases plus every existing `envRotationAt` and `PointerLight` case.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/render/lighting.ts packages/core/test/render/lighting.test.ts

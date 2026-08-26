@@ -5,7 +5,7 @@ what is worth doing next.
 
 ## In flight
 
-**`composable-lighting`, five tasks of nine done.** Branch cut from `fb058fe`, nothing pushed.
+**`composable-lighting`, six tasks of nine done.** Branch cut from `fb058fe`, nothing pushed.
 Every task passed both gates — spec compliance clean on the first pass, code quality after one fix
 round each. Task 1 (`9425be1`, `e637b33`) added the additive `light` channel on `PartOffset` and
 summed it in the effects compositor. Task 2 (`13d1c62`, `4a61f72`) added the four light sources —
@@ -14,10 +14,11 @@ summed it in the effects compositor. Task 2 (`13d1c62`, `4a61f72`) added the fou
 required `ctx`, and moved `FrameCtx` into `effects/types.ts`. Task 4 (`61cbfb0`, `0e6f9a0`,
 `ee63418`) exported `lightBase`, the emissive and hue a lamp resolves against. Task 5 (`a39aaed`,
 `03f59d4`, `789d83b`) landed `litEmissive` and wrote the light onto both a body's emissive and a
-run's colour buffer, threaded the `ctx`, and added `partExtent()`. `npm run check` is green at
-**1024 tests**, up from 977 at the branch point.
+run's colour buffer, threaded the `ctx`, and added `partExtent()`. Task 6 (`b883659`, `295bce7`,
+`f3d4f5e`) added `EnvPiece`, `mergeEnv` and the `sweep`/`still`/`track` factories. `npm run check`
+is green at **1047 tests**, up from 977 at the branch point.
 
-Pick up at **Task 6** of [the plan](plans/2026-08-25-composable-lighting.md), which is
+Pick up at **Task 7** of [the plan](plans/2026-08-25-composable-lighting.md), which is
 self-contained: every signature, test body and command is in it. **Read the plan, not the design
 doc** — review rounds have amended Tasks 5, 7 and 9 (`0baa15e`, `f53d233`, `b5f6a49`, `874a9e7`,
 `fec9a2d`), and the design predates all of it. The execution method was subagent-driven — one implementer
@@ -57,6 +58,19 @@ leaves the part pool alone, so after one, a pointer at fraction *f* lights whate
 original layout. Recomputing `PartInfo.x`/`y` per frame is the real fix and it is not Task 7's to
 make — `stagger`'s positional ordering reads the same fields. Task 7 guards the degenerate box;
 Task 9 should sweep a regrouped sign and record what it looks like.
+
+**What Task 6 learned: a piece that accumulates state can be poisoned once and never recover.**
+`track` eases toward the pointer by mutating closed-over `yaw`/`pitch`, so any frame that produces a
+`NaN` leaves it returning `NaN` for the rest of its life — straight into `environmentRotation`. A
+caller-supplied `followMs` of 0 does it on a `dt: 0` frame (`exp(-0/0)`), `NaN` does it always, and a
+negative one diverges past 4000 radians in five frames. Guarded with `followMs > 0 ? … : 1`, zero
+reading as "snap". **The test that catches this has to assert the value, not that the value is
+finite** — sanitizing the return while leaving the accumulator poisoned passes a finiteness check
+forever.
+
+**`ENV_PIECES` uses `satisfies`, not an annotation**, matching `EFFECTS` in `effects/pieces.ts`,
+which carries the comment arguing for it. An annotation erases each factory's own spec parameter, so
+`ENV_PIECES.sweep({ periodMs: 1000 })` stops compiling while still working at runtime.
 
 **Two things Task 2 learned that the plan did not say.** The plan's supplied tests are vacuous on
 the two things worth testing. `along` is only exercised on a 2-point path, where `last === 1` so the

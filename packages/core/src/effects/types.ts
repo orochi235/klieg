@@ -69,12 +69,15 @@ export interface ResolvedOffset {
 
 /** What every lighting piece and light source reads for one frame. */
 export interface FrameCtx {
-  /** -1..1 over the canvas box, or null until the pointer has been inside it. */
+  /** -1..1 over the canvas box, +y down, or null until the pointer has been inside it. */
   pointer: { x: number; y: number } | null;
-  /** The same pointer in the word's layout space — the em, block-relative space `PartInfo.x/y`
-   * uses. Null whenever `pointer` is. */
+  /** The same pointer stretched onto the word's layout space — the em, block-relative space
+   * `PartInfo.x/y` uses, +y up. The canvas's whole -1..1 covers the word's extent per axis
+   * rather than projecting onto it, so on a sign that does not fill the canvas the point
+   * travels further than the cursor. Null whenever `pointer` is. */
   pointerInWord: { x: number; y: number } | null;
-  /** Milliseconds since the previous frame. */
+  /** Milliseconds since the previous frame, and `Infinity` under reduced motion. Read it to snap
+   * to a target, never to integrate: one infinite frame leaves an accumulator `NaN` for good. */
   dt: number;
 }
 

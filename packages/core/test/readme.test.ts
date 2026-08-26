@@ -19,6 +19,10 @@ describe('documented surface', () => {
       'EXIT_NAMES',
       'LOOK_NAMES',
       'POLICY_NAMES',
+      'sweep',
+      'still',
+      'track',
+      'lamp',
       'linear',
       'easeOutCubic',
       'easeInCubic',
@@ -39,9 +43,5 @@ describe('documented surface', () => {
     expect(swoop.duration).toBe(800);
     expect(swoop.offset(0, { index: 0, count: 4 }).opacity).toBeCloseTo(0, 6);
     expect(swoop.offset(1, { index: 0, count: 4 }).opacity).toBeCloseTo(1, 6);
-  });
-
-  it('builds a cycle that rakes the environment, as sweep does', () => {
-    expect(bk.cycle(3400, { envRotation: true }).envRotation).toBe(true);
   });
 });

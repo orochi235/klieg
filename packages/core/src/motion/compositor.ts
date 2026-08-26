@@ -49,10 +49,6 @@ const layers = (slot: Slot): MotionPiece[] => (Array.isArray(slot) ? slot : [slo
 export const slotDuration = (slot: Slot): number =>
   Math.max(0, ...layers(slot).map((p) => p.duration));
 
-/** A layered slot rakes the highlight if any member does. */
-export const slotDrivesEnv = (slot: Slot): boolean =>
-  layers(slot).some((p) => p.envRotation === true);
-
 const SAMPLE_T = [0, 0.17, 0.33, 0.5, 0.67, 0.83, 1];
 const SAMPLE_LETTERS = 8;
 

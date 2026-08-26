@@ -104,6 +104,15 @@ slots.
 | `static` | holds the environment still |
 | `pointer` | aims the highlight wherever the cursor or finger is; `static` until one arrives |
 
+The slot takes a piece instead of a name, or an array mixing both — `sweep({ periodMs })`,
+`still()` and `track({ yawRange, pitchRange, followMs })` build one. Layering here is not
+`active`'s: each piece keeps its own `duration` rather than sharing the slot's, so
+`['sweep', sweep({ periodMs: 1000 })]` runs two periods at once, with nothing holding a phase
+between them.
+
+All of these turn the one shared environment. For light on the letters near a position instead —
+a pool under the cursor — put a `lamp` in `effects`.
+
 Each list is also exported as a runtime array — `ENTER_NAMES`, `ACTIVE_NAMES`, `EXIT_NAMES`,
 `LOOK_NAMES`, `LIGHTING_NAMES`, `POLICY_NAMES` — for building a picker.
 
@@ -327,8 +336,8 @@ controls per-letter delay: `spread` fixes the total ramp, `each` fixes per-lette
 measuring it radially over a multiline block.
 
 `cycle(duration, spec)` builds a looping idle from a per-channel `amplitude`, an optional
-`harmonic`, and a `phase` function. `envRotation: true` rakes the environment highlight instead
-of moving the letters, and overrides the `lighting` option for as long as that piece is active.
+`harmonic`, and a `phase` function. Motion moves the letters; to rake the environment highlight
+instead, declare an env piece in [`lighting`](#lighting).
 
 `spring({ stiffness, damping, mass })` returns a curve, not an animation — it is the closed-form
 solution, so it stays a pure `(t) => number` and can go anywhere an easing goes.
@@ -363,7 +372,7 @@ const bounce = transition(700, { from: { scale: 0 }, ease: easeElasticOut });
 | `active` | `'none'` | what it does while it holds |
 | `exit` | `'fade'` | how it leaves |
 | `look` | `'gold'` | the material — a name, or a spec of your own |
-| `lighting` | `'sweep'` | how the environment lights it |
+| `lighting` | `'sweep'` | how the environment lights it — a name, an env piece, or an array of them; a `lamp` effect lights the letters instead of the scene |
 | `tint` | none | recolors the look, as `0xff2d6f`, or a rule consulted per letter |
 | `hold` | `1200` | milliseconds in the active phase, or `'click'` to hold until dismissed; `'click'` is refused under an element `placement` |
 | `stages` | none | stages played after the enter, each regrouping what survives it |

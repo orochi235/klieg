@@ -12,7 +12,7 @@ import { pointerFrame } from './pointer.js';
 import { EffectQueue, type QueuePolicy } from './queue.js';
 import { BloomPath } from './render/bloom.js';
 import {
-  LIGHTING,
+  ENV_PIECES,
   type LightingName,
   type LightingSlot,
   mergeEnv,
@@ -45,12 +45,25 @@ export {
   type SpringParams,
   spring,
 } from './easing.js';
+export {
+  along,
+  fixed,
+  fromPointer,
+  type LampSpec,
+  type LightPose,
+  type LightSource,
+  lamp,
+  type OrbitSpec,
+  orbit,
+} from './effects/lamp.js';
 export { type ChaseSpec, EFFECTS, type FlickerSpec, type HueSpec } from './effects/pieces.js';
 export { type RovingSpec, roving } from './effects/roving.js';
 export type {
   EffectName,
   EffectPiece,
   EffectSpec,
+  FrameCtx,
+  LightOffset,
   PartInfo,
   PartKind,
   PartOffset,
@@ -68,6 +81,17 @@ export type { Pose, PoseOffset, Vec3 } from './pose.js';
 export { POLICY_NAMES } from './queue.js';
 export type { DecorationSpec, MaterialSpec } from './render/decoration.js';
 export type { FlakeSpec } from './render/flake.js';
+export {
+  ENV_PIECES,
+  type EnvOffset,
+  type EnvPiece,
+  mergeEnv,
+  type ResolvedEnv,
+  still,
+  sweep,
+  type TrackSpec,
+  track,
+} from './render/lighting.js';
 export type { LookParams, TintTarget } from './render/looks.js';
 /** The spec behind a built-in name, for building a variation on one. */
 export { specOf } from './render/looks.js';
@@ -102,7 +126,7 @@ export const ENTER_NAMES: readonly EnterName[] = Object.keys(ENTER) as EnterName
 export const ACTIVE_NAMES: readonly ActiveName[] = Object.keys(ACTIVE) as ActiveName[];
 export const EXIT_NAMES: readonly ExitName[] = Object.keys(EXIT) as ExitName[];
 export const LOOK_NAMES: readonly LookName[] = Object.keys(LOOKS) as LookName[];
-export const LIGHTING_NAMES: readonly LightingName[] = Object.keys(LIGHTING) as LightingName[];
+export const LIGHTING_NAMES: readonly LightingName[] = Object.keys(ENV_PIECES) as LightingName[];
 export const EFFECT_NAMES: readonly EffectName[] = Object.keys(EFFECTS) as EffectName[];
 
 /** An explicit `bloom` always wins; a look may only ask when the caller said nothing. */
@@ -183,7 +207,10 @@ export interface FireOptions {
    */
   effects?: EffectSpec[];
   /** How the environment lights the type. `sweep` rakes the highlight, `static` holds it still.
-   * Layers compose: `['sweep', track({ pitchRange: 0.1 })]`. */
+   * Layers compose: `['sweep', track({ pitchRange: 0.1 })]`, each on its own period.
+   *
+   * A piece you construct carries its own state, so give each fire its own `track()` rather than
+   * sharing one; the name `'pointer'` builds a fresh piece per run and is safe to reuse. */
   lighting?: LightingSlot;
   /**
    * Recolors the look, as `0xff2d6f`. A function is consulted per letter and may return

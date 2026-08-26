@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- `lighting` accepts a piece or an array of them, not only a name. `sweep({ periodMs })`,
+  `still()` and `track({ yawRange, pitchRange, followMs })` expose what were module constants.
+- `lamp()`, an effect piece that puts light on the parts near a position, with `fixed`, `orbit`,
+  `along` and `fromPointer` as sources.
+- `PartOffset.light`, an additive channel carrying a lamp's colour and amount.
+
+### Fixed
+- A tracked pointer normalized against the viewport rather than the canvas box, so an anchored
+  sign in a small box only ever saw a slice of the yaw range.
+
+### Removed
+- `MotionPiece.envRotation` and `CycleSpec.envRotation`. Declare an env piece in `lighting`
+  instead.
+
 ## 0.7.0
 
 ### The rendered word now exists in the DOM

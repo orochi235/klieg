@@ -645,18 +645,18 @@ const clamp255 = (n: number): number => Math.min(255, Math.max(0, Math.round(n))
  * material's identity — a white lamp on gold reflects gold, and adding white reflects cream.
  * @internal exported for test; not part of the public surface.
  */
-export function litEmissive(base: number, hue: number, light: readonly number[]): number {
-  if (!light[0] && !light[1] && !light[2]) return base;
-  const out: number[] = [];
-  for (let i = 0; i < 3; i++) {
-    const shift = 16 - i * 8;
-    const b = (base >> shift) & 0xff;
-    const h = ((hue >> shift) & 0xff) / 255;
-    out.push(clamp255(b + (light[i] as number) * h * 255));
-  }
-  return ((out[0] as number) << 16) | ((out[1] as number) << 8) | (out[2] as number);
+export function litEmissive(base: number, hue: number, light: Vec3): number {
+  const [lr, lg, lb] = light;
+  if (!lr && !lg && !lb) return base;
+  // A non-finite channel contributes nothing rather than blacking the channel out: clamp255(NaN)
+  // is NaN, and NaN << 16 is 0, so the base would vanish on one channel and survive on the others.
+  const ch = (shift: number, l: number): number =>
+    clamp255(((base >> shift) & 0xff) + (Number.isFinite(l) ? l : 0) * ((hue >> shift) & 0xff));
+  return (ch(16, lr) << 16) | (ch(8, lg) << 8) | ch(0, lb);
 }
 ```
+
+The hue byte is not divided by 255 and re-multiplied — `light` is already a 0..n multiplier.
 
 - [ ] **Step 4: Run the test**
 
@@ -675,8 +675,14 @@ empty-glyph path that pushes `null` to the others:
 ```ts
   private readonly bodyLights: (LightBase | null)[] = [];
 ```
+Hoist the tint expression rather than writing it twice — `applyLook` and `lightBase` resolving
+against different hues is silent, and is the defect Task 4 exists to prevent:
+
 ```ts
-    this.bodyLights.push(lightBase(look, tintMaterialOf(spec) === 'body' ? hue : undefined));
+    const bodyTint = tintMaterialOf(spec) === 'body' ? hue : undefined;
+```
+```ts
+    this.bodyLights.push(lightBase(look, bodyTint));
 ```
 
 Clear it in `dispose` where `bodyMaterials.length = 0`.
@@ -693,6 +699,16 @@ the letter's place in the word, which `regroup` renumbers, while `bodyLights` is
       setEmissiveIntensity(material, this.bodyBase.emissiveIntensity * out.gain);
       return;
     }
+```
+
+`apply`'s per-letter loop already resets `emissiveIntensity` every frame for every letter, retired
+ones included, because `retiredPart` skips `writePart` for a letter a regroup dropped. `emissive` now
+needs the same reset beside it — otherwise a letter that was lit when it was dropped keeps that lamp
+frozen on it for the whole exit:
+
+```ts
+        const light = this.bodyLights[i];
+        if (light) material.emissive.setHex(light.emissive);
 ```
 
 For a `run` part, the hue is the run's own colour, and the light adds into the vertex colour
@@ -715,8 +731,24 @@ Change `apply(driver, elapsed)` to `apply(driver, elapsed, ctx: FrameCtx)`, pass
 `fromPointer` needs the word's real extent to map into, and the design records that it is not
 centred on zero — `KLIEG` gives `x ∈ [-1.72, 0.89]`.
 
+**It must be the box of the letters' ink, not of their origins.** `part.x`/`part.y` are the glyph
+origin and the baseline, and `placement.ts` sets `y = -line * LINE_HEIGHT_EM` — constant per line.
+So a box built from `part.x`/`part.y` alone has **zero height on any single-line sign**, and Task 7's
+mapping would hand every pointer position the same `y`, costing `fromPointer` its vertical tracking
+entirely. On x it is short by the last glyph's advance.
+
+Fold each glyph's own bounds in, the way `fitOf` already does with `y + geoMinY[i]`. `geoMinY`/
+`geoMaxY` are per-slot on `Word`; store `geoMinX`/`geoMaxX` beside them from the same
+`geo.boundingBox`, and offset them by the part's own `x`/`y` so the box stays in the frozen pool's
+space. Glyph bounds are a property of the glyph, not of the layout, so they are constant across a
+regroup and mixing them with a frozen `part.x` is consistent.
+
+Test it on a single-line word: the extent must have non-zero height, and must be wider than the
+span of the origins alone.
+
 ```ts
-  /** The bounding box of the part pool in layout space, or null before any part exists. */
+  /** The ink bounding box of the part pool in layout space, or null before any part exists.
+   * Describes the pool as built: `regroup` re-lays the letters and leaves the pool alone. */
   partExtent(): { minX: number; maxX: number; minY: number; maxY: number } | null {
     if (this.parts.length === 0) return null;
     let minX = Number.POSITIVE_INFINITY;
@@ -964,7 +996,7 @@ and per frame, before `word.apply`:
           y: ((pointerClient.y - box.top) / box.height) * 2 - 1,
         };
         const extent = word.partExtent();
-        if (extent) {
+        if (extent && extent.maxX > extent.minX && extent.maxY > extent.minY) {
           // The word is not centred on zero, so map into its real extent rather than scaling.
           pointerInWord = {
             x: extent.minX + ((pointer.x + 1) / 2) * (extent.maxX - extent.minX),
@@ -974,6 +1006,16 @@ and per frame, before `word.apply`:
       }
       const ctx: FrameCtx = { pointer, pointerInWord, dt: still ? Number.POSITIVE_INFINITY : dt };
 ```
+
+A degenerate extent leaves `pointerInWord` null, which `fromPointer` already reads as rest — better
+than mapping every pointer position onto one constant and calling it tracking.
+
+**The extent describes the pool as it was built.** `regroup` re-lays the letters but deliberately
+leaves the part pool alone, so after one, a pointer at fraction *f* across the canvas lights whatever
+was at fraction *f* in the original layout. Recomputing `PartInfo.x`/`y` per frame is the real fix
+and it is not this task's to make — `stagger`'s positional ordering reads the same fields and would
+change behavior on every regroup. Leave it; Task 9 should sweep the pointer across a regrouped sign
+and record what it looks like.
 
 - [ ] **Step 4: Drive the environment from the merged pieces**
 
@@ -1096,6 +1138,14 @@ look, which is the exact failure this plan exists to fix.
 
 `sequin` will not pass and is out of scope — it has zero `run` parts and a near-black body. See
 the findings note.
+
+Three things the pixels are the only judge of, beyond the no-op check above. A lamp on a **run**
+passes the run's own colour as the hue and not `out.color`, so a part recoloured by `hue()` reflects
+the colour it started with — deliberate, and surprising enough to look at. On a **gradient** look the
+lamp multiplies against one blueprint stop while the pixel colour comes from the ramp in the shader,
+so lit and unlit stops disagree; this is pre-existing for `gain` and `color` and the lamp inherits
+it. And a lamp targeting **every** run rewrites and re-uploads each run's vertex buffer every frame —
+already true of `gain` and `chase`, but a lamp is the first effect that invites `by: 'all'`.
 
 - [ ] **Step 3: Render the overlap**
 

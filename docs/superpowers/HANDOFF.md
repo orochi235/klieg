@@ -38,8 +38,11 @@ duration equals the inner pass for any inner over ~17s, so one afflicted tube re
 time means nothing in the sign flickers for 15 of every 19 seconds. Legitimate, but not what
 "one bad tube that jumps every few seconds" prepares a reader for.
 
-## Superseded — see above
+## Landed since this section was written
 
+**`selectable-text` shipped in 0.7.0.** The text below described it as complete and unmerged, and it
+is neither now — it is on `main` and released. Kept only for the three things it learned that its
+design doc does not carry; treat every claim about its *status* as historical.
 
 **`selectable-text`, complete and unmerged.** 14 commits off `main`, nothing uncommitted, not
 pushed. `npm run check` is green at 977 unit tests and `npm run test:visual` at 33. It implements

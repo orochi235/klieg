@@ -602,7 +602,7 @@ describe('lightBase', () => {
   });
 
   it('reads the tint the material was actually built with', () => {
-    expect(lightBase('gold', 0xff2d6f).hue).toBe(0xff2d6f);
+    expect(lightBase('gold', 0xff2d6f)).toEqual({ emissive: 0x000000, hue: 0xff2d6f });
   });
 
   // A tinted neon's emissive IS the tint; reading the look's own would reset it every frame.

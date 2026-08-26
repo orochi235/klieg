@@ -180,7 +180,27 @@ test('removing a sign takes its canvas and its pointer listener with it', async 
   await expect(page.locator('canvas')).toHaveCount(2);
 });
 
-test('three elements install one stylesheet between them', async ({ page }) => {
+test('re-firing swaps a live context for one more, never stacking them', async ({ page }) => {
+  const failures: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.text().includes('failed to light')) failures.push(msg.text());
+  });
+
   await lightAll(page);
-  await expect(page.locator('head style[data-klieg-sign]')).toHaveCount(1);
+  await page.evaluate(() =>
+    document.querySelector('#plain canvas')?.setAttribute('data-first', ''),
+  );
+
+  await page.evaluate(() => document.getElementById('plain')?.setAttribute('look', 'tubing'));
+
+  // The one path no unit test reaches: the element mocks `sign()` and `sign()` mocks core, so
+  // tearing a real WebGL context down and building a second is proven here or nowhere.
+  await expect(page.locator('#plain')).toHaveAttribute('lit', '', { timeout: LIGHTING_MS });
+  await expect(page.locator('#plain canvas[data-first]')).toHaveCount(0);
+  await expect(page.locator('#plain canvas')).toHaveCount(1);
+
+  await expect
+    .poll(async () => (await meanColor(page, 'plain')).lit, { timeout: LIGHTING_MS })
+    .toBeGreaterThan(0);
+  expect(failures).toEqual([]);
 });

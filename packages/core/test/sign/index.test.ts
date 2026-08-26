@@ -24,9 +24,9 @@ let anchor: HTMLElement;
 let settle: () => void;
 
 /** The options the last `createKlieg` was built with. */
-const built = (): KliegOptions => createKlieg.mock.calls[0]?.[0] as KliegOptions;
+const built = (): KliegOptions => createKlieg.mock.calls.at(-1)?.[0] as KliegOptions;
 /** The options the last `fire` was called with. */
-const fired = (): FireOptions => fire.mock.calls[0]?.[1] as FireOptions;
+const fired = (): FireOptions => fire.mock.calls.at(-1)?.[1] as FireOptions;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -87,6 +87,18 @@ describe('sign', () => {
     expect(fire).toHaveBeenCalledWith('Something Else', expect.anything());
   });
 
+  it('adds no DOM copy of a word the anchor already carries', () => {
+    sign(anchor, { font: '/f.ttf' });
+
+    expect(fired().selectable).toBe('none');
+  });
+
+  it('adds a hidden DOM copy of a word nothing else carries', () => {
+    sign(anchor, { font: '/f.ttf', text: 'Something Else' });
+
+    expect(fired().selectable).toBe('hidden');
+  });
+
   it('resolves a CSS tint against the anchor', () => {
     sign(anchor, { font: '/f.ttf', tint: '#22d3ee' });
 
@@ -125,6 +137,75 @@ describe('sign', () => {
     settle();
     await Promise.resolve();
     expect(onLit).toHaveBeenLastCalledWith(false);
+    expect(it_.lit).toBe(false);
+  });
+
+  it('takes the sign down and back up across an update, and ignores the superseded fire', async () => {
+    const onLit = vi.fn();
+    const it_ = sign(anchor, { font: '/f.ttf', onLit });
+    const superseded = settle;
+
+    it_.update({ text: 'A New Name' });
+
+    expect(destroy).toHaveBeenCalledOnce();
+    expect(fire).toHaveBeenLastCalledWith('A New Name', expect.anything());
+    // Down while the replacement blocks the main thread building its word, then up again.
+    expect(onLit.mock.calls).toEqual([[true], [false], [true]]);
+
+    superseded();
+    await Promise.resolve();
+    expect(it_.lit).toBe(true);
+    expect(onLit).toHaveBeenLastCalledWith(true);
+  });
+
+  it('reports unlit once when destroyed, not again when its fire settles', async () => {
+    const onLit = vi.fn();
+    const it_ = sign(anchor, { font: '/f.ttf', onLit });
+
+    it_.destroy();
+    expect(destroy).toHaveBeenCalledOnce();
+    expect(it_.lit).toBe(false);
+
+    settle();
+    await Promise.resolve();
+    expect(onLit.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it('warns rather than crashing the page when the fire rejects', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const failure = new Error('no such font');
+    fire.mockRejectedValueOnce(failure);
+    const onLit = vi.fn();
+
+    const it_ = sign(anchor, { font: '/missing.ttf', onLit });
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+
+    // Nothing holds the promise `sign()` made, so an escaped rejection lands in the host page.
+    expect(warn).toHaveBeenCalledWith('klieg: a sign failed to light', failure);
+    expect(onLit.mock.calls).toEqual([[true], [false]]);
+    expect(it_.lit).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('owes the replaced callback its own unlit, not the one that replaced it', () => {
+    const before = vi.fn();
+    const after = vi.fn();
+    const it_ = sign(anchor, { font: '/f.ttf', onLit: before });
+
+    it_.update({ onLit: after });
+
+    expect(before.mock.calls).toEqual([[true], [false]]);
+    expect(after.mock.calls).toEqual([[true]]);
+  });
+
+  it('stays destroyed when updated', () => {
+    const it_ = sign(anchor, { font: '/f.ttf' });
+    it_.destroy();
+    createKlieg.mockClear();
+
+    it_.update({ text: 'A New Name' });
+
+    expect(createKlieg).not.toHaveBeenCalled();
     expect(it_.lit).toBe(false);
   });
 });

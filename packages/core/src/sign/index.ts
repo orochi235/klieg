@@ -34,7 +34,12 @@ export interface SignOptions {
 
 export interface Sign {
   readonly lit: boolean;
-  /** Re-fires. A sign's settings change rarely enough that diffing them is not worth the branch. */
+  /**
+   * Re-fires. A sign's settings change rarely enough that diffing them is not worth the branch,
+   * though only `font` and `framing` are constructor-level: everything else could in principle
+   * re-fire on the existing instance. As it stands each update builds a WebGL context and
+   * refetches the font, so driving it rapidly stacks contexts against the browser's cap.
+   */
   update(patch: Partial<SignOptions>): void;
   destroy(): void;
 }
@@ -43,8 +48,17 @@ export function sign(anchor: HTMLElement, options: SignOptions): Sign {
   let opts = options;
   let instance: Klieg | null = null;
   let lit = false;
+  let run = 0;
+  let destroyed = false;
+
+  function setLit(next: boolean): void {
+    if (lit === next) return;
+    lit = next;
+    opts.onLit?.(next);
+  }
 
   function start(): void {
+    if (destroyed) return;
     const text = opts.text ?? anchor.textContent?.trim() ?? '';
     if (!text) return;
 
@@ -62,8 +76,8 @@ export function sign(anchor: HTMLElement, options: SignOptions): Sign {
     const still = prefersReducedMotion();
     const tint = resolveTint(anchor, opts.tint);
 
-    lit = true;
-    opts.onLit?.(true);
+    const token = ++run;
+    setLit(true);
     void klieg
       .fire(text, {
         // An anchored canvas crops to its box and every enter piece travels outside it.
@@ -80,15 +94,22 @@ export function sign(anchor: HTMLElement, options: SignOptions): Sign {
         ...(opts.bloom !== undefined ? { bloom: opts.bloom } : {}),
         ...opts.fire,
       })
+      // A fire the next `start()` already replaced settles late and no longer speaks for the sign.
       .finally(() => {
-        lit = false;
-        opts.onLit?.(false);
+        if (token === run) setLit(false);
+      })
+      // `sign()` returns no promise, so this is the only place a failed font fetch or a lost
+      // context can be handled — unhandled, it reaches the host page as an app crash.
+      .catch((err) => {
+        console.warn('klieg: a sign failed to light', err);
       });
   }
 
   function stop(): void {
+    run++;
     instance?.destroy();
     instance = null;
+    setLit(false);
   }
 
   start();
@@ -98,10 +119,14 @@ export function sign(anchor: HTMLElement, options: SignOptions): Sign {
       return lit;
     },
     update(patch) {
-      opts = { ...opts, ...patch };
+      // Before the swap: the callback that saw the sign light is the one owed its `false`.
       stop();
+      opts = { ...opts, ...patch };
       start();
     },
-    destroy: stop,
+    destroy() {
+      destroyed = true;
+      stop();
+    },
   };
 }

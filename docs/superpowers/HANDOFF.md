@@ -5,6 +5,43 @@ what is worth doing next.
 
 ## In flight
 
+**`sign-wrapper`, seven of twelve tasks done, unpushed.** Worktree `~/src/klieg-worktrees/sign-wrapper`,
+cut from `origin/main` (which carries `framing.align`). It builds two entry points over `createKlieg`
+for a **sign** — type standing in for a page heading, lit once, held until removed.
+
+The [design](specs/2026-08-26-sign-wrapper-design.md) and [plan](plans/2026-08-26-sign-wrapper.md)
+are current and carry every decision. Read them rather than this. What follows is only what they
+cannot say.
+
+**Done:** `hold: 'forever'` in core; jsdom per-file; `resolveTint`; `sign()`; `<klieg-sign>` with its
+attribute layer. **Left:** the subpath exports and `sideEffects` (Task 8), the standalone bundle
+(Task 9), a lab page at `/sign/` (Task 10), the playwright spec (Task 11), README and CHANGELOG
+(Task 12).
+
+**The plan was written against the wrong branch in one place.** It named `LightingSlot`, which exists
+only on the unmerged `composable-lighting` work; `origin/main` has `LightingName`. Corrected in both
+docs, but expect other drift if you copy code out of the plan without compiling it.
+
+**Two element behaviors are deliberate and undocumented until Task 12.** The `look` *property* beats
+the `look` attribute, so a page driving both sees the attribute change re-fire with the property's
+value. And `bloom="false"` means off while any other value means on — an invented convention, kept
+because `bloom="${on}"` stringifies to `"false"` and nothing else could express off.
+
+**`align` is validated in the element; `lighting` deliberately is not.** An unknown align is silently
+*wrong* — `edgeFor` resolves it to the right edge in an ltr document rather than the `start` default.
+An unknown lighting throws and surfaces as a `console.warn`. Validate where garbage is silently
+wrong, pass through where it fails loudly.
+
+**A vitest defect shapes the element tests.** The second of two *concurrent* `import()` calls of a
+`vi.mock`'d module never settles, and worse, falls through the mock into the real module graph — which
+produced an intermittent `EnvironmentTeardownError` blamed on `element.test.ts`. Mount elements
+sequentially, or in the same task only when no dynamic import can start (the `readyState: 'loading'`
+trick in the stylesheet test). Do not "simplify" those tests back into one `innerHTML`.
+
+**`document.head` is not reset between tests.** `beforeEach` clears it explicitly; without that the
+stylesheet idempotence guard short-circuits and both stylesheet tests silently assert nothing.
+
+
 **`selectable-text`, complete and unmerged.** 14 commits off `main`, nothing uncommitted, not
 pushed. `npm run check` is green at 977 unit tests and `npm run test:visual` at 33. It implements
 [the design](specs/2026-08-25-selectable-text-design.md) in full — one `FireOptions.selectable` of

@@ -5,14 +5,16 @@ what is worth doing next.
 
 ## In flight
 
-**`composable-lighting`, two tasks of nine done.** Branch cut from `fb058fe`, nothing pushed.
+**`composable-lighting`, three tasks of nine done.** Branch cut from `fb058fe`, nothing pushed.
 Both tasks passed both gates — spec compliance clean on the first pass, code quality after one fix
 round each. Task 1 (`9425be1`, `e637b33`) added the additive `light` channel on `PartOffset` and
-summed it in the effects compositor. Task 2 (`13d1c62`, `4a61f72`) added `FrameCtx` to
-`render/lighting.ts` and the four light sources — `fixed`, `fromPointer`, `orbit`, `along` — in the
-new `effects/lamp.ts`. `npm run check` is green at **991 tests**, up from 977 at the branch point.
+summed it in the effects compositor. Task 2 (`13d1c62`, `4a61f72`) added the four light sources —
+`fixed`, `fromPointer`, `orbit`, `along` — in the new `effects/lamp.ts`, plus `FrameCtx`. Task 3
+(`36511b9`, `7dadd2d`, `1a59f88`, `822afe4`) added the `lamp()` piece, gave `EffectPiece.at` a
+required `ctx`, and moved `FrameCtx` into `effects/types.ts`. `npm run check` is green at
+**1003 tests**, up from 977 at the branch point.
 
-Pick up at **Task 3** of [the plan](plans/2026-08-25-composable-lighting.md), which is
+Pick up at **Task 4** of [the plan](plans/2026-08-25-composable-lighting.md), which is
 self-contained: every signature, test body and command is in it. The execution method was
 subagent-driven — one implementer per task, then a spec-compliance review, then a code-quality
 review, no skipping and no reordering.
@@ -36,14 +38,45 @@ tests were confirmed red against the defect they target; the suite is 9, not the
 out. **Assume the same of tasks 3-8** — the plan's test bodies are a floor, and the parameter a test
 leaves at its default is the one the implementation gets wrong for free.
 
-**`FrameCtx` in `render/lighting.ts` is an open call, and Task 4 hardens it.** The plan's file table
-puts it there, so `effects/lamp.ts` is now the only module under `effects/` importing from
-`render/`. It is `import type` only, no cycle and no runtime coupling, but `FrameCtx` is a pure data
-shape sharing a module with `PointerLight`, a class that attaches DOM `pointermove` listeners — so
-every effects consumer's type graph now pulls in `render/lighting.d.ts`. `effects/types.ts`, which
-already owns `PartInfo` and `EffectPiece`, is the more natural home. Task 4 puts `ctx` on
-`EffectPiece.at` and makes `effects/types.ts` cross the same boundary. Cheaper to move before that
-than after. Not moved: it is a deviation from the plan and the call had not been made.
+**`FrameCtx` moved to `effects/types.ts`, and the plan is amended to match.** The plan's file table
+put it in `render/lighting.ts`. Task 3 is the step that would have made `effects/types.ts` — the
+module every effects consumer imports — depend on `render/lighting.ts`, whose other export is
+`PointerLight`, a class that attaches DOM `pointermove` listeners. `FrameCtx` is a pure data shape
+with nothing rendering-specific in it, so it went to `effects/types.ts` alongside `PartInfo` and
+`EffectPiece`, and `effects/` now imports nothing from `render/`. Task 6 imports it back when
+`EnvPiece` needs it. The plan carries an amendment note under Task 2; read every
+`from '../render/lighting.js'` in Task 2's step text as `from './types.js'`.
+
+**The unit suite times out under load too, not just the visual one.** `vitest.config.ts` sets no
+`testTimeout`, so the default 5s applies, and the three tests that do a dynamic
+`import('../../src/index.js')` — `pieces.test.ts`'s registry check and `motion/enter`/`motion/exit`
+— pull three.js through a cold Vite transform. At load average 134 those failed and then passed on
+re-run with nothing changed. **A timeout in those three is not evidence of a regression; check
+`uptime` before believing it.** The handoff already said this of `npm run test:visual`; it is true
+of `npm run check` as well.
+
+**Three things Task 3 learned, and the first two are about the plan itself.** The plan's `lamp` test
+asserted `.light?.amount` where the plan's own literal code returns a shared `REST` — so the spec
+could not pass itself. Both are corrected in the plan now; the test gained `?? 0`, matching the
+idiom its own fourth case already used. And **"a third parameter is additive" is true of
+implementations and false of callers**: `word.ts` and `roving.ts` both call `.at(t, part)` and both
+broke the moment `ctx` was required. Do not resolve that by making `ctx` optional — a lamp reached
+without a ctx would silently emit nothing, which is this design's own defect class one level up.
+`word.ts` passes an explicit placeholder until Task 5 threads the real one, and biome's
+`noUnusedVariables` makes forgetting it loud.
+
+**`roving(lamp(...))` does not work, and it is structural.** `holderOf` substitutes `part.index` but
+keeps the calling part's `x`/`y`, so `roving`'s holder walk assumes the inner keys off index. `lamp`
+reads position. Measured: order-dependent between iteration directions, nothing lit across 16 frames
+of a pointer sweep at a narrow radius, and the fault pinned to one part forever at a wide one — at a
+wide radius the lamp never rests, so no handover ever defers. Documented on `roving` rather than
+fixed, because the honest answer is that a position-dependent piece is not a valid inner. **Task 8
+should not export both without that line.**
+
+**A red-then-green claim can be red for the wrong reason.** `roving` forwards `ctx` at two call
+sites; a test covered one, and the reported verification mutated only the covered one. Mutating the
+other left the suite green. When a review fix claims mutation evidence, mutate the exact `file:line`
+the finding names and check each site separately.
 
 **Green units still mean nothing here.** Tasks 1-8 are all pure functions and all unit-testable, and
 none of them can show that light reaches the screen. That is Task 9's whole job, and it is the
@@ -295,6 +328,49 @@ Roughly in order of value; the items are independent of each other.
   does. **Measure the gap before adding the knob:** a fallback is styled type with its own
   line-height and cap-height, and if the neon comes out smaller by a consistent ratio that is a fit
   bug to fix rather than a knob to hand the caller.
+
+- **A macro spell for `flicker`, so a tube stops flickering for ~15s and starts again. Asked for
+  directly, and prototyped.** `flicker` is already intermittent per part, but only on a micro scale:
+  `unrest` is the share of a pass spent stuttering across 24 steps of a 1400ms pass, which is a tube
+  buzzing. Two more params give it the long scale — `spell`, the milliseconds of one flickering
+  bout, and `calm`, the quiet between. `calm: 0` is today's behaviour, so every current caller is
+  unchanged.
+
+  **Do this rather than an `intermittent(inner)` wrapper**, which was the first shape considered.
+  A wrapper runs two independent clocks, and when the gate period lands on a whole multiple of the
+  inner duration, the inner phase at the start of every burst is 0 — so every burst opens on the
+  same phase and they all look identical, silently deleting the variation the wrapper exists for.
+  `roving` documents the same resonance from the other side, above its `duration` arithmetic: do not
+  make the epoch a multiple of the inner pass, or every handover samples one fixed phase. Folding
+  the spell into `flicker` derives both scales from the one `t` and the trap cannot exist.
+
+  **`STEPS` has to stop being a constant, and that is the whole risk.** It is hardcoded 24 against
+  the 1400ms default — 58.3ms a step, which the file's own comment ties to ~3 frames at 60fps. A
+  57s pass at 24 steps is a 2.4-second strobe, not a flicker. Derive it as `round(duration / 58.3)`:
+  that returns exactly 24 at the default, so nothing shipped moves, and holds 58.4ms a step at any
+  length. `node spikes/flicker-macro.mjs` prints the derivation and walks a fitted pass — measured
+  57ms shortest drop and a ~16s lit stretch against a 15s calm.
+
+  **The pass length adjusts to fit whole spells**, as `roving` already does for epochs: 60s asked
+  with a 4s spell and 15s calm gives 57s and three spells. `roving` reads `inner.duration`, and
+  `roving(flicker())` against a 57s inner degrades sanely — 18 epochs of ~3.2s.
+
+  **Snap the spell to a whole number of steps, or it clips drops to single frames.** The spell gate
+  runs on its own schedule, so a boundary lands wherever it lands inside a step — measured 5 of 5
+  boundaries mid-step, producing drops as short as 29ms against a 58.3ms step. `flicker`'s own
+  comment above `STEPS` says a one-frame drop "reads as noise rather than as a failing tube", so
+  this quietly breaks the thing that comment exists to protect. Make the spell a whole number of
+  steps and the boundaries fall on step edges.
+
+  **If the wrapper is wanted anyway — for `roving` or `hue`, which this does not cover — derive its
+  period from `inner.duration`.** The ask was for something that wraps "things like roving", and
+  folding `spell`/`calm` into `flicker` only serves flicker. A general wrapper is fine as long as
+  the caller cannot set a period independent of the inner's: the wrapper picks a period off integer
+  ratios with `inner.duration`, the same accommodation `roving` already makes when it rounds its
+  epoch. The semantics are the ones asked for — the gate swallows the inner's output for a stretch
+  rather than resetting it — and the trap is not reset-versus-swallow but which phases the swallowing
+  leaves visible: on an integer ratio the surviving windows land on the same phases every time, so
+  every burst looks identical while the inner genuinely never resets.
 
 - **A composition lab, so effect pieces get built by hand rather than through a plan.** Asked for
   directly. `roving` and `hue` were specified in prose, and the wrapper's epoch arithmetic came out

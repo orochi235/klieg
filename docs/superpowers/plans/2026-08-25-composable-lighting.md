@@ -18,9 +18,9 @@ why `gain` is not the channel, which is the single most important thing to not r
 
 | File | Responsibility |
 |---|---|
-| `packages/core/src/render/lighting.ts` | **Rewrite.** `EnvPiece`, `FrameCtx`, the `sweep`/`static`/`track` factories, and `mergeEnv`. `PointerLight` stays as `track`'s internals. |
+| `packages/core/src/render/lighting.ts` | **Rewrite.** `EnvPiece`, the `sweep`/`static`/`track` factories, and `mergeEnv`. `PointerLight` stays as `track`'s internals. Imports `FrameCtx`. |
 | `packages/core/src/effects/lamp.ts` | **New.** `LightPose`, `LightSource`, the `fixed`/`orbit`/`along`/`fromPointer` sources, and `lamp()`. |
-| `packages/core/src/effects/types.ts` | `PartOffset.light`, `ResolvedOffset.light`, `EffectPiece.at` gains a `ctx`. |
+| `packages/core/src/effects/types.ts` | `FrameCtx`, `PartOffset.light`, `ResolvedOffset.light`, `EffectPiece.at` gains a `ctx`. |
 | `packages/core/src/effects/compositor.ts` | Sums the light channel. Stays pure — no three import. |
 | `packages/core/src/render/looks.ts` | Exports `lightBase(look)` — the emissive a lamp adds onto, and the hue it multiplies. |
 | `packages/core/src/render/word.ts` | Resolves the light channel onto materials; `partExtent()`; threads `ctx`. |
@@ -134,6 +134,13 @@ git commit -m "add an additive light channel to a part offset"
 ---
 
 ### Task 2: `FrameCtx` and light sources
+
+> **Amended after Task 2 shipped.** `FrameCtx` now lives in `packages/core/src/effects/types.ts`,
+> not `render/lighting.ts`. Task 3 is what would have made `effects/types.ts` — the module every
+> effects consumer imports — depend on `render/lighting.ts`, whose other export is `PointerLight`,
+> a class that attaches DOM listeners. The step text below is left as it was executed; the move is
+> folded into Task 3. Read every `from '../render/lighting.js'` below as `from './types.js'`, and
+> in the test as `from '../../src/effects/types.js'`.
 
 **Files:**
 - Modify: `packages/core/src/render/lighting.ts`
@@ -310,7 +317,7 @@ git commit -m "add light sources and the per-frame lighting context"
 - Modify: `packages/core/src/effects/lamp.ts`
 - Test: `packages/core/test/effects/lamp.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/core/test/effects/lamp.test.ts`:
 
@@ -333,8 +340,8 @@ describe('lamp', () => {
   it('is brightest at its centre and dark past its radius', () => {
     const piece = lamp({ source: fixed(0, 0), radius: 1, strength: 2 });
     expect(piece.at(0, partAt(0), NO_POINTER).light?.amount).toBeCloseTo(2);
-    expect(piece.at(0, partAt(1), NO_POINTER).light?.amount).toBeCloseTo(0);
-    expect(piece.at(0, partAt(5), NO_POINTER).light?.amount).toBeCloseTo(0);
+    expect(piece.at(0, partAt(1), NO_POINTER).light?.amount ?? 0).toBeCloseTo(0);
+    expect(piece.at(0, partAt(5), NO_POINTER).light?.amount ?? 0).toBeCloseTo(0);
   });
 
   it('falls off between the two', () => {
@@ -365,15 +372,21 @@ describe('lamp', () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/core/test/effects/lamp.test.ts -t "lamp"`
 Expected: FAIL — `lamp` is not exported.
 
-- [ ] **Step 3: Give `EffectPiece.at` the context**
+- [x] **Step 3: Give `EffectPiece.at` the context**
 
-In `packages/core/src/effects/types.ts`, change the `at` signature. A third parameter is additive:
-an existing piece that declares two keeps typechecking.
+In `packages/core/src/effects/types.ts`, change the `at` signature. A piece that *implements*
+`at(t, part)` keeps typechecking — TypeScript allows an implementation to declare fewer parameters.
+**Callers are a different matter, and this plan originally got it wrong:** `render/word.ts` and
+`effects/roving.ts` both call `.at(t, part)` with two arguments, and both fail to compile once `ctx`
+is required. `roving` is a wrapper and forwards the `ctx` it receives; `word.ts` has no real `ctx`
+until Task 7, so it passes an explicit rest constant. Do **not** make `ctx` optional to dodge this —
+a lamp reached without a `ctx` would silently emit no light, which is the defect class this design
+exists to fix.
 
 ```ts
 export interface EffectPiece {
@@ -384,9 +397,9 @@ export interface EffectPiece {
 }
 ```
 
-Import the type at the top: `import type { FrameCtx } from '../render/lighting.js';`
+`FrameCtx` is declared in this file (see the amendment note under Task 2), so no import is needed.
 
-- [ ] **Step 4: Write `lamp`**
+- [x] **Step 4: Write `lamp`**
 
 Append to `packages/core/src/effects/lamp.ts`:
 
@@ -434,17 +447,18 @@ export function lamp(spec: LampSpec = {}): EffectPiece {
 }
 ```
 
-- [ ] **Step 5: Run the test**
+- [x] **Step 5: Run the test**
 
 Run: `npx vitest run packages/core/test/effects/lamp.test.ts`
-Expected: PASS, 13 tests.
+Expected: PASS. The count is 16 — the plan supplies 5 and both review rounds added more.
 
-- [ ] **Step 6: Run the whole suite — the `at` signature touched every piece**
+- [x] **Step 6: Run the whole suite — the `at` signature touched every piece**
 
 Run: `npm run typecheck && npx vitest run`
-Expected: PASS. `flicker`, `hue`, `chase` and `roving` declare two parameters and are unaffected.
+Expected: PASS — but only after the two call sites above are updated. `flicker`, `hue` and `chase`
+implement `at(t, part)` and are genuinely unaffected; `roving` is not, because it calls `inner.at`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/core/src/effects/lamp.ts packages/core/src/effects/types.ts packages/core/test/effects/lamp.test.ts
@@ -986,7 +1000,7 @@ git commit -m "drive the environment from a composable lighting slot"
 
 ```ts
 export { type LampSpec, along, fixed, fromPointer, lamp, type LightPose, type LightSource, orbit, type OrbitSpec } from './effects/lamp.js';
-export { type EnvOffset, type EnvPiece, type FrameCtx, mergeEnv, still, sweep, track, type TrackSpec } from './render/lighting.js';
+export { type EnvOffset, type EnvPiece, mergeEnv, still, sweep, track, type TrackSpec } from './render/lighting.js';
 export type { LightingSlot };
 ```
 

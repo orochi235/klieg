@@ -244,8 +244,6 @@ import type { FrameCtx } from '../render/lighting.js';
 export interface LightPose {
   x: number;
   y: number;
-  /** Radians. Reserved for a directional lamp; radial falloff ignores it. */
-  direction?: number;
 }
 
 /** Null means the lamp has nowhere to be this frame and contributes nothing. */

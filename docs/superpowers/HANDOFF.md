@@ -20,7 +20,7 @@ run's colour buffer, threaded the `ctx`, and added `partExtent()`. Task 6 (`b883
 `FrameCtx`, and moved the pointer arithmetic into a new pure `src/pointer.ts`. Task 8 (`4a68519`,
 `9bc93a1`, `c50c5b1`, `88aeb0c`) exported the surface, retired `envRotation` and `PointerLight`, and
 wrote the CHANGELOG and README. Task 9 (`369b328`, `116fa4f`, `785a475`, `cfbf02b`, `0a4fbd8`) is
-the render proof. `npm run check` is green at **1071 tests**, up from 977 at the branch point.
+the render proof. `npm run check` is green at **1100 tests**, up from 977 at the branch point.
 
 **Task 9 proved it reaches the screen.** `spikes/lamp-proof.mjs` drives a real page for 49 shots and
 8 contact sheets: **the lamp reads on all six looks, including `tubing` on `{ kind: 'run' }`**, so the
@@ -38,15 +38,17 @@ up — `effects/types.ts:72-75`) is exercised by no pixel on this branch. The sc
 the light's x centroid rises with the cursor rather than merely differing; the vertical half of that
 check wants a multi-line sign, which nothing renders yet.
 
-**What is left is the decision to merge.** Nothing is pushed; `main` is 11 ahead of `origin/main`.
-Every one of the nine tasks passed a spec-compliance review and a code-quality review, most with a
-fix round between. **A whole-branch pre-merge review was attempted twice and both runs died to API
-529s**, so the seams *between* tasks — one concept named two ways, an abstraction carrying weight it
-should not, the coherence of a fairly large new public surface landing in one release — have had no
-reviewer. That is the one gap in the branch's verification, and it is a gap in coverage rather than a
-known problem.
-Task 9's code-quality gate has since run, and its findings are folded in. Three findings below are
-recorded and deliberately unfixed.
+**The whole-branch review has now run, and its six findings are fixed.** Every one of the nine tasks
+passed a spec-compliance review and a code-quality review, so the gap was the seams *between* them;
+that pass found no incorrect condition, off-by-one or dropped guard in the new arithmetic. What it
+did find: the pointer's canvas box was measured every frame of every sign once the cursor had moved
+anywhere on the page, whether or not any piece read it — `FrameCtx.pointer` and `pointerInWord` are
+lazy getters now, resolved once a frame and only when something asks. A lamp on a run took its hue
+from the colour the run was *built* with rather than the one it is showing, so a `hue` piece and a
+lamp on one tube drifted into two colours. `LightPose.direction` was public, documented and read by
+nothing, and is gone. `sweep`'s spec is a named, exported `SweepSpec` like its siblings. The rest
+were doc fixes, below.
+Three findings from Task 9's gate are recorded and deliberately unfixed.
 
 The execution method was subagent-driven — one implementer per task, then a spec-compliance review,
 then a code-quality review. Read the plan rather than the design doc: review rounds amended Tasks 5,
@@ -59,6 +61,14 @@ compared frames differing only by where the crosshair sat. Two frames in which t
 headline source. With the crosshair moved out of the hashed clip those frames collapse to
 byte-identical with the unlit frame. **Anything drawn for a human to look at must sit outside
 anything a machine compares.**
+
+**Two doc claims the review falsified.** The layering example `['sweep', sweep({ periodMs: 1000 })]`
+was described as turning two periods at once. It cannot: both pieces write only `yaw`, `mergeEnv`
+sums them, and the result is one uniform turn at the summed rate — 772.7ms, measured, with no seam,
+since each piece's wrap is exactly 2pi. Layered env pieces add per axis, so a reader who wants two
+layers they can tell apart has to write different axes. And the `lamp` reference documented the
+pointer compression but not `stages`: a lamp lights by position against a pool frozen at
+construction, so a regroup leaves the light where the letters used to be. Both now say so.
 
 **Three findings the renders settled, recorded and unfixed.** A cursor anywhere on a **regrouped**
 sign lights nothing: the part pool is frozen at construction, so the light lives where the letters

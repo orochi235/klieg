@@ -27,8 +27,9 @@ with the fit rather than jumping when the letters re-lay.
 `active` and `exit` already had. `sweep({ periodMs })`, `still()` and
 `track({ yawRange, pitchRange, followMs })` build one, so the periods and swing ranges that were
 module constants are arguments now. The layering is not the motion slots', though: each piece runs
-on its own `duration` rather than sharing the slot's, so `['sweep', sweep({ periodMs: 1000 })]`
-turns two periods at once with nothing holding a phase between them.
+on its own `duration` rather than sharing the slot's, with nothing holding a phase between them.
+Pieces add per axis, so layer ones that write different axes — two sweeps give a single turn at the
+summed rate, not two you can tell apart.
 
 Every one of those turns the whole environment at once. `lamp()` is the other half — an effect
 piece that puts light on the parts near a position and leaves the rest of the sign alone, so the
@@ -40,6 +41,10 @@ untouched page.
 Light lands on `PartOffset.light`, a new additive channel carrying a lamp's colour and amount. A
 multiplier could not carry it: `emissive` defaults to black, so scaling it is a no-op on every look
 but `neon`.
+
+A lamp lights by position against a part pool fixed at construction, so it does not follow a
+`stages` regroup: after the letters re-lay, the light stays where they were, and on a centred sign
+that has dropped letters a cursor over the type can light nothing at all.
 
 ### `lighting: 'pointer'` now sees the canvas rather than the window
 

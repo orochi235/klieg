@@ -106,9 +106,13 @@ slots.
 
 The slot takes a piece instead of a name, or an array mixing both — `sweep({ periodMs })`,
 `still()` and `track({ yawRange, pitchRange, followMs })` build one. Layering here is not
-`active`'s: each piece keeps its own `duration` rather than sharing the slot's, so
-`['sweep', sweep({ periodMs: 1000 })]` runs two periods at once, with nothing holding a phase
-between them.
+`active`'s: each piece keeps its own `duration` rather than sharing the slot's, so the pieces run
+on unrelated clocks with nothing holding a phase between them.
+
+Layered pieces add per axis, so two that write the same axis give you one motion rather than two
+you can pick apart: `['sweep', sweep({ periodMs: 1000 })]` is a single uniform turn at the summed
+rate, once every 773ms. Layer pieces that write different axes — `['sweep', track({ yawRange: 0 })]`
+rakes on the clock while the pointer tips the pitch.
 
 All of these turn the one shared environment. For light on the letters near a position instead —
 a pool the cursor carries across the word — put a `lamp` in `effects`.
@@ -256,6 +260,11 @@ polyline at constant time per segment rather than constant speed.
 `duration` is one pass for the sources that read the clock, `orbit` and `along`, and does nothing
 to `fixed` or `fromPointer`, which ignore it. A pointer source stays dark until the pointer has
 been inside the canvas, so an untouched page gets no lamp rather than one parked at the origin.
+
+**A lamp does not follow a `stages` regroup.** It lights by position, and the part pool is fixed at
+construction, so after the letters re-lay the light still lands where they used to be — on a centred
+sign that has dropped letters, a cursor over the type can light nothing at all. Combine the two and
+the lamp is a silent no-op, not a smaller effect.
 
 Effects layer. Brightness multiplies and colour is replaced, so `flicker` and `hue` compose without
 either knowing about the other — but two pieces both writing colour fight, and the last one wins.

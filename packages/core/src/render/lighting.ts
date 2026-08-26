@@ -44,16 +44,16 @@ export function mergeEnv(offsets: readonly EnvOffset[]): ResolvedEnv {
   return { yaw, pitch };
 }
 
+export interface SweepSpec {
+  /** Milliseconds for one full turn of the environment. Defaults to 3400. */
+  periodMs?: number;
+}
+
 /**
  * Turns the environment on the clock. `t` is effect-relative: absolute clock time would start
  * every effect at an arbitrary angle.
  */
-export function sweep(
-  spec: {
-    /** Milliseconds for one full turn of the environment. Defaults to 3400. */
-    periodMs?: number;
-  } = {},
-): EnvPiece {
+export function sweep(spec: SweepSpec = {}): EnvPiece {
   const periodMs = spec.periodMs ?? SWEEP_PERIOD_MS;
   return { duration: periodMs, env: (t) => ({ yaw: t * TAU }) };
 }

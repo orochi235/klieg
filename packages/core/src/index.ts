@@ -8,7 +8,7 @@ import { ENTER } from './motion/enter.js';
 import { EXIT } from './motion/exit.js';
 import { Sequence } from './motion/sequence.js';
 import type { ActiveName, EnterName, ExitName, LetterInfo, MotionPiece } from './motion/types.js';
-import { pointerFrame } from './pointer.js';
+import { type PointerFrame, pointerFrame } from './pointer.js';
 import { EffectQueue, type QueuePolicy } from './queue.js';
 import { BloomPath } from './render/bloom.js';
 import {
@@ -88,6 +88,7 @@ export {
   type EnvPiece,
   mergeEnv,
   type ResolvedEnv,
+  type SweepSpec,
   still,
   sweep,
   type TrackSpec,
@@ -531,14 +532,22 @@ export function createKlieg(options: KliegOptions): Klieg {
           // Ahead of the pose, or the fit and the phase advance both lag it by a frame.
           sequence?.tick(elapsed);
 
-          const { pointer, pointerInWord } = pointerFrame(
-            pointerClient ? stage.canvas?.getBoundingClientRect() : null,
-            pointerClient,
-            extent,
-          );
+          // Resolved on demand, once per frame: placing the cursor reads the canvas' box, which
+          // flushes layout, and most signs run no piece that asks for it.
+          let placed: PointerFrame | null = null;
+          const place = (): PointerFrame =>
+            (placed ??= pointerFrame(
+              pointerClient ? stage.canvas?.getBoundingClientRect() : null,
+              pointerClient,
+              extent,
+            ));
           const ctx: FrameCtx = {
-            pointer,
-            pointerInWord,
+            get pointer() {
+              return place().pointer;
+            },
+            get pointerInWord() {
+              return place().pointerInWord;
+            },
             dt: still ? Number.POSITIVE_INFINITY : dt,
           };
           word.apply(driver, elapsed, ctx);

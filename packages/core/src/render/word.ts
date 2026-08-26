@@ -537,8 +537,11 @@ export class Word {
       | undefined;
     if (!attribute) return;
     const base = this.partBaseColor[index] as number;
+    // Hue and emissive are the same colour here: a lamp on a run tints by what the run is showing,
+    // so a `hue` piece sweeping the base takes the lit pool with it.
+    const shown = out.color ?? base;
     const color = this.partColor
-      .setHex(litEmissive(out.color ?? base, base, out.light))
+      .setHex(litEmissive(shown, shown, out.light))
       .multiplyScalar(out.gain);
     const array = attribute.array as Float32Array;
     for (let v = 0; v < array.length; v += 3) {

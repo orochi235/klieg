@@ -1669,6 +1669,21 @@ describe('effects', () => {
     at: () => ({ light: { color: 0xffffff, amount: 0.5 } }),
   };
 
+  // A `hue` piece and a `lamp` on one run: the light has to tint by the colour the run is showing,
+  // or the lit pool keeps adding the original tube colour while the base sweeps away from it.
+  it('lights a recoloured run in the colour it is showing, not the one it was built with', () => {
+    const bluedAndLit: EffectPiece = {
+      duration: 1000,
+      at: () => ({ color: 0x0000ff, light: { color: 0xffffff, amount: 1 } }),
+    };
+    const word = tubingWith([{ piece: bluedAndLit, target: { kind: 'run', ...FIRST } }]);
+
+    word.apply(STILL, 0, NO_CTX);
+
+    expect(runColorOf(word, 0, 'r')).toBe(0);
+    expect(runColorOf(word, 0, 'g')).toBe(0);
+  });
+
   function extentOf(text: string): { minX: number; maxX: number; minY: number; maxY: number } {
     const extent = new Word(text, stubFont(), 'gold', ROOMY).partExtent();
     if (!extent) throw new Error(`'${text}' has no parts`);

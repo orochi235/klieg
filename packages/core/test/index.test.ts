@@ -1457,10 +1457,35 @@ describe('the pointer in the frame context', () => {
     // A forced layout read every frame, for a box nothing is going to be measured against.
     expect(reads).toBe(0);
 
+    // Still nothing: this sign runs no piece that asks where the cursor is.
+    dispatch('pointermove', { clientX: 40, clientY: 40 });
+    clock.advance(16);
+
+    expect(reads).toBe(0);
+    bk.destroy();
+  });
+
+  it('measures the canvas once a frame for a sign whose piece does read the pointer', async () => {
+    let reads = 0;
+    const bk = create();
+    void bk.fire('HI', { ...LIT, lighting: track({ followMs: 0 }) });
+    await flush();
+    stage().canvas = {
+      getBoundingClientRect: () => {
+        reads++;
+        return { ...BOX, right: 100, bottom: 100 };
+      },
+    } as unknown as HTMLCanvasElement;
     dispatch('pointermove', { clientX: 40, clientY: 40 });
     clock.advance(16);
 
     expect(reads).toBe(1);
+
+    // Once per frame however many pieces ask, and never cached across frames: the box can move
+    // without a resize or a scroll.
+    clock.advance(16);
+
+    expect(reads).toBe(2);
     bk.destroy();
   });
 

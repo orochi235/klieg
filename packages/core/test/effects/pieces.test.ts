@@ -122,6 +122,11 @@ describe('flicker', () => {
 
   // A calm alone used to invent a one-step spell, inflating the pass tenfold for an effect
   // indistinguishable from a steady tube.
+  it('treats a non-finite scale as absent rather than as an endless pass', () => {
+    expect(flicker({ spell: 4000, calm: Number.POSITIVE_INFINITY }).duration).toBe(1400);
+    expect(flicker({ spell: Number.POSITIVE_INFINITY, calm: 15000 }).duration).toBe(1400);
+  });
+
   it('leaves the pass alone when only one of the two scales is given', () => {
     expect(flicker({ calm: 15000 }).duration).toBe(1400);
     expect(gainsAcrossOnePass(flicker({ calm: 15000 }))).toEqual(gainsAcrossOnePass(flicker()));

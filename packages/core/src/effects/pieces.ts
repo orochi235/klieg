@@ -33,13 +33,19 @@ function clamp01(n: number): number {
   return Math.min(Math.max(n, 0), 1);
 }
 
+function finiteMs(ms: number | undefined): number {
+  return Number.isFinite(ms) ? Math.max(0, ms as number) : 0;
+}
+
 /** A tube on its way out: mostly lit, with short irregular stutters. */
 export function flicker(spec: FlickerSpec = {}): EffectPiece {
   const depth = clamp01(spec.depth ?? 0);
   const unrest = clamp01(spec.unrest ?? 0.18);
   const wanted = spec.duration ?? 1400;
-  const calm = Math.max(0, spec.calm ?? 0);
-  const spell = Math.max(0, spec.spell ?? 0);
+  // A non-finite scale reads as absent: an infinite one would otherwise set an infinite pass, and
+  // `spell` would take every gain to NaN with it.
+  const calm = finiteMs(spec.calm);
+  const spell = finiteMs(spec.spell);
 
   // Both scales snap to whole steps, which is what puts every gate boundary on a step edge: a
   // boundary inside a step clips that drop to a frame or two and it reads as noise.

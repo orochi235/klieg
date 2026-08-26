@@ -9,7 +9,7 @@ const { sign, update, destroy } = vi.hoisted(() => ({
 
 vi.mock('../src/sign/index.js', () => ({ sign }));
 
-await import('../src/element.js');
+const { KliegSign } = await import('../src/element.js');
 
 /** The custom element upgrade and the dynamic import of `sign` are both async. */
 const settled = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -39,6 +39,20 @@ async function mount(html: string): Promise<HTMLElement> {
 describe('<klieg-sign>', () => {
   it('registers itself once the module is imported', () => {
     expect(customElements.get('klieg-sign')).toBeDefined();
+  });
+
+  it('observes every attribute it reads', () => {
+    expect(KliegSign.observedAttributes).toEqual([
+      'font',
+      'text',
+      'look',
+      'tint',
+      'framing-width',
+      'framing-height',
+      'align',
+      'lighting',
+      'bloom',
+    ]);
   });
 
   it('installs exactly one stylesheet however many elements connect', async () => {
@@ -185,11 +199,9 @@ describe('<klieg-sign>', () => {
   it('omits what the page did not say, so the library defaults stand', async () => {
     await mount('<klieg-sign font="/f.ttf"><h1>A Name</h1></klieg-sign>');
 
+    // Absence, not a present `undefined`: a key sent either way would override klieg's default.
     const opts = sign.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(opts.framing).toBeUndefined();
-    expect(opts.look).toBeUndefined();
-    expect(opts.bloom).toBeUndefined();
-    expect(opts.text).toBeUndefined();
+    expect(Object.keys(opts).sort()).toEqual(['font', 'onLit']);
   });
 
   it('reads a bare bloom as on and an explicit false as off', async () => {
@@ -208,6 +220,9 @@ describe('<klieg-sign>', () => {
     await mount('<klieg-sign font="/f.ttf" framing-width=""><h1>A</h1></klieg-sign>');
     const opts = sign.mock.calls[0]?.[1] as { framing?: unknown };
     expect(opts.framing).toBeUndefined();
+
+    await mount('<klieg-sign font="/f.ttf" framing-width="0"><h1>A</h1></klieg-sign>');
+    expect(sign.mock.calls[1]?.[1]).toMatchObject({ framing: { width: 0 } });
   });
 
   it('prefers the properties over the attributes for what an attribute cannot carry', async () => {
@@ -226,10 +241,27 @@ describe('<klieg-sign>', () => {
     });
   });
 
+  it('carries every alignment it knows', async () => {
+    await mount('<klieg-sign font="/f.ttf" align="end"><h1>A</h1></klieg-sign>');
+    await mount('<klieg-sign font="/f.ttf" align="start"><h1>A</h1></klieg-sign>');
+
+    expect(sign.mock.calls[0]?.[1]).toMatchObject({ framing: { align: 'end' } });
+    expect(sign.mock.calls[1]?.[1]).toMatchObject({ framing: { align: 'start' } });
+  });
+
   it('ignores an align it does not know rather than aligning to an edge', async () => {
     await mount('<klieg-sign font="/f.ttf" align="banana"><h1>A</h1></klieg-sign>');
     const opts = sign.mock.calls[0]?.[1] as { framing?: unknown };
     expect(opts.framing).toBeUndefined();
+  });
+
+  it('lets a look set as a property beat the look attribute', async () => {
+    document.body.innerHTML = '<klieg-sign font="/f.ttf" look="gold"><h1>A</h1></klieg-sign>';
+    const el = document.querySelector('klieg-sign') as HTMLElement & { look?: unknown };
+    el.look = { metalness: 0.2 };
+    await settled();
+
+    expect(sign.mock.calls[0]?.[1]).toMatchObject({ look: { metalness: 0.2 } });
   });
 
   it('re-fires through update when an observed attribute changes', async () => {
@@ -257,6 +289,30 @@ describe('<klieg-sign>', () => {
       tint: 'red',
       framing: { align: 'center' },
     });
+  });
+
+  it('takes a setting away with the attribute the page removed', async () => {
+    const el = await mount('<klieg-sign font="/f.ttf" tint="red"><h1>A</h1></klieg-sign>');
+
+    el.removeAttribute('tint');
+    await settled();
+
+    // `Sign.update()` merges, so an omitted `tint` would leave the old one lit.
+    expect(update).toHaveBeenCalledOnce();
+    expect(update.mock.calls[0]?.[0]).toHaveProperty('tint', undefined);
+  });
+
+  it('starts a reconnected sign from the attributes alone', async () => {
+    const el = await mount('<klieg-sign font="/f.ttf" tint="red"><h1>A</h1></klieg-sign>');
+
+    el.remove();
+    el.removeAttribute('tint');
+    document.body.appendChild(el);
+    await settled();
+
+    // A tombstone belongs in a patch, never in the settings a fresh sign is built from.
+    const opts = sign.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect(Object.keys(opts).sort()).toEqual(['font', 'onLit']);
   });
 
   it('never re-fires a sign the element destroyed before the update landed', async () => {

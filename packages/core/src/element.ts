@@ -23,7 +23,8 @@ function installStyle(doc: Document): void {
   doc.head.appendChild(style);
 }
 
-/** A framing fraction the page did not write, or wrote as something that is not a number. */
+/** A framing fraction, or nothing where the page wrote none — an empty attribute among them,
+ * since `Number('')` is a perfectly finite `0` that would frame the sign at no width. */
 function fraction(raw: string | null): number | undefined {
   if (raw === null || raw.trim() === '') return undefined;
   const value = Number(raw);
@@ -61,9 +62,12 @@ class KliegSign extends HTMLElement {
   declare options?: SignOptions['fire'];
 
   #sign: Sign | null = null;
-  /** Bumped on every connect and disconnect, so a late import lands on a stale element and stops. */
+  /** Bumped on every connect and disconnect, so a late import or a deferred update that lands on
+   * a stale element stops there. */
   #token = 0;
   #queued = false;
+  /** The keys of the last settings sent, to tell a dropped one from one never written. */
+  #sent: string[] = [];
 
   connectedCallback(): void {
     installStyle(this.ownerDocument);
@@ -77,7 +81,7 @@ class KliegSign extends HTMLElement {
       void import('./sign/index.js').then(({ sign }) => {
         if (token !== this.#token || !this.isConnected) return;
         this.#sign = sign(this, {
-          ...this.#options(),
+          ...this.#settings(),
           onLit: (on) => this.toggleAttribute('lit', on),
         });
       });
@@ -94,6 +98,7 @@ class KliegSign extends HTMLElement {
     this.#token++;
     this.#sign?.destroy();
     this.#sign = null;
+    this.#sent = [];
     this.removeAttribute('lit');
   }
 
@@ -106,7 +111,7 @@ class KliegSign extends HTMLElement {
     void Promise.resolve().then(() => {
       this.#queued = false;
       if (token !== this.#token || !this.isConnected) return;
-      this.#sign?.update(this.#options());
+      this.#sign?.update(this.#settings());
     });
   }
 
@@ -115,28 +120,35 @@ class KliegSign extends HTMLElement {
     for (const child of [...this.children]) child.setAttribute(FALLBACK, '');
   }
 
+  /** Everything the sign is told: the element's whole state, plus a tombstone for each setting the
+   * last call sent and this one omits, since `Sign.update()` merges rather than replaces. */
+  #settings(): SignOptions {
+    const options = this.#options();
+    const gone = this.#sent.filter((key) => !(key in options));
+    this.#sent = Object.keys(options);
+    return Object.assign(Object.fromEntries(gone.map((key) => [key, undefined])), options);
+  }
+
   #options(): SignOptions {
     const framing = {
       ...optional('width', fraction(this.getAttribute('framing-width'))),
       ...optional('height', fraction(this.getAttribute('framing-height'))),
       ...optional('align', alignment(this.getAttribute('align'))),
     };
+    // A name is a `Look`; the property carries a spec an attribute cannot hold.
+    const look = this.look ?? (this.getAttribute('look') as SignOptions['look']) ?? undefined;
+    // Unvalidated where `align` is not: an unknown lighting throws and warns, where an unknown
+    // align would silently right-align.
+    const lighting = (this.getAttribute('lighting') as SignOptions['lighting']) ?? undefined;
     const bloom = this.getAttribute('bloom');
 
     return {
       font: this.getAttribute('font') ?? '',
       ...optional('text', this.getAttribute('text') ?? undefined),
-      // A name is a `Look`; the property carries a spec an attribute cannot hold.
-      ...optional(
-        'look',
-        this.look ?? (this.getAttribute('look') as SignOptions['look']) ?? undefined,
-      ),
+      ...optional('look', look),
       ...optional('tint', this.getAttribute('tint') ?? undefined),
       ...(Object.keys(framing).length ? { framing } : {}),
-      ...optional(
-        'lighting',
-        (this.getAttribute('lighting') as SignOptions['lighting']) ?? undefined,
-      ),
+      ...optional('lighting', lighting),
       ...optional('effects', this.effects),
       ...optional('bloom', bloom === null ? undefined : bloom !== 'false'),
       ...optional('fire', this.options),

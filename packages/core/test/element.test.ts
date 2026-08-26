@@ -204,6 +204,11 @@ describe('<klieg-sign>', () => {
     expect(Object.keys(opts).sort()).toEqual(['font', 'onLit']);
   });
 
+  it('sends an empty font rather than none when the page named no font', async () => {
+    await mount('<klieg-sign><h1>A</h1></klieg-sign>');
+    expect(sign.mock.calls[0]?.[1]).toHaveProperty('font', '');
+  });
+
   it('reads a bare bloom as on and an explicit false as off', async () => {
     await mount('<klieg-sign font="/f.ttf" bloom="false"><h1>A</h1></klieg-sign>');
     const opts = sign.mock.calls[0]?.[1] as { bloom?: boolean };
@@ -216,7 +221,7 @@ describe('<klieg-sign>', () => {
     expect(opts.framing).toBeUndefined();
   });
 
-  it('ignores an empty framing attribute rather than reading it as a zero', async () => {
+  it('tells an empty framing attribute from a real zero', async () => {
     await mount('<klieg-sign font="/f.ttf" framing-width=""><h1>A</h1></klieg-sign>');
     const opts = sign.mock.calls[0]?.[1] as { framing?: unknown };
     expect(opts.framing).toBeUndefined();

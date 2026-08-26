@@ -21,12 +21,24 @@
   "license": "MIT",
   "author": "orochi235",
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/element.js",
+    "./dist/standalone/klieg-sign.js"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./sign": {
+      "types": "./dist/sign/index.d.ts",
+      "default": "./dist/sign/index.js"
+    },
+    "./element": {
+      "types": "./dist/element.d.ts",
+      "default": "./dist/element.js"
+    },
+    "./element/standalone": "./dist/standalone/klieg-sign.js",
     "./package.json": "./package.json"
   },
   "main": "./dist/index.js",

@@ -703,3 +703,28 @@ After Task 5, the masthead's compensation should be expressible as a design quan
 measurement. The consumer keeps `{ width: 0.78, height: 0.55 }`, adds `align: 'start'`, and makes
 the strip's padding symmetric — the remaining negative margin is the glow's radius, which is chosen,
 not measured. Nothing in this repo depends on that; it is what to tell issue #2.
+
+---
+
+## As shipped
+
+Both corrections below came from running it, not from reading it — the plan's own test code asserts
+the naive edge in two places and would have passed a wrong implementation.
+
+**The paint is wider than the outline, twice over.** A glyph's geometry runs `bevelSize` (0.038 em)
+past its outline, and at an acute vertex the miter carries it further still — so a hand-derived
+expectation like "the first origin, minus one bevel" is wrong by an amount that depends on the
+glyph. `test/index.test.ts` measures the real thing instead: it walks the letter meshes and takes
+the bounding box of what is actually drawn.
+
+**Alignment happens in a frustum, so the plane is not the edge.** Aligning the word's world-space
+extent to `extent / 2` put the type's near cap outside the box and the anchored canvas clipped it —
+16px off `klieg` in the 832×120 strip lab, which is the same species of defect the feature exists to
+remove. `Budget.cameraZ` and `GlyphBounds.depth` let `alignOffset` measure against the box's edge at
+the depth of the *nearest* paint. That is conservative by construction: the widest point of a
+bevelled glyph sits slightly behind its near cap, so the word can only ever land a hair inside the
+edge, never over it. Measured in the lab after the fix: the painted span reaches column 0 of the
+canvas with nothing clipped, and the fit is untouched (84px tall at every alignment).
+
+The strip lab (`apps/lab/strip/`) grew an `align` selector, which is what those measurements were
+taken through.

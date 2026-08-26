@@ -216,6 +216,7 @@ export class Stage {
       width: vh * this.camera.aspect * widthFrac,
       height: vh * heightFrac,
       extent: vh * this.camera.aspect,
+      cameraZ: this.camera.position.z,
       align,
       // The anchor's box is the bound already, and filling it is the whole point of anchoring.
       cap: this.placement.kind === 'element' ? Number.POSITIVE_INFINITY : undefined,

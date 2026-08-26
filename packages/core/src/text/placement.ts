@@ -91,6 +91,8 @@ export interface Fit {
 
 /** Each glyph's own bounds in em, indexed like the placement; null where the glyph draws nothing. */
 export interface GlyphBounds {
+  /** How far the paint stands toward the camera, in em. Zero leaves alignment in the plane. */
+  depth?: number;
   minX: readonly (number | null | undefined)[];
   maxX: readonly (number | null | undefined)[];
   minY: readonly (number | null | undefined)[];
@@ -131,14 +133,24 @@ export function fitOf(placed: Placement, geo: GlyphBounds, budget: Budget): Fit 
   return {
     scale,
     midY: drawn ? (minY + maxY) / 2 : 0,
-    offsetX: alignOffset(scale, minX, maxX, budget),
+    offsetX: alignOffset(scale, minX, maxX, geo.depth ?? 0, budget),
   };
 }
 
-function alignOffset(scale: number, minX: number, maxX: number, budget: Budget): number {
+function alignOffset(
+  scale: number,
+  minX: number,
+  maxX: number,
+  depth: number,
+  budget: Budget,
+): number {
   const align: Align | undefined = budget.align;
-  const extent = budget.extent;
+  const { extent, cameraZ } = budget;
   if (!align || align === 'center' || extent === undefined) return 0;
   if (!Number.isFinite(minX)) return 0;
-  return align === 'start' ? -extent / 2 - minX * scale : extent / 2 - maxX * scale;
+
+  // The frustum narrows toward the camera, so the box's edge at the near cap's depth is inside
+  // its edge at the word's. Aligning on the nearer one is what keeps the extrusion out of the clip.
+  const half = (extent / 2) * (cameraZ ? (cameraZ - depth * scale) / cameraZ : 1);
+  return align === 'start' ? -half - minX * scale : half - maxX * scale;
 }

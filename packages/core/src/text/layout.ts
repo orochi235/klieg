@@ -65,6 +65,12 @@ export interface Budget {
    * the word inset by exactly the slack the fraction cut out.
    */
   extent?: number;
+  /**
+   * Camera distance to the word's plane. Alignment needs it because the type is extruded: the
+   * near cap of a glyph off the frustum's axis projects wider than the plane the extent measures,
+   * so a word aligned in the plane alone overhangs the box and the canvas clips it.
+   */
+  cameraZ?: number;
   align?: Align;
 }
 

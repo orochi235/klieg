@@ -15,7 +15,8 @@ import {
 } from '../src/index.js';
 import type { Vec3 } from '../src/pose.js';
 import { BloomPath } from '../src/render/bloom.js';
-import { Stage } from '../src/render/stage.js';
+import { BASE_Z, Stage } from '../src/render/stage.js';
+import { DEFAULT_GLYPH_OPTIONS } from '../src/text/glyphs.js';
 import { fromEuler } from '../src/transform.js';
 
 const { parse } = vi.hoisted(() => ({ parse: vi.fn() }));
@@ -1013,7 +1014,16 @@ describe('framing', () => {
   }
 
   /** Half the frustum width at the word's depth; the stage is stubbed, so the aspect is 1. */
-  const HALF_BOX = (2 * Math.tan((38 * Math.PI) / 360) * 11) / 2;
+  const HALF_BOX = (2 * Math.tan((38 * Math.PI) / 360) * BASE_Z) / 2;
+  /** The box's own edge, as the angle it subtends — the same at every depth. */
+  const BOX_EDGE = HALF_BOX / BASE_Z;
+
+  /**
+   * Where a painted edge lands on the box's, as the angle it subtends. Measured at the near cap,
+   * which is the silhouette the viewer sees and the first thing an anchored canvas would clip.
+   */
+  const edgeOf = (at: { scale: number; left?: number; right?: number }, x: number) =>
+    x / (BASE_Z - DEFAULT_GLYPH_OPTIONS.depth * at.scale);
 
   it('centres the word when the caller says nothing', async () => {
     expect((await placeOf('HELLOTHERE')).x).toBe(0);
@@ -1025,7 +1035,7 @@ describe('framing', () => {
     const started = await placeOf('HELLOTHERE', { align: 'start' });
 
     expect(started.scale).toBe(centred.scale);
-    expect(started.left).toBeCloseTo(-HALF_BOX, 6);
+    expect(edgeOf(started, started.left)).toBeCloseTo(-BOX_EDGE, 6);
   });
 
   it('aligns at the size the fractions chose, not at the width of the box', async () => {
@@ -1034,16 +1044,16 @@ describe('framing', () => {
     const wide = await placeOf('HELLOTHERE', { width: 0.62, align: 'start' });
 
     expect(narrow.scale).toBeLessThan(wide.scale);
-    expect(narrow.left).toBeCloseTo(-HALF_BOX, 6);
-    expect(wide.left).toBeCloseTo(-HALF_BOX, 6);
+    expect(edgeOf(narrow, narrow.left)).toBeCloseTo(-BOX_EDGE, 6);
+    expect(edgeOf(wide, wide.left)).toBeCloseTo(-BOX_EDGE, 6);
   });
 
   it('meets the right edge with the paint, not with the advance', async () => {
     const ended = await placeOf('HELLOTHERE', { align: 'end' });
 
-    expect(ended.right).toBeCloseTo(HALF_BOX, 6);
+    expect(edgeOf(ended, ended.right)).toBeCloseTo(BOX_EDGE, 6);
     // The last advance reaches 3 em past the word's centre; that edge overshoots the box.
-    expect(ended.x + 3 * ended.scale).toBeGreaterThan(HALF_BOX);
+    expect(edgeOf(ended, ended.x + 3 * ended.scale)).toBeGreaterThan(BOX_EDGE);
   });
 });
 

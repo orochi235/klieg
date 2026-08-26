@@ -568,6 +568,7 @@ export class Word {
   private glyphBounds(pick?: readonly number[]): GlyphBounds {
     const at = (src: (number | null)[]) => (pick ? pick.map((i) => src[i] ?? null) : src);
     return {
+      depth: DEFAULT_GLYPH_OPTIONS.depth,
       minX: at(this.geoMinX),
       maxX: at(this.geoMaxX),
       minY: at(this.geoMinY),

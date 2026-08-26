@@ -8,6 +8,7 @@ import {
   type PathSource,
 } from './generators.js';
 import type { GradientSpec } from './gradient.js';
+import type { HairpinShape } from './hairpin.js';
 import {
   type CornerRecord,
   type CornerWeights,
@@ -24,6 +25,8 @@ import { wanderPaths } from './wander.js';
 export type { SelectSpec } from './assign.js';
 export type { PathSource } from './generators.js';
 export type { GradientDomain, GradientSpec } from './gradient.js';
+export type { HairpinShape } from './hairpin.js';
+export { DEFAULT_HAIRPIN, HAIRPIN_SHAPES } from './hairpin.js';
 export type { CornerRecord, CornerStrategy, CornerWeights, Rejoin, Run, ShortRun } from './runs.js';
 export { ALL_BREAK, ALL_CONNECT, DEFAULT_REJOIN, REJOINS } from './runs.js';
 export type { SurfaceKind } from './surfaces.js';
@@ -63,6 +66,11 @@ export interface TubeSpec {
    * minimum radius. `drop` by default; see `Rejoin`.
    */
   rejoin?: Rejoin;
+  /**
+   * Which hairpin a corner drawing one turns around with. `uturn` by default; only consulted when
+   * `corners.hairpin` is nonzero. See `HairpinShape`.
+   */
+  hairpin?: HairpinShape;
   /** Depth fraction the wall generator runs at, 0 back to 1 front. */
   wallDepth?: number;
   /** Peak-to-peak depth swing along a wall path, as a fraction of depth. */
@@ -140,6 +148,7 @@ export function buildTubeBlueprint(
     blockout: spec.blockout,
     shortRun: spec.shortRun,
     rejoin: spec.rejoin,
+    hairpin: spec.hairpin,
     seed,
   });
   const runs = assign(

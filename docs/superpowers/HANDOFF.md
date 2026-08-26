@@ -24,12 +24,12 @@ Two earlier accounts of the loss were wrong, and re-deriving them costs a sessio
 not move, because what it gives up it replaces with a chord. `spikes/corner-coverage.mjs` is the
 measure, and `OUT=page.html` draws where the bare contour actually is.
 
-**The hairpin is prototyped and blocked on one aesthetic call.** `spikes/hairpin-view.mjs` builds it
-— the major arc of the circle inscribed in the wedge opposite the corner, which `biarcBlend` cannot
-produce — and where it lands it draws the right shape. What stops it is that the arc stands
-`rhoMin / cos(turn/2) + rhoMin` proud of the letter, up to 0.29 em on a 1 em `W`, and that grows as
-the corner sharpens. Either the construction gets a bounded footprint or someone decides a bulge at
-the sharpest corners is what neon looks like. Nothing else is in the way.
+**The hairpin ships too, in both constructions.** It is a fourth `CornerWeights` weight, and
+`TubeSpec.hairpin` picks the shape: `bisector` takes `W` from 17% bare to **0%** and holds the bend
+floor, but stands up to 0.29 em proud and worse as the corner sharpens; `uturn` holds a flat 0.13 em
+footprint but eats up to `6 rhoMin` of each leg and leaves 2 of 233 runs marginally under the floor.
+Opposite costs, so both are knobs rather than a decision. No shipped look sets a hairpin weight, so
+baselines are unmoved. `spikes/hairpin-view.mjs` draws them side by side.
 
 **The visual suite is failing three tests on `main` right now, and it is not this branch.** At load
 average 12, `visual.spec.ts` fails the bloom-path, two-line-block and wrap tests. Stashing the run

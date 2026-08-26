@@ -10,6 +10,13 @@ import {
   STYLE_FACTOR,
 } from './bend.js';
 import type { GeneratedPath } from './generators.js';
+import {
+  apexLoss,
+  DEFAULT_HAIRPIN,
+  type Hairpin,
+  type HairpinShape,
+  hairpinAt,
+} from './hairpin.js';
 import { minCurvatureRadius3 } from './resample.js';
 import type { SurfaceKind } from './surfaces.js';
 
@@ -42,7 +49,7 @@ export interface Run {
   color: number;
 }
 
-export type CornerStrategy = 'break' | 'connect' | 'return';
+export type CornerStrategy = 'break' | 'connect' | 'return' | 'hairpin';
 
 /**
  * What the corner stage does when a fillet's arc cannot join its leg without bending under the
@@ -76,6 +83,11 @@ export interface CutResult {
 export interface CornerWeights {
   break: number;
   connect: number;
+  /**
+   * How often a corner too sharp for a fillet to follow turns the tube around outside the apex
+   * instead of cutting it off. Absent or zero is today's behavior — no corner draws one.
+   */
+  hairpin?: number;
 }
 
 /** Every corner cuts — today's only behavior, and the default when a spec sets nothing. */
@@ -102,6 +114,8 @@ export interface CutOptions {
   corners?: CornerWeights;
   /** How a fillet rejoins a leg it cannot meet cleanly. `bridge` by default. */
   rejoin?: Rejoin;
+  /** Which hairpin a `hairpin` corner draws. `uturn` by default. */
+  hairpin?: HairpinShape;
   /** Requested tube radius in em. */
   radius?: number;
   /** Minimum bend radius as a multiple of `radius`. Floored at 1.25. */
@@ -154,6 +168,8 @@ interface CornerDecision extends Corner {
   at?: THREE.Vector3;
   /** The fillet decided for this corner, measured off the untouched legs. */
   fillet?: Fillet | null;
+  /** The hairpin decided for this corner, when it draws one instead. */
+  hairpin?: Hairpin | null;
 }
 
 /**
@@ -215,12 +231,15 @@ function rawSpansOf(path: GeneratedPath, rhoMin: number, rhoStyle: number): RawS
  * always picks that one — the bias multiplies a weight, and multiplying zero by anything stays zero.
  */
 function pickStrategy(turn: number, weights: CornerWeights, draw: () => number): CornerStrategy {
+  const wHairpin = (weights.hairpin ?? 0) * clamp(turn / Math.PI, FLOOR, 1);
   const wBreak = weights.break * clamp(turn / Math.PI, FLOOR, 1);
   const wConnect = weights.connect * clamp(1 - turn / CONNECT_LIMIT, FLOOR, 1);
 
-  const total = wBreak + wConnect;
+  const total = wBreak + wConnect + wHairpin;
   if (total <= 0) return 'break';
-  return draw() * total < wBreak ? 'break' : 'connect';
+  const roll = draw() * total;
+  if (roll < wHairpin) return 'hairpin';
+  return roll < wHairpin + wBreak ? 'break' : 'connect';
 }
 
 /**
@@ -364,6 +383,34 @@ function filletFor(
     if (fillet && joinsAtOnce(target, next, corner, fillet, rhoMin, spacing)) return fillet;
   }
   return base;
+}
+
+/**
+ * The hairpin for the join between `target` and `next`, built off the same averaged leg directions
+ * a fillet is. The apex is the corner's own vertex rather than the legs' intersection: a hairpin
+ * turns around the point the reader sees, and the virtual corner a fillet is fitted to can sit a
+ * bend radius away from it.
+ */
+function hairpinFor(
+  target: THREE.Vector3[],
+  next: THREE.Vector3[],
+  corner: Corner,
+  shape: HairpinShape,
+  rhoMin: number,
+  spacing: number,
+): Hairpin | null {
+  const iA = target.length - 2 - corner.groupBefore;
+  const iB = corner.groupAfter + 1;
+  if (iA < 1 || target.length < 2 || !next[iB]) return null;
+  const u = legDirection(target, iA, -1);
+  const v = legDirection(next, iB, 1);
+  if (!u || !v) return null;
+
+  const pin = hairpinAt(target, next, u, v, shape, rhoMin, spacing);
+  // A hairpin that reaches back further than the leg it reaches along has nothing to attach to.
+  if (!pin) return null;
+  if (pin.reach > polyLength(target) || pin.reach > polyLength(next)) return null;
+  return pin;
 }
 
 /** Radii a `widen` rejoin tries, as multiples of the minimum. */
@@ -665,6 +712,41 @@ function relaxOnto(
 }
 
 /**
+ * Swaps a hairpin in for the corner. `bisector` is tangent to the legs past the apex and takes over
+ * none of them, so the apex vertex itself stays; `uturn` blends from `reach` back along each leg and
+ * the stretch between is dropped.
+ */
+function spliceHairpin(
+  target: THREE.Vector3[],
+  next: THREE.Vector3[],
+  decision: CornerDecision,
+  pin: Hairpin,
+): void {
+  const apex = target[target.length - 1] as THREE.Vector3;
+  const head = pin.points[0] as THREE.Vector3;
+  const tail = pin.points[pin.points.length - 1] as THREE.Vector3;
+  // Cut exactly where the hairpin picked up, not by distance from the apex: a `uturn` blends from a
+  // named leg vertex, and a trim that stops one vertex short of it doubles back over the blend.
+  const from = target.lastIndexOf(head);
+  if (from >= 0) target.length = from;
+  else {
+    for (let i = 0; i < decision.groupBefore && target.length > 1; i++) target.pop();
+    if (pin.reach > 0) trimTail(target, pin.reach, apex);
+  }
+  decision.at = pin.points[pin.points.length >> 1];
+  for (const p of pin.points) target.push(p);
+
+  const to = next.indexOf(tail);
+  const start =
+    to >= 0
+      ? to + 1
+      : pin.reach > 0
+        ? indexPast(next, decision.groupAfter + 1, pin.reach, apex)
+        : 1;
+  for (let i = start; i < next.length; i++) target.push(next[i] as THREE.Vector3);
+}
+
+/**
  * Appends `next` onto `target`, which already ends at the shared corner.
  *
  * `rejoin` chooses what happens on each side when the leg cannot meet the arc without bending under
@@ -679,6 +761,10 @@ function mergeArc(
   spacing: number,
   rejoin: Rejoin,
 ): void {
+  if (decision.hairpin && decision.strategy === 'hairpin') {
+    spliceHairpin(target, next, decision, decision.hairpin);
+    return;
+  }
   if (!fillet) {
     for (let i = 1; i < next.length; i++) target.push(next[i] as THREE.Vector3);
     return;
@@ -783,6 +869,7 @@ function stitchPath(
   spacing: number,
   blockout: number,
   rejoin: Rejoin,
+  shape: HairpinShape,
   draw: () => number,
 ): { spans: Span[]; decisions: CornerDecision[] } {
   const { arcs, corners } = raw;
@@ -802,6 +889,14 @@ function stitchPath(
     let strategy: CornerStrategy = pickStrategy(c.turn, weights, draw);
     // A hard corner drawn `connect` must fillet, and a fillet that will not fit breaks instead.
     // `CONNECT_LIMIT` used to guess this from the angle; now it is measured.
+    let hairpin: Hairpin | null = null;
+    if (strategy === 'hairpin') {
+      hairpin = hairpinFor(before, after, c, shape, rhoMin, spacing);
+      // Nothing worth turning around for: a hairpin leaves the contour on both approaches to buy
+      // the apex back, so it only pays where a fillet would cut more than a bend radius away.
+      // One that cannot be built has to cut like any other corner.
+      if (!hairpin || apexLoss(c, rhoMin) <= rhoMin) strategy = 'break';
+    }
     let fillet =
       strategy === 'connect' && c.hard
         ? filletFor(before, after, c, rhoMin, spacing, rejoin)
@@ -814,6 +909,9 @@ function stitchPath(
       fillet = filletFor(before, after, c, rhoMin, spacing, rejoin);
       if (fillet) strategy = 'return';
     }
+    if (strategy === 'hairpin' && hairpin) {
+      return { ...c, strategy, setback: Math.max(0, hairpin.reach), fillet: null, hairpin };
+    }
     if (strategy === 'break') return { ...c, strategy, setback: 0, fillet: null };
     return { ...c, strategy, setback: fillet?.setback ?? 0, fillet };
   });
@@ -823,7 +921,12 @@ function stitchPath(
   // not on the path, so two fillets can overlap while their setbacks still appear to fit.
   const eatsAt = (k: number) => {
     const { before, after } = legsOf(k);
-    return eatenBy(corners[k] as Corner, decisions[k]?.fillet ?? null, before, after);
+    const decision = decisions[k];
+    if (decision?.hairpin) {
+      const reach = Math.max(0, decision.hairpin.reach);
+      return { before: reach, after: reach };
+    }
+    return eatenBy(corners[k] as Corner, decision?.fillet ?? null, before, after);
   };
   // To a fixed point: breaking a corner cuts its own stretch out of the same leg, so the survivor
   // has less room than the pass that spared it measured, not more.
@@ -972,6 +1075,7 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
   const rhoStyle = radius * STYLE_FACTOR;
   const spacing = opts.spacing ?? FALLBACK_SPACING;
   const rejoin = opts.rejoin ?? DEFAULT_REJOIN;
+  const shape = opts.hairpin ?? DEFAULT_HAIRPIN;
   const seed = opts.seed ?? 0;
   let cornerCounter = 0;
   const draw = () => rng(cornerSeed(seed, cornerCounter++))();
@@ -996,6 +1100,7 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
       spacing,
       opts.blockout ?? DEFAULT_BLOCKOUT,
       rejoin,
+      shape,
       draw,
     );
     for (const d of decisions) {

@@ -16,6 +16,7 @@ const CORNER_COLOR: Record<CornerStrategy, number> = {
   break: 0xff3b30,
   connect: 0x35d0a5,
   return: 0xa86a90,
+  hairpin: 0xffa63a,
 };
 
 export interface Skeleton {

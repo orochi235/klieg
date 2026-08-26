@@ -251,15 +251,14 @@ describe('track', () => {
     expect(out.pitch).toBeCloseTo(-0.5);
   });
 
-  // The ease accumulates in a closure, so one bad frame would poison every later one.
-  it('keeps returning finite numbers after a hostile frame', () => {
+  it('holds the snapped pose after a hostile frame', () => {
     const pointer = { x: 0.5, y: 0.5 };
     for (const followMs of [0, -100, Number.NaN]) {
       const piece = track({ followMs });
       piece.env(0, { pointer, pointerInWord: null, dt: 0 });
       const out = mergeEnv([piece.env(0, { pointer, pointerInWord: null, dt: 16 })]);
-      expect(Number.isFinite(out.yaw)).toBe(true);
-      expect(Number.isFinite(out.pitch)).toBe(true);
+      expect(out.yaw).toBeCloseTo(0.5 * (Math.PI / 2));
+      expect(out.pitch).toBeCloseTo(0.5 * (Math.PI / 9));
     }
   });
 

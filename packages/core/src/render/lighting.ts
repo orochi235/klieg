@@ -88,6 +88,7 @@ export interface EnvPiece {
   env(t: number, ctx: FrameCtx): EnvOffset;
 }
 
+/** Everything `mergeEnv` resolved. Both axes rest at 0. */
 export interface ResolvedEnv {
   yaw: number;
   pitch: number;
@@ -116,7 +117,7 @@ export function still(): EnvPiece {
 export interface TrackSpec {
   /** Radians the environment swings between opposite edges of the canvas. */
   yawRange?: number;
-  /** Radians on the other axis. Shallower than yaw by default; see the note on `PITCH_RANGE`. */
+  /** Radians on the other axis. Shallower than yaw: tipping the studio far swings its floor into frame. */
   pitchRange?: number;
   /** Milliseconds to cover ~63% of the way to a new pointer position. Zero snaps. */
   followMs?: number;

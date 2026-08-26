@@ -435,11 +435,10 @@ export interface LightBase {
   hue: number;
 }
 
-export function lightBase(look: Look): LightBase {
+export function lightBase(look: Look, tint?: number): LightBase {
   const spec = specOf(look);
   const params = resolveParams(spec);
-  return {
-    emissive: params.emissive,
-    hue: params[tintTargetOf(params, spec.tintTarget)] as number,
-  };
+  const target = tintTargetOf(params, spec.tintTarget);
+  if (tint !== undefined) params[target] = tint;
+  return { emissive: params.emissive, hue: params[target] };
 }

@@ -600,4 +600,17 @@ describe('lightBase', () => {
       0x445566,
     );
   });
+
+  it('reads the tint the material was actually built with', () => {
+    expect(lightBase('gold', 0xff2d6f).hue).toBe(0xff2d6f);
+  });
+
+  // A tinted neon's emissive IS the tint; reading the look's own would reset it every frame.
+  it('moves the base emissive too when the tint landed on it', () => {
+    expect(lightBase('neon', 0xff2d6f)).toEqual({ emissive: 0xff2d6f, hue: 0xff2d6f });
+  });
+
+  it('falls back to the defaults for a look that declares no colour', () => {
+    expect(lightBase({ metalness: 1 })).toEqual({ emissive: 0x000000, hue: 0xffffff });
+  });
 });

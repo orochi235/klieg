@@ -1301,8 +1301,10 @@ already true of `gain` and `chase`, but a lamp is the first effect that invites 
 
 Task 5 ships the light channel summing in sRGB rather than in linear radiance. **Do not try to judge
 this from an offset seam.** Two half-strength lamps whose pools cross will read darker at the seam
-than one full lamp under *either* scheme, because the two falloff curves generally do not sum to 1
-there — the geometry swamps the colour space and the test fires either way.
+than one full lamp under *either* scheme. Measured: at the crossing each lamp is at half its reach and
+so gives half of its already-halved strength, landing the pair at 7.8 mean lift against the single
+lamp's 15.1 at its centre — half, spread over twice the width. The strengths, not the colour space,
+decide it, and the test fires either way.
 
 Nor does strength discriminate it: `amount` scales linearly in both schemes, so two coincident lamps
 at half strength and one at full strength are byte-identical whichever is in use.

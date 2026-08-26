@@ -340,9 +340,9 @@ Roughly in order of value; the items are independent of each other.
 
 - ~~**Selectable text**~~ — built and merged into `main`.
 
-- **Composable lighting — eight of nine tasks built, on the branch.** See the "In flight" section
-  at the top; only Task 9, the render proof, is left. `PointerLight` and `slotDrivesEnv` are gone
-  and the `aimAt` viewport bug with them.
+- **Composable lighting — all nine tasks built, on the branch, unmerged.** See the "In flight"
+  section at the top. `PointerLight` and `slotDrivesEnv` are gone and the `aimAt` viewport bug with
+  them. What is left is the decision to merge.
 
   **Two spikes are the evidence, and they re-run.** `spikes/lamp-falloff.mjs` proves
   `PartOffset.gain` is a byte-identical no-op on seven of eight looks; `spikes/lamp-blend.mjs`
@@ -353,7 +353,14 @@ Roughly in order of value; the items are independent of each other.
 - **The rendered word does not register against the text it stands in for. Asked for directly.**
   Two settings, one theme: klieg replaces real DOM text and does not currently agree with it.
 
-  **Horizontal alignment is not settable, and centred is the wrong default.** `text/placement.ts`
+  **Where the word sits in its box is settable now — `framing.align` on the `framing-align` branch,
+  pushed and unmerged, seven commits off `d15979c`.** `Align` is `'start' | 'center' | 'end'`, it
+  places the word at whatever size the framing fractions chose, it measures against the painted edge
+  (bevel included), and an anchored word defaults to the page's text edge. That is the half of this
+  ask that answers the original complaint. It aligns the **block**, computing one `offsetX` for the
+  group off the painted extent.
+
+  **Per-line alignment inside a block is still open, and centred is still the wrong default.** `text/placement.ts`
   centres every line on `x = 0` across the glyphs that draw ink, and nothing exposes a choice. It
   wants `'left' | 'center' | 'right'`, defaulting to **left**, with the `selectable` layer reading
   the same setting so its spans keep matching the ink. `apps/lab/test/visual.spec.ts` already

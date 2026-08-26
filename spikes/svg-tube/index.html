@@ -9,12 +9,22 @@
   #hud {
     position: fixed; left: 12px; top: 12px; z-index: 2;
     font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-    color: #9aa4b2; background: #11141ccc; padding: 10px 12px; border-radius: 8px;
-    max-width: 320px;
+    color: #9aa4b2; background: #11141ce6; padding: 10px 12px; border-radius: 8px;
+    width: 300px; max-height: calc(100vh - 24px); overflow-y: auto;
   }
   #hud b { color: #e6ebf2; font-weight: 600; }
-  #hud label { display: block; margin-top: 6px; }
-  #hud input[type=range] { width: 160px; vertical-align: middle; }
+  #title { cursor: pointer; user-select: none; }
+  #title .hint { color: #6b7684; }
+  #hud.collapsed #controls, #hud.collapsed .row, #hud.collapsed label { display: none; }
+  #hud.collapsed { width: auto; }
+  #hud label { display: grid; grid-template-columns: 84px 1fr 38px; align-items: center;
+                gap: 6px; margin-top: 3px; }
+  #hud label.check { grid-template-columns: auto 1fr; }
+  #hud .group { margin-top: 10px; color: #6b7684; text-transform: uppercase;
+                letter-spacing: .08em; font-size: 10px; }
+  #hud output { text-align: right; color: #cfd6e0; }
+  #hud input[type=range] { width: 100%; }
+  #hud select { width: 100%; }
   #hud .row { margin-top: 8px; }
   #silhouette {
     position: fixed; inset: 0; z-index: 1; pointer-events: none; display: none;
@@ -28,20 +38,11 @@
 <div id="stage"></div>
 <div id="silhouette"><img id="ref" alt=""></div>
 <div id="hud">
-  <div><b>tubing on vector art</b></div>
+  <div id="title"><b>tubing on vector art</b> <span class="hint">[hide]</span></div>
   <div id="stats">loading…</div>
   <div class="row">drag to pivot · double-click to reset</div>
-  <label><input type="checkbox" id="showRef"> overlay source SVG</label>
-  <label>contract <input type="range" id="contract" min="0" max="0.09" step="0.002" value="0"><span id="contractV">0.000</span></label>
-  <label>radius <input type="range" id="radius" min="0.006" max="0.05" step="0.002" value="0.022"><span id="radiusV">0.022</span></label>
-  <label>runs <input type="range" id="runs" min="1" max="24" step="1" value="7"><span id="runsV">7</span></label>
-  <label>paths
-    <select id="source">
-      <option value="direct">direct (offset)</option>
-      <option value="field">field (SDF)</option>
-      <option value="exact">exact</option>
-    </select>
-  </label>
+  <label class="check"><input type="checkbox" id="showRef"> overlay source SVG</label>
+  <div id="controls"></div>
 </div>
 <div id="err"></div>
 <script type="module" src="./main.js"></script>

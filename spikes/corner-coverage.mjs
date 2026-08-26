@@ -2,7 +2,7 @@
  * How much of a contour ends up with no tube over it?
  *
  *   npm run build -w klieg && node spikes/corner-coverage.mjs [look] [letters]
- *   CORNERS=connect|break|look  MIN_RUN=0  PATH_SOURCE=direct  node spikes/corner-coverage.mjs
+ *   REJOIN=bridge|widen|relax|drop  CORNERS=connect|break|look  MIN_RUN=0  PATH_SOURCE=direct
  *
  * Path length minus run length is not the answer: a filleted corner is shorter than the corner it
  * replaced and still continuous. This walks the generated contour instead and asks, per vertex,
@@ -16,7 +16,7 @@ import opentype from 'opentype.js';
 import { specOf } from '../packages/core/dist/render/looks.js';
 import { minBendRadius } from '../packages/core/dist/render/tube/bend.js';
 import { generatePaths } from '../packages/core/dist/render/tube/generators.js';
-import { cutIntoRuns, RESUME_DROP } from '../packages/core/dist/render/tube/runs.js';
+import { cutIntoRuns } from '../packages/core/dist/render/tube/runs.js';
 import { surfacesOf } from '../packages/core/dist/render/tube/surfaces.js';
 import { glyphToShapes } from '../packages/core/dist/text/glyphs.js';
 
@@ -26,6 +26,8 @@ const SOURCE = process.env.PATH_SOURCE ?? 'field';
 const look = process.argv[2] ?? 'tubing';
 const letters = process.argv[3] ?? 'tWMNSREAKX';
 const spec = { ...specOf(look).decoration, pathSource: SOURCE };
+if (process.env.RADIUS) spec.radius = Number(process.env.RADIUS);
+if (process.env.BEND) spec.bend = Number(process.env.BEND);
 const rhoMin = minBendRadius(spec.radius, spec.bend);
 const WEIGHTS = { connect: { break: 0, connect: 1 }, break: { break: 1, connect: 0 } };
 const mode = process.env.CORNERS ?? 'connect';
@@ -33,7 +35,7 @@ const corners = WEIGHTS[mode] ?? spec.corners;
 const minRun = Number(process.env.MIN_RUN ?? spec.minRun);
 const NICK = 3 * spec.radius;
 const OUT = process.env.OUT;
-const CELL = 260;
+const CELL = 300;
 const panels = [];
 
 /** Uniform grid over the drawn points, answering "is anything within `cell` of this probe". */
@@ -62,18 +64,15 @@ function coverGrid(points, cell) {
 }
 
 console.log(
-  `look ${look}  source ${SOURCE}  corners ${mode}  blockout ${process.env.BLOCKOUT ?? 0}  minRun ${minRun}  ` +
+  `look ${look}  rejoin ${process.env.REJOIN ?? 'drop'}  source ${SOURCE}  corners ${mode}  blockout ${process.env.BLOCKOUT ?? 0}  minRun ${minRun}  ` +
     `radius ${spec.radius}  rhoMin ${rhoMin.toFixed(4)} em`,
 );
 console.log(
-  'letter   path  uncovered        nicks         holes   corners  cn  rt  bk   resume  break',
+  'letter   path  uncovered        nicks         holes   corners  cn  rt  bk',
 );
 let totalPath = 0;
 let totalUncovered = 0;
 let totalHoles = 0;
-let totalResume = 0;
-let totalDrop = 0;
-let totalWipe = 0;
 for (const ch of letters) {
   const shapes = glyphToShapes(font, ch, 1);
   const paths = generatePaths(surfacesOf(shapes, 0.3), spec.surfaces, {
@@ -84,11 +83,6 @@ for (const ch of letters) {
     pad: 0.35,
     source: SOURCE,
   });
-  RESUME_DROP.back = 0;
-  RESUME_DROP.fwd = 0;
-  RESUME_DROP.drop = 0;
-  RESUME_DROP.wipeBack = 0;
-  RESUME_DROP.wipeFwd = 0;
   const cut = cutIntoRuns(paths, {
     runs: spec.runs,
     minRun,
@@ -97,6 +91,7 @@ for (const ch of letters) {
     bend: spec.bend,
     spacing: spec.spacing,
     blockout: Number(process.env.BLOCKOUT ?? 0),
+    rejoin: process.env.REJOIN ?? 'drop',
     seed: 0,
   });
   const drawn = cut.runs.flatMap((r) => r.points);
@@ -152,20 +147,16 @@ for (const ch of letters) {
       `${nicks.toFixed(3)} ${((nicks / pathLen) * 100).toFixed(0).padStart(3)}%  ` +
       `${holes.toFixed(3)} ${((holes / pathLen) * 100).toFixed(0).padStart(3)}%  ` +
       `${String(cut.corners.length).padStart(5)}  ${String(census.connect).padStart(2)}  ` +
-      `${String(census.return).padStart(2)}  ${String(census.break).padStart(2)}   ` +
-      `${(RESUME_DROP.back + RESUME_DROP.fwd).toFixed(3)}  ${RESUME_DROP.drop.toFixed(3)}`,
+      `${String(census.return).padStart(2)}  ${String(census.break).padStart(2)}`,
   );
-  totalWipe += RESUME_DROP.wipeBack + RESUME_DROP.wipeFwd;
-  totalResume += RESUME_DROP.back + RESUME_DROP.fwd;
-  totalDrop += RESUME_DROP.drop;
 }
 if (OUT) {
-  const S = CELL * 0.72;
+  const S = CELL * 0.62;
   const svg = panels
     .map(({ ch, misses, runs, holes, pathLen }, k) => {
       const x0 = (k % 5) * CELL;
       const y0 = Math.floor(k / 5) * CELL;
-      const map = (p) => `${(x0 + 30 + p.x * S).toFixed(1)},${(y0 + 30 - p.y * S).toFixed(1)}`;
+      const map = (p) => `${(x0 + 40 + p.x * S).toFixed(1)},${(y0 + CELL - 40 - p.y * S).toFixed(1)}`;
       const contour = misses
         .map(([pts]) => `<polyline points="${pts.map(map).join(' ')}"/>`)
         .join('');
@@ -177,7 +168,7 @@ if (OUT) {
         .join('');
       return (
         `<g class="contour">${contour}</g><g class="tube">${tube}</g><g class="gap">${gaps}</g>` +
-        `<text x="${x0 + 10}" y="${y0 + CELL - 10}">${ch} — ${((holes / pathLen) * 100).toFixed(0)}% holes</text>`
+        `<text x="${x0 + 10}" y="${y0 + 18}">${ch} — ${((holes / pathLen) * 100).toFixed(0)}% holes</text>`
       );
     })
     .join('\n');
@@ -198,7 +189,4 @@ console.log(
   `total ${totalPath.toFixed(3)} em: uncovered ${totalUncovered.toFixed(3)} ` +
     `(${((totalUncovered / totalPath) * 100).toFixed(1)}%), holes ${totalHoles.toFixed(3)} ` +
     `(${((totalHoles / totalPath) * 100).toFixed(1)}%)`,
-);
-console.log(
-  `discarded by resumeAt ${totalResume.toFixed(3)} em, by break drops ${totalDrop.toFixed(3)} em; ${totalWipe} whole-leg wipes`,
 );

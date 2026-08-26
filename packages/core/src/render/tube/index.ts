@@ -12,6 +12,7 @@ import {
   type CornerRecord,
   type CornerWeights,
   cutIntoRuns,
+  type Rejoin,
   type Run,
   type ShortRun,
 } from './runs.js';
@@ -23,8 +24,8 @@ import { wanderPaths } from './wander.js';
 export type { SelectSpec } from './assign.js';
 export type { PathSource } from './generators.js';
 export type { GradientDomain, GradientSpec } from './gradient.js';
-export type { CornerRecord, CornerStrategy, CornerWeights, Run, ShortRun } from './runs.js';
-export { ALL_BREAK, ALL_CONNECT } from './runs.js';
+export type { CornerRecord, CornerStrategy, CornerWeights, Rejoin, Run, ShortRun } from './runs.js';
+export { ALL_BREAK, ALL_CONNECT, DEFAULT_REJOIN, REJOINS } from './runs.js';
 export type { SurfaceKind } from './surfaces.js';
 
 export interface TubeSpec {
@@ -57,6 +58,11 @@ export interface TubeSpec {
   shortRun?: ShortRun;
   /** Weight distribution over what a corner does. Defaults to every corner breaking. */
   corners?: CornerWeights;
+  /**
+   * What the corner stage does when a fillet cannot meet its leg without bending under the
+   * minimum radius. `drop` by default; see `Rejoin`.
+   */
+  rejoin?: Rejoin;
   /** Depth fraction the wall generator runs at, 0 back to 1 front. */
   wallDepth?: number;
   /** Peak-to-peak depth swing along a wall path, as a fraction of depth. */
@@ -133,6 +139,7 @@ export function buildTubeBlueprint(
     radius: spec.radius,
     blockout: spec.blockout,
     shortRun: spec.shortRun,
+    rejoin: spec.rejoin,
     seed,
   });
   const runs = assign(

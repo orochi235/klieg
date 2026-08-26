@@ -1,88 +1,64 @@
 # Corner rejoin — design
 
-**For:** whoever implements this in `packages/core/src/render/tube/`. Assumes you know the corner
-stage fillets a corner it cannot bend around; assumes nothing else.
-**Answers:** why letters come out with tube missing from them, and what the stage should do instead
-of discarding a leg it cannot join cleanly.
+**For:** whoever works on `packages/core/src/render/tube/` next, and anyone who has read that the
+corner stage loses a fifth of a letter.
+**Answers:** where the tube actually goes missing from a letter, why it is mostly not a bug, and what
+the four `rejoin` strategies buy.
 
-## The problem
+## The tube missing from a letter is the tube's own bend radius
 
-A fillet is a circular arc tangent to both legs of a corner. Splicing it in means finding, on each
-leg, the vertex the arc can resume at — near enough not to leave a gap, far enough that the junction
-between the two does not itself bend under the material's minimum radius `rhoMin`. `resumeAt`
-(`runs.ts:436`) walks outward from the tangent point looking for that vertex.
+`spikes/corner-coverage.mjs` walks the generated contour and asks, per vertex, whether any drawn
+point lands within a tube radius of it. Uncovered arc length is what a reader sees missing.
 
-When the leg is still curving where the arc meets it — a corner spread across several vertices, or
-the distance field's own wobble — the junction test fails vertex after vertex and the walk runs off
-the end. The caller then drops the whole leg.
+Run it and look at `OUT=page.html`: the bare contour is the **sharp interior apexes** — the notches
+inside `W`, the tip of `A`'s counter, `K`'s junction. A fillet is an arc at the material's minimum
+bend radius, and an arc that wide cannot reach into a sharp V, so it cuts across and the tip is left
+bare. That is the material, not the stage. It scales with the tube:
 
-Measured on `tubing` over A–Z, 90.04 em of contour, every corner forced to `connect` so a break is
-the stage failing rather than choosing:
+| radius | 0.008 | 0.014 | 0.022 (shipped) | 0.030 | 0.040 |
+|---|---|---|---|---|---|
+| holes, `WAKNVtM` | 3.9% | 6.2% | 8.0% | 19.8% | 24.1% |
 
-| discarded by | em |
-|---|---|
-| `resumeAt` walking off a leg | 15.80 |
-| `dropHead` / `dropTail` at breaks | 0.85 |
+**Two earlier accounts of this were wrong, and both are worth not re-deriving.** The first named
+`filletAt` returning null and `dropHead`/`dropTail` then cutting the corner stretch out; measured,
+break drops account for 0.85 em across A–Z. The second named `resumeAt` (`runs.ts`), which walks a
+leg for a vertex whose junction into the arc clears the floor and gives the leg up when it finds
+none; it discards 15.80 em across A–Z, which looks damning until you make it never walk at all —
+`W`'s holes are unchanged to three decimals. What it discards it replaces with a straight chord, so
+it costs fidelity, not coverage.
 
-Most of that is re-covered, because the arc plus the straight join still passes near the contour.
-What survives as visible hole is **5.1% of the alphabet under the shipped `tubing`** and 3.2% under
-`piping`. `W` is the worst letter at 17%, with all 13 of its corners connected and no break anywhere
-in it.
+## `TubeSpec.rejoin`
 
-`spikes/corner-coverage.mjs` is the measure. Path length minus run length is not it: a fillet is
-shorter than the corner it replaced and still continuous, so that number counts working geometry as
-loss. The spike walks the generated contour instead and asks, per vertex, whether any drawn point
-lands within a tube radius of it.
+Four answers to what the stage does when the arc cannot join its leg without bending under `rhoMin`.
+The case was previously unnamed and always answered one way.
 
-## The fix
+| | | measured |
+|---|---|---|
+| `drop` | Walk for a clearing vertex; give the leg up if there is none. Today's behavior, and the default. | — |
+| `bridge` | `biarcBlend` from the tangent point out to the earliest leg vertex a blend reaches at `rhoMin` or wider. | halves uncovered contour at `radius` 0.008 (3.0% → 1.6%); a wash at 0.022 |
+| `widen` | Re-fit the fillet at a larger radius until its tangent points land on straight leg. | worse: 6.3% at `radius` 0.008 |
+| `relax` | Push the failing leg vertices out from their centre of curvature until they clear. | matches `bridge` on coverage, but breaks the bend floor — `piping` 3/49 runs under, against 1/49 today |
 
-**`TubeSpec.rejoin`** names what the stage does when the arc cannot join its leg. Today the case is
-unnamed and always answered one way.
+**`drop` stays the default.** `bridge` is the only one that improves anything, and only at tube radii
+finer than either shipped look uses; at the shipped radii apex rounding dominates and it is a wash.
+It is a real option for a fine-tubed look, not a fix to impose. Baselines are unmoved.
 
-| | |
-|---|---|
-| `bridge` | Two arcs meeting at a common tangent, from the fillet's tangent point out to the earliest leg vertex a blend reaches at `rhoMin` or wider. Default. |
-| `widen` | Re-fit the fillet at a larger radius until its tangent point lands past the shoulder, on leg that is genuinely straight. |
-| `relax` | Push the leg vertices that fail the junction test out from their own centre of curvature until they clear. |
-| `drop` | Walk for a clearing vertex and give up the leg if there is none — what ships today. |
+`bridge` does clear `piping`'s long-standing under-bend run (1/49 → 0/49) while adding one to
+`tubing` under wander (1/225 → 2/226) — worth knowing, not worth trading blind.
 
-`bridge` is `biarcBlend` (`bend.ts:236`), which has been in the tree with no callers since the corner
-lab. A blend between two directed points always exists, so the path meets it tangentially by
-construction rather than by a fit that can be wrong; it returns null only when an arc would bend
-tighter than `rhoMin`, and feasibility is not monotone in the room available, so a caller reaching
-outward must test every candidate rather than stop at the first failure.
+`biarcBlend` (`bend.ts`) had been in the tree with no callers since the corner lab; `bridge` and
+`relax` promote that lab's `blendAcross` and `relaxAcross` from one corner to every corner.
 
-The corner lab prototypes `bridge` and `relax` against a single corner already — `blendAcross` and
-`relaxAcross` in `dev/corner-lab/src/scene.ts`. This promotes them into `runs.ts` and runs them over
-every corner of every path.
+## The trap in splicing an arc
 
-**Independently of `rejoin`, one bug goes.** The backward walk returns `-1` when it finds nothing,
-and `mergeArc` does `target.length = 0` — discarding everything accumulated on that path, not just
-the leg. It fires 3 times across A–Z. `drop` keeps the leg's far end instead; nothing wipes a path.
+`splitReturn` finds the fillet inside a span by **object identity**, so a rejoin that splices a
+positional copy of the arc's first point instead of the point itself loses the lookup, and the dark
+stretch silently grows from one corner to most of the run. It cost 109 of 111 returns and read as a
+41% coverage win until the dark tube was counted. `runs.test.ts` pins it for every strategy.
 
-## What each option costs
+## If the apexes are worth covering
 
-`bridge` keeps the whole leg and adds built vertices. It is the only option that answers the failure
-without changing either the letterform or the corner's sharpness, which is why it is the default.
-
-`widen` blunts the corner, and does not always terminate usefully: a growing fillet eventually
-collides with the next corner's fillet on the shared leg, and the existing fixed-point loop resolves
-that by breaking one of them. It will still leave holes on tight corner sequences.
-
-`relax` is the one option that moves the contour rather than the tube's route through it. Under the
-`field` path source it competes with the wobble the field already introduces.
-
-`drop` stays reachable because a look may want small detail falling out of a sign rather than being
-drawn through, which is the same argument `TubeSpec.shortRun: 'drop'` won.
-
-## Acceptance
-
-`spikes/corner-coverage.mjs` over A–Z, both looks, both path sources, all four options. `bridge` at
-or near 0% holes against today's 5.1% and 3.2%. The bend invariant is unchanged and
-`spikes/bend-acceptance.mjs` still has to pass: no run may ship tighter than its look's minimum, and
-a rejoin that buys coverage by violating it has not fixed anything.
-
-The other three get measured on the same scale rather than argued about. The pipeline editor's knob
-needs numbers behind it, and `widen` in particular is expected to underperform.
-
-`bridge` replaces `drop` outright, so all 24 visual baselines move and get re-recorded.
+Nothing here covers a sharp apex, because a tube of radius `r` bending at `2r` cannot enter one. The
+move that would is a **hairpin**: run the tube past the apex and back, the way a bender does, letting
+it stand slightly outside the letter's outline. That is a new corner strategy beside `break`,
+`connect` and `return` — not a `rejoin` — and it is the only thing measured here that would move `W`.

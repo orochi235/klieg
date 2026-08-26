@@ -77,9 +77,10 @@ The cut now fits the count to what the contour can carry, and the old behaviour 
 `TubeSpec.shortRun: 'drop'` — it has a use, which is small detail falling out of a sign rather than
 being drawn coarsely.
 
-**Letters ship with tube missing from them — diagnosed, and not where this doc first said.** The
-suspect was `filletAt` returning null (`bend.ts:152`) and a break then cutting the whole corner
-stretch out. Measured, that accounts for 0.85 em across A–Z against 15.80 em discarded by `resumeAt`
-walking off the end of a leg it cannot join to the fillet. `W` loses 17% of itself with all 13
-corners connected and no break in it at all. See
-[the rejoin design](2026-08-26-corner-rejoin-design.md); `spikes/corner-coverage.mjs` is the measure.
+**A sequence of sharp corners loses a fifth of the letter — measured, and it is mostly the material.**
+The suspect was `filletAt` returning null (`bend.ts`) and a break cutting the whole corner stretch
+out; that accounts for 0.85 em across A–Z. What is actually bare is the sharp interior apexes, where
+an arc at the minimum bend radius cannot reach the tip — it scales with tube radius, 3.9% of `WAKNVtM`
+at radius 0.008 against 24.1% at 0.040. Covering an apex needs a hairpin past it, not a better
+fillet. See [the rejoin design](2026-08-26-corner-rejoin-design.md);
+`spikes/corner-coverage.mjs` is the measure.

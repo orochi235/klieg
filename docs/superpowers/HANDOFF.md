@@ -24,10 +24,12 @@ Two earlier accounts of the loss were wrong, and re-deriving them costs a sessio
 not move, because what it gives up it replaces with a chord. `spikes/corner-coverage.mjs` is the
 measure, and `OUT=page.html` draws where the bare contour actually is.
 
-**The one thing that would cover an apex is a hairpin past it** — run the tube beyond the tip and
-back, standing slightly outside the letter, the way a bender does. That is a new corner strategy
-beside `break`, `connect` and `return`, not a `rejoin`, and it is the only move measured that would
-change `W`.
+**The hairpin is prototyped and blocked on one aesthetic call.** `spikes/hairpin-view.mjs` builds it
+— the major arc of the circle inscribed in the wedge opposite the corner, which `biarcBlend` cannot
+produce — and where it lands it draws the right shape. What stops it is that the arc stands
+`rhoMin / cos(turn/2) + rhoMin` proud of the letter, up to 0.29 em on a 1 em `W`, and that grows as
+the corner sharpens. Either the construction gets a bounded footprint or someone decides a bulge at
+the sharpest corners is what neon looks like. Nothing else is in the way.
 
 **The visual suite is failing three tests on `main` right now, and it is not this branch.** At load
 average 12, `visual.spec.ts` fails the bloom-path, two-line-block and wrap tests. Stashing the run

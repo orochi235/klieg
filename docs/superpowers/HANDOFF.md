@@ -39,6 +39,12 @@ the light's x centroid rises with the cursor rather than merely differing; the v
 check wants a multi-line sign, which nothing renders yet.
 
 **What is left is the decision to merge.** Nothing is pushed; `main` is 11 ahead of `origin/main`.
+Every one of the nine tasks passed a spec-compliance review and a code-quality review, most with a
+fix round between. **A whole-branch pre-merge review was attempted twice and both runs died to API
+529s**, so the seams *between* tasks — one concept named two ways, an abstraction carrying weight it
+should not, the coherence of a fairly large new public surface landing in one release — have had no
+reviewer. That is the one gap in the branch's verification, and it is a gap in coverage rather than a
+known problem.
 Task 9's code-quality gate has since run, and its findings are folded in. Three findings below are
 recorded and deliberately unfixed.
 

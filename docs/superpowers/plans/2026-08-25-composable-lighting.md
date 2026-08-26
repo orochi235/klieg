@@ -1206,6 +1206,14 @@ Under `## Unreleased`:
 
 Find the `lighting` row in the options table and widen it to name the slot form and `lamp`.
 
+**Give `lamp` its own entry under `### effects`.** `flicker`, `hue` and `roving` each get a
+signature and their spec fields there; `lamp` is the branch's headline piece and currently appears
+only as two cross-references. A reader who follows the CHANGELOG's "put a `lamp` in `effects`" lands
+in a section that never mentions it. Cover the four sources and say which of them needs a pointer.
+
+**Document `sweep`'s spec.** `TrackSpec` documents every field and `sweep` takes a bare inline
+`{ periodMs?: number }` with none, while the CHANGELOG advertises `sweep({ periodMs })`.
+
 **Say that layers keep their own periods.** The design's claim is "the same grammar as `active`", and
 the *shape* matches exactly — a name, a piece, or an array. The layering does not: `Timeline.poseAt`
 gives every member of a motion slot one shared `t` from the slot's duration, with phase weights,

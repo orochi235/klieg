@@ -1097,7 +1097,7 @@ git commit -m "drive the environment from a composable lighting slot"
 - Modify: `CHANGELOG.md`
 - Modify: `README.md`
 
-- [ ] **Step 1: Export the new surface**
+- [x] **Step 1: Export the new surface**
 
 ```ts
 export { type LampSpec, along, fixed, fromPointer, lamp, type LightPose, type LightSource, orbit, type OrbitSpec } from './effects/lamp.js';
@@ -1141,7 +1141,7 @@ barrel alone, since `PartOffset` already re-exports and consumers get the shape 
 wants the name once callers are writing lamps.
 
 
-- [ ] **Step 1b: Retire `envRotation` in one piece**
+- [x] **Step 1b: Retire `envRotation` in one piece**
 
 Task 7 stopped reading it and deleted nothing, because the field reaches public API. The whole set:
 
@@ -1159,7 +1159,7 @@ One of the tests Task 7 found here (`lets a caller-supplied active piece rake th
 false green even before this change: the default `sweep` turns the environment anyway, so it passed
 without `envRotation` doing anything. Do not port its assertion forward.
 
-- [ ] **Step 1c: Five doc lines the exported surface is wrong without**
+- [x] **Step 1c: Five doc lines the exported surface is wrong without**
 
 Each is one clause, and each is a silent wrong answer rather than a restatement:
 
@@ -1182,7 +1182,7 @@ Each is one clause, and each is a silent wrong answer rather than a restatement:
 - **`EnvPiece.duration: 0` does not mean "holds still".** `track` reports 0 and moves. It means
   aperiodic: `t` is always 0.
 
-- [ ] **Step 2: Write the CHANGELOG entry**
+- [x] **Step 2: Write the CHANGELOG entry**
 
 Under `## Unreleased`:
 
@@ -1202,7 +1202,7 @@ Under `## Unreleased`:
 - `MotionPiece.envRotation`. Declare an env piece in `lighting` instead.
 ```
 
-- [ ] **Step 3: Document the option in the README**
+- [x] **Step 3: Document the option in the README**
 
 Find the `lighting` row in the options table and widen it to name the slot form and `lamp`.
 
@@ -1222,7 +1222,7 @@ while each lighting piece gets its own `t` from its own `duration` and there are
 The lighting behavior is the one we want; a reader who learned layering from `active` will expect
 phase-lock and needs telling.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add packages/core/src packages/core/test CHANGELOG.md README.md
@@ -1288,12 +1288,6 @@ from `OrbitSpec`, which is the only place it is written.
 
 `sequin` will not pass and is out of scope — it has zero `run` parts and a near-black body. See
 the findings note.
-
-**Sweep the pointer across a small anchored sign**, not only a fullscreen one. `pointerInWord`
-stretches the canvas onto the word's extent per axis rather than projecting through the camera, so
-the lamp is under the cursor only when the word fills the frame. `projectLetters` in
-`text/projection.ts` is a true inverse and `index.ts` already drives it for the DOM layer. Whether
-the stretch reads as wrong is a pixels question; decide it here.
 
 Three things the pixels are the only judge of, beyond the no-op check above. A lamp on a **run**
 passes the run's own colour as the hue and not `out.color`, so a part recoloured by `hue()` reflects

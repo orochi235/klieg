@@ -5,7 +5,7 @@ what is worth doing next.
 
 ## In flight
 
-**`composable-lighting`, seven tasks of nine done.** Branch cut from `fb058fe`, nothing pushed.
+**`composable-lighting`, eight tasks of nine done.** Branch cut from `fb058fe`, nothing pushed.
 Every task passed both gates — spec compliance clean on the first pass, code quality after one fix
 round each. Task 1 (`9425be1`, `e637b33`) added the additive `light` channel on `PartOffset` and
 summed it in the effects compositor. Task 2 (`13d1c62`, `4a61f72`) added the four light sources —
@@ -17,10 +17,12 @@ required `ctx`, and moved `FrameCtx` into `effects/types.ts`. Task 4 (`61cbfb0`,
 run's colour buffer, threaded the `ctx`, and added `partExtent()`. Task 6 (`b883659`, `295bce7`,
 `f3d4f5e`) added `EnvPiece`, `mergeEnv` and the `sweep`/`still`/`track` factories. Task 7
 (`8a778f9`, `3b69ca8`, `6d3b3d3`, `ad60629`, `5589976`) made `lighting` a slot, built the per-frame
-`FrameCtx`, and moved the pointer arithmetic into a new pure `src/pointer.ts`. `npm run check` is
-green at **1081 tests**, up from 977 at the branch point.
+`FrameCtx`, and moved the pointer arithmetic into a new pure `src/pointer.ts`. Task 8 (`4a68519`,
+`9bc93a1`, `c50c5b1`, `88aeb0c`) exported the surface, retired `envRotation` and `PointerLight`, and
+wrote the CHANGELOG and README. `npm run check` is green at **1070 tests**, up from 977 at the branch
+point — down from 1081 because 13 tests went with the API they covered.
 
-Pick up at **Task 8** of [the plan](plans/2026-08-25-composable-lighting.md), which is
+Pick up at **Task 9** of [the plan](plans/2026-08-25-composable-lighting.md), which is
 self-contained: every signature, test body and command is in it. **Read the plan, not the design
 doc** — review rounds have amended Tasks 5, 7 and 9 (`0baa15e`, `f53d233`, `b5f6a49`, `874a9e7`,
 `fec9a2d`), and the design predates all of it. The execution method was subagent-driven — one implementer
@@ -88,6 +90,15 @@ but is never cleared, so the next fire opens aimed wherever the cursor was when 
 The listener attaches on the first `fire()` and lives until `destroy()`, which is what `PointerLight`
 did before this branch. The test that catches it has to move the pointer **in the gap between two
 fires**.
+
+**What Task 8 learned: verify your own prose against the built package.** Two claims written in this
+task were false and both were caught by a throwaway script that imported `dist` and asserted each
+sentence. `duration` is read by `orbit` and `along` only — `fixed` ignores `t` exactly as
+`fromPointer` does, and `LampSpec`'s own doc named just one of the two, which is how the wrong
+sentence got written. And `lamp({ source: orbit() })` **on bare defaults lights nothing at all**:
+`orbit` sits at 2 em, a lamp reaches 0.5 em, and a short sign's parts live inside 1.3 em. Not a
+ratio problem — the same 4:1 works at a larger scale. Task 9 renders it and decides whether the
+default moves; it has never shipped, so it is free to change now and a breaking change later.
 
 **Two things Task 2 learned that the plan did not say.** The plan's supplied tests are vacuous on
 the two things worth testing. `along` is only exercised on a 2-point path, where `last === 1` so the
@@ -353,16 +364,9 @@ Roughly in order of value; the items are independent of each other.
 
 - ~~**Selectable text**~~ — built and merged into `main`.
 
-- **Composable lighting — planned, not built. This is the next thing to execute.** See
-  [the plan](plans/2026-08-25-composable-lighting.md), nine TDD tasks, and behind it
-  [the design](specs/2026-08-25-composable-lighting-design.md): `lighting` becomes a composable slot
-  posing the environment, a `lamp` effect piece carries light landing on a part, and light sources
-  are `(t, ctx)` functions with the cursor as one of them. It also folds in the `PointerLight.aimAt`
-  viewport bug and retires `slotDrivesEnv`.
-
-  The plan is self-contained — it carries every signature and test it needs, so it can be executed
-  from a cold session. Task 9 is the only one that proves anything reaches the screen; treat green
-  units from tasks 1-8 as meaning nothing, for the reason the findings note gives.
+- **Composable lighting — eight of nine tasks built, on the branch.** See the "In flight" section
+  at the top; only Task 9, the render proof, is left. `PointerLight` and `slotDrivesEnv` are gone
+  and the `aimAt` viewport bug with them.
 
   **Two spikes are the evidence, and they re-run.** `spikes/lamp-falloff.mjs` proves
   `PartOffset.gain` is a byte-identical no-op on seven of eight looks; `spikes/lamp-blend.mjs`

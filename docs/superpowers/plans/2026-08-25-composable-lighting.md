@@ -18,7 +18,7 @@ why `gain` is not the channel, which is the single most important thing to not r
 
 | File | Responsibility |
 |---|---|
-| `packages/core/src/render/lighting.ts` | **Rewrite.** `EnvPiece`, the `sweep`/`static`/`track` factories, and `mergeEnv`. `PointerLight` stays as `track`'s internals. Imports `FrameCtx`. |
+| `packages/core/src/render/lighting.ts` | **Rewrite.** `EnvPiece`, the `sweep`/`static`/`track` factories, and `mergeEnv`. `track` carries its own follow, so `PointerLight` is dead once Task 7 lands and Task 8 deletes it. Imports `FrameCtx` from `effects/types.ts`. |
 | `packages/core/src/effects/lamp.ts` | **New.** `LightPose`, `LightSource`, the `fixed`/`orbit`/`along`/`fromPointer` sources, and `lamp()`. |
 | `packages/core/src/effects/types.ts` | `FrameCtx`, `PartOffset.light`, `ResolvedOffset.light`, `EffectPiece.at` gains a `ctx`. |
 | `packages/core/src/effects/compositor.ts` | Sums the light channel. Stays pure — no three import. |
@@ -1074,6 +1074,11 @@ export { type LampSpec, along, fixed, fromPointer, lamp, type LightPose, type Li
 export { type EnvOffset, type EnvPiece, mergeEnv, still, sweep, track, type TrackSpec } from './render/lighting.js';
 export type { LightingSlot };
 ```
+
+Delete `PointerLight` and `envRotationAt` from `render/lighting.ts`, their exports, and their tests.
+`track` carries its own follow and `sweep` its own period, so once Task 7 rewrites the render loop
+nothing calls either. `PointerLight`'s viewport normalization is the bug the Fixed note below names —
+it must not survive as a second, wrong way to do this.
 
 Also re-export `LightOffset` from `./effects/types.js` beside the existing `PartOffset` export.
 Task 1 added it as a named interface following the `FlakeSpec` precedent but deliberately left the

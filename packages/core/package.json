@@ -23,7 +23,8 @@
   "type": "module",
   "sideEffects": [
     "./dist/element.js",
-    "./dist/standalone/klieg-sign.js"
+    "./dist/standalone/klieg-sign.js",
+    "./src/element.ts"
   ],
   "exports": {
     ".": {

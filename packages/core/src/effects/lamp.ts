@@ -28,9 +28,9 @@ export function fromPointer(map?: (p: { x: number; y: number }) => LightPose): L
 }
 
 export interface OrbitSpec {
-  /** Em of layout space. Defaults to 0.3, inside a lamp's 0.5 em default reach: every part of a
-   * single-line sign sits on the baseline, so a circle wider than the reach goes dark at the top
-   * and bottom of its pass. A taller or wider sign wants a wider circle. */
+  /** Em of layout space. Defaults to 0.3, six tenths of a lamp's 0.5 em default reach: every part
+   * of a single-line sign sits on the baseline, so a circle as wide as the reach is already dark
+   * at the top and bottom of its pass. A taller or wider sign wants a wider circle. */
   radius?: number;
   /** Centre of the circle, in layout space. Both default to 0, the middle of the word. */
   x?: number;

@@ -38,11 +38,13 @@ describe('orbit', () => {
 
   // The default radius and a lamp's default reach have to meet, and only the pair proves it:
   // orbit at 2 em cleared a lamp's 0.5 em reach and `lamp({ source: orbit() })` lit nothing at
-  // any phase, with every unit test on this file green.
-  it('stays inside a default lamp on every quarter of its pass', () => {
+  // most of its pass, with every unit test on this file green. Any amount above zero is the
+  // property; a floor would encode which radius was picked instead.
+  it('stays inside a default lamp all the way around its pass', () => {
     const piece = lamp({ source: orbit() });
-    for (const t of [0, 0.25, 0.5, 0.75]) {
-      expect(piece.at(t, partAt(0), NO_CTX).light?.amount ?? 0, `t=${t}`).toBeGreaterThan(0.5);
+    for (let i = 0; i < 16; i++) {
+      const t = i / 16;
+      expect(piece.at(t, partAt(0), NO_CTX).light?.amount ?? 0, `t=${t}`).toBeGreaterThan(0);
     }
   });
 

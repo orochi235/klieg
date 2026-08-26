@@ -22,10 +22,13 @@ attribute layer. **Left:** the subpath exports and `sideEffects` (Task 8), the s
 only on the unmerged `composable-lighting` work; `origin/main` has `LightingName`. Corrected in both
 docs, but expect other drift if you copy code out of the plan without compiling it.
 
-**Two element behaviors are deliberate and undocumented until Task 12.** The `look` *property* beats
-the `look` attribute, so a page driving both sees the attribute change re-fire with the property's
-value. And `bloom="false"` means off while any other value means on — an invented convention, kept
-because `bloom="${on}"` stringifies to `"false"` and nothing else could express off.
+**Three element behaviors are deliberate and undocumented until Task 12.** Removing an attribute
+actively *unsets* its setting: the element keeps a ledger of the keys it last sent and patches a
+dropped one back to `undefined`, so `toggleAttribute('bloom')` really does turn bloom off rather than
+leaving the old value lit. The `look` *property* beats the `look` attribute, so a page driving both
+sees the attribute change re-fire with the property's value. And `bloom="false"` means off while any
+other value means on — an invented convention, kept because `bloom="${on}"` stringifies to `"false"`
+and nothing else could express off.
 
 **`align` is validated in the element; `lighting` deliberately is not.** An unknown align is silently
 *wrong* — `edgeFor` resolves it to the right edge in an ltr document rather than the `start` default.

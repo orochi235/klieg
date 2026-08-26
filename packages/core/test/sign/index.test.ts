@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FireOptions, KliegOptions } from '../../src/index.js';
+import { track } from '../../src/render/lighting.js';
 
 const { createKlieg, fire, destroy, prefersReducedMotion } = vi.hoisted(() => ({
   createKlieg: vi.fn(),
@@ -123,6 +124,13 @@ describe('sign', () => {
     expect(fire).toHaveBeenCalledWith('A Name', expect.anything());
     expect(fired().lighting).toBe('static');
     expect(fired().effects).toEqual([]);
+  });
+
+  it('passes a composed lighting slot straight through', () => {
+    const piece = track({ pitchRange: 0.1 });
+    sign(anchor, { font: '/f.ttf', lighting: ['sweep', piece] });
+
+    expect(fired().lighting).toEqual(['sweep', piece]);
   });
 
   it('reports lit before the build blocks, and unlit when the fire settles', async () => {

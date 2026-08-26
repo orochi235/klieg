@@ -3,16 +3,28 @@ import { hueColor } from './luminance.js';
 import type { EffectName, EffectPiece } from './types.js';
 
 export interface FlickerSpec {
+  /** Milliseconds for one pass. With a `spell` and a `calm` the pass becomes the nearest whole
+   * number of cycles of the two, which can be longer than this or shorter. */
   duration?: number;
   /** How dark the stutter goes, as the floor of `gain`. 0 is fully out. */
   depth?: number;
   /** Share of the pass spent stuttering. The rest is held lit. */
   unrest?: number;
+  /** Milliseconds of one flickering bout. Needs a `calm`, and both must exceed one step. */
+  spell?: number;
+  /** Milliseconds held steady between bouts. Needs a `spell`, and lengthens the pass to fit whole
+   * cycles of the two. 0, the default, flickers throughout. */
+  calm?: number;
 }
 
-/** Steps per pass. One step is ~58ms at the default duration, so the shortest drop covers about
- * three frames at 60fps; a one-frame drop reads as noise rather than as a failing tube. */
-const STEPS = 24;
+/** One step is ~58ms, so the shortest drop covers about three frames at 60fps; a one-frame drop
+ * reads as noise rather than as a failing tube. Derived rather than fixed: 24 steps against a long
+ * pass would stretch each one into a multi-second strobe. */
+const STEP_MS = 1400 / 24;
+
+function stepsFor(duration: number): number {
+  return Math.max(1, Math.round(duration / STEP_MS));
+}
 
 /** How far above `depth` a drop is allowed to sit, so a stutter lands near dark, not half-lit. */
 const BITE = 0.35;
@@ -21,16 +33,36 @@ function clamp01(n: number): number {
   return Math.min(Math.max(n, 0), 1);
 }
 
+function finiteMs(ms: number | undefined): number {
+  return Number.isFinite(ms) ? Math.max(0, ms as number) : 0;
+}
+
 /** A tube on its way out: mostly lit, with short irregular stutters. */
 export function flicker(spec: FlickerSpec = {}): EffectPiece {
-  const duration = spec.duration ?? 1400;
   const depth = clamp01(spec.depth ?? 0);
   const unrest = clamp01(spec.unrest ?? 0.18);
+  const wanted = spec.duration ?? 1400;
+  // A non-finite scale reads as absent: an infinite one would otherwise set an infinite pass, and
+  // `spell` would take every gain to NaN with it.
+  const calm = finiteMs(spec.calm);
+  const spell = finiteMs(spec.spell);
+
+  // Both scales snap to whole steps, which is what puts every gate boundary on a step edge: a
+  // boundary inside a step clips that drop to a frame or two and it reads as noise.
+  const spellSteps = Math.round(spell / STEP_MS);
+  const calmSteps = Math.round(calm / STEP_MS);
+  const gated = spellSteps > 0 && calmSteps > 0;
+  const cycleSteps = spellSteps + calmSteps;
+  const cycles = gated ? Math.max(1, Math.round(wanted / (cycleSteps * STEP_MS))) : 1;
+  const duration = gated ? cycles * cycleSteps * STEP_MS : wanted;
+  const steps = stepsFor(duration);
+  const spellShare = spellSteps / cycleSteps;
 
   return {
     duration,
     at(t, part) {
-      const step = Math.floor(t * STEPS) % STEPS;
+      if (gated && (t * cycles) % 1 >= spellShare) return { gain: 1 };
+      const step = Math.floor(t * steps) % steps;
       if (hash01(step + part.index * 977.3) > unrest) return { gain: 1 };
       const bite = hash01(step * 3.7 + part.index * 131.1);
       return { gain: depth + (1 - depth) * bite * BITE };

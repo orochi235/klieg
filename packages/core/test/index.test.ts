@@ -2,11 +2,14 @@ import type { Font } from 'opentype.js';
 import type * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type Clock, ManualClock, type Tick } from '../src/clock.js';
+import type { FrameCtx, PartInfo } from '../src/effects/types.js';
 import {
   ACTIVE_NAMES,
   createKlieg,
+  type EffectSpec,
   ENTER_NAMES,
   EXIT_NAMES,
+  type FireOptions,
   type KliegOptions,
   LIGHTING_NAMES,
   LOOK_NAMES,
@@ -15,6 +18,7 @@ import {
 } from '../src/index.js';
 import type { Vec3 } from '../src/pose.js';
 import { BloomPath } from '../src/render/bloom.js';
+import { type EnvPiece, sweep, track } from '../src/render/lighting.js';
 import { BASE_Z, Stage } from '../src/render/stage.js';
 import { DEFAULT_GLYPH_OPTIONS } from '../src/text/glyphs.js';
 import { fromEuler } from '../src/transform.js';
@@ -36,15 +40,39 @@ const BOX = (size: number) => [
 function stubFont(): Font {
   return {
     unitsPerEm: UPEM,
-    charToGlyph: () => ({
+    // A space advances and draws nothing, as a real face does: it is how a word gets no parts.
+    charToGlyph: (char: string) => ({
       advanceWidth: ADVANCE,
-      getPath: (_x: number, _y: number, size: number) => ({ commands: BOX(size) }),
+      getPath: (_x: number, _y: number, size: number) => ({
+        commands: char === ' ' ? [] : BOX(size),
+      }),
     }),
     getKerningValue: () => 0,
   } as unknown as Font;
 }
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+type Listener = (e: unknown) => void;
+let listeners: Map<string, Listener[]>;
+
+/** node has no window event target, and every effect attaches a pointermove listener. */
+function stubListeners(): void {
+  listeners = new Map();
+  vi.stubGlobal('addEventListener', (type: string, fn: Listener) => {
+    listeners.set(type, [...(listeners.get(type) ?? []), fn]);
+  });
+  vi.stubGlobal('removeEventListener', (type: string, fn: Listener) => {
+    listeners.set(
+      type,
+      (listeners.get(type) ?? []).filter((f) => f !== fn),
+    );
+  });
+}
+
+const dispatch = (type: string, e: unknown = {}) => {
+  for (const fn of [...(listeners.get(type) ?? [])]) fn(e);
+};
 
 /** Ignores unsubscribe, so a tick still reaches an effect that has already settled. */
 class LeakyClock implements Clock {
@@ -125,6 +153,17 @@ function firstCell(): THREE.Group {
   return inner.children[0] as THREE.Group;
 }
 
+/** Stage.mount is stubbed, so the canvas the pointer is measured against has to stand in. */
+function stubCanvas(box: { left: number; top: number; width: number; height: number }): void {
+  stage().canvas = {
+    getBoundingClientRect: () => ({
+      ...box,
+      right: box.left + box.width,
+      bottom: box.top + box.height,
+    }),
+  } as unknown as HTMLCanvasElement;
+}
+
 function firstMesh(): THREE.Mesh {
   return firstCell().children[0] as THREE.Mesh;
 }
@@ -154,6 +193,7 @@ beforeEach(() => {
   stubFetch();
   stubWebgl(true);
   stubStage();
+  stubListeners();
 });
 
 afterEach(() => {
@@ -163,6 +203,8 @@ afterEach(() => {
 
 /** Enter, active and exit all zero-length, so the effect finishes on its first tick. */
 const INSTANT = { enter: 'none', active: 'none', exit: 'none', hold: 0 } as const;
+/** The same, but held long enough to tick under a pointer. */
+const LIT = { ...INSTANT, hold: 5000 } as const;
 
 describe('createKlieg', () => {
   it('mounts, renders and tears the word down when the timeline finishes', async () => {
@@ -686,32 +728,10 @@ describe('createKlieg', () => {
 });
 
 describe('holding until dismissed', () => {
-  type Listener = (e: unknown) => void;
-  let listeners: Map<string, Listener[]>;
-
-  /** node has no window event target, so the dismissal listeners need one to attach to. */
-  function stubListeners(): void {
-    listeners = new Map();
-    vi.stubGlobal('addEventListener', (type: string, fn: Listener) => {
-      listeners.set(type, [...(listeners.get(type) ?? []), fn]);
-    });
-    vi.stubGlobal('removeEventListener', (type: string, fn: Listener) => {
-      listeners.set(
-        type,
-        (listeners.get(type) ?? []).filter((f) => f !== fn),
-      );
-    });
-  }
-
-  const dispatch = (type: string, e: unknown = {}) => {
-    for (const fn of [...(listeners.get(type) ?? [])]) fn(e);
-  };
   const attached = () =>
     (listeners.get('pointerdown')?.length ?? 0) + (listeners.get('keydown')?.length ?? 0);
 
   const HELD = { enter: 'none', active: 'none', exit: 'none', hold: 'click' } as const;
-
-  beforeEach(stubListeners);
 
   it('stays on screen while a numeric hold would long since have ended', async () => {
     const bk = create();
@@ -1191,50 +1211,381 @@ describe('caller-supplied motion', () => {
     // Layout x is baked into the cell, so the layer's contribution is the delta from rest.
     expect(cell.position.x).toBeGreaterThan(0);
   });
+});
 
-  it('lets a caller-supplied active piece rake the highlight', async () => {
-    const raker = { duration: 1000, offset: () => ({}), envRotation: true };
+describe('the lighting slot', () => {
+  const envY = () => stage().scene.environmentRotation.y;
+
+  it('drives the environment from a caller-supplied piece', async () => {
+    const tip: EnvPiece = { duration: 0, env: () => ({ yaw: 0.4, pitch: 0.2 }) };
 
     const bk = create();
-    void bk.fire('HI', { enter: 'none', active: raker, exit: 'none', hold: 1000 });
+    void bk.fire('HI', { ...LIT, lighting: tip });
     await flush();
-    clock.advance(500);
+    clock.advance(16);
 
-    expect(stage().scene.environmentRotation.y).toBeGreaterThan(0);
+    expect(envY()).toBeCloseTo(0.4, 6);
+    expect(stage().scene.environmentRotation.x).toBeCloseTo(0.2, 6);
+    bk.destroy();
   });
 
-  it('falls back to the lighting mode for a piece that does not drive the environment', async () => {
-    const plain = { duration: 1000, offset: () => ({}) };
+  it('layers an array of names and pieces onto both axes at once', async () => {
+    const tip: EnvPiece = { duration: 0, env: () => ({ pitch: 0.25 }) };
 
     const bk = create();
-    void bk.fire('HI', {
-      enter: 'none',
-      active: plain,
-      exit: 'none',
-      hold: 1000,
-      lighting: 'static',
-    });
+    void bk.fire('HI', { ...LIT, lighting: ['sweep', tip] });
     await flush();
-    clock.advance(500);
+    clock.advance(850);
 
-    expect(stage().scene.environmentRotation.y).toBe(0);
+    expect(envY()).toBeCloseTo(TAU / 4, 6);
+    expect(stage().scene.environmentRotation.x).toBeCloseTo(0.25, 6);
+    bk.destroy();
   });
 
-  it('lets a driving piece override the lighting mode, being the more specific choice', async () => {
-    const raker = { duration: 1000, offset: () => ({}), envRotation: true };
+  it('wraps a sweep that outlives its own period rather than winding on forever', async () => {
+    const bk = create();
+    void bk.fire('HI', { ...LIT, lighting: sweep({ periodMs: 1000 }) });
+    await flush();
+    clock.advance(2250);
+
+    expect(envY()).toBeCloseTo(TAU / 4, 6);
+    bk.destroy();
+  });
+
+  it('hands a piece that holds still a finite t rather than dividing by its zero duration', async () => {
+    const seen: number[] = [];
+    const held: EnvPiece = {
+      duration: 0,
+      env: (t) => {
+        seen.push(t);
+        return { yaw: t };
+      },
+    };
 
     const bk = create();
-    void bk.fire('HI', {
-      enter: 'none',
-      active: raker,
-      exit: 'none',
-      hold: 1000,
-      lighting: 'static',
-    });
+    void bk.fire('HI', { ...LIT, lighting: held });
     await flush();
-    clock.advance(500);
+    clock.advance(16);
 
-    expect(stage().scene.environmentRotation.y).toBeGreaterThan(0);
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every(Number.isFinite)).toBe(true);
+    expect(envY()).toBe(0);
+    bk.destroy();
+  });
+
+  it('measures the pointer against the canvas box, not the viewport', async () => {
+    const bk = create();
+    void bk.fire('HI', { ...LIT, lighting: track({ yawRange: 1, followMs: 0 }) });
+    await flush();
+    stubCanvas({ left: 0, top: 0, width: 100, height: 100 });
+    dispatch('pointermove', { clientX: 75, clientY: 50 });
+    clock.advance(16);
+
+    expect(envY()).toBeCloseTo(0.5, 6);
+
+    // The same client position against a box that has moved must read somewhere else entirely.
+    stubCanvas({ left: 50, top: 0, width: 100, height: 100 });
+    clock.advance(16);
+
+    expect(envY()).toBeCloseTo(-0.5, 6);
+    bk.destroy();
+  });
+
+  it('clamps a pointer outside the canvas box into the range it promises', async () => {
+    const bk = create();
+    void bk.fire('HI', { ...LIT, lighting: track({ yawRange: 1, pitchRange: 1, followMs: 0 }) });
+    await flush();
+    stubCanvas({ left: 0, top: 0, width: 100, height: 100 });
+    dispatch('pointermove', { clientX: 900, clientY: -400 });
+    clock.advance(16);
+
+    expect(envY()).toBeCloseTo(1, 6);
+    expect(stage().scene.environmentRotation.x).toBeCloseTo(-1, 6);
+    bk.destroy();
+  });
+
+  it('resolves a name once per run, so the follow keeps closing on the pointer', async () => {
+    const bk = create();
+    void bk.fire('HI', { ...LIT, lighting: 'pointer' });
+    await flush();
+    stubCanvas({ left: 0, top: 0, width: 100, height: 100 });
+    dispatch('pointermove', { clientX: 100, clientY: 50 });
+    clock.advance(16);
+    const afterOne = envY();
+    for (let i = 0; i < 40; i++) clock.advance(16);
+
+    expect(afterOne).toBeGreaterThan(0);
+    // Rebuilding the slot per frame would hand back a fresh piece easing from rest every time, so
+    // the yaw would sit at exactly what one frame reached and never move again.
+    expect(envY()).toBeGreaterThan(afterOne * 5);
+    bk.destroy();
+  });
+
+  it('rests at the static pose until the pointer has been inside the box', async () => {
+    const bk = create();
+    void bk.fire('HI', { ...LIT, lighting: 'pointer' });
+    await flush();
+    stubCanvas({ left: 0, top: 0, width: 100, height: 100 });
+    clock.advance(16);
+
+    expect(envY()).toBe(0);
+    expect(stage().scene.environmentRotation.x).toBe(0);
+    bk.destroy();
+  });
+
+  it('attaches no listener until something has been fired', () => {
+    create();
+
+    expect(listeners.get('pointermove') ?? []).toHaveLength(0);
+  });
+
+  it('keeps the listener past a settled effect and drops it on destroy', async () => {
+    const bk = create();
+    const done = bk.fire('HI', INSTANT);
+    await flush();
+    expect(listeners.get('pointermove')).toHaveLength(1);
+
+    clock.advance(16);
+    await done;
+
+    expect(listeners.get('pointermove')).toHaveLength(1);
+
+    bk.destroy();
+
+    expect(listeners.get('pointermove') ?? []).toHaveLength(0);
+  });
+
+  it('adds no second listener for a second fire', async () => {
+    const bk = create();
+    const done = bk.fire('HI', INSTANT);
+    await flush();
+    clock.advance(16);
+    await done;
+
+    void bk.fire('HI', LIT);
+    await flush();
+
+    expect(listeners.get('pointermove')).toHaveLength(1);
+    bk.destroy();
+  });
+
+  it('drops it on a destroy that aborts an effect mid-flight', async () => {
+    const bk = create();
+    const done = bk.fire('HI', LIT);
+    await flush();
+    expect(listeners.get('pointermove')).toHaveLength(1);
+
+    bk.destroy();
+    await done;
+
+    expect(listeners.get('pointermove') ?? []).toHaveLength(0);
+  });
+});
+
+describe('the pointer in the frame context', () => {
+  const BOX = { left: 0, top: 0, width: 100, height: 100 };
+
+  /** A body-wide effect piece is the only thing handed the ctx the render loop builds. */
+  function capture() {
+    const frames: FrameCtx[] = [];
+    const parts: PartInfo[] = [];
+    return {
+      frames,
+      parts,
+      spec: {
+        piece: {
+          duration: 1000,
+          at: (_t: number, part: PartInfo, ctx: FrameCtx) => {
+            parts.push(part);
+            frames.push(ctx);
+            return {};
+          },
+        },
+        target: { kind: 'body', by: 'index', amount: 1 },
+      } as const,
+    };
+  }
+
+  const last = <T>(xs: T[]): T => xs[xs.length - 1] as T;
+  const LOOKING = (spec: EffectSpec): FireOptions => ({
+    enter: 'none',
+    active: 'none',
+    exit: 'none',
+    hold: 5000,
+    effects: [spec],
+  });
+
+  it('leaves both pointers null until one has moved', async () => {
+    const seen = capture();
+    const bk = create();
+    void bk.fire('HI', LOOKING(seen.spec));
+    await flush();
+    stubCanvas(BOX);
+    clock.advance(16);
+
+    expect(seen.frames.length).toBeGreaterThan(0);
+    expect(last(seen.frames).pointer).toBeNull();
+    expect(last(seen.frames).pointerInWord).toBeNull();
+    bk.destroy();
+  });
+
+  it('carries a canvas pointer that sweeps the whole word in layout space', async () => {
+    const seen = capture();
+    const bk = create();
+    // Two lines, and wide enough that the word's extent reaches past the -1..1 the box is in:
+    // a single line has no vertical extent to speak of and cannot tell the y axes apart.
+    void bk.fire('HELLO\nTHERE', LOOKING(seen.spec));
+    await flush();
+    stubCanvas(BOX);
+
+    dispatch('pointermove', { clientX: 0, clientY: 0 });
+    clock.advance(16);
+    const topLeft = last(seen.frames).pointerInWord;
+
+    dispatch('pointermove', { clientX: 100, clientY: 100 });
+    clock.advance(16);
+    const bottomRight = last(seen.frames).pointerInWord;
+
+    const xs = seen.parts.map((p) => p.x);
+    const ys = seen.parts.map((p) => p.y);
+    expect(xs.length).toBeGreaterThan(0);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(0);
+    // The far corners of the canvas must reach past every part, or a lamp can never light the ends.
+    expect(topLeft?.x).toBeLessThanOrEqual(Math.min(...xs));
+    expect(bottomRight?.x).toBeGreaterThanOrEqual(Math.max(...xs));
+    // clientY grows downward and layout y grows upward, so the top of the canvas is the top line.
+    expect(topLeft?.y).toBeGreaterThanOrEqual(Math.max(...ys));
+    expect(bottomRight?.y).toBeLessThanOrEqual(Math.min(...ys));
+    bk.destroy();
+  });
+
+  it('remembers where the pointer was for an effect that opens under a still cursor', async () => {
+    const bk = create();
+    const first = bk.fire('HI', INSTANT);
+    await flush();
+    stubCanvas(BOX);
+    dispatch('pointermove', { clientX: 100, clientY: 50 });
+    clock.advance(16);
+    await first;
+
+    // The cursor never moves again: a hover- or click-triggered sign opens under a still pointer.
+    const seen = capture();
+    void bk.fire('HI', LOOKING(seen.spec));
+    await flush();
+    clock.advance(16);
+
+    expect(last(seen.frames).pointer).not.toBeNull();
+    expect(last(seen.frames).pointer?.x).toBeCloseTo(1, 6);
+    bk.destroy();
+  });
+
+  it('sees a pointer that moved between two fires, not the one from before', async () => {
+    const bk = create();
+    const first = bk.fire('HI', INSTANT);
+    await flush();
+    stubCanvas(BOX);
+    dispatch('pointermove', { clientX: 0, clientY: 50 });
+    clock.advance(16);
+    await first;
+
+    // Nothing is on screen, but the cursor keeps moving. A listener that comes and goes with the
+    // effect would miss this and reopen the next one aimed where the pointer used to be.
+    dispatch('pointermove', { clientX: 100, clientY: 50 });
+
+    const seen = capture();
+    void bk.fire('HI', LOOKING(seen.spec));
+    await flush();
+    clock.advance(16);
+
+    expect(last(seen.frames).pointer?.x).toBeCloseTo(1, 6);
+    bk.destroy();
+  });
+
+  it('shares one listener across concurrent effects and drops it exactly once', async () => {
+    const bk = create({ policy: 'concurrent' });
+    const a = bk.fire('HI', { ...LIT });
+    const b = bk.fire('HI', { ...LIT });
+    await flush();
+
+    expect(listeners.get('pointermove')).toHaveLength(1);
+
+    bk.destroy();
+    await Promise.all([a, b]);
+
+    expect(listeners.get('pointermove') ?? []).toHaveLength(0);
+  });
+
+  it('never measures the canvas for a page whose pointer has not moved', async () => {
+    let reads = 0;
+    const bk = create();
+    void bk.fire('HI', LIT);
+    await flush();
+    stage().canvas = {
+      getBoundingClientRect: () => {
+        reads++;
+        return { ...BOX, right: 100, bottom: 100 };
+      },
+    } as unknown as HTMLCanvasElement;
+    clock.advance(16);
+    clock.advance(16);
+
+    // A forced layout read every frame, for a box nothing is going to be measured against.
+    expect(reads).toBe(0);
+
+    // Still nothing: this sign runs no piece that asks where the cursor is.
+    dispatch('pointermove', { clientX: 40, clientY: 40 });
+    clock.advance(16);
+
+    expect(reads).toBe(0);
+    bk.destroy();
+  });
+
+  it('measures the canvas once a frame for a sign whose piece does read the pointer', async () => {
+    let reads = 0;
+    const bk = create();
+    void bk.fire('HI', { ...LIT, lighting: track({ followMs: 0 }) });
+    await flush();
+    stage().canvas = {
+      getBoundingClientRect: () => {
+        reads++;
+        return { ...BOX, right: 100, bottom: 100 };
+      },
+    } as unknown as HTMLCanvasElement;
+    dispatch('pointermove', { clientX: 40, clientY: 40 });
+    clock.advance(16);
+
+    expect(reads).toBe(1);
+
+    // Once per frame however many pieces ask, and never cached across frames: the box can move
+    // without a resize or a scroll.
+    clock.advance(16);
+
+    expect(reads).toBe(2);
+    bk.destroy();
+  });
+
+  it('reports the frame delta the clock advanced by', async () => {
+    const seen = capture();
+    const bk = create();
+    void bk.fire('HI', LOOKING(seen.spec));
+    await flush();
+    clock.advance(16);
+    clock.advance(32);
+
+    expect(last(seen.frames).dt).toBe(32);
+    bk.destroy();
+  });
+
+  it('reports an infinite delta under reduced motion, which snaps rather than eases', async () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    const seen = capture();
+    const bk = create();
+    void bk.fire('HI', LOOKING(seen.spec));
+    await flush();
+    clock.advance(16);
+
+    expect(last(seen.frames).dt).toBe(Number.POSITIVE_INFINITY);
+    bk.destroy();
   });
 });
 
@@ -1321,9 +1672,6 @@ describe('element placement', () => {
   });
 
   it("leaves hold: 'click' alone for a fullscreen overlay", () => {
-    // node has no window event target for the dismissal listeners the held effect attaches.
-    vi.stubGlobal('addEventListener', () => {});
-    vi.stubGlobal('removeEventListener', () => {});
     const klieg = create();
 
     expect(() => klieg.fire('hi', { hold: 'click' })).not.toThrow();

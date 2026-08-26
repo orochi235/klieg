@@ -13,7 +13,9 @@ import { Word } from '../../src/render/word.js';
 import type { LoadedFont } from '../../src/text/font.js';
 import { DEFAULT_GLYPH_OPTIONS } from '../../src/text/glyphs.js';
 import type { Budget } from '../../src/text/layout.js';
+import { LINE_HEIGHT_EM } from '../../src/text/layout.js';
 import { fromEuler } from '../../src/transform.js';
+import { NO_CTX } from '../effects/ctx.js';
 
 const UPEM = 1000;
 const ADVANCE = 600;
@@ -152,6 +154,7 @@ describe('Word', () => {
     word.apply(
       timelineOf(() => ({ position: [1, 0, 0] })),
       50,
+      NO_CTX,
     );
     const [a, b] = groups(word);
 
@@ -166,6 +169,7 @@ describe('Word', () => {
     word.apply(
       timelineOf(() => ({ position: [0, 2, 3], rotation: [0.1, 0.2, 0.3], scale: 4 })),
       50,
+      NO_CTX,
     );
     const [a] = groups(word);
 
@@ -185,6 +189,7 @@ describe('Word', () => {
         return {};
       }),
       50,
+      NO_CTX,
     );
 
     expect(seen.map((l) => [l.index, l.count])).toEqual([
@@ -268,7 +273,7 @@ describe('Word', () => {
       opacity: letter.index === 0 ? 1 : 0,
     });
 
-    word.apply(timelineOf(fadeByIndex), 50);
+    word.apply(timelineOf(fadeByIndex), 50, NO_CTX);
 
     const [a, b] = meshes(word);
     expect(((a as THREE.Mesh).material as THREE.MeshPhysicalMaterial).opacity).toBe(1);
@@ -308,6 +313,7 @@ describe('Word', () => {
     word.apply(
       timelineOf(() => ({ opacity: 0.4 })),
       50,
+      NO_CTX,
     );
 
     expect(materialOf(word).opacity).toBeCloseTo(0.2, 10);
@@ -321,6 +327,7 @@ describe('Word', () => {
     word.apply(
       timelineOf(() => ({ opacity: 1 })),
       50,
+      NO_CTX,
     );
 
     expect(materialOf(word).opacity).toBe(0);
@@ -332,6 +339,7 @@ describe('Word', () => {
     word.apply(
       timelineOf(() => ({ opacity: 0.4 })),
       50,
+      NO_CTX,
     );
 
     expect(materialOf(word).opacity).toBeCloseTo(0.4, 10);
@@ -376,6 +384,7 @@ describe('Word', () => {
     word.apply(
       timelineOf(() => ({ position: [1, 2, 3], rotation: [0.4, 0.4, 0.4] })),
       50,
+      NO_CTX,
     );
 
     expect(word.transform).toEqual(before);
@@ -391,6 +400,7 @@ describe('Word', () => {
     word.apply(
       timelineOf(() => ({ position: [5, 0, 0], opacity: 0.25 })),
       50,
+      NO_CTX,
     );
 
     expect(cell?.position.x).toBe(rest);
@@ -438,6 +448,7 @@ describe('Word', () => {
     word.apply(
       timelineOf(() => ({ position: [3, 0, 0] })),
       50,
+      NO_CTX,
     );
 
     expect(cell.position.x).toBeCloseTo(rest + 3, 5);
@@ -451,6 +462,7 @@ describe('Word', () => {
     word.apply(
       timelineOf(() => ({ opacity: 0.5 })),
       50,
+      NO_CTX,
     );
 
     const group = groups(word)[0] as THREE.Group;
@@ -661,6 +673,7 @@ describe('Word as a block', () => {
     word.apply(
       timelineOf(() => ({ position: [0, 1, 0] })),
       0,
+      NO_CTX,
     );
 
     const after = groups(word).map((g) => g.position.y);
@@ -680,6 +693,7 @@ describe('Word as a block', () => {
         return {};
       }),
       0,
+      NO_CTX,
     );
 
     expect(seen.map((l) => l.line)).toEqual([0, 0, 1]);
@@ -770,6 +784,7 @@ describe('LetterInfo position', () => {
         return {};
       }),
       0,
+      NO_CTX,
     );
     // Glyph origins, centred on the advance span: 'AB' puts A at -STEP and B at 0.
     expect(seen[0]?.x).toBeCloseTo(-STEP);
@@ -785,6 +800,7 @@ describe('LetterInfo position', () => {
         return {};
       }),
       0,
+      NO_CTX,
     );
     // The stub's 'A' spans 0..0.7em, so its centre is 0.35 below the glyph origin.
     expect(seen[0]?.y).toBeCloseTo(-0.35);
@@ -799,6 +815,7 @@ describe('LetterInfo position', () => {
         return {};
       }),
       0,
+      NO_CTX,
     );
     expect((seen[0]?.y as number) - (seen[1]?.y as number)).toBeCloseTo(1.1);
   });
@@ -820,6 +837,7 @@ describe('regroup', () => {
         return {};
       }),
       0,
+      NO_CTX,
     );
     // Three survivors on one line, origins centred on the advance span.
     expect(seen[0]?.x).toBeCloseTo(-1.5 * STEP);
@@ -837,6 +855,7 @@ describe('regroup', () => {
         return {};
       }),
       0,
+      NO_CTX,
     );
     expect(seen[0]?.line).toBe(0);
     expect(seen[2]?.line).toBe(1);
@@ -853,6 +872,7 @@ describe('regroup', () => {
         return {};
       }),
       0,
+      NO_CTX,
     );
     expect([seen[0]?.index, seen[2]?.index]).toEqual([0, 1]);
     expect([seen[0]?.count, seen[2]?.count]).toEqual([2, 2]);
@@ -874,6 +894,7 @@ describe('regroup', () => {
         return {};
       }),
       0,
+      NO_CTX,
     );
     expect(seen[1]?.leaving).toBe(true);
     expect(seen[0]?.leaving).toBeFalsy();
@@ -904,6 +925,7 @@ describe('regroup', () => {
         return { position: [dx, dy, 0] };
       }),
       0,
+      NO_CTX,
     );
 
     const after = groups(word).map((g) => g.position.clone());
@@ -922,6 +944,7 @@ describe('regroup', () => {
         return {};
       }),
       0,
+      NO_CTX,
     );
     word.regroup(firstOfLine, 'line');
     const after: LetterInfo[] = [];
@@ -931,6 +954,7 @@ describe('regroup', () => {
         return {};
       }),
       0,
+      NO_CTX,
     );
     expect(after[1]?.x).toBeCloseTo(before[1]?.x as number);
   });
@@ -945,6 +969,7 @@ describe('regroup', () => {
         return {};
       }),
       0,
+      NO_CTX,
     );
 
     const direct = new Word('NEO', stubFont(), 'gold', ROOMY);
@@ -955,6 +980,7 @@ describe('regroup', () => {
         return {};
       }),
       0,
+      NO_CTX,
     );
     expect([regrouped[0], regrouped[2], regrouped[4]]).toEqual(plain);
   });
@@ -1048,6 +1074,7 @@ describe('fit tween', () => {
         return {};
       }),
       0,
+      NO_CTX,
     );
     // One line of survivors: its own centre.
     expect(seen[0]?.y).toBeCloseTo(-0.35);
@@ -1140,6 +1167,7 @@ describe('positional gradient bounds', () => {
     word.apply(
       timelineOf(() => ({})),
       0,
+      NO_CTX,
     );
   }
 
@@ -1353,6 +1381,7 @@ describe('frame-owned material properties', () => {
     word.apply(
       timelineOf(() => ({})),
       50,
+      NO_CTX,
     );
   }
 
@@ -1507,14 +1536,16 @@ describe('effects', () => {
   }
 
   /** Lit runs in pool order: they follow the body in each cell and share that cell's material. */
-  function runColorOf(word: Word, ordinal: number): number {
+  function runColorOf(word: Word, ordinal: number, channel: 'r' | 'g' | 'b' = 'r'): number {
     const meshes = groups(word).flatMap((cell) => {
       const lit = (cell.children[1] as THREE.Mesh).material;
       return (cell.children.slice(1) as THREE.Mesh[]).filter((m) => m.material === lit);
     });
     const mesh = meshes[ordinal];
     if (!mesh) throw new Error(`the word has no run ${ordinal}`);
-    return mesh.geometry.getAttribute('runColor').getX(0);
+    const runColor = mesh.geometry.getAttribute('runColor');
+    if (channel === 'g') return runColor.getY(0);
+    return channel === 'b' ? runColor.getZ(0) : runColor.getX(0);
   }
 
   /** The crawl buffer only exists where the look declared a gradient. */
@@ -1549,14 +1580,14 @@ describe('effects', () => {
   it('drives the crawl buffer from an effect that writes the channel', () => {
     const slide: EffectPiece = { duration: 1000, at: () => ({ crawl: 0.25 }) };
     const word = gradientTubingWith([{ piece: slide, target: { kind: 'run', ...FIRST } }]);
-    word.apply(STILL, 0);
+    word.apply(STILL, 0, NO_CTX);
     expect(crawlOf(word, 0)).toBeCloseTo(0.25, 6);
   });
 
   it('leaves the crawl buffer at rest for a part no effect targets', () => {
     const slide: EffectPiece = { duration: 1000, at: () => ({ crawl: 0.25 }) };
     const word = gradientTubingWith([{ piece: slide, target: { kind: 'run', ...FIRST } }]);
-    word.apply(STILL, 0);
+    word.apply(STILL, 0, NO_CTX);
     expect(crawlOf(word, 1)).toBe(0);
   });
 
@@ -1580,7 +1611,7 @@ describe('effects', () => {
     const word = tubingWith(undefined);
     const before = [runColorOf(word, 0), runColorOf(word, 1)];
 
-    word.apply(STILL, 0);
+    word.apply(STILL, 0, NO_CTX);
 
     expect([runColorOf(word, 0), runColorOf(word, 1)]).toEqual(before);
   });
@@ -1589,7 +1620,7 @@ describe('effects', () => {
     const word = tubingWith([{ piece: half, target: { kind: 'run', ...FIRST } }]);
     const before = [runColorOf(word, 0), runColorOf(word, 1)];
 
-    word.apply(STILL, 0);
+    word.apply(STILL, 0, NO_CTX);
 
     expect(runColorOf(word, 0)).toBeCloseTo((before[0] as number) * 0.5, 6);
     expect(runColorOf(word, 1)).toBe(before[1]);
@@ -1600,10 +1631,10 @@ describe('effects', () => {
   it('does not compound across frames', () => {
     const word = tubingWith([{ piece: half, target: { kind: 'run', ...FIRST } }]);
 
-    word.apply(STILL, 0);
+    word.apply(STILL, 0, NO_CTX);
     const once = runColorOf(word, 0);
-    word.apply(STILL, 16);
-    word.apply(STILL, 32);
+    word.apply(STILL, 16, NO_CTX);
+    word.apply(STILL, 32, NO_CTX);
 
     expect(runColorOf(word, 0)).toBe(once);
   });
@@ -1615,7 +1646,7 @@ describe('effects', () => {
     ]);
     const before = runColorOf(word, 0);
 
-    word.apply(STILL, 0);
+    word.apply(STILL, 0, NO_CTX);
 
     expect(runColorOf(word, 0)).toBeCloseTo(before * 0.25, 6);
   });
@@ -1628,9 +1659,122 @@ describe('effects', () => {
       ROOMY,
     );
 
-    word.apply(STILL, 0);
+    word.apply(STILL, 0, NO_CTX);
 
     expect(materialOf(word).emissiveIntensity).toBeCloseTo(1.6, 6);
+  });
+
+  const lamplight: EffectPiece = {
+    duration: 1000,
+    at: () => ({ light: { color: 0xffffff, amount: 0.5 } }),
+  };
+
+  // A `hue` piece and a `lamp` on one run: the light has to tint by the colour the run is showing,
+  // or the lit pool keeps adding the original tube colour while the base sweeps away from it.
+  it('lights a recoloured run in the colour it is showing, not the one it was built with', () => {
+    const bluedAndLit: EffectPiece = {
+      duration: 1000,
+      at: () => ({ color: 0x0000ff, light: { color: 0xffffff, amount: 1 } }),
+    };
+    const word = tubingWith([{ piece: bluedAndLit, target: { kind: 'run', ...FIRST } }]);
+
+    word.apply(STILL, 0, NO_CTX);
+
+    expect(runColorOf(word, 0, 'r')).toBe(0);
+    expect(runColorOf(word, 0, 'g')).toBe(0);
+  });
+
+  function extentOf(text: string): { minX: number; maxX: number; minY: number; maxY: number } {
+    const extent = new Word(text, stubFont(), 'gold', ROOMY).partExtent();
+    if (!extent) throw new Error(`'${text}' has no parts`);
+    return extent;
+  }
+
+  it('has no part extent at all for a word with nothing to draw', () => {
+    expect(new Word('  ', stubFont(), 'gold', ROOMY).partExtent()).toBeNull();
+  });
+
+  // Origins alone give a single-line sign a box of zero height: placement puts every letter on a
+  // line at the same baseline, and a pointer mapped into that box could never move vertically.
+  it('measures the part extent by a glyph ink rather than by its origin or its advance', () => {
+    const one = extentOf('A');
+
+    expect(one.maxY - one.minY).toBeGreaterThan(0);
+    expect(one.maxY - one.minY).toBeLessThan(LINE_HEIGHT_EM);
+    expect(one.maxX - one.minX).toBeLessThan(STEP);
+  });
+
+  // Relating the shapes pins the baseline and the advance without pinning the extrusion's bevel.
+  it('grows the part extent by an advance for a letter and a line height for a line', () => {
+    const one = extentOf('A');
+    const row = extentOf('AA');
+    const stack = extentOf('A\nA');
+
+    expect(row.maxX - row.minX).toBeCloseTo(one.maxX - one.minX + STEP, 6);
+    expect(row.maxY - row.minY).toBeCloseTo(one.maxY - one.minY, 6);
+    expect(stack.maxY - stack.minY).toBeCloseTo(one.maxY - one.minY + LINE_HEIGHT_EM, 6);
+  });
+
+  it('lights every body part off its own letter, blanks in the word included', () => {
+    const word = new Word(
+      'A B',
+      stubFont(),
+      { ...specOf('neon'), effects: [{ piece: lamplight, target: { kind: 'body', by: 'index' } }] },
+      ROOMY,
+    );
+    const unlit = new THREE.Color(0xff2d95);
+
+    word.apply(STILL, 0, NO_CTX);
+
+    const green = meshes(word).map((m) => (m.material as THREE.MeshPhysicalMaterial).emissive.g);
+    expect(green).toHaveLength(2);
+    for (const g of green) expect(g).toBeGreaterThan(unlit.g);
+  });
+
+  it('reflects the tint a look was given rather than the colour the tint replaced', () => {
+    const word = new Word(
+      'A',
+      stubFont(),
+      { ...specOf('neon'), effects: [{ piece: lamplight, target: { kind: 'body', by: 'index' } }] },
+      ROOMY,
+      false,
+      0x008000,
+    );
+
+    word.apply(STILL, 0, NO_CTX);
+
+    const emissive = materialOf(word).emissive;
+    expect(emissive.r).toBe(0);
+    expect(emissive.g).toBeGreaterThan(new THREE.Color(0x008000).g);
+  });
+
+  // tubing's runs are 0xff2d95, so red is already saturated and clamping cannot raise it: a lamp
+  // this test can see has to be read off green or blue.
+  it('adds lamp light into a run colour', () => {
+    const word = tubingWith([{ piece: lamplight, target: { kind: 'run', by: 'index' } }]);
+    const before = runColorOf(word, 0, 'g');
+
+    word.apply(STILL, 0, NO_CTX);
+
+    expect(runColorOf(word, 0, 'g')).toBeGreaterThan(before);
+  });
+
+  it('lets a lamp go when a regroup drops the letter it was lighting', () => {
+    const word = new Word(
+      'AB',
+      stubFont(),
+      { ...specOf('neon'), effects: [{ piece: lamplight, target: { kind: 'body', ...FIRST } }] },
+      ROOMY,
+    );
+    const unlit = new THREE.Color(0xff2d95);
+
+    word.apply(STILL, 0, NO_CTX);
+    const lit = materialOf(word).emissive.g;
+    word.regroup((letter) => letter.index === 1, 'line');
+    word.apply(STILL, 0, NO_CTX);
+
+    expect(lit).toBeGreaterThan(unlit.g);
+    expect(materialOf(word).emissive.g).toBeCloseTo(unlit.g, 6);
   });
 
   it('skips a run whose material came from a debug override and has no run-colour contract', () => {
@@ -1646,7 +1790,7 @@ describe('effects', () => {
     );
     const before = runColorOf(word, 0);
 
-    word.apply(STILL, 0);
+    word.apply(STILL, 0, NO_CTX);
 
     expect(runColorOf(word, 0)).toBe(before);
   });
@@ -1659,10 +1803,10 @@ describe('effects', () => {
       ROOMY,
     );
 
-    word.apply(STILL, 0);
+    word.apply(STILL, 0, NO_CTX);
     const driven = materialOf(word).emissiveIntensity;
     word.regroup((letter) => letter.index === 1, 'line');
-    word.apply(STILL, 0);
+    word.apply(STILL, 0, NO_CTX);
 
     expect(driven).toBeCloseTo(materialOf(word).emissiveIntensity * 0.5, 6);
   });
@@ -1674,7 +1818,7 @@ describe('effects', () => {
     ]);
     const before = [runColorOf(word, 0), runColorOf(word, 1)];
 
-    word.apply(STILL, 0);
+    word.apply(STILL, 0, NO_CTX);
 
     expect(at).not.toHaveBeenCalled();
     expect([runColorOf(word, 0), runColorOf(word, 1)]).toEqual(before);
@@ -1702,6 +1846,7 @@ describe('effects', () => {
     word.apply(
       timelineOf(() => ({ position: [1, 0, 0] })),
       50,
+      NO_CTX,
     );
 
     const run = cell.children[1] as THREE.Mesh;
@@ -1750,6 +1895,7 @@ describe('atRest', () => {
     word.apply(
       timelineOf(() => ({ position: [0, 1, 0] })),
       0,
+      NO_CTX,
     );
 
     expect(word.atRest()).toBe(false);
@@ -1760,12 +1906,14 @@ describe('atRest', () => {
     word.apply(
       timelineOf(() => ({ rotation: [0, 0.4, 0] })),
       0,
+      NO_CTX,
     );
     expect(word.atRest()).toBe(false);
 
     word.apply(
       timelineOf(() => ({ scale: 1.5 })),
       0,
+      NO_CTX,
     );
     expect(word.atRest()).toBe(false);
   });
@@ -1776,14 +1924,14 @@ describe('atRest', () => {
     word.setFitProgress(1);
     expect(word.atRest()).toBe(false);
 
-    word.apply(rest, 0);
+    word.apply(rest, 0, NO_CTX);
     expect(word.atRest()).toBe(true);
   });
 
   it('is false part-way through a fit tween and true once it settles', () => {
     const word = new Word('ABCDE', stubFont(), 'gold', { width: 2, height: 2 });
     word.regroup((l) => l.index < 2, 'line');
-    word.apply(rest, 0);
+    word.apply(rest, 0, NO_CTX);
 
     word.setFitProgress(0.5);
     expect(word.atRest()).toBe(false);
@@ -1799,6 +1947,7 @@ describe('atRest', () => {
     word.apply(
       timelineOf((_t, letter) => (letter.leaving ? { position: [0, -3, 0] } : {})),
       0,
+      NO_CTX,
     );
 
     expect(word.atRest()).toBe(true);
@@ -1876,6 +2025,7 @@ describe('framing alignment', () => {
     word.apply(
       timelineOf(() => ({})),
       0,
+      NO_CTX,
     );
 
     word.setFitProgress(0.5);

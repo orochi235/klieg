@@ -154,7 +154,6 @@ function options(look: LookName): FireOptions {
     hold: cycling ? config.cycleMs : STILL_HOLD_MS,
     // A long word in portrait is unreadable on one line; wrapping picks whatever fits largest.
     wrap: true,
-    placement: { kind: 'fullscreen' },
   };
 }
 
@@ -163,6 +162,10 @@ const klieg = createKlieg({
   fontUrl: `${import.meta.env.BASE_URL}font.ttf`,
   clock,
   policy: 'replace',
+  // Anchored to the stage, which is `inset: 0` — the same box a fullscreen overlay would take, but
+  // an anchored placement lifts `FIT_CAP`. Without that the framing below never binds: a short word
+  // stops at 2.2x its natural size, which is the cap protecting a page the overlay is guest on.
+  placement: { kind: 'element', el: stage },
   // Nothing shares this page with the type, so it takes far more of the frame than the library
   // leaves an overlay. Tuned on a 390x844 phone, where width is what binds a single line.
   framing: { width: 0.84, height: 0.46 },

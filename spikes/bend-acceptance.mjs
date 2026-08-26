@@ -2,6 +2,7 @@
  * The acceptance check: does any run of any letter bend tighter than the look's own rho_min?
  *
  *   npm run build -w klieg && node spikes/bend-acceptance.mjs
+ *   REJOIN=bridge|widen|relax|drop  overrides how a fillet rejoins a leg it cannot meet cleanly.
  *
  * Runs the whole pipeline, not just the cut — so wander, which moves run points after cutting, is
  * included. A fillet is built at exactly rho_min, so the test is "not below", not "strictly above".
@@ -20,10 +21,12 @@ const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 // Wander is the one stage that can still bend a run after the corner stage has passed over it, so
 // measuring with it off separates what the corner stage owes from what wander does.
+const REJOIN = process.env.REJOIN;
+const rejoined = (spec) => (REJOIN ? { ...spec, rejoin: REJOIN } : spec);
 const CASES = [
-  ['tubing', specOf('tubing').decoration],
-  ['tubing no wander', { ...specOf('tubing').decoration, amplitude: 0 }],
-  ['piping', specOf('piping').decoration],
+  ['tubing', rejoined(specOf('tubing').decoration)],
+  ['tubing no wander', rejoined({ ...specOf('tubing').decoration, amplitude: 0 })],
+  ['piping', rejoined(specOf('piping').decoration)],
 ];
 
 for (const [look, spec] of CASES) {

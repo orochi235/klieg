@@ -4,6 +4,8 @@ dist/
 # Copied from the repo root at pack time so the npm page has the README.
 packages/core/README.md
 test-results/
+# Lab renders regenerated on demand; the plan that produced this one is in docs/.
+corner-lab-legend.png
 playwright-report/
 .DS_Store
 *.log

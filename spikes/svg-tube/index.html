@@ -1,0 +1,55 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>klieg — tubing on vector art</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #0b0d12; overflow: hidden; }
+  #stage { position: fixed; inset: 0; touch-action: none; cursor: grab; }
+  #stage.dragging { cursor: grabbing; }
+  #hud {
+    position: fixed; left: 0; right: 0; top: 0; z-index: 2;
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #9aa4b2; background: #11141cf2; border-bottom: 1px solid #232838;
+    padding: 8px 12px 10px; max-height: 60vh; overflow-y: auto;
+  }
+  #hud b { color: #e6ebf2; font-weight: 600; }
+  #head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  #title { cursor: pointer; user-select: none; }
+  #title .hint, #head .hint { color: #6b7684; }
+  #hud label.inline { display: inline-flex; gap: 5px; align-items: center; margin: 0; }
+  #hud.collapsed #controls { display: none; }
+  #controls { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 8px; }
+  .col { min-width: 208px; }
+  .col > .group { color: #6b7684; text-transform: uppercase;
+                  letter-spacing: .08em; font-size: 10px; margin-bottom: 2px; }
+  #hud label { display: grid; grid-template-columns: 74px 1fr 36px; align-items: center;
+               gap: 6px; margin-top: 2px; }
+  #hud label.check { grid-template-columns: 74px auto; }
+  #hud output { text-align: right; color: #cfd6e0; }
+  #hud input[type=range] { width: 100%; }
+  #hud input[type=color] { width: 100%; height: 20px; padding: 0; border: 0;
+                           background: none; cursor: pointer; }
+  #hud select { width: 100%; }
+  #stats { color: #6b7684; }
+  #silhouette {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none; display: none;
+    align-items: center; justify-content: center;
+  }
+  #silhouette.on { display: flex; }
+  #silhouette img { width: 70vw; opacity: 0.45; filter: invert(1); }
+  #err { position: fixed; left: 12px; bottom: 12px; z-index: 3; color: #ff8a8a;
+         font: 12px ui-monospace, monospace; white-space: pre-wrap; }
+</style>
+<div id="stage"></div>
+<div id="silhouette"><img id="ref" alt=""></div>
+<div id="hud">
+  <div id="head">
+    <div id="title"><b>tubing on vector art</b> <span class="hint">[hide]</span></div>
+    <div id="stats">loading…</div>
+    <div class="hint">drag to pivot · double-click to reset</div>
+    <label class="check inline"><input type="checkbox" id="showRef"> overlay SVG</label>
+  </div>
+  <div id="controls"></div>
+</div>
+<div id="err"></div>
+<script type="module" src="./main.js"></script>

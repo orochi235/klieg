@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { flicker } from '../../src/effects/pieces.js';
 import { roving } from '../../src/effects/roving.js';
-import type { EffectPiece, PartInfo } from '../../src/effects/types.js';
+import type { EffectPiece, FrameCtx, PartInfo } from '../../src/effects/types.js';
+import { NO_CTX } from './ctx.js';
 
 const COUNT = 6;
 
@@ -22,7 +23,7 @@ const PARTS = Array.from({ length: COUNT }, (_, i) => partAt(i));
 
 /** Which part indices are contributing anything at `t`. */
 function afflicted(piece: EffectPiece, t: number): number[] {
-  return PARTS.filter((p) => Object.keys(piece.at(t, p)).length > 0).map((p) => p.index);
+  return PARTS.filter((p) => Object.keys(piece.at(t, p, NO_CTX)).length > 0).map((p) => p.index);
 }
 
 /** A piece that is never at rest, so a deferred handover can never resolve. */
@@ -43,7 +44,7 @@ describe('roving', () => {
     const holder = afflicted(piece, 0.5)[0] as number;
     for (const p of PARTS) {
       if (p.index === holder) continue;
-      expect(piece.at(0.5, p)).toEqual({});
+      expect(piece.at(0.5, p, NO_CTX)).toEqual({});
     }
   });
 
@@ -51,7 +52,7 @@ describe('roving', () => {
     const marker: EffectPiece = { duration: 100, at: () => ({ gain: 0.5, scale: 1.25 }) };
     const piece = roving(marker);
     const holder = afflicted(piece, 0.5)[0] as number;
-    expect(piece.at(0.5, partAt(holder))).toEqual({ gain: 0.5, scale: 1.25 });
+    expect(piece.at(0.5, partAt(holder), NO_CTX)).toEqual({ gain: 0.5, scale: 1.25 });
   });
 
   // Measured at 4 distinct holders over a default pass against a pool of 6. This is the assertion
@@ -130,7 +131,7 @@ describe('roving', () => {
     const piece = roving(flicker());
     afflicted(piece, 0.5);
     const one: PartInfo = { ...partAt(0), count: 1 };
-    expect(piece.at(0.5, one).gain).toBeTypeOf('number');
+    expect(piece.at(0.5, one, NO_CTX).gain).toBeTypeOf('number');
   });
 
   it('survives an inner piece with no duration', () => {
@@ -138,5 +139,24 @@ describe('roving', () => {
     const piece = roving(instant);
     expect(piece.duration).toBeGreaterThan(0);
     expect(afflicted(piece, 0.5)).toHaveLength(1);
+  });
+
+  it('forwards the ctx it receives to the inner piece, rather than dropping or inventing one', () => {
+    const seen: unknown[] = [];
+    const recorder: EffectPiece = {
+      duration: 100,
+      at: (_t, _part, ctx) => {
+        seen.push(ctx);
+        return { gain: 1 };
+      },
+    };
+    const ctx: FrameCtx = {
+      pointer: { x: 0.1, y: 0.2 },
+      pointerInWord: { x: 0.3, y: 0.4 },
+      dt: 42,
+    };
+    for (const p of PARTS) roving(recorder).at(0.5, p, ctx);
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((c) => c === ctx)).toBe(true);
   });
 });

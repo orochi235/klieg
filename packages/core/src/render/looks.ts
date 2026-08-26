@@ -51,7 +51,12 @@ type LookKey =
   | 'anisotropyRotation'
   | 'dispersion'
   | 'emissive'
-  | 'emissiveIntensity';
+  | 'emissiveIntensity'
+  // Both blend toward the base colour by `metalness`, so they do nothing at `metalness: 1` — a
+  // tool for `gem` and `velvet`, inert on `gold` and `chrome`. `reflectivity` is deliberately
+  // absent: three implements it as a second accessor over `ior`, which is already authorable.
+  | 'specularIntensity'
+  | 'specularColor';
 
 // Every LookKey must still name a real material property. This runs where `@types/three` is
 // installed — here — rather than in a consumer's build, which is the only place it ever worked.
@@ -68,7 +73,9 @@ export type LookParams = {
  * touches: body, lit decoration and dark decoration each resolve their own base and each get
  * their own per-frame write. A look still declares the base and `resolveParams` still clamps it;
  * what must not happen is `applyLook` writing a value that the next frame overwrites, which is
- * two writers for one property.
+ * two writers for one property. `emissive` is the deliberate exception: `Word` rewrites it per
+ * frame on the body alone, through a `lightBase` the same `resolveParams` and tint resolved, so
+ * the two writers cannot disagree.
  */
 const FRAME_OWNED = ['opacity', 'emissiveIntensity'] as const;
 type FrameOwned = (typeof FRAME_OWNED)[number];
@@ -98,6 +105,9 @@ export const DEFAULTS: LookParams = {
   dispersion: 0,
   emissive: 0x000000,
   emissiveIntensity: 1,
+  // three's own defaults, so adding these left every shipped look rendering exactly as it did.
+  specularIntensity: 1,
+  specularColor: 0xffffff,
 };
 
 // Every look is applied over DEFAULTS, never over the previous look, so switching cannot
@@ -280,7 +290,13 @@ export const LOOKS: Record<LookName, LookSpec> = {
   },
 };
 
-export const COLOR_KEYS = new Set<LookKey>(['color', 'attenuationColor', 'sheenColor', 'emissive']);
+export const COLOR_KEYS = new Set<LookKey>([
+  'color',
+  'attenuationColor',
+  'sheenColor',
+  'emissive',
+  'specularColor',
+]);
 
 export type TintTarget = 'color' | 'attenuationColor' | 'emissive' | 'sheenColor';
 
@@ -338,6 +354,7 @@ const RANGES: Partial<Record<LookKey, [number, number]>> = {
   sheen: [0, 1],
   sheenRoughness: [0, 1],
   anisotropy: [0, 1],
+  specularIntensity: [0, 1],
   thickness: [0, Number.POSITIVE_INFINITY],
   attenuationDistance: [0, Number.POSITIVE_INFINITY],
   emissiveIntensity: [0, Number.POSITIVE_INFINITY],
@@ -411,4 +428,19 @@ export function frameOwnedBase(look: Look): FrameOwnedBase {
     opacity: Math.min(Math.max(spec.opacity ?? 1, 0), 1),
     emissiveIntensity: resolveParams(spec).emissiveIntensity,
   };
+}
+
+export interface LightBase {
+  /** The look's own emissive, which lamp light adds onto rather than replacing. */
+  emissive: number;
+  /** The colour the look reads as, whichever property carries it. What a lamp multiplies against. */
+  hue: number;
+}
+
+export function lightBase(look: Look, tint?: number): LightBase {
+  const spec = specOf(look);
+  const params = resolveParams(spec);
+  const target = tintTargetOf(params, spec.tintTarget);
+  if (tint !== undefined) params[target] = tint;
+  return { emissive: params.emissive, hue: params[target] };
 }

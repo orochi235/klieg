@@ -168,13 +168,6 @@ describe('cycle', () => {
       6,
     );
   });
-
-  it('contributes no transform at all when it only drives the environment', () => {
-    const piece = cycle(3400, { envRotation: true });
-
-    expect(piece.offset(0.5, L)).toEqual({});
-    expect(piece.envRotation).toBe(true);
-  });
 });
 
 describe('delayBy', () => {

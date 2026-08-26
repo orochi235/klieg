@@ -117,8 +117,6 @@ export interface CycleSpec {
   /** Cycles per pass, per channel. Defaults to 1. */
   harmonic?: PoseOffset;
   phase?: (letter: LetterInfo) => number;
-  /** Drives the environment rotation instead of the transform. */
-  envRotation?: boolean;
 }
 
 const waveVec = (amp: Vec3 | undefined, harm: Vec3 | undefined, t: number, phase: number): Vec3 => {
@@ -135,7 +133,7 @@ export function cycle(duration: number, spec: CycleSpec = {}): MotionPiece {
   const amp = spec.amplitude ?? {};
   const harm = spec.harmonic ?? {};
 
-  const piece: MotionPiece = {
+  return {
     duration,
     offset(t, letter) {
       const phase = spec.phase?.(letter) ?? 0;
@@ -152,8 +150,6 @@ export function cycle(duration: number, spec: CycleSpec = {}): MotionPiece {
       return out;
     },
   };
-
-  return spec.envRotation ? { ...piece, envRotation: true } : piece;
 }
 
 /** One piece for the letters a predicate keeps, another for the rest. */

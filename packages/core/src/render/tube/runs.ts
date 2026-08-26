@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { rng } from '../../rng.js';
 import {
+  biarcBlend,
   type Corner,
   cornersByBend,
   type Fillet,
@@ -43,6 +44,20 @@ export interface Run {
 
 export type CornerStrategy = 'break' | 'connect' | 'return';
 
+/**
+ * What the corner stage does when a fillet's arc cannot join its leg without bending under the
+ * material's minimum radius. See `docs/superpowers/specs/2026-08-26-corner-rejoin-design.md`.
+ */
+export type Rejoin = 'bridge' | 'widen' | 'relax' | 'drop';
+
+export const REJOINS: readonly Rejoin[] = ['bridge', 'widen', 'relax', 'drop'];
+/**
+ * `drop` — today's behavior. `bridge` measures better only at tube radii finer than either shipped
+ * look uses, and at the shipped ones it is a wash, so it is offered rather than imposed. See the
+ * numbers in `docs/superpowers/specs/2026-08-26-corner-rejoin-design.md`.
+ */
+export const DEFAULT_REJOIN: Rejoin = 'drop';
+
 /** What one corner's strategy draw decided, in the path's own coordinates. */
 export interface CornerRecord {
   point: THREE.Vector3;
@@ -68,13 +83,25 @@ export const ALL_BREAK: CornerWeights = { break: 1, connect: 0 };
 /** Every corner bends through instead of cutting — a continuous cord, what `piping` wants. */
 export const ALL_CONNECT: CornerWeights = { break: 0, connect: 1 };
 
+/** What a contour that cannot afford its requested run count does. */
+export type ShortRun = 'fit' | 'drop';
+
 export interface CutOptions {
   /** Requested run count per glyph. Cannot go below the corner count. */
   runs: number;
   /** Runs shorter than this are dropped and left dark, in em. */
   minRun: number;
+  /**
+   * What a contour too short to carry `runs` does. `fit` cuts it into as many runs as clear
+   * `minRun`, and is the default. `drop` spends the whole budget and drops every piece under the
+   * floor, which leaves a contour shorter than `runs * minRun` empty — small detail falls out of
+   * the sign rather than being drawn coarsely.
+   */
+  shortRun?: ShortRun;
   /** Weight distribution over what each corner does. Defaults to every corner breaking. */
   corners?: CornerWeights;
+  /** How a fillet rejoins a leg it cannot meet cleanly. `bridge` by default. */
+  rejoin?: Rejoin;
   /** Requested tube radius in em. */
   radius?: number;
   /** Minimum bend radius as a multiple of `radius`. Floored at 1.25. */
@@ -281,6 +308,7 @@ function filletFor(
   corner: Corner,
   rhoMin: number,
   spacing: number,
+  rejoin: Rejoin = 'drop',
 ): Fillet | null {
   // The legs are measured outside the corner's whole stretch, not either side of its tightest
   // vertex: the neighbouring vertices are part of the same rounded corner, and a direction taken
@@ -314,16 +342,77 @@ function filletFor(
     virtual.clone(),
     virtual.clone().addScaledVector(v, fwd),
   ];
-  const fillet = filletAt(probe, false, 1, rhoMin, spacing);
-  if (!fillet) return null;
+  const at = (radius: number): Fillet | null => {
+    const fillet = filletAt(probe, false, 1, radius, spacing);
+    if (!fillet) return null;
+    // A fillet cuts the corner back on both sides. One whose tangent point lands past the corner
+    // vertex instead is inverted: the leg would run out to it and reverse, and the room test reads
+    // that consumption as near zero rather than as the overrun it is.
+    const entry = fillet.points[0] as THREE.Vector3;
+    const exit = fillet.points[fillet.points.length - 1] as THREE.Vector3;
+    if (entry.clone().sub(vertex).dot(u) > 0 || exit.clone().sub(vertex).dot(v) < 0) return null;
+    return fillet;
+  };
 
-  // A fillet cuts the corner back on both sides. One whose tangent point lands past the corner
-  // vertex instead is inverted: the leg would run out to it and reverse, and the room test reads
-  // that consumption as near zero rather than as the overrun it is.
+  const base = at(rhoMin);
+  if (rejoin !== 'widen') return base;
+  // A wider arc reaches its tangent points further down the leg, past the shoulder the fit reads as
+  // straight. The first radius whose own neighbours clear is taken; failing all of them, the
+  // minimum arc is still the right answer, and the join falls back to the walk.
+  for (const factor of WIDEN_LADDER) {
+    const fillet = at(rhoMin * factor);
+    if (fillet && joinsAtOnce(target, next, corner, fillet, rhoMin, spacing)) return fillet;
+  }
+  return base;
+}
+
+/** Radii a `widen` rejoin tries, as multiples of the minimum. */
+const WIDEN_LADDER = [1, 1.3, 1.7, 2.2, 3];
+
+/**
+ * Whether both legs meet this fillet at the first vertex clear of its setback — the test a `widen`
+ * grows the arc to satisfy, and the condition under which `resumeAt` would not walk at all.
+ */
+function joinsAtOnce(
+  target: THREE.Vector3[],
+  next: THREE.Vector3[],
+  corner: Corner,
+  fillet: Fillet,
+  rhoMin: number,
+  spacing: number,
+): boolean {
+  const n = fillet.points.length;
   const entry = fillet.points[0] as THREE.Vector3;
-  const exit = fillet.points[fillet.points.length - 1] as THREE.Vector3;
-  if (entry.clone().sub(vertex).dot(u) > 0 || exit.clone().sub(vertex).dot(v) < 0) return null;
-  return fillet;
+  const exit = fillet.points[n - 1] as THREE.Vector3;
+  const second = fillet.points[1] as THREE.Vector3;
+  const penult = fillet.points[n - 2] as THREE.Vector3;
+
+  const before = target.slice(0, Math.max(0, target.length - 1 - corner.groupBefore));
+  trimTail(before, fillet.setback, fillet.corner);
+  const keep = resumeAt(
+    before,
+    before.length - 1,
+    -1,
+    entry,
+    second,
+    entry.clone().sub(second).normalize(),
+    rhoMin,
+    spacing,
+  );
+  if (keep !== before.length - 1) return false;
+
+  const start = indexPast(next, corner.groupAfter + 1, fillet.setback, fillet.corner);
+  const from = resumeAt(
+    next,
+    start,
+    1,
+    exit,
+    penult,
+    exit.clone().sub(penult).normalize(),
+    rhoMin,
+    spacing,
+  );
+  return from === start;
 }
 
 /**
@@ -444,7 +533,143 @@ function resumeAt(
   return step === 1 ? leg.length : -1;
 }
 
-/** Appends `next` onto `target`, which already ends at the shared corner. */
+/** Whether the junction where a blend meets the leg's own next vertex clears the floor. */
+function clearsInto(
+  a: THREE.Vector3 | undefined,
+  mid: THREE.Vector3,
+  b: THREE.Vector3 | undefined,
+  rhoMin: number,
+): boolean {
+  return !a || !b || bendThrough(a, mid, b) >= rhoMin;
+}
+
+/** How far along a leg a bridge may reach for room, as a multiple of the minimum bend radius. */
+const BRIDGE_REACH = 3;
+/** Window of leg vertices a relax may move, and the ceiling on how far it may move one. */
+const RELAX_WINDOW = 6;
+const RELAX_TRAVEL = 0.5;
+
+/**
+ * A blend from the leg onto the arc's entry, reaching back along the leg until one clears `rhoMin`.
+ * Every candidate is tested rather than stopping at the first failure, because a blend's tightest
+ * radius is not monotone in the room it is given.
+ */
+function bridgeBefore(
+  leg: THREE.Vector3[],
+  entry: THREE.Vector3,
+  into: THREE.Vector3,
+  rhoMin: number,
+  spacing: number,
+): { points: THREE.Vector3[]; at: number } | null {
+  const from = leg.length - 1;
+  let along = 0;
+  for (let i = from; i >= 1; i--) {
+    const p = leg[i] as THREE.Vector3;
+    if (i < from) along += p.distanceTo(leg[i + 1] as THREE.Vector3);
+    if (along > BRIDGE_REACH * rhoMin) break;
+    const t = legDirection(leg, i, -1);
+    if (!t) continue;
+    const blend = biarcBlend(p, t, entry, into, rhoMin, spacing);
+    // The blend holds `rhoMin` across its own two arcs by construction, but the vertex the leg
+    // arrives on is not one of them: the junction into it is the same bend `resumeAt` walks for.
+    if (blend && clearsInto(leg[i - 1], p, blend[1], rhoMin)) return { points: blend, at: i };
+  }
+  return null;
+}
+
+/** The same blend on the outgoing side, from the arc's exit onto the leg. */
+function bridgeAfter(
+  leg: THREE.Vector3[],
+  from: number,
+  exit: THREE.Vector3,
+  outOf: THREE.Vector3,
+  rhoMin: number,
+  spacing: number,
+): { points: THREE.Vector3[]; at: number } | null {
+  let along = 0;
+  for (let i = Math.max(1, from); i < leg.length; i++) {
+    const p = leg[i] as THREE.Vector3;
+    if (i > from) along += p.distanceTo(leg[i - 1] as THREE.Vector3);
+    if (along > BRIDGE_REACH * rhoMin) break;
+    const t = legDirection(leg, i, 1);
+    if (!t) continue;
+    const blend = biarcBlend(exit, outOf, p, t, rhoMin, spacing);
+    if (blend && clearsInto(blend[blend.length - 2], p, leg[i + 1], rhoMin)) {
+      // The blend's own last point is a copy of `p`; the leg's vector carries the provenance.
+      blend[blend.length - 1] = p;
+      return { points: blend, at: i };
+    }
+  }
+  return null;
+}
+
+/**
+ * Pushes the leg vertices next to the arc away from their own centre of curvature until the chain
+ * through them clears `rhoMin`. Copies rather than moving the path's own vectors: a leg is shared
+ * with the span on its other side, and with the provenance map that `from` is resolved through.
+ *
+ * Null when clearing would cost more than `RELAX_TRAVEL` of a bend radius — past that the contour
+ * has been redrawn rather than nudged, and the caller is better off with its own fallback.
+ */
+function relaxOnto(
+  anchor: THREE.Vector3[],
+  leg: THREE.Vector3[],
+  from: number,
+  step: 1 | -1,
+  rhoMin: number,
+): THREE.Vector3[] | null {
+  const moved: THREE.Vector3[] = [];
+  for (let k = 0; k < RELAX_WINDOW; k++) {
+    const p = leg[from + k * step] as THREE.Vector3 | undefined;
+    if (!p) break;
+    moved.push(p.clone());
+  }
+  if (moved.length < 2) return null;
+
+  // The chain the invariant is measured over: the arc's last two points, then the leg's own.
+  const chain = [...anchor, ...moved];
+  const fixed = anchor.length;
+  const nudge = rhoMin * 0.004;
+  let travel = 0;
+  for (let pass = 0; pass < 400; pass++) {
+    let worst = Number.POSITIVE_INFINITY;
+    let worstAt = -1;
+    for (let i = 1; i + 1 < chain.length; i++) {
+      const rho = bendThrough(
+        chain[i - 1] as THREE.Vector3,
+        chain[i] as THREE.Vector3,
+        chain[i + 1] as THREE.Vector3,
+      );
+      if (rho < worst) {
+        worst = rho;
+        worstAt = i;
+      }
+    }
+    if (worst >= rhoMin) return moved;
+    // Only the copied leg vertices move; the arc is what the whole stage exists to hold.
+    if (worstAt < fixed) worstAt = fixed;
+    if (worstAt + 1 >= chain.length) return null;
+    const cur = chain[worstAt] as THREE.Vector3;
+    const away = cur.clone().sub(
+      (chain[worstAt - 1] as THREE.Vector3)
+        .clone()
+        .add(chain[worstAt + 1] as THREE.Vector3)
+        .multiplyScalar(0.5),
+    );
+    if (away.lengthSq() < 1e-18) return null;
+    cur.addScaledVector(away.normalize(), nudge);
+    travel += nudge;
+    if (travel > RELAX_TRAVEL * rhoMin * RELAX_WINDOW) return null;
+  }
+  return null;
+}
+
+/**
+ * Appends `next` onto `target`, which already ends at the shared corner.
+ *
+ * `rejoin` chooses what happens on each side when the leg cannot meet the arc without bending under
+ * `rhoMin`. Every strategy falls back to `drop`'s walk, so none is ever worse than it.
+ */
 function mergeArc(
   target: THREE.Vector3[],
   next: THREE.Vector3[],
@@ -452,40 +677,77 @@ function mergeArc(
   fillet: Fillet | null,
   rhoMin: number,
   spacing: number,
+  rejoin: Rejoin,
 ): void {
-  if (fillet) {
-    const n = fillet.points.length;
-    const entry = fillet.points[0] as THREE.Vector3;
-    const exit = fillet.points[n - 1] as THREE.Vector3;
-    const into = entry
-      .clone()
-      .sub(fillet.points[1] as THREE.Vector3)
-      .normalize();
-    const outOf = exit
-      .clone()
-      .sub(fillet.points[n - 2] as THREE.Vector3)
-      .normalize();
-
-    // Drop the corner's whole stretch before trimming by distance: a shallow turn's setback can be
-    // shorter than one sample step, and would leave the stretch's own vertices in the path.
-    for (let i = 0; i <= decision.groupBefore && target.length > 0; i++) target.pop();
-    trimTail(target, fillet.setback, fillet.corner);
-    const second = fillet.points[1] as THREE.Vector3;
-    const keep = resumeAt(target, target.length - 1, -1, entry, second, into, rhoMin, spacing);
-    target.length = keep + 1;
-
-    decision.at = fillet.points[n >> 1];
-    for (const p of fillet.points) target.push(p);
-
-    const start = indexPast(next, decision.groupAfter + 1, fillet.setback, fillet.corner);
-    const penult = fillet.points[n - 2] as THREE.Vector3;
-    const from = resumeAt(next, start, 1, exit, penult, outOf, rhoMin, spacing);
-    for (let i = from; i < next.length; i++) {
-      target.push(next[i] as THREE.Vector3);
-    }
+  if (!fillet) {
+    for (let i = 1; i < next.length; i++) target.push(next[i] as THREE.Vector3);
     return;
   }
-  for (let i = 1; i < next.length; i++) target.push(next[i] as THREE.Vector3);
+  const n = fillet.points.length;
+  const entry = fillet.points[0] as THREE.Vector3;
+  const exit = fillet.points[n - 1] as THREE.Vector3;
+  const second = fillet.points[1] as THREE.Vector3;
+  const penult = fillet.points[n - 2] as THREE.Vector3;
+  const into = entry.clone().sub(second).normalize();
+  const outOf = exit.clone().sub(penult).normalize();
+
+  // Drop the corner's whole stretch before trimming by distance: a shallow turn's setback can be
+  // shorter than one sample step, and would leave the stretch's own vertices in the path.
+  for (let i = 0; i <= decision.groupBefore && target.length > 0; i++) target.pop();
+  trimTail(target, fillet.setback, fillet.corner);
+
+  let bridgedIn: THREE.Vector3[] | null = null;
+  if (rejoin === 'bridge') {
+    const blend = bridgeBefore(target, entry, second.clone().sub(entry), rhoMin, spacing);
+    if (blend) {
+      target.length = blend.at + 1;
+      bridgedIn = blend.points;
+    }
+  }
+  if (!bridgedIn) {
+    let relaxed: THREE.Vector3[] | null = null;
+    if (rejoin === 'relax') {
+      relaxed = relaxOnto([second, entry], target, target.length - 1, -1, rhoMin);
+      if (relaxed) {
+        target.length = Math.max(0, target.length - relaxed.length);
+        for (let i = relaxed.length - 1; i >= 0; i--) target.push(relaxed[i] as THREE.Vector3);
+      }
+    }
+    if (!relaxed) {
+      const keep = resumeAt(target, target.length - 1, -1, entry, second, into, rhoMin, spacing);
+      target.length = keep + 1;
+    }
+  }
+
+  decision.at = fillet.points[n >> 1];
+  // Never the blend's own last point: it is a copy of the arc's entry, and `splitReturn` finds the
+  // fillet in a span by identity.
+  if (bridgedIn) {
+    for (let i = 1; i + 1 < bridgedIn.length; i++) target.push(bridgedIn[i] as THREE.Vector3);
+  }
+  for (const p of fillet.points) target.push(p);
+
+  const start = indexPast(next, decision.groupAfter + 1, fillet.setback, fillet.corner);
+  if (rejoin === 'bridge') {
+    const blend = bridgeAfter(next, start, exit, outOf, rhoMin, spacing);
+    if (blend) {
+      for (let i = 1; i < blend.points.length; i++) target.push(blend.points[i] as THREE.Vector3);
+      for (let i = blend.at + 1; i < next.length; i++) target.push(next[i] as THREE.Vector3);
+      return;
+    }
+  }
+  if (rejoin === 'relax' && start < next.length) {
+    const relaxed = relaxOnto([penult, exit], next, start, 1, rhoMin);
+    if (relaxed) {
+      for (const p of relaxed) target.push(p);
+      for (let i = start + relaxed.length; i < next.length; i++) {
+        target.push(next[i] as THREE.Vector3);
+      }
+      return;
+    }
+  }
+  const from = resumeAt(next, start, 1, exit, penult, outOf, rhoMin, spacing);
+  for (let i = from; i < next.length; i++) target.push(next[i] as THREE.Vector3);
 }
 
 const EPS = 1e-9;
@@ -520,6 +782,7 @@ function stitchPath(
   rhoMin: number,
   spacing: number,
   blockout: number,
+  rejoin: Rejoin,
   draw: () => number,
 ): { spans: Span[]; decisions: CornerDecision[] } {
   const { arcs, corners } = raw;
@@ -540,13 +803,15 @@ function stitchPath(
     // A hard corner drawn `connect` must fillet, and a fillet that will not fit breaks instead.
     // `CONNECT_LIMIT` used to guess this from the angle; now it is measured.
     let fillet =
-      strategy === 'connect' && c.hard ? filletFor(before, after, c, rhoMin, spacing) : null;
+      strategy === 'connect' && c.hard
+        ? filletFor(before, after, c, rhoMin, spacing, rejoin)
+        : null;
     if (strategy === 'connect' && c.hard && !fillet) strategy = 'break';
     // A cut end is an electrode, and a letter has two of those rather than thirty. Everywhere else
     // the bender bends the tube out of the plane and paints the return, so the glass carries
     // through and only the light stops — which is the same fillet a connect draws.
     if (strategy === 'break' && draw() < blockout) {
-      fillet = filletFor(before, after, c, rhoMin, spacing);
+      fillet = filletFor(before, after, c, rhoMin, spacing, rejoin);
       if (fillet) strategy = 'return';
     }
     if (strategy === 'break') return { ...c, strategy, setback: 0, fillet: null };
@@ -593,7 +858,7 @@ function stitchPath(
         spans.push({ points: dropTail(current, decision.groupBefore + 1) });
         current = dropHead(next.slice(), decision.groupAfter + 1);
       } else {
-        mergeArc(current, next, decision, decision.fillet ?? null, rhoMin, spacing);
+        mergeArc(current, next, decision, decision.fillet ?? null, rhoMin, spacing, rejoin);
         if (decision.strategy === 'return' && decision.fillet) {
           const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
           spans.push(head, dark);
@@ -618,7 +883,7 @@ function stitchPath(
     const mid = Math.max(1, Math.min(first.length - 2, first.length >> 1));
     let current = first.slice(mid);
     const walk = (decision: CornerDecision, arc: THREE.Vector3[]) => {
-      mergeArc(current, arc, decision, decision.fillet ?? null, rhoMin, spacing);
+      mergeArc(current, arc, decision, decision.fillet ?? null, rhoMin, spacing, rejoin);
       if (decision.strategy === 'return' && decision.fillet) {
         const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
         closedSpans.push(head, dark);
@@ -653,6 +918,7 @@ function stitchPath(
         decision.fillet ?? null,
         rhoMin,
         spacing,
+        rejoin,
       );
       if (decision.strategy === 'return' && decision.fillet) {
         const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
@@ -705,6 +971,7 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
   const rhoMin = minBendRadius(radius, opts.bend);
   const rhoStyle = radius * STYLE_FACTOR;
   const spacing = opts.spacing ?? FALLBACK_SPACING;
+  const rejoin = opts.rejoin ?? DEFAULT_REJOIN;
   const seed = opts.seed ?? 0;
   let cornerCounter = 0;
   const draw = () => rng(cornerSeed(seed, cornerCounter++))();
@@ -728,6 +995,7 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
       rhoMin,
       spacing,
       opts.blockout ?? DEFAULT_BLOCKOUT,
+      rejoin,
       draw,
     );
     for (const d of decisions) {
@@ -750,12 +1018,21 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
   const extra = Math.max(0, opts.runs - spans.length);
   // A dark span is one piece of blockout, never several: slicing it would light its middle.
   const want = lengths.map((l, i) => (total > 0 && !spans[i]?.dark ? (extra * l) / total : 0));
-  const base = want.map(Math.floor);
+  // Extra cuts a span cannot afford: every piece has to clear `minRun` or it is dropped below,
+  // and a span sliced past its own budget loses all of them rather than some.
+  const fitting = (opts.shortRun ?? 'fit') === 'fit';
+  const room = lengths.map((l, i) =>
+    !fitting || spans[i]?.dark || !(opts.minRun > 0)
+      ? Number.POSITIVE_INFINITY
+      : Math.floor(l / opts.minRun) - 1,
+  );
+  const base = want.map((w, i) => Math.max(0, Math.min(Math.floor(w), room[i] as number)));
   let left = extra - base.reduce((a, b) => a + b, 0);
   for (const [, i] of want
     .map((w, i) => [w - (base[i] as number), i] as const)
     .sort((a, b) => b[0] - a[0])) {
     if (left <= 0) break;
+    if ((base[i] as number) >= (room[i] as number)) continue;
     base[i] = (base[i] as number) + 1;
     left--;
   }

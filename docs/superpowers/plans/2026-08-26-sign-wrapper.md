@@ -574,7 +574,7 @@ import {
   type FireOptions,
   type Framing,
   type Klieg,
-  type LightingName,
+  type LightingSlot,
   type Look,
 } from '../index.js';
 import { prefersReducedMotion } from '../render/stage.js';
@@ -589,7 +589,7 @@ export interface SignOptions {
   /** A number, or any CSS color — `currentColor` and `var(--x)` included, resolved on `anchor`. */
   tint?: number | string;
   framing?: Framing;
-  lighting?: LightingName;
+  lighting?: LightingSlot;
   bloom?: boolean;
   effects?: EffectSpec[];
   /** Merged over everything the options above build. */

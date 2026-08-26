@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { assign } from '../../../src/render/tube/assign.js';
 import { minBendRadius } from '../../../src/render/tube/bend.js';
-import { ALL_BREAK, ALL_CONNECT, cutIntoRuns } from '../../../src/render/tube/runs.js';
+import { ALL_BREAK, ALL_CONNECT, cutIntoRuns, REJOINS } from '../../../src/render/tube/runs.js';
 import { tightestBend } from '../../../src/render/tube/sweep.js';
 
 /**
@@ -41,6 +41,14 @@ function circlePath(): THREE.Vector3[] {
   return Array.from({ length: 120 }, (_, i) => {
     const t = (i / 120) * Math.PI * 2;
     return new THREE.Vector3(Math.cos(t) * 0.5, Math.sin(t) * 0.5, 0);
+  });
+}
+
+/** A closed circle of a given radius, sampled fine enough that its perimeter is the real one. */
+function circleOf(radius: number): THREE.Vector3[] {
+  return Array.from({ length: 720 }, (_, i) => {
+    const t = (i / 720) * Math.PI * 2;
+    return new THREE.Vector3(Math.cos(t) * radius, Math.sin(t) * radius, 0);
   });
 }
 
@@ -104,6 +112,41 @@ describe('cutIntoRuns', () => {
       const { runs } = cutIntoRuns([PATH(circlePath())], { runs: requested, minRun: 0 });
       expect(runs.length, `requested ${requested}, got ${runs.length}`).toBe(requested);
     }
+  });
+
+  // `TubeSpec.runs` is documented as bounded above by `minRun`. It was not: the budget was
+  // allocated first and any piece under the floor dropped afterwards, so a contour too short to
+  // carry the requested count lost every piece and rendered nothing at all.
+  it('cuts a short loop into as many runs as it can carry rather than none', () => {
+    const perimeter = 2 * Math.PI * 0.153;
+    const { runs } = cutIntoRuns([PATH(circleOf(0.153))], { runs: 7, minRun: 0.15 });
+
+    expect(runs.length).toBe(Math.floor(perimeter / 0.15));
+    for (const run of runs) expect(run.length).toBeGreaterThanOrEqual(0.15);
+  });
+
+  // The old behaviour, kept deliberately: small detail falls out of a sign rather than being
+  // drawn coarsely. It is opt-in because it renders nothing, which reads as a defect by default.
+  it('drops every piece of a short loop when asked to spend the budget anyway', () => {
+    const { runs } = cutIntoRuns([PATH(circleOf(0.153))], {
+      runs: 7,
+      minRun: 0.15,
+      shortRun: 'drop',
+    });
+
+    expect(runs).toHaveLength(0);
+  });
+
+  it('leaves a loop that cannot carry even one run empty rather than emitting a stub', () => {
+    const { runs } = cutIntoRuns([PATH(circleOf(0.01))], { runs: 7, minRun: 0.15 });
+
+    expect(runs).toHaveLength(0);
+  });
+
+  it('spends a budget it can afford exactly as before', () => {
+    const { runs } = cutIntoRuns([PATH(circleOf(0.5))], { runs: 7, minRun: 0.15 });
+
+    expect(runs).toHaveLength(7);
   });
 
   it('never returns fewer runs than there are corners', () => {
@@ -611,5 +654,57 @@ describe('vertex provenance', () => {
       });
     }
     expect(checked).toBeGreaterThan(0);
+  });
+});
+
+describe('the rejoin strategy', () => {
+  const OPTS = { runs: 1, minRun: 0, radius: 0.03, bend: 2, spacing: 0.02, seed: 0 };
+  const lengthOf = (runs: { length: number }[]) => runs.reduce((a, r) => a + r.length, 0);
+
+  it('defaults to leaving the path where `drop` leaves it', () => {
+    const fallback = cutIntoRuns([PATH(squarePath())], { ...OPTS, corners: ALL_CONNECT });
+    const named = cutIntoRuns([PATH(squarePath())], {
+      ...OPTS,
+      corners: ALL_CONNECT,
+      rejoin: 'drop',
+    });
+    expect(named.runs.length).toBe(fallback.runs.length);
+    expect(lengthOf(named.runs)).toBeCloseTo(lengthOf(fallback.runs), 12);
+  });
+
+  for (const rejoin of REJOINS) {
+    it(`draws a closed square under \`${rejoin}\``, () => {
+      const { runs, corners } = cutIntoRuns([PATH(squarePath())], {
+        ...OPTS,
+        corners: ALL_CONNECT,
+        rejoin,
+      });
+      expect(corners.length).toBe(4);
+      expect(runs.length).toBeGreaterThan(0);
+      // A square's legs are long and straight, so no strategy has an excuse to give one up.
+      expect(lengthOf(runs)).toBeGreaterThan(3.5);
+    });
+  }
+
+  /**
+   * `splitReturn` locates the fillet in a span by object identity, so a rejoin that splices a copy
+   * of the arc's first point instead of the point itself loses the lookup — and the dark stretch
+   * silently grows from one corner to most of the run. Nothing else in the cut notices.
+   */
+  it('keeps a return dark only over its own corner, whatever the rejoin', () => {
+    for (const rejoin of REJOINS) {
+      const { runs } = cutIntoRuns([PATH(squarePath())], {
+        ...OPTS,
+        corners: ALL_BREAK,
+        blockout: 1,
+        rejoin,
+      });
+      const dark = lengthOf(runs.filter((r) => r.dark));
+      expect(
+        runs.some((r) => r.dark),
+        rejoin,
+      ).toBe(true);
+      expect(dark / lengthOf(runs), rejoin).toBeLessThan(0.3);
+    }
   });
 });

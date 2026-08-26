@@ -1,0 +1,84 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>lamp falloff</title>
+<style>
+  body { margin: 0; background: #08090b; }
+  #strip { position: relative; width: 100%; height: 200px; }
+</style>
+<script type="importmap">
+  {
+    "imports": {
+      "three": "/three/three.module.js",
+      "klieg": "/klieg/index.js",
+      "opentype.js": "/opentype/opentype.mjs"
+    }
+  }
+</script>
+<div id="strip"></div>
+<script type="module">
+  import { createKlieg, specOf } from 'klieg';
+
+  const q = new URLSearchParams(location.search);
+  const num = (name, fallback) => {
+    const v = q.get(name);
+    return v === null ? fallback : Number(v);
+  };
+
+  const lookName = q.get('look') ?? 'gold';
+  // An emissive slot the lamp can multiply. Every material has one; only `neon` ships a non-black
+  // value, which is the whole reason a gain multiplier is a no-op on the other seven.
+  const em = q.get('em');
+  const look = em === null ? lookName : { ...specOf(lookName), emissive: Number.parseInt(em, 16), emissiveIntensity: Number(q.get('ei') ?? 0.25) };
+  const kind = q.get('kind') ?? 'body';
+  const lamp = q.get('lamp') === '1';
+  const lx = num('lx', 0);
+  const ly = num('ly', 0);
+  const radius = num('radius', 0.5);
+  const strength = num('strength', 2.5);
+  const shape = q.get('shape') ?? 'smooth';
+
+  // Reported back so the spike learns the real units of `PartInfo.x/y` instead of guessing.
+  const seen = { n: 0, minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+
+  const fall = (d) => {
+    const u = Math.min(1, Math.max(0, d / radius));
+    if (shape === 'linear') return 1 - u;
+    if (shape === 'inverse') return 1 / (1 + (d / radius) * (d / radius) * 4);
+    if (shape === 'gauss') return Math.exp(-(d * d) / (radius * radius));
+    return (1 - u) * (1 - u) * (1 + 2 * u); // smoothstep-ish, flat at the centre
+  };
+
+  const piece = {
+    duration: 1000,
+    at(_t, part) {
+      seen.n += 1;
+      seen.minX = Math.min(seen.minX, part.x);
+      seen.maxX = Math.max(seen.maxX, part.x);
+      seen.minY = Math.min(seen.minY, part.y);
+      seen.maxY = Math.max(seen.maxY, part.y);
+      if (!lamp) return { gain: 1 };
+      const d = Math.hypot(part.x - lx, part.y - ly);
+      return { gain: 1 + strength * fall(d) };
+    },
+  };
+
+  window.__shot = false;
+  const klieg = createKlieg({
+    fontUrl: '/font.ttf',
+    placement: { kind: 'element', el: document.getElementById('strip') },
+    framing: { width: 0.9, height: 0.6 },
+  });
+
+  void klieg.fire(q.get('text') ?? 'KLIEG', {
+    look,
+    lighting: 'static',
+    enter: 'none',
+    hold: 600_000,
+    effects: [{ piece, target: { kind, by: 'index' } }],
+  });
+
+  setTimeout(() => {
+    window.__parts = seen;
+    window.__shot = true;
+  }, 2500);
+</script>

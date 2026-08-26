@@ -1,22 +1,23 @@
 import { type Clock, RafClock } from './clock.js';
 import type { Easing } from './easing.js';
 import { EFFECTS } from './effects/pieces.js';
-import type { EffectName, EffectSpec } from './effects/types.js';
+import type { EffectName, EffectSpec, FrameCtx } from './effects/types.js';
 import { ACTIVE } from './motion/active.js';
-import {
-  type Slot,
-  slotDrivesEnv,
-  slotDuration,
-  slotMovesLetters,
-  Timeline,
-} from './motion/compositor.js';
+import { type Slot, slotDuration, slotMovesLetters, Timeline } from './motion/compositor.js';
 import { ENTER } from './motion/enter.js';
 import { EXIT } from './motion/exit.js';
 import { Sequence } from './motion/sequence.js';
 import type { ActiveName, EnterName, ExitName, LetterInfo, MotionPiece } from './motion/types.js';
+import { type PointerFrame, pointerFrame } from './pointer.js';
 import { EffectQueue, type QueuePolicy } from './queue.js';
 import { BloomPath } from './render/bloom.js';
-import { envRotationAt, LIGHTING, type LightingName, PointerLight } from './render/lighting.js';
+import {
+  ENV_PIECES,
+  type LightingName,
+  type LightingSlot,
+  mergeEnv,
+  resolveLighting,
+} from './render/lighting.js';
 import { LOOKS, type Look, type LookName, type LookSpec, specOf } from './render/looks.js';
 import {
   type Placement,
@@ -45,12 +46,25 @@ export {
   type SpringParams,
   spring,
 } from './easing.js';
+export {
+  along,
+  fixed,
+  fromPointer,
+  type LampSpec,
+  type LightPose,
+  type LightSource,
+  lamp,
+  type OrbitSpec,
+  orbit,
+} from './effects/lamp.js';
 export { type ChaseSpec, EFFECTS, type FlickerSpec, type HueSpec } from './effects/pieces.js';
 export { type RovingSpec, roving } from './effects/roving.js';
 export type {
   EffectName,
   EffectPiece,
   EffectSpec,
+  FrameCtx,
+  LightOffset,
   PartInfo,
   PartKind,
   PartOffset,
@@ -68,6 +82,18 @@ export type { Pose, PoseOffset, Vec3 } from './pose.js';
 export { POLICY_NAMES } from './queue.js';
 export type { DecorationSpec, MaterialSpec } from './render/decoration.js';
 export type { FlakeSpec } from './render/flake.js';
+export {
+  ENV_PIECES,
+  type EnvOffset,
+  type EnvPiece,
+  mergeEnv,
+  type ResolvedEnv,
+  type SweepSpec,
+  still,
+  sweep,
+  type TrackSpec,
+  track,
+} from './render/lighting.js';
 export type { LookParams, TintTarget } from './render/looks.js';
 /** The spec behind a built-in name, for building a variation on one. */
 export { specOf } from './render/looks.js';
@@ -77,6 +103,7 @@ export type {
   PathSource,
   Run,
   SelectSpec,
+  ShortRun,
   SurfaceKind,
   TubeSpec,
 } from './render/tube/index.js';
@@ -102,10 +129,8 @@ export const ENTER_NAMES: readonly EnterName[] = Object.keys(ENTER) as EnterName
 export const ACTIVE_NAMES: readonly ActiveName[] = Object.keys(ACTIVE) as ActiveName[];
 export const EXIT_NAMES: readonly ExitName[] = Object.keys(EXIT) as ExitName[];
 export const LOOK_NAMES: readonly LookName[] = Object.keys(LOOKS) as LookName[];
-export const LIGHTING_NAMES: readonly LightingName[] = Object.keys(LIGHTING) as LightingName[];
+export const LIGHTING_NAMES: readonly LightingName[] = Object.keys(ENV_PIECES) as LightingName[];
 export const EFFECT_NAMES: readonly EffectName[] = Object.keys(EFFECTS) as EffectName[];
-
-const TAU = Math.PI * 2;
 
 /** An explicit `bloom` always wins; a look may only ask when the caller said nothing. */
 export function wantsBloom(explicit: boolean | undefined, look: Look): boolean {
@@ -182,6 +207,7 @@ export type { Align } from './text/layout.js';
 export type EnterSlot = EnterName | MotionPiece | (EnterName | MotionPiece)[];
 export type ActiveSlot = ActiveName | MotionPiece | (ActiveName | MotionPiece)[];
 export type ExitSlot = ExitName | MotionPiece | (ExitName | MotionPiece)[];
+export type { LightingSlot };
 
 export interface FireOptions {
   enter?: EnterSlot;
@@ -194,8 +220,12 @@ export interface FireOptions {
    * than adding to it — spread `specOf(look).effects` to keep them.
    */
   effects?: EffectSpec[];
-  /** How the environment lights the type. `sweep` rakes the highlight, `static` holds it still. */
-  lighting?: LightingName;
+  /** How the environment lights the type. `sweep` rakes the highlight, `static` holds it still.
+   * Layers compose: `['sweep', track({ pitchRange: 0.1 })]`, each on its own period.
+   *
+   * A piece you construct carries its own state, so give each fire its own `track()` rather than
+   * sharing one; the name `'pointer'` builds a fresh piece per run and is safe to reuse. */
+  lighting?: LightingSlot;
   /**
    * Recolors the look, as `0xff2d6f`. A function is consulted per letter and may return
    * `undefined` for "not mine", leaving that letter the look's own colour.
@@ -295,7 +325,25 @@ export function createKlieg(options: KliegOptions): Klieg {
     placement,
   });
 
-  const pointerLight = new PointerLight();
+  let pointerClient: { x: number; y: number } | null = null;
+  let pointerAttached = false;
+  const onMove = (event: PointerEvent) => {
+    pointerClient = { x: event.clientX, y: event.clientY };
+  };
+
+  /** Once attached it stays for the instance's life. The cursor goes on moving between effects,
+   * so a listener that came and went would open the next one aimed where the pointer used to be. */
+  function holdPointer(): void {
+    if (pointerAttached) return;
+    pointerAttached = true;
+    globalThis.addEventListener('pointermove', onMove, { passive: true });
+  }
+
+  function releasePointer(): void {
+    if (!pointerAttached) return;
+    pointerAttached = false;
+    globalThis.removeEventListener('pointermove', onMove);
+  }
 
   let fontPromise: Promise<LoadedFont> | null = null;
   function font(): Promise<LoadedFont> {
@@ -375,10 +423,10 @@ export function createKlieg(options: KliegOptions): Klieg {
       });
     }
 
-    const lighting = opts.lighting ?? 'sweep';
-    const tracksPointer = LIGHTING[lighting].tracksPointer === true;
-    if (tracksPointer) pointerLight.attach();
-    const envDriven = slotDrivesEnv(active);
+    const envPieces = resolveLighting(opts.lighting ?? 'sweep');
+    // A construction-time snapshot, as `partExtent` documents: a regroup re-lays the letters and
+    // leaves the pool alone, so this cannot change under a running effect.
+    const extent = word.partExtent();
     const hold = opts.hold ?? 1200;
     const untilClick = hold === 'click';
     const exit = resolveSlot(opts.exit ?? 'fade', EXIT);
@@ -420,6 +468,8 @@ export function createKlieg(options: KliegOptions): Klieg {
       : null;
     const driver: Sequence | Timeline = sequence ?? timeline;
     const startedAt = clock.now();
+
+    holdPointer();
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
@@ -485,7 +535,26 @@ export function createKlieg(options: KliegOptions): Klieg {
           const elapsed = sequence ? raw : Math.min(raw, timeline.duration);
           // Ahead of the pose, or the fit and the phase advance both lag it by a frame.
           sequence?.tick(elapsed);
-          word.apply(driver, elapsed);
+
+          // Resolved on demand, once per frame: placing the cursor reads the canvas' box, which
+          // flushes layout, and most signs run no piece that asks for it.
+          let placed: PointerFrame | null = null;
+          const place = (): PointerFrame =>
+            (placed ??= pointerFrame(
+              pointerClient ? stage.canvas?.getBoundingClientRect() : null,
+              pointerClient,
+              extent,
+            ));
+          const ctx: FrameCtx = {
+            get pointer() {
+              return place().pointer;
+            },
+            get pointerInWord() {
+              return place().pointerInWord;
+            },
+            dt: still ? Number.POSITIVE_INFINITY : dt,
+          };
+          word.apply(driver, elapsed, ctx);
 
           if (layer && mode === 'layer' && family) {
             if (word.atRest()) {
@@ -519,19 +588,13 @@ export function createKlieg(options: KliegOptions): Klieg {
             }
           }
 
-          // A caller piece declaring envRotation wins: it is the more specific choice, and it
-          // carries its own duration as the period.
-          // Reduced motion snaps rather than eases: following the viewer's own finger is asked
-          // for, but the 90ms glide after it is the one part of this nobody asked for.
-          if (tracksPointer && !envDriven) pointerLight.step(still ? Number.POSITIVE_INFINITY : dt);
-          // Both axes every frame: only the pointer mode tilts x, and leaving a tilt behind would
-          // follow the viewer into the next effect.
-          stage.scene.environmentRotation.x = tracksPointer && !envDriven ? pointerLight.pitch : 0;
-          stage.scene.environmentRotation.y = envDriven
-            ? (elapsed / Math.max(1, slotDuration(active))) * TAU
-            : tracksPointer
-              ? pointerLight.yaw
-              : envRotationAt(lighting, elapsed);
+          const env = mergeEnv(
+            envPieces.map((piece) =>
+              piece.env(piece.duration > 0 ? (elapsed % piece.duration) / piece.duration : 0, ctx),
+            ),
+          );
+          stage.scene.environmentRotation.x = env.pitch;
+          stage.scene.environmentRotation.y = env.yaw;
 
           if (bloom) {
             bloom.render(stage.scene, stage.camera);
@@ -579,7 +642,7 @@ export function createKlieg(options: KliegOptions): Klieg {
     },
     destroy() {
       destroyed = true;
-      pointerLight.release();
+      releasePointer();
       // A running effect only notices the abort on its next tick, and tearing down first would
       // leave it re-arming idle teardown against a stage that is already gone.
       void queue.cancelAll().then(() => stage.unmount());

@@ -26,7 +26,7 @@ for the standalone bundle), biome.
 | File | Responsibility |
 |---|---|
 | `packages/core/src/index.ts` | **Modify** — `hold` gains `'forever'` |
-| `packages/core/src/sign/tint.ts` | **Create** — a CSS colour string to a klieg tint number |
+| `packages/core/src/sign/tint.ts` | **Create** — a CSS color string to a klieg tint number |
 | `packages/core/src/sign/index.ts` | **Create** — `sign()`, `SignOptions`, `Sign` |
 | `packages/core/src/element.ts` | **Create** — `<klieg-sign>`. No static import of core |
 | `packages/core/test/index.test.ts` | **Modify** — `hold: 'forever'` |
@@ -41,7 +41,7 @@ for the standalone bundle), biome.
 | `apps/lab/test/sign.spec.ts` | **Create** — playwright |
 | `README.md`, `CHANGELOG.md` | **Modify** |
 
-`sign()` splits from `tint.ts` because colour resolution is pure string work with its own failure
+`sign()` splits from `tint.ts` because color resolution is pure string work with its own failure
 modes and is the only part that can be tested without mocking anything.
 
 ---
@@ -297,9 +297,9 @@ git commit -m "give the suite a real DOM for the wrapper tests"
 
 ### Task 3: `resolveTint`
 
-A sign takes its colour from the page. Rather than parse CSS, it sets the candidate value as `color`
+A sign takes its color from the page. Rather than parse CSS, it sets the candidate value as `color`
 on a probe inside the anchor and reads back what the browser computed — which resolves
-`currentColor`, `var(--x)`, named colours, `hsl()` and hex through one path.
+`currentColor`, `var(--x)`, named colors, `hsl()` and hex through one path.
 
 **Files:**
 - Create: `packages/core/src/sign/tint.ts`
@@ -331,11 +331,11 @@ describe('resolveTint', () => {
     expect(resolveTint(anchor, undefined)).toBeUndefined();
   });
 
-  it('packs a hex colour into a klieg tint', () => {
+  it('packs a hex color into a klieg tint', () => {
     expect(resolveTint(anchor, '#22d3ee')).toBe(0x22d3ee);
   });
 
-  it('packs a named colour', () => {
+  it('packs a named color', () => {
     expect(resolveTint(anchor, 'red')).toBe(0xff0000);
   });
 
@@ -346,8 +346,8 @@ describe('resolveTint', () => {
     expect(anchor.children).toHaveLength(0);
   });
 
-  it('returns undefined rather than a wrong colour for something unparseable', () => {
-    expect(resolveTint(anchor, 'not-a-colour')).toBeUndefined();
+  it('returns undefined rather than a wrong color for something unparseable', () => {
+    expect(resolveTint(anchor, 'not-a-color')).toBeUndefined();
   });
 });
 ```
@@ -372,7 +372,7 @@ Create `packages/core/src/sign/tint.ts`:
 /**
  * A computed `color` is `rgb(r, g, b)` or `rgba(r, g, b, a)` in every engine that matters. A
  * browser returning `color(srgb …)` for a wide-gamut input falls through to undefined, which
- * leaves the look its own colour rather than a wrong one.
+ * leaves the look its own color rather than a wrong one.
  */
 function packRgb(css: string): number | undefined {
   const match = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/.exec(css);
@@ -493,7 +493,7 @@ describe('sign', () => {
     expect(fire).toHaveBeenCalledWith('A Name', expect.anything());
   });
 
-  it('holds forever and never enters, because an anchored canvas clips a travelling enter', () => {
+  it('holds forever and never enters, because an anchored canvas clips a traveling enter', () => {
     sign(anchor, { font: '/f.ttf' });
 
     expect(fired().hold).toBe('forever');
@@ -586,7 +586,7 @@ export interface SignOptions {
   /** Defaults to the anchor's own text, which is what makes the page's markup the DOM copy. */
   text?: string;
   look?: Look;
-  /** A number, or any CSS colour — `currentColor` and `var(--x)` included, resolved on `anchor`. */
+  /** A number, or any CSS color — `currentColor` and `var(--x)` included, resolved on `anchor`. */
   tint?: number | string;
   framing?: Framing;
   lighting?: LightingName;
@@ -696,7 +696,7 @@ git commit -m "light a held sign into an element with one call"
 
 ### Task 5: `sign()` — reduced motion, `selectable`, lifecycle
 
-The behaviours from Task 4's implementation that its tests do not yet pin.
+The behaviors from Task 4's implementation that its tests do not yet pin.
 
 **Files:**
 - Test: `packages/core/test/sign/index.test.ts`
@@ -773,7 +773,7 @@ Expected: no output.
 
 ```bash
 git add packages/core/test/sign/index.test.ts
-git commit -m "pin a sign's reduced-motion, selectable and update behaviour"
+git commit -m "pin a sign's reduced-motion, selectable and update behavior"
 ```
 
 ---
@@ -1511,7 +1511,7 @@ test.describe('the sign element', () => {
     expect(await page.locator('#plain').getByText('klieg', { exact: true }).count()).toBe(1);
   });
 
-  test('resolves a var() tint and an inherited currentColor to different colours', async ({
+  test('resolves a var() tint and an inherited currentColor to different colors', async ({
     page,
   }) => {
     const tints: string[] = [];
@@ -1549,7 +1549,7 @@ test.describe('the sign element', () => {
 });
 ```
 
-The `recordTint`/`tints` pair asserts the page's own script never had to resolve a colour — the
+The `recordTint`/`tints` pair asserts the page's own script never had to resolve a color — the
 element did it. Keep it: it is the difference between the feature working and the test page faking it.
 
 - [ ] **Step 2: Run it**
@@ -1558,7 +1558,7 @@ element did it. Keep it: it is the difference between the feature working and th
 npx playwright test apps/lab/test/sign.spec.ts
 ```
 
-Expected: PASS, 5 tests. This spec is written last on purpose — it asserts the browser behaviour
+Expected: PASS, 5 tests. This spec is written last on purpose — it asserts the browser behavior
 the earlier tasks could not reach, so a failure here is a defect in Tasks 3–7, not in the spec.
 Fix the implementation.
 
@@ -1629,13 +1629,13 @@ transparent once the type lands; with no WebGL, no JavaScript or a failed load, 
 it at all. Type size stays your `font-size`: `framing` is a proportion of the anchor, never a size.
 
 Attributes: `font`, `text`, `look`, `tint`, `framing-width`, `framing-height`, `align`, `lighting`,
-`bloom`. `tint` takes any CSS colour, `currentColor` and `var(--x)` included, so a sign inherits
+`bloom`. `tint` takes any CSS color, `currentColor` and `var(--x)` included, so a sign inherits
 your palette rather than repeating it. The `.look`, `.effects` and `.options` properties carry what
 an attribute cannot, `.options` being a whole `FireOptions` merged over the rest.
 
 The element imports klieg dynamically, so three.js arrives only when one connects.
 
-For a page that would rather call a function, `klieg/sign` is the same behaviour without the
+For a page that would rather call a function, `klieg/sign` is the same behavior without the
 registry:
 
 ```js
@@ -1670,7 +1670,7 @@ content so the word stays readable, selectable and in the accessibility tree whe
 anything renders. The element imports klieg dynamically, so three.js arrives only when one connects,
 and `dist/standalone/klieg-sign.js` is the whole thing in one file for a page with no bundler.
 
-`tint` on a sign takes any CSS colour, `currentColor` and `var(--x)` included, resolved against the
+`tint` on a sign takes any CSS color, `currentColor` and `var(--x)` included, resolved against the
 anchor — so a sign tracks the page's palette rather than repeating a number from it.
 
 **`FireOptions.hold` gains `'forever'`**, which holds until `destroy()`. `'click'` is refused for an

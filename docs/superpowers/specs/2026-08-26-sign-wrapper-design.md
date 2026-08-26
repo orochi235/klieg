@@ -30,7 +30,7 @@ export interface SignOptions {
   font: string                    // required; no default
   text?: string                   // defaults to anchor.textContent
   look?: Look
-  tint?: number | string          // a CSS colour, `currentColor` or `var(--x)`, resolved off `anchor`
+  tint?: number | string          // a CSS color, `currentColor` or `var(--x)`, resolved off `anchor`
   framing?: Framing               // including `align`
   lighting?: LightingName
   bloom?: boolean
@@ -155,7 +155,7 @@ asking for it; the `sign()`/adapter split is the seam it would arrive through.
 
 - **The element is an adapter, not the abstraction.** `sign()` is framework-free and testable without
   a custom element registry; the element is attributes in, `sign()` out. A consumer who does not want
-  a custom element gets identical behaviour from the function.
+  a custom element gets identical behavior from the function.
 - **Sign policy does not belong in `createKlieg`.** Which look, when to give up, what reduced motion
   means — core's job is mechanism, and a `mode:` per scenario would grow the entry point once per
   wrapper.

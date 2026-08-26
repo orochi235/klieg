@@ -55,7 +55,7 @@ describe('sign', () => {
     expect(fire).toHaveBeenCalledWith('A Name', expect.anything());
   });
 
-  it('holds forever and never enters, because an anchored canvas clips a travelling enter', () => {
+  it('holds forever and never enters, because an anchored canvas clips a traveling enter', () => {
     sign(anchor, { font: '/f.ttf' });
 
     expect(fired().hold).toBe('forever');

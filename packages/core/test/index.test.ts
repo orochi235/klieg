@@ -20,6 +20,7 @@ import type { Vec3 } from '../src/pose.js';
 import { BloomPath } from '../src/render/bloom.js';
 import { type EnvPiece, sweep, track } from '../src/render/lighting.js';
 import { Stage } from '../src/render/stage.js';
+import { Word } from '../src/render/word.js';
 import { fromEuler } from '../src/transform.js';
 
 const { parse } = vi.hoisted(() => ({ parse: vi.fn() }));
@@ -1241,27 +1242,82 @@ describe('the pointer in the frame context', () => {
   it('carries a canvas pointer that sweeps the whole word in layout space', async () => {
     const seen = capture();
     const bk = create();
-    // Wide enough that the word's own extent reaches well past the -1..1 the canvas box is in.
-    void bk.fire('HELLOTHERE', LOOKING(seen.spec));
+    // Two lines, and wide enough that the word's extent reaches past the -1..1 the box is in:
+    // a single line has no vertical extent to speak of and cannot tell the y axes apart.
+    void bk.fire('HELLO\nTHERE', LOOKING(seen.spec));
     await flush();
     stubCanvas(BOX);
 
     dispatch('pointermove', { clientX: 0, clientY: 0 });
     clock.advance(16);
-    const left = last(seen.frames).pointerInWord;
+    const topLeft = last(seen.frames).pointerInWord;
 
     dispatch('pointermove', { clientX: 100, clientY: 100 });
     clock.advance(16);
-    const right = last(seen.frames).pointerInWord;
+    const bottomRight = last(seen.frames).pointerInWord;
 
     const xs = seen.parts.map((p) => p.x);
     const ys = seen.parts.map((p) => p.y);
     expect(xs.length).toBeGreaterThan(0);
-    // The far edges of the canvas must reach past every part, or a lamp can never light the ends.
-    expect(left?.x).toBeLessThanOrEqual(Math.min(...xs));
-    expect(right?.x).toBeGreaterThanOrEqual(Math.max(...xs));
-    expect(left?.y).toBeLessThanOrEqual(Math.min(...ys));
-    expect(right?.y).toBeGreaterThanOrEqual(Math.max(...ys));
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(0);
+    // The far corners of the canvas must reach past every part, or a lamp can never light the ends.
+    expect(topLeft?.x).toBeLessThanOrEqual(Math.min(...xs));
+    expect(bottomRight?.x).toBeGreaterThanOrEqual(Math.max(...xs));
+    // clientY grows downward and layout y grows upward, so the top of the canvas is the top line.
+    expect(topLeft?.y).toBeGreaterThanOrEqual(Math.max(...ys));
+    expect(bottomRight?.y).toBeLessThanOrEqual(Math.min(...ys));
+    bk.destroy();
+  });
+
+  it('reads no pointer at all from a canvas that has been collapsed to nothing', async () => {
+    const seen = capture();
+    const bk = create();
+    void bk.fire('HI', LOOKING(seen.spec));
+    await flush();
+    // A display:none ancestor, or a frame before layout has run: the box is real but has no area.
+    stubCanvas({ left: 0, top: 0, width: 0, height: 0 });
+    dispatch('pointermove', { clientX: 40, clientY: 40 });
+    clock.advance(16);
+
+    expect(last(seen.frames).pointer).toBeNull();
+    expect(last(seen.frames).pointerInWord).toBeNull();
+    bk.destroy();
+  });
+
+  it('keeps the canvas pointer but drops pointerInWord when the word has no extent', async () => {
+    // The stub font gives every glyph a real box, so a degenerate pool has to be stood in for.
+    vi.spyOn(Word.prototype, 'partExtent').mockReturnValue({
+      minX: 0,
+      maxX: 0,
+      minY: 0,
+      maxY: 0,
+    });
+    const seen = capture();
+    const bk = create();
+    void bk.fire('HI', LOOKING(seen.spec));
+    await flush();
+    stubCanvas(BOX);
+    dispatch('pointermove', { clientX: 40, clientY: 40 });
+    clock.advance(16);
+
+    expect(last(seen.frames).pointer).not.toBeNull();
+    // fromPointer reads null as rest, which beats mapping every position onto one constant.
+    expect(last(seen.frames).pointerInWord).toBeNull();
+    bk.destroy();
+  });
+
+  it('drops pointerInWord for a pool with no parts in it yet', async () => {
+    vi.spyOn(Word.prototype, 'partExtent').mockReturnValue(null);
+    const seen = capture();
+    const bk = create();
+    void bk.fire('HI', LOOKING(seen.spec));
+    await flush();
+    stubCanvas(BOX);
+    dispatch('pointermove', { clientX: 40, clientY: 40 });
+    clock.advance(16);
+
+    expect(last(seen.frames).pointer).not.toBeNull();
+    expect(last(seen.frames).pointerInWord).toBeNull();
     bk.destroy();
   });
 

@@ -483,7 +483,7 @@ export function createKlieg(options: KliegOptions): Klieg {
               // The word is not centred on zero, so map into its real extent rather than scaling.
               pointerInWord = {
                 x: extent.minX + ((pointer.x + 1) / 2) * (extent.maxX - extent.minX),
-                y: extent.minY + ((pointer.y + 1) / 2) * (extent.maxY - extent.minY),
+                y: extent.maxY - ((pointer.y + 1) / 2) * (extent.maxY - extent.minY),
               };
             }
           }

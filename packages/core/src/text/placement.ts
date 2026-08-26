@@ -1,4 +1,4 @@
-import type { Block, Budget, GlyphMetrics, Line } from './layout.js';
+import type { Align, Block, Budget, GlyphMetrics, Line } from './layout.js';
 import { fitScale, LINE_HEIGHT_EM } from './layout.js';
 
 /** How a regrouped word is laid out: one line, or one glyph per line. */
@@ -85,34 +85,60 @@ export interface Fit {
   scale: number;
   /** Vertical centre of the drawn ink, in em. The group shifts by `-midY * scale`. */
   midY: number;
+  /** World-space x for the group, placing the painted edge on the box's. 0 when centred. */
+  offsetX: number;
+}
+
+/** Each glyph's own bounds in em, indexed like the placement; null where the glyph draws nothing. */
+export interface GlyphBounds {
+  minX: readonly (number | null | undefined)[];
+  maxX: readonly (number | null | undefined)[];
+  minY: readonly (number | null | undefined)[];
+  maxY: readonly (number | null | undefined)[];
 }
 
 /**
- * Uniform scale and vertical centring for a placed block. `geoMinY`/`geoMaxY` are each glyph's
- * own vertical bounds in em, indexed like the placement; a glyph that draws nothing contributes
- * neither. Ink height, not cap height: a descender both drops the centre and eats budget.
+ * Uniform scale, vertical centring and horizontal alignment for a placed block. Ink height, not
+ * cap height: a descender both drops the centre and eats budget. Alignment measures the painted
+ * extent rather than the advance span the fit is scored on, so an edge glyph's side bearing does
+ * not hold the word off the edge it was asked to meet.
  */
-export function fitOf(
-  placed: Placement,
-  geoMinY: readonly (number | null)[],
-  geoMaxY: readonly (number | null)[],
-  budget: Budget,
-): Fit {
+export function fitOf(placed: Placement, geo: GlyphBounds, budget: Budget): Fit {
   let minY = Number.POSITIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
 
   for (let i = 0; i < placed.x.length; i++) {
-    const lo = geoMinY[i];
-    const hi = geoMaxY[i];
+    const lo = geo.minY[i];
+    const hi = geo.maxY[i];
     if (lo === null || lo === undefined || hi === null || hi === undefined) continue;
     const y = placed.y[i] as number;
     minY = Math.min(minY, y + lo);
     maxY = Math.max(maxY, y + hi);
+
+    const left = geo.minX[i];
+    const right = geo.maxX[i];
+    if (left === null || left === undefined || right === null || right === undefined) continue;
+    const x = placed.x[i] as number;
+    minX = Math.min(minX, x + left);
+    maxX = Math.max(maxX, x + right);
   }
 
   const drawn = Number.isFinite(minY);
+  const scale = fitScale(placed.inkWidth, drawn ? maxY - minY : 0, budget);
+
   return {
-    scale: fitScale(placed.inkWidth, drawn ? maxY - minY : 0, budget),
+    scale,
     midY: drawn ? (minY + maxY) / 2 : 0,
+    offsetX: alignOffset(scale, minX, maxX, budget),
   };
+}
+
+function alignOffset(scale: number, minX: number, maxX: number, budget: Budget): number {
+  const align: Align | undefined = budget.align;
+  const extent = budget.extent;
+  if (!align || align === 'center' || extent === undefined) return 0;
+  if (!Number.isFinite(minX)) return 0;
+  return align === 'start' ? -extent / 2 - minX * scale : extent / 2 - maxX * scale;
 }

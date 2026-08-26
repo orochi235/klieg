@@ -47,6 +47,9 @@ export function layoutBlock(text: string, metrics: GlyphMetrics): Block {
   return { lines, width: Math.max(0, ...lines.map((l) => l.width)) };
 }
 
+/** Where the word sits in the box. `'start'` is its left edge; klieg has no text direction. */
+export type Align = 'start' | 'center' | 'end';
+
 export interface Budget {
   width: number;
   height: number;
@@ -56,6 +59,13 @@ export interface Budget {
    * the cap binds long before the budget does, holding the type well under its framing.
    */
   cap?: number;
+  /**
+   * Full visible width at the word's depth. Alignment measures against the whole box, where
+   * `width` is only the share of it the type may fill — aligning inside that share would leave
+   * the word inset by exactly the slack the fraction cut out.
+   */
+  extent?: number;
+  align?: Align;
 }
 
 /** Keeps one short word on a fullscreen overlay from blowing up to fill the viewport. */

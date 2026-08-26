@@ -30,6 +30,14 @@ function fraction(raw: string | null): number | undefined {
   return Number.isFinite(value) ? value : undefined;
 }
 
+const ALIGNS: readonly Align[] = ['start', 'center', 'end'];
+
+/** An unknown name is omitted: `edgeFor` reads anything but `center` as an edge, so passing one
+ * through would align to `end` rather than leaving klieg's default standing. */
+function alignment(raw: string | null): Align | undefined {
+  return ALIGNS.find((known) => known === raw);
+}
+
 function optional<K extends string, T>(key: K, value: T | undefined): { [P in K]?: T } {
   return (value === undefined ? {} : { [key]: value }) as { [P in K]?: T };
 }
@@ -55,6 +63,7 @@ class KliegSign extends HTMLElement {
   #sign: Sign | null = null;
   /** Bumped on every connect and disconnect, so a late import lands on a stale element and stops. */
   #token = 0;
+  #queued = false;
 
   connectedCallback(): void {
     installStyle(this.ownerDocument);
@@ -88,8 +97,17 @@ class KliegSign extends HTMLElement {
     this.removeAttribute('lit');
   }
 
+  /** A page reconfiguring several attributes writes them one at a time, and every `update()`
+   * rebuilds a WebGL context and refetches the font. One microtask collapses the burst. */
   attributeChangedCallback(): void {
-    this.#sign?.update(this.#options());
+    if (this.#queued) return;
+    this.#queued = true;
+    const token = this.#token;
+    void Promise.resolve().then(() => {
+      this.#queued = false;
+      if (token !== this.#token || !this.isConnected) return;
+      this.#sign?.update(this.#options());
+    });
   }
 
   /** Runs before klieg appends anything, so every child here is the page's own. */
@@ -101,7 +119,7 @@ class KliegSign extends HTMLElement {
     const framing = {
       ...optional('width', fraction(this.getAttribute('framing-width'))),
       ...optional('height', fraction(this.getAttribute('framing-height'))),
-      ...optional('align', (this.getAttribute('align') as Align | null) ?? undefined),
+      ...optional('align', alignment(this.getAttribute('align'))),
     };
     const bloom = this.getAttribute('bloom');
 

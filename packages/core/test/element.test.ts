@@ -226,12 +226,47 @@ describe('<klieg-sign>', () => {
     });
   });
 
+  it('ignores an align it does not know rather than aligning to an edge', async () => {
+    await mount('<klieg-sign font="/f.ttf" align="banana"><h1>A</h1></klieg-sign>');
+    const opts = sign.mock.calls[0]?.[1] as { framing?: unknown };
+    expect(opts.framing).toBeUndefined();
+  });
+
   it('re-fires through update when an observed attribute changes', async () => {
     const el = await mount('<klieg-sign font="/f.ttf" look="gold"><h1>A</h1></klieg-sign>');
 
     el.setAttribute('look', 'tubing');
+    await settled();
 
     expect(update).toHaveBeenCalledOnce();
     expect(update.mock.calls[0]?.[0]).toMatchObject({ look: 'tubing' });
+  });
+
+  it('folds a burst of attribute changes into one re-fire', async () => {
+    const el = await mount('<klieg-sign font="/f.ttf"><h1>A</h1></klieg-sign>');
+
+    el.setAttribute('look', 'gold');
+    el.setAttribute('tint', 'red');
+    el.setAttribute('align', 'center');
+    await settled();
+
+    // Each `update()` builds a WebGL context and refetches the font, so three would be three.
+    expect(update).toHaveBeenCalledOnce();
+    expect(update.mock.calls[0]?.[0]).toMatchObject({
+      look: 'gold',
+      tint: 'red',
+      framing: { align: 'center' },
+    });
+  });
+
+  it('never re-fires a sign the element destroyed before the update landed', async () => {
+    const el = await mount('<klieg-sign font="/f.ttf"><h1>A</h1></klieg-sign>');
+
+    el.setAttribute('look', 'gold');
+    el.remove();
+    await settled();
+
+    expect(update).not.toHaveBeenCalled();
+    expect(destroy).toHaveBeenCalledOnce();
   });
 });

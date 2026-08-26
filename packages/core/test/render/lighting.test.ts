@@ -6,6 +6,7 @@ import {
   type LightingName,
   mergeEnv,
   PointerLight,
+  type ResolvedEnv,
   still,
   sweep,
   track,
@@ -151,10 +152,10 @@ describe('still', () => {
 
 describe('mergeEnv', () => {
   it('rests flat', () => {
-    expect(mergeEnv([])).toEqual({ yaw: 0, pitch: 0 });
+    const merged: ResolvedEnv = mergeEnv([]);
+    expect(merged).toEqual({ yaw: 0, pitch: 0 });
   });
 
-  // Additive, like the pose compositor: two layers must both be visible in the result.
   it('sums yaw and pitch across layers', () => {
     const merged = mergeEnv([{ yaw: 1, pitch: 0.2 }, { yaw: 0.5 }, { pitch: -0.1 }]);
     expect(merged.yaw).toBeCloseTo(1.5);
@@ -164,6 +165,20 @@ describe('mergeEnv', () => {
   it('keeps each axis out of the other', () => {
     expect(mergeEnv([{ yaw: 3 }])).toEqual({ yaw: 3, pitch: 0 });
     expect(mergeEnv([{ pitch: 3 }])).toEqual({ yaw: 0, pitch: 3 });
+  });
+});
+
+describe('layered env pieces', () => {
+  // The shape the option documents: ['sweep', track({ pitchRange: 0.1 })].
+  it('takes yaw from both layers and pitch from the only piece that sets it', () => {
+    const rake = sweep({ periodMs: 1000 });
+    const aim = track({ yawRange: 1, pitchRange: 0.1, followMs: 0 });
+    const ctx = { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 16 };
+
+    const merged = mergeEnv([rake.env(0.5, ctx), aim.env(0, ctx)]);
+
+    expect(merged.yaw).toBeCloseTo(Math.PI + 1);
+    expect(merged.pitch).toBeCloseTo(-0.1);
   });
 });
 
@@ -180,9 +195,9 @@ describe('track', () => {
     expect(piece.env(0, CTX)).toEqual({ yaw: 0, pitch: 0 });
 
     const ctx = { pointer: { x: 1, y: 1 }, pointerInWord: null, dt: 16 };
-    const out = piece.env(0, ctx);
-    expect(out.yaw as number).toBeGreaterThan(0);
-    expect(out.pitch as number).toBeGreaterThan(0);
+    const out = mergeEnv([piece.env(0, ctx)]);
+    expect(out.yaw).toBeGreaterThan(0);
+    expect(out.pitch).toBeGreaterThan(0);
   });
 
   it('swings less on pitch than on yaw', () => {
@@ -212,6 +227,54 @@ describe('track', () => {
     expect(out.pitch).toBeCloseTo(-0.5);
   });
 
+  // followMs 0 on a dt 0 frame is exp(-0/0) = NaN, and the closure never recovers.
+  it('snaps rather than going NaN when the follow period is zero', () => {
+    const piece = track({ yawRange: 1, pitchRange: 0.5, followMs: 0 });
+    const out = piece.env(0, { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 0 });
+    expect(out.yaw).toBeCloseTo(1);
+    expect(out.pitch).toBeCloseTo(-0.5);
+  });
+
+  it('snaps rather than diverging when the follow period is negative', () => {
+    const piece = track({ yawRange: 1, pitchRange: 0.5, followMs: -100 });
+    const ctx = { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 16 };
+    for (let i = 0; i < 5; i++) piece.env(0, ctx);
+    const out = piece.env(0, ctx);
+    expect(out.yaw).toBeCloseTo(1);
+    expect(out.pitch).toBeCloseTo(-0.5);
+  });
+
+  it('snaps rather than going NaN when the follow period is NaN', () => {
+    const piece = track({ yawRange: 1, pitchRange: 0.5, followMs: Number.NaN });
+    const out = piece.env(0, { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 16 });
+    expect(out.yaw).toBeCloseTo(1);
+    expect(out.pitch).toBeCloseTo(-0.5);
+  });
+
+  // The ease accumulates in a closure, so one bad frame would poison every later one.
+  it('keeps returning finite numbers after a hostile frame', () => {
+    const pointer = { x: 0.5, y: 0.5 };
+    for (const followMs of [0, -100, Number.NaN]) {
+      const piece = track({ followMs });
+      piece.env(0, { pointer, pointerInWord: null, dt: 0 });
+      const out = mergeEnv([piece.env(0, { pointer, pointerInWord: null, dt: 16 })]);
+      expect(Number.isFinite(out.yaw)).toBe(true);
+      expect(Number.isFinite(out.pitch)).toBe(true);
+    }
+  });
+
+  it('freezes at its last pose when the pointer leaves rather than easing back to rest', () => {
+    const piece = track({ yawRange: 1, pitchRange: 0.5, followMs: 1 });
+    const ctx = { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 100_000 };
+    piece.env(0, ctx);
+    const aimed = mergeEnv([piece.env(0, ctx)]);
+    expect(aimed.yaw).toBeCloseTo(1);
+
+    const gone = { pointer: null, pointerInWord: null, dt: 100_000 };
+    piece.env(0, gone);
+    expect(mergeEnv([piece.env(0, gone)])).toEqual(aimed);
+  });
+
   it('follows the pointer partway in a single short frame', () => {
     const piece = track({ yawRange: 1, pitchRange: 1, followMs: 100 });
     const ctx = { pointer: { x: 1, y: 1 }, pointerInWord: null, dt: 100 };
@@ -224,14 +287,22 @@ describe('track', () => {
     expect(piece.duration).toBe(0);
     const ctx = { pointer: { x: 1, y: 0 }, pointerInWord: null, dt: 100_000 };
     piece.env(0, ctx);
-    const settled = piece.env(0.6, ctx).yaw;
-    expect(piece.env(0.9, ctx).yaw).toBeCloseTo(settled as number, 10);
+    const settled = mergeEnv([piece.env(0.6, ctx)]);
+    expect(mergeEnv([piece.env(0.9, ctx)]).yaw).toBeCloseTo(settled.yaw, 10);
   });
 });
 
 describe('ENV_PIECES', () => {
   it('has an entry for every lighting name', () => {
     expect(Object.keys(ENV_PIECES).sort()).toEqual([...NAMES].sort());
+  });
+
+  // An annotated Record would erase each factory's own spec parameter.
+  it('keeps every factory callable by name and with its own spec', () => {
+    const name: LightingName = 'sweep';
+    expect(ENV_PIECES[name]().duration).toBe(LIGHTING.sweep.periodMs);
+    expect(ENV_PIECES.sweep({ periodMs: 200 }).duration).toBe(200);
+    expect(ENV_PIECES.pointer({ yawRange: 2, followMs: 0 }).duration).toBe(0);
   });
 
   it('maps each name to the piece that mode describes', () => {
@@ -243,6 +314,6 @@ describe('ENV_PIECES', () => {
     const pointer = ENV_PIECES.pointer();
     const ctx = { pointer: { x: 1, y: 0 }, pointerInWord: null, dt: 100_000 };
     pointer.env(0, ctx);
-    expect(pointer.env(0, ctx).yaw as number).toBeGreaterThan(0);
+    expect(mergeEnv([pointer.env(0, ctx)]).yaw).toBeGreaterThan(0);
   });
 });

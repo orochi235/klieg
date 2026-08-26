@@ -88,8 +88,13 @@ export interface EnvPiece {
   env(t: number, ctx: FrameCtx): EnvOffset;
 }
 
+export interface ResolvedEnv {
+  yaw: number;
+  pitch: number;
+}
+
 /** Additive, matching the pose compositor: layering two pieces must show both. */
-export function mergeEnv(offsets: readonly EnvOffset[]): { yaw: number; pitch: number } {
+export function mergeEnv(offsets: readonly EnvOffset[]): ResolvedEnv {
   let yaw = 0;
   let pitch = 0;
   for (const o of offsets) {
@@ -109,8 +114,11 @@ export function still(): EnvPiece {
 }
 
 export interface TrackSpec {
+  /** Radians the environment swings between opposite edges of the canvas. */
   yawRange?: number;
+  /** Radians on the other axis. Shallower than yaw by default; see the note on `PITCH_RANGE`. */
   pitchRange?: number;
+  /** Milliseconds to cover ~63% of the way to a new pointer position. Zero snaps. */
   followMs?: number;
 }
 
@@ -129,7 +137,7 @@ export function track(spec: TrackSpec = {}): EnvPiece {
     duration: 0,
     env(_t, ctx) {
       if (ctx.pointer) {
-        const k = 1 - Math.exp(-Math.max(0, ctx.dt) / followMs);
+        const k = followMs > 0 ? 1 - Math.exp(-Math.max(0, ctx.dt) / followMs) : 1;
         yaw += (ctx.pointer.x * yawRange - yaw) * k;
         pitch += (ctx.pointer.y * pitchRange - pitch) * k;
       }
@@ -138,8 +146,8 @@ export function track(spec: TrackSpec = {}): EnvPiece {
   };
 }
 
-export const ENV_PIECES: Record<LightingName, () => EnvPiece> = {
+export const ENV_PIECES = {
   sweep,
   static: still,
   pointer: track,
-};
+} satisfies Record<LightingName, () => EnvPiece>;

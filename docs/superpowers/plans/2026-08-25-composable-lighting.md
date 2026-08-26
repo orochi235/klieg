@@ -1263,9 +1263,15 @@ Exit non-zero when any look renders lamp-on and lamp-off to the same md5, the wa
 
 - [ ] **Step 2: Build and run it**
 
-Run: `npm run build -w klieg && node spikes/lamp-proof.mjs --looks gold,chrome,gem,velvet,neon`
+Run: `npm run build -w klieg && node spikes/lamp-proof.mjs --looks gold,chrome,gem,velvet,neon,tubing`
 Expected: every look reports `reads`. A `NO-OP` row means the lamp never reached the GPU on that
 look, which is the exact failure this plan exists to fix.
+
+**`tubing` is in the list because none of the other five has a single `run` part**, and a lamp on a
+run takes a different write path from a lamp on a body — a vertex-buffer write gated on
+`partReadsRunColor` and an early return when the geometry carries no run-colour attribute, versus
+one `material.emissive.setHex`. The run path has strictly more places to silently do nothing, and it
+is the path under the two looks people will most want to light. Target it with `{ kind: 'run' }`.
 
 `sequin` will not pass and is out of scope — it has zero `run` parts and a near-black body. See
 the findings note.
@@ -1286,14 +1292,46 @@ already true of `gain` and `chase`, but a lamp is the first effect that invites 
 
 - [ ] **Step 3: Render the overlap**
 
-Task 5 ships the light channel summing in sRGB rather than in linear radiance, which is wrong
-everywhere two lamps land on one part and invisible everywhere else. Add a second run to the script:
-two lamps of the same colour and half strength, offset so their pools cross the middle of the word.
+Task 5 ships the light channel summing in sRGB rather than in linear radiance. **Do not try to judge
+this from an offset seam.** Two half-strength lamps whose pools cross will read darker at the seam
+than one full lamp under *either* scheme, because the two falloff curves generally do not sum to 1
+there — the geometry swamps the colour space and the test fires either way.
 
-Run it and look at the seam. Two lamps at half strength should read as one lamp at full strength; if
-the overlap bands, or reads darker than either lamp alone at full, decode in the compositor's `rgb()`
-and encode once in `litEmissive`. Attach the render either way — a seam nobody looked at is the same
-evidence `gain` had.
+Nor does strength discriminate it: `amount` scales linearly in both schemes, so two coincident lamps
+at half strength and one at full strength are byte-identical whichever is in use.
+
+**What discriminates is the colour decode.** `rgb()` divides the byte by 255 with no gamma decode, so
+a mid-grey lamp contributes 0.502 where linear radiance would give it 0.216. Render two frames, same
+position, same everything else:
+
+- a lamp at `color: 0x808080, amount: 1`
+- a lamp at `color: 0xffffff, amount: 0.5`
+
+Under the shipped sRGB sum those are the same light (0.502 against 0.500) and the two frames must
+md5 to the same value. Under a linear sum they differ by 2.3x and plainly do not. That is one
+assertion, and it either holds or the channel is not doing what Task 5 says.
+
+Then render the offset seam as the thing you **look at** rather than assert on, and attach it — a
+seam nobody looked at is the same evidence `gain` had.
+
+- [ ] **Step 3b: Render the pointer, and a regrouped sign**
+
+The md5 proof drives `fixed(0, 0)`, so `fromPointer` — the default source, and the headline of the
+whole feature — is never rendered by any of this. The script already drives a real page, so
+`page.mouse.move()` gives a pointer-off and pointer-over pair for nothing.
+
+That pair is also the only place the open question gets an answer: `pointerInWord` **stretches** the
+canvas onto the word's extent per axis rather than projecting through the camera, so on a sign that
+does not fill the frame the lamp travels further than the cursor. Render a small anchored sign and
+look at whether the light sits where the cursor is. If it reads wrong, `projectLetters` in
+`text/projection.ts` is a true inverse and `index.ts` already drives it for the DOM layer. Record the
+answer either way — the README currently promises the light is under the cursor, and nothing has
+measured that.
+
+Then sweep the pointer across a sign that has **regrouped**. The part pool is a construction-time
+snapshot, so a pointer at fraction *f* lights whatever was at *f* in the original layout. The handoff
+has promised this render since Task 5 and nothing has produced it. If it reads acceptably, say so and
+close it; if not, it is its own change, not this branch's.
 
 - [ ] **Step 4: Ignore its output**
 

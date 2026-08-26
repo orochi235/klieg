@@ -71,7 +71,12 @@ describe('the published surface', () => {
 
   it('declares the element as having side effects, because registering one is', () => {
     // `sideEffects: false` lets a bundler drop a module nothing imports a binding from, which is
-    // exactly how the element is used: imported for the registration and nothing else.
-    expect(pkg.sideEffects).toEqual(['./dist/element.js', './dist/standalone/klieg-sign.js']);
+    // exactly how the element is used: imported for the registration and nothing else. The source
+    // path is named too, for a consumer aliasing `klieg/element` to this workspace's `src`.
+    expect(pkg.sideEffects).toEqual([
+      './dist/element.js',
+      './dist/standalone/klieg-sign.js',
+      './src/element.ts',
+    ]);
   });
 });

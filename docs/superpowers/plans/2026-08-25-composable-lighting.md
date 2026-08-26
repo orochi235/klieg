@@ -1273,6 +1273,13 @@ run takes a different write path from a lamp on a body — a vertex-buffer write
 one `material.emissive.setHex`. The run path has strictly more places to silently do nothing, and it
 is the path under the two looks people will most want to light. Target it with `{ kind: 'run' }`.
 
+**Render `lamp({ source: orbit() })` on its bare defaults too.** Task 8 measured it and found zero
+lit samples across a full pass on a short sign: `orbit`'s default radius is 2 em and a lamp's default
+reach is 0.5 em, so the two defaults compose into a lamp that lights nothing. A part placed out at
+2 em does light, so the source works and the defaults do not meet. This script exists to catch
+exactly that, and a `NO-OP` row here is a real finding about the API rather than a bug in the render
+— decide whether the defaults move, and record which.
+
 `sequin` will not pass and is out of scope — it has zero `run` parts and a near-black body. See
 the findings note.
 

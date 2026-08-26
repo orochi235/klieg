@@ -207,11 +207,16 @@ Append inside `describe('flicker', …)`:
 
   // The gate and the stutter share one clock, so each bout samples a different stretch of the hash.
   // A second clock — or a step index that restarts per bout — makes every bout identical instead.
+  // The sample count must not be a multiple of the pass's step count: sampling on the step grid
+  // lands every third sample on an edge, where float residue alone makes identical bouts compare
+  // unequal and the test stops seeing the defect.
   it('gives each spell its own stutter rather than repeating one', () => {
     const piece = flicker({ duration: 60000, spell: 4000, calm: 15000 });
-    const gains = gainsAcrossOnePass(piece, part, 2934); // 978 steps x 3 samples
+    const gains = gainsAcrossOnePass(piece, part, 2937);
     const third = gains.length / 3;
-    expect(gains.slice(0, third)).not.toEqual(gains.slice(third, third * 2));
+    const drops = (from: number) => gains.slice(from, from + third).filter((g) => g < 1);
+    expect(drops(0).length).toBeGreaterThan(20);
+    expect(drops(0)).not.toEqual(drops(third));
   });
 
   // cycles rounds rather than floors, so a pass that is nearer three bouts than two gets three.
@@ -301,6 +306,13 @@ Run: `npx vitest run packages/core/test/effects/pieces.test.ts`
 Expected: FAIL on `gives each spell its own stutter` **and on that alone** — the duration stays
 57050, the calm stays ~15167ms and the shortest drop stays 57.05ms, which is exactly why the rest of
 the suite cannot see it. Restore and confirm green. Quote both outputs.
+
+The first version of this test sampled 2934 times — three per step across 978 steps — and **passed
+against the mutation**. On the step grid, bout 2's `(t * cycles) % 1` computes `1 + k/978` and
+subtracts back to a hair under it, so `floor` returns one step lower at 16 of 978 samples: enough for
+`.not.toEqual` while the bouts were byte-identical. Verified at 2937 and 3000, both of which
+discriminate; the filter to drops removes the ~771 gate-held `1`s per bout that carry no information,
+and the `> 20` guard stops the comparison passing vacuously if both sides come back empty.
 
 - [ ] **Step 6: Prove the snapping is load-bearing**
 

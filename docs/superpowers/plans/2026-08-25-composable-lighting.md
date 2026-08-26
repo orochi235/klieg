@@ -580,10 +580,10 @@ and deferred it here. `ResolvedOffset.light` accumulates sRGB-encoded bytes over
 the sRGB-to-linear conversion. That is self-consistent, but summing sRGB is not summing radiance:
 two lamps at half strength do not add to the brightness one lamp at full strength gives.
 
-It matters only where two lamps overlap, which is why the design did not catch it. Ship the simple
-version, then render two overlapping lamps and look at the seam — if it reads wrong, the fix is to
-decode in `rgb()` and encode once in `litEmissive`, not to change the channel's shape. Add that
-render to Task 9 either way.
+It matters only where two lamps overlap, which is why the design did not catch it. **Decided: ship
+the sRGB version below unchanged.** Task 9 Step 3 renders two overlapping lamps and looks at the
+seam; if it reads wrong, the fix is to decode in `rgb()` and encode once in `litEmissive`, not to
+change the channel's shape.
 
 
 This is the task no unit test can prove. Write the unit test anyway for the arithmetic, then prove
@@ -1097,11 +1097,22 @@ look, which is the exact failure this plan exists to fix.
 `sequin` will not pass and is out of scope — it has zero `run` parts and a near-black body. See
 the findings note.
 
-- [ ] **Step 3: Ignore its output**
+- [ ] **Step 3: Render the overlap**
+
+Task 5 ships the light channel summing in sRGB rather than in linear radiance, which is wrong
+everywhere two lamps land on one part and invisible everywhere else. Add a second run to the script:
+two lamps of the same colour and half strength, offset so their pools cross the middle of the word.
+
+Run it and look at the seam. Two lamps at half strength should read as one lamp at full strength; if
+the overlap bands, or reads darker than either lamp alone at full, decode in the compositor's `rgb()`
+and encode once in `litEmissive`. Attach the render either way — a seam nobody looked at is the same
+evidence `gain` had.
+
+- [ ] **Step 4: Ignore its output**
 
 `spikes/.gitignore` already carries `lamp-*/`, which covers it. Confirm with `git status`.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add spikes/lamp-proof.mjs

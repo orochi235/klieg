@@ -1131,7 +1131,10 @@ derive `LIGHTING_NAMES` from `ENV_PIECES` — which is the rule `index.ts` alrea
 the records the effect itself indexes". `Object.keys(ENV_PIECES)` preserves the order `index.test.ts`
 pins.
 
-Also re-export `LightOffset` from `./effects/types.js` beside the existing `PartOffset` export.
+Also re-export `LightOffset` **and `FrameCtx`** from `./effects/types.js` beside the existing
+`PartOffset` export. `FrameCtx` names a parameter of three exported types — `EffectPiece.at`,
+`EnvPiece.env` and `LightSource` — so without it a consumer writing a standalone source or piece,
+which is the documented reason those types are public, cannot type the argument.
 Task 1 added it as a named interface following the `FlakeSpec` precedent but deliberately left the
 barrel alone, since `PartOffset` already re-exports and consumers get the shape structurally. It
 wants the name once callers are writing lamps.
@@ -1154,6 +1157,29 @@ Task 7 stopped reading it and deleted nothing, because the field reaches public 
 One of the tests Task 7 found here (`lets a caller-supplied active piece rake the highlight`) was a
 false green even before this change: the default `sweep` turns the environment anyway, so it passed
 without `envRotation` doing anything. Do not port its assertion forward.
+
+- [ ] **Step 1c: Five doc lines the exported surface is wrong without**
+
+Each is one clause, and each is a silent wrong answer rather than a restatement:
+
+- **`track()` is stateful.** It accumulates its ease in a closure, and `resolveLighting` hands a
+  caller-supplied piece back by reference. So one `track()` shared across two concurrent fires is
+  stepped twice per frame, and a second sequential fire starts from the first's leftover angle
+  rather than rest. Say on `track` and on `FireOptions.lighting` that a constructed `track()`
+  belongs to one fire. The name form (`lighting: 'pointer'`) is safe — it builds a piece per run.
+- **`FrameCtx.dt` is `Infinity` under reduced motion.** The doc says "Milliseconds since the previous
+  frame." A piece that integrates (`phase += ctx.dt * rate`) then goes to `Infinity`, and the next
+  subtraction to `NaN`, permanently — the defect `track`'s `followMs` guard already exists for. Say
+  it must snap, not integrate.
+- **`FrameCtx.pointer` is +y down; `FrameCtx.pointerInWord` is +y up.** Two fields on one object with
+  opposite conventions, and neither says which. This is what the Task 7 y-inversion bug was.
+- **`pointerInWord` stretches, it does not project.** The canvas's full −1..1 maps onto the word's
+  extent per axis, so the lamp sits under the cursor only when the word fills the canvas; on a small
+  anchored sign it travels several times faster. That is a deliberate reach guarantee — the far
+  corners must be able to light every part — but the current doc, "the same pointer in the word's
+  layout space", oversells it as a projection.
+- **`EnvPiece.duration: 0` does not mean "holds still".** `track` reports 0 and moves. It means
+  aperiodic: `t` is always 0.
 
 - [ ] **Step 2: Write the CHANGELOG entry**
 
@@ -1178,6 +1204,14 @@ Under `## Unreleased`:
 - [ ] **Step 3: Document the option in the README**
 
 Find the `lighting` row in the options table and widen it to name the slot form and `lamp`.
+
+**Say that layers keep their own periods.** The design's claim is "the same grammar as `active`", and
+the *shape* matches exactly — a name, a piece, or an array. The layering does not: `Timeline.poseAt`
+gives every member of a motion slot one shared `t` from the slot's duration, with phase weights,
+while each lighting piece gets its own `t` from its own `duration` and there are no phases. So
+`['sweep', sweep({ periodMs: 1000 })]` runs two independent periods, which `active` cannot express.
+The lighting behavior is the one we want; a reader who learned layering from `active` will expect
+phase-lock and needs telling.
 
 - [ ] **Step 4: Commit**
 
@@ -1218,6 +1252,12 @@ look, which is the exact failure this plan exists to fix.
 
 `sequin` will not pass and is out of scope — it has zero `run` parts and a near-black body. See
 the findings note.
+
+**Sweep the pointer across a small anchored sign**, not only a fullscreen one. `pointerInWord`
+stretches the canvas onto the word's extent per axis rather than projecting through the camera, so
+the lamp is under the cursor only when the word fills the frame. `projectLetters` in
+`text/projection.ts` is a true inverse and `index.ts` already drives it for the DOM layer. Whether
+the stretch reads as wrong is a pixels question; decide it here.
 
 Three things the pixels are the only judge of, beyond the no-op check above. A lamp on a **run**
 passes the run's own colour as the hue and not `out.color`, so a part recoloured by `hue()` reflects

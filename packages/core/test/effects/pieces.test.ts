@@ -90,6 +90,20 @@ describe('flicker', () => {
   it('is reachable by name', () => {
     expect(typeof EFFECTS.flicker).toBe('function');
   });
+
+  /** Shortest dark stretch in milliseconds, which is what a step length actually means on screen. */
+  function shortestDropMs(piece: EffectPiece, samples = 4000): number {
+    const runs = darkRuns(gainsAcrossOnePass(piece, part, samples));
+    return Math.min(...runs) * (piece.duration / samples);
+  }
+
+  // A step is ~58ms so a drop covers about three frames. Holding 24 steps against a long pass turns
+  // that into a multi-second strobe, which is a different effect wearing the same name.
+  it('holds a step near 58ms however long the pass is', () => {
+    expect(shortestDropMs(flicker())).toBeGreaterThan(40);
+    expect(shortestDropMs(flicker())).toBeLessThan(80);
+    expect(shortestDropMs(flicker({ duration: 30000 }))).toBeLessThan(80);
+  });
 });
 
 describe('hue', () => {

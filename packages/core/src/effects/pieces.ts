@@ -10,9 +10,14 @@ export interface FlickerSpec {
   unrest?: number;
 }
 
-/** Steps per pass. One step is ~58ms at the default duration, so the shortest drop covers about
- * three frames at 60fps; a one-frame drop reads as noise rather than as a failing tube. */
-const STEPS = 24;
+/** One step is ~58ms, so the shortest drop covers about three frames at 60fps; a one-frame drop
+ * reads as noise rather than as a failing tube. Derived rather than fixed: 24 steps against a long
+ * pass would stretch each one into a multi-second strobe. */
+const STEP_MS = 1400 / 24;
+
+function stepsFor(duration: number): number {
+  return Math.max(1, Math.round(duration / STEP_MS));
+}
 
 /** How far above `depth` a drop is allowed to sit, so a stutter lands near dark, not half-lit. */
 const BITE = 0.35;
@@ -26,11 +31,12 @@ export function flicker(spec: FlickerSpec = {}): EffectPiece {
   const duration = spec.duration ?? 1400;
   const depth = clamp01(spec.depth ?? 0);
   const unrest = clamp01(spec.unrest ?? 0.18);
+  const steps = stepsFor(duration);
 
   return {
     duration,
     at(t, part) {
-      const step = Math.floor(t * STEPS) % STEPS;
+      const step = Math.floor(t * steps) % steps;
       if (hash01(step + part.index * 977.3) > unrest) return { gain: 1 };
       const bite = hash01(step * 3.7 + part.index * 131.1);
       return { gain: depth + (1 - depth) * bite * BITE };

@@ -1873,7 +1873,10 @@ describe('framing alignment', () => {
     const word = new Word('AA', stubFont(), 'gold', LOOSE);
     word.regroup((letter) => letter.index === 0);
     // The survivor onto its new layout position, the way a finished timeline leaves it.
-    word.apply(timelineOf(() => ({})), 0);
+    word.apply(
+      timelineOf(() => ({})),
+      0,
+    );
 
     word.setFitProgress(0.5);
     expect(word.atRest()).toBe(false);

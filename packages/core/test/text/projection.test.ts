@@ -24,7 +24,9 @@ describe('projectLetters', () => {
   it('scales one em to the pixels one world unit covers', () => {
     // vh = 2 * tan(45°) * 1 = 2; pxPerWorld = 400 / 2 = 200. One em is fit.scale world units.
     expect(projectLetters(input()).fontSize).toBeCloseTo(200, 6);
-    expect(projectLetters(input({ fit: { scale: 0.5, midY: 0, offsetX: 0 } })).fontSize).toBeCloseTo(100, 6);
+    expect(
+      projectLetters(input({ fit: { scale: 0.5, midY: 0, offsetX: 0 } })).fontSize,
+    ).toBeCloseTo(100, 6);
   });
 
   it('puts a letter at the layout origin on the canvas centre line', () => {
@@ -55,7 +57,8 @@ describe('projectLetters', () => {
   });
 
   it('centres the block vertically through fit.midY, as applyFit does', () => {
-    const centred = projectLetters(input({ y: [0.5], fit: { scale: 1, midY: 0.5, offsetX: 0 } })).boxes[0];
+    const centred = projectLetters(input({ y: [0.5], fit: { scale: 1, midY: 0.5, offsetX: 0 } }))
+      .boxes[0];
     const origin = projectLetters(input()).boxes[0];
     expect(centred?.top).toBeCloseTo(origin?.top ?? 0, 6);
   });

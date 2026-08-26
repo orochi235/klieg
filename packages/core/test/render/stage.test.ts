@@ -322,29 +322,29 @@ describe('framing against an anchor', () => {
     expect(budget.width / (frustumHeight(strip) * strip.camera.aspect)).toBeCloseTo(0.94, 12);
     expect(budget.height / frustumHeight(strip)).toBeCloseTo(0.66, 12);
   });
+});
+
+it('reports the whole box as the extent the alignment measures against', () => {
+  const strip = new Stage({
+    idleTimeoutMs: 1000,
+    placement: { kind: 'element', el: anchor(800, 120) },
+  });
+  strip.camera.aspect = 800 / 120;
+  const budget = strip.viewportBudget(0.94, 0.66);
+
+  expect(budget.extent).toBeCloseTo(frustumHeight(strip) * strip.camera.aspect, 12);
+  // The fractions cut the budget out of the extent; alignment needs the extent itself.
+  expect(budget.width).toBeCloseTo((budget.extent as number) * 0.94, 12);
+});
+
+it('carries the alignment through to the fit', () => {
+  const strip = new Stage({
+    idleTimeoutMs: 1000,
+    placement: { kind: 'element', el: anchor(800, 120) },
   });
 
-  it('reports the whole box as the extent the alignment measures against', () => {
-    const strip = new Stage({
-      idleTimeoutMs: 1000,
-      placement: { kind: 'element', el: anchor(800, 120) },
-    });
-    strip.camera.aspect = 800 / 120;
-    const budget = strip.viewportBudget(0.94, 0.66);
-
-    expect(budget.extent).toBeCloseTo(frustumHeight(strip) * strip.camera.aspect, 12);
-    // The fractions cut the budget out of the extent; alignment needs the extent itself.
-    expect(budget.width).toBeCloseTo((budget.extent as number) * 0.94, 12);
-  });
-
-  it('carries the alignment through to the fit', () => {
-    const strip = new Stage({
-      idleTimeoutMs: 1000,
-      placement: { kind: 'element', el: anchor(800, 120) },
-    });
-
-    expect(strip.viewportBudget(0.94, 0.66, 'start').align).toBe('start');
-    expect(strip.viewportBudget(0.94, 0.66).align).toBeUndefined();
+  expect(strip.viewportBudget(0.94, 0.66, 'start').align).toBe('start');
+  expect(strip.viewportBudget(0.94, 0.66).align).toBeUndefined();
 });
 
 describe('the lens against a wide anchor', () => {

@@ -1,6 +1,21 @@
 # Changelog
 
-## 0.7.0
+## Unreleased
+
+### `framing` can align the word against the box's edge
+
+`framing` said how much of the anchor the type could fill and not where in it the word sat, so an
+anchored masthead floated off the page's text edge — a gap a consumer could only close by padding
+the anchor asymmetrically, in a number measured to one name at one size. `framing.align` places it:
+`'start'` puts the leftmost paint on the box's left edge, `'end'` the rightmost on its right, and
+`'center'` (the default) renders exactly as before.
+
+Three things worth knowing about what it measures. It aligns at the size `width` and `height`
+already chose, against the whole box rather than the share those fractions cut out of it — so
+reaching an edge does not mean widening the framing and resizing the sign to get there. It measures
+the **painted** extent rather than the advance span the fit is scored on, bevel included, so what
+meets the edge is the lit edge of the glyph and not a side bearing behind it. And it survives a
+regroup, tweening with the fit rather than jumping when the letters re-lay.
 
 ### The rendered word now exists in the DOM
 

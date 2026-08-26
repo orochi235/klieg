@@ -983,6 +983,68 @@ describe('framing', () => {
     expect(await fitScaleOf(tall, { width: 1 })).toBe(await fitScaleOf(tall));
     expect(await fitScaleOf(tall, { height: 0.6 })).toBeCloseTo((await fitScaleOf(tall)) * 2, 6);
   });
+
+  /** Leftmost and rightmost painted world x over every letter, bevel and all. */
+  function paintedSpan(group: THREE.Group): { left: number; right: number } {
+    group.updateMatrixWorld(true);
+    let left = Number.POSITIVE_INFINITY;
+    let right = Number.NEGATIVE_INFINITY;
+    group.traverse((node) => {
+      const mesh = node as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.geometry.computeBoundingBox();
+      const box = (mesh.geometry.boundingBox as THREE.Box3).clone().applyMatrix4(mesh.matrixWorld);
+      left = Math.min(left, box.min.x);
+      right = Math.max(right, box.max.x);
+    });
+    return { left, right };
+  }
+
+  /** Where the word ended up, and how big, after one instant fire. */
+  async function placeOf(text: string, framing?: KliegOptions['framing']) {
+    const bk = create(framing ? { framing } : {});
+    const done = bk.fire(text, INSTANT);
+    await flush();
+    const group = words()[0] as THREE.Group;
+    const at = { x: group.position.x, scale: group.scale.x, ...paintedSpan(group) };
+    clock.advance(16);
+    await done;
+    return at;
+  }
+
+  /** Half the frustum width at the word's depth; the stage is stubbed, so the aspect is 1. */
+  const HALF_BOX = (2 * Math.tan((38 * Math.PI) / 360) * 11) / 2;
+
+  it('centres the word when the caller says nothing', async () => {
+    expect((await placeOf('HELLOTHERE')).x).toBe(0);
+    expect((await placeOf('HELLOTHERE', { width: 0.62, height: 0.3 })).x).toBe(0);
+  });
+
+  it('puts the painted edge on the box edge without changing the size', async () => {
+    const centred = await placeOf('HELLOTHERE');
+    const started = await placeOf('HELLOTHERE', { align: 'start' });
+
+    expect(started.scale).toBe(centred.scale);
+    expect(started.left).toBeCloseTo(-HALF_BOX, 6);
+  });
+
+  it('aligns at the size the fractions chose, not at the width of the box', async () => {
+    // The masthead case: width binds, so there is no slack, and alignment must work anyway.
+    const narrow = await placeOf('HELLOTHERE', { width: 0.4, align: 'start' });
+    const wide = await placeOf('HELLOTHERE', { width: 0.62, align: 'start' });
+
+    expect(narrow.scale).toBeLessThan(wide.scale);
+    expect(narrow.left).toBeCloseTo(-HALF_BOX, 6);
+    expect(wide.left).toBeCloseTo(-HALF_BOX, 6);
+  });
+
+  it('meets the right edge with the paint, not with the advance', async () => {
+    const ended = await placeOf('HELLOTHERE', { align: 'end' });
+
+    expect(ended.right).toBeCloseTo(HALF_BOX, 6);
+    // The last advance reaches 3 em past the word's centre; that edge overshoots the box.
+    expect(ended.x + 3 * ended.scale).toBeGreaterThan(HALF_BOX);
+  });
 });
 
 describe('caller-supplied motion', () => {

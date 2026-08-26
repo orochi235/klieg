@@ -103,7 +103,12 @@ describe('fitOf', () => {
     const p = place('AAAA');
     const fit = fitOf(
       p,
-      { minX: [0, 0, 0, 0], maxX: [0.5, 0.5, 0.5, 0.5], minY: [0, 0, 0, 0], maxY: [0.7, 0.7, 0.7, 0.7] },
+      {
+        minX: [0, 0, 0, 0],
+        maxX: [0.5, 0.5, 0.5, 0.5],
+        minY: [0, 0, 0, 0],
+        maxY: [0.7, 0.7, 0.7, 0.7],
+      },
       { width: 1, height: 10 },
     );
     // Four 0.6em advances span 2.4em of ink; a 1-wide budget scales that by 1/2.4.
@@ -112,7 +117,11 @@ describe('fitOf', () => {
 
   it('puts the vertical centre of the ink at midY', () => {
     const p = place('A');
-    const fit = fitOf(p, { minX: [0], maxX: [0.5], minY: [-0.2], maxY: [0.7] }, { width: 100, height: 100 });
+    const fit = fitOf(
+      p,
+      { minX: [0], maxX: [0.5], minY: [-0.2], maxY: [0.7] },
+      { width: 100, height: 100 },
+    );
     expect(fit.midY).toBeCloseTo(0.25);
   });
 });
@@ -129,7 +138,8 @@ describe('fitOf alignment', () => {
   it('leaves a centred word at the origin', () => {
     expect(fitOf(place('AB'), bounds(2), { width: 1.2, height: 100, extent: 4 }).offsetX).toBe(0);
     expect(
-      fitOf(place('AB'), bounds(2), { width: 1.2, height: 100, extent: 4, align: 'center' }).offsetX,
+      fitOf(place('AB'), bounds(2), { width: 1.2, height: 100, extent: 4, align: 'center' })
+        .offsetX,
     ).toBe(0);
   });
 
@@ -168,15 +178,22 @@ describe('fitOf alignment', () => {
   });
 
   it('stays at the origin when the box extent is unknown', () => {
-    expect(
-      fitOf(place('AB'), bounds(2), { width: 1.2, height: 100, align: 'start' }).offsetX,
-    ).toBe(0);
+    expect(fitOf(place('AB'), bounds(2), { width: 1.2, height: 100, align: 'start' }).offsetX).toBe(
+      0,
+    );
   });
 
   it('stays at the origin when nothing draws', () => {
-    const blank = { minX: [null, null], maxX: [null, null], minY: [null, null], maxY: [null, null] };
+    const blank = {
+      minX: [null, null],
+      maxX: [null, null],
+      minY: [null, null],
+      maxY: [null, null],
+    };
 
-    expect(fitOf(place('  '), blank, { width: 1, height: 1, extent: 4, align: 'start' }).offsetX).toBe(0);
+    expect(
+      fitOf(place('  '), blank, { width: 1, height: 1, extent: 4, align: 'start' }).offsetX,
+    ).toBe(0);
   });
 
   it('does not move the scale or the vertical centring', () => {

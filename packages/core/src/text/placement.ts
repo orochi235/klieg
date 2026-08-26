@@ -1,8 +1,11 @@
 import type { Block, Budget, GlyphMetrics, Line } from './layout.js';
 import { fitScale, LINE_HEIGHT_EM } from './layout.js';
 
-/** How a regrouped word is laid out: one line, or one glyph per line. */
-export type Arrangement = 'line' | 'stack';
+/**
+ * How a regrouped word is laid out: one line, one glyph per line, or `place` — left exactly where
+ * the letters already are, so a stage can drop letters without moving the ones that stay.
+ */
+export type Arrangement = 'line' | 'stack' | 'place';
 
 export interface Placement {
   /** Layout x per glyph, in em, already centred on its own line. */

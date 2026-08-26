@@ -852,6 +852,7 @@ export class Word {
     const frozen = this.frozenInfo[i];
     if (frozen) return { ...frozen, leaving: true };
     return {
+      char: this.charOf[i] as string,
       index: this.idxOf[i] as number,
       count: this.liveCount,
       line: this.lineOf[i] as number,
@@ -886,6 +887,16 @@ export class Word {
 
     // Frozen before the renumbering below, so each keeps the count its exit was staggered against.
     for (const i of dropped) this.frozenInfo[i] = this.letterInfo(i);
+
+    // `place` renumbers the survivors as their own group but leaves every position, line and
+    // column describing where they still physically are — which is what each of those fields
+    // means. The viewport does not refit either: a stage that only removes letters must not zoom.
+    if (as === 'place') {
+      this.liveCount = kept.length;
+      for (let n = 0; n < kept.length; n++) this.idxOf[kept[n] as number] = n;
+      this.layoutVersion++;
+      return { kept, dropped, delta };
+    }
 
     const chars = kept.map((i) => this.charOf[i] as string);
     const block = layoutBlock(arrange(chars, as), this.metrics);

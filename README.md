@@ -298,7 +298,7 @@ Each stage:
 |---|---|---|
 | `keep` | keeps all | the letters that continue; the rest play this stage's `exit` |
 | `exit` | `'fade'` | how the letters that do not continue leave |
-| `as` | `'line'` | the survivors' new layout — one line, or `'stack'` for one letter per line |
+| `as` | `'line'` | the survivors' new layout — one line, `'stack'` for one letter per line, or `'place'` to leave them exactly where they already are |
 | `active` | `'none'` | what the new word does while it holds |
 | `hold` | `1200` | milliseconds, or `'click'` to wait for the viewer |
 | `tween` | none | timing for the move into the new layout |
@@ -324,6 +324,41 @@ outlasts the move. `delayBy: { scale: 0.45 }` lands the word before it grows to 
 
 Under `prefers-reduced-motion: reduce` the stages do not play — that path holds a pose and never
 travels, so there is nothing to regroup.
+
+### acronym
+
+`acronym` is that effect pre-baked: type a block whose acronym is capitalised, and it renders with
+the capitals picked out, holds to be read, drops the lower case where it stands, and gathers the
+capitals into a line that stays until dismissed.
+
+```ts
+import { acronym } from 'klieg';
+
+await bk.fire(...acronym(`Keep
+Lighting
+Interesting, Every
+Glowing letter`));
+```
+
+It returns the arguments to `fire()` rather than firing, so the look, lighting and queue policy stay
+yours — spread the options and override whatever you like.
+
+| field | default | |
+|---|---|---|
+| `caps` | cyan | how the capitals are styled, in the block and after they gather |
+| `body` | the look's own colour | how everything else is styled while it is still up |
+| `read` | `'click'` | the pause after the block renders, before the lower case leaves |
+| `settle` | `600` | the pause after the lower case has gone, before the capitals gather |
+| `hold` | `'click'` | how long the gathered acronym stays |
+| `exit` | `'fade'` | how the lower-case letters leave |
+| `active` | `'none'` | what the gathered acronym does while it holds |
+| `tween` | none | timing for the gather |
+
+`caps` and `body` are objects rather than colours — today each carries a `tint`, and taking an
+object means a richer per-letter style can be added without changing the signature.
+
+A capital is a character whose lower case differs from itself, so digits and punctuation are
+dropped along with the lower case. `isCapital` is exported if you want the same test elsewhere.
 
 ## Writing your own motion
 

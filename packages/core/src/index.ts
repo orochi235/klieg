@@ -35,6 +35,12 @@ import type { Arrangement } from './text/placement.js';
 import { projectLetters } from './text/projection.js';
 import { isIdentity, type Transform } from './transform.js';
 
+export {
+  type AcronymOptions,
+  acronym,
+  isCapital,
+  type LetterStyle,
+} from './acronym.js';
 export { ManualClock } from './clock.js';
 export {
   backOut,

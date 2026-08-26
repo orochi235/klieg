@@ -824,6 +824,43 @@ describe('LetterInfo position', () => {
 describe('regroup', () => {
   const firstOfLine = (l: LetterInfo) => l.column === 0;
 
+  it('leaves every survivor where it was under `place`', () => {
+    const word = new Word('NA\nEB\nOC', stubFont(), 'gold', ROOMY);
+    const before: LetterInfo[] = [];
+    word.apply(
+      timelineOf((_t, letter) => {
+        before.push({ ...letter });
+        return {};
+      }),
+      0,
+      NO_CTX,
+    );
+
+    const result = word.regroup(firstOfLine, 'place');
+    expect(result.kept).toEqual([0, 2, 4]);
+    // Nothing moved, so nothing has anywhere to move back from.
+    expect(result.delta.every(([dx, dy]) => dx === 0 && dy === 0)).toBe(true);
+
+    const after: LetterInfo[] = [];
+    word.apply(
+      timelineOf((_t, letter) => {
+        after.push({ ...letter });
+        return {};
+      }),
+      0,
+      NO_CTX,
+    );
+    for (const i of result.kept) {
+      expect(after[i]?.x, `x of ${i}`).toBeCloseTo(before[i]?.x as number);
+      expect(after[i]?.y, `y of ${i}`).toBeCloseTo(before[i]?.y as number);
+      expect(after[i]?.line, `line of ${i}`).toBe(before[i]?.line);
+      expect(after[i]?.column, `column of ${i}`).toBe(before[i]?.column);
+    }
+    // Renumbered as their own group all the same, so a stagger over them is coherent.
+    expect(result.kept.map((i) => after[i]?.index)).toEqual([0, 1, 2]);
+    expect(after[0]?.count).toBe(3);
+  });
+
   it('lays the survivors out as the word they spell', () => {
     const word = new Word('NA\nEB\nOC', stubFont(), 'gold', ROOMY);
     const result = word.regroup(firstOfLine, 'line');

@@ -163,4 +163,75 @@ describe('<klieg-sign>', () => {
 
     expect(sign).not.toHaveBeenCalled();
   });
+
+  it('reads every attribute it observes', async () => {
+    await mount(
+      '<klieg-sign font="/f.ttf" text="Sign" look="tubing" tint="currentColor" ' +
+        'framing-width="0.94" framing-height="0.66" align="center" lighting="static" bloom>' +
+        '<h1>A Name</h1></klieg-sign>',
+    );
+
+    expect(sign.mock.calls[0]?.[1]).toMatchObject({
+      font: '/f.ttf',
+      text: 'Sign',
+      look: 'tubing',
+      tint: 'currentColor',
+      framing: { width: 0.94, height: 0.66, align: 'center' },
+      lighting: 'static',
+      bloom: true,
+    });
+  });
+
+  it('omits what the page did not say, so the library defaults stand', async () => {
+    await mount('<klieg-sign font="/f.ttf"><h1>A Name</h1></klieg-sign>');
+
+    const opts = sign.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(opts.framing).toBeUndefined();
+    expect(opts.look).toBeUndefined();
+    expect(opts.bloom).toBeUndefined();
+    expect(opts.text).toBeUndefined();
+  });
+
+  it('reads a bare bloom as on and an explicit false as off', async () => {
+    await mount('<klieg-sign font="/f.ttf" bloom="false"><h1>A</h1></klieg-sign>');
+    const opts = sign.mock.calls[0]?.[1] as { bloom?: boolean };
+    expect(opts.bloom).toBe(false);
+  });
+
+  it('ignores a framing number that is not one', async () => {
+    await mount('<klieg-sign font="/f.ttf" framing-width="wide"><h1>A</h1></klieg-sign>');
+    const opts = sign.mock.calls[0]?.[1] as { framing?: unknown };
+    expect(opts.framing).toBeUndefined();
+  });
+
+  it('ignores an empty framing attribute rather than reading it as a zero', async () => {
+    await mount('<klieg-sign font="/f.ttf" framing-width=""><h1>A</h1></klieg-sign>');
+    const opts = sign.mock.calls[0]?.[1] as { framing?: unknown };
+    expect(opts.framing).toBeUndefined();
+  });
+
+  it('prefers the properties over the attributes for what an attribute cannot carry', async () => {
+    document.body.innerHTML = '<klieg-sign font="/f.ttf"><h1>A</h1></klieg-sign>';
+    const el = document.querySelector('klieg-sign') as HTMLElement & {
+      effects?: unknown;
+      options?: unknown;
+    };
+    el.effects = [{ piece: 'flicker' }];
+    el.options = { blendMs: 40 };
+    await settled();
+
+    expect(sign.mock.calls[0]?.[1]).toMatchObject({
+      effects: [{ piece: 'flicker' }],
+      fire: { blendMs: 40 },
+    });
+  });
+
+  it('re-fires through update when an observed attribute changes', async () => {
+    const el = await mount('<klieg-sign font="/f.ttf" look="gold"><h1>A</h1></klieg-sign>');
+
+    el.setAttribute('look', 'tubing');
+
+    expect(update).toHaveBeenCalledOnce();
+    expect(update.mock.calls[0]?.[0]).toMatchObject({ look: 'tubing' });
+  });
 });

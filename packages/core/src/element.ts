@@ -1,4 +1,5 @@
 import type { Sign, SignOptions } from './sign/index.js';
+import type { Align } from './text/layout.js';
 
 const TAG = 'klieg-sign';
 const STYLE_MARK = 'data-klieg-sign';
@@ -20,6 +21,17 @@ function installStyle(doc: Document): void {
   style.setAttribute(STYLE_MARK, '');
   style.textContent = CSS;
   doc.head.appendChild(style);
+}
+
+/** A framing fraction the page did not write, or wrote as something that is not a number. */
+function fraction(raw: string | null): number | undefined {
+  if (raw === null || raw.trim() === '') return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function optional<K extends string, T>(key: K, value: T | undefined): { [P in K]?: T } {
+  return (value === undefined ? {} : { [key]: value }) as { [P in K]?: T };
 }
 
 class KliegSign extends HTMLElement {
@@ -86,7 +98,31 @@ class KliegSign extends HTMLElement {
   }
 
   #options(): SignOptions {
-    return { font: this.getAttribute('font') ?? '' };
+    const framing = {
+      ...optional('width', fraction(this.getAttribute('framing-width'))),
+      ...optional('height', fraction(this.getAttribute('framing-height'))),
+      ...optional('align', (this.getAttribute('align') as Align | null) ?? undefined),
+    };
+    const bloom = this.getAttribute('bloom');
+
+    return {
+      font: this.getAttribute('font') ?? '',
+      ...optional('text', this.getAttribute('text') ?? undefined),
+      // A name is a `Look`; the property carries a spec an attribute cannot hold.
+      ...optional(
+        'look',
+        this.look ?? (this.getAttribute('look') as SignOptions['look']) ?? undefined,
+      ),
+      ...optional('tint', this.getAttribute('tint') ?? undefined),
+      ...(Object.keys(framing).length ? { framing } : {}),
+      ...optional(
+        'lighting',
+        (this.getAttribute('lighting') as SignOptions['lighting']) ?? undefined,
+      ),
+      ...optional('effects', this.effects),
+      ...optional('bloom', bloom === null ? undefined : bloom !== 'false'),
+      ...optional('fire', this.options),
+    };
   }
 }
 

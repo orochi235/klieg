@@ -18,13 +18,14 @@ why `gain` is not the channel, which is the single most important thing to not r
 
 | File | Responsibility |
 |---|---|
-| `packages/core/src/render/lighting.ts` | **Rewrite.** `EnvPiece`, `FrameCtx`, the `sweep`/`static`/`track` factories, and `mergeEnv`. `PointerLight` stays as `track`'s internals. |
+| `packages/core/src/render/lighting.ts` | **Rewrite.** `EnvPiece`, the `sweep`/`static`/`track` factories, and `mergeEnv`. `track` carries its own follow, so `PointerLight` is dead once Task 7 lands and Task 8 deletes it. Imports `FrameCtx` from `effects/types.ts`. |
 | `packages/core/src/effects/lamp.ts` | **New.** `LightPose`, `LightSource`, the `fixed`/`orbit`/`along`/`fromPointer` sources, and `lamp()`. |
-| `packages/core/src/effects/types.ts` | `PartOffset.light`, `ResolvedOffset.light`, `EffectPiece.at` gains a `ctx`. |
+| `packages/core/src/effects/types.ts` | `FrameCtx`, `PartOffset.light`, `ResolvedOffset.light`, `EffectPiece.at` gains a `ctx`. |
 | `packages/core/src/effects/compositor.ts` | Sums the light channel. Stays pure — no three import. |
 | `packages/core/src/render/looks.ts` | Exports `lightBase(look)` — the emissive a lamp adds onto, and the hue it multiplies. |
 | `packages/core/src/render/word.ts` | Resolves the light channel onto materials; `partExtent()`; threads `ctx`. |
-| `packages/core/src/index.ts` | `LightingSlot`, the ctx build from the canvas rect, and the render loop. |
+| `packages/core/src/index.ts` | The render loop and the `lighting` option. `LightingSlot` and `resolveLighting` live in `render/lighting.ts` instead, so the resolver stays testable without going public. |
+| `packages/core/src/pointer.ts` | **New in Task 7.** `pointerFrame(box, client, extent)` — the canvas rect and the word extent to a `FrameCtx` pointer pair, pure and unit-tested. Not in the barrel. |
 | `packages/core/src/motion/types.ts`, `motion/compositor.ts` | `envRotation` and `slotDrivesEnv` are removed. |
 
 ---
@@ -135,12 +136,19 @@ git commit -m "add an additive light channel to a part offset"
 
 ### Task 2: `FrameCtx` and light sources
 
+> **Amended after Task 2 shipped.** `FrameCtx` now lives in `packages/core/src/effects/types.ts`,
+> not `render/lighting.ts`. Task 3 is what would have made `effects/types.ts` — the module every
+> effects consumer imports — depend on `render/lighting.ts`, whose other export is `PointerLight`,
+> a class that attaches DOM listeners. The step text below is left as it was executed; the move is
+> folded into Task 3. Read every `from '../render/lighting.js'` below as `from './types.js'`, and
+> in the test as `from '../../src/effects/types.js'`.
+
 **Files:**
 - Modify: `packages/core/src/render/lighting.ts`
 - Create: `packages/core/src/effects/lamp.ts`
 - Test: `packages/core/test/effects/lamp.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `packages/core/test/effects/lamp.test.ts`:
 
@@ -203,12 +211,12 @@ describe('along', () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/core/test/effects/lamp.test.ts`
 Expected: FAIL — `packages/core/src/effects/lamp.js` does not exist.
 
-- [ ] **Step 3: Add `FrameCtx` to lighting**
+- [x] **Step 3: Add `FrameCtx` to lighting**
 
 At the top of `packages/core/src/render/lighting.ts`:
 
@@ -225,7 +233,7 @@ export interface FrameCtx {
 }
 ```
 
-- [ ] **Step 4: Write the sources**
+- [x] **Step 4: Write the sources**
 
 Create `packages/core/src/effects/lamp.ts`:
 
@@ -236,8 +244,6 @@ import type { FrameCtx } from '../render/lighting.js';
 export interface LightPose {
   x: number;
   y: number;
-  /** Radians. Reserved for a directional lamp; radial falloff ignores it. */
-  direction?: number;
 }
 
 /** Null means the lamp has nowhere to be this frame and contributes nothing. */
@@ -289,12 +295,12 @@ export function along(points: readonly { x: number; y: number }[]): LightSource 
 }
 ```
 
-- [ ] **Step 5: Run the test**
+- [x] **Step 5: Run the test**
 
 Run: `npx vitest run packages/core/test/effects/lamp.test.ts`
-Expected: PASS, 8 tests.
+Expected: PASS, 7 tests. (The review round added two more, taking it to 9.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/core/src/effects/lamp.ts packages/core/src/render/lighting.ts packages/core/test/effects/lamp.test.ts
@@ -310,7 +316,7 @@ git commit -m "add light sources and the per-frame lighting context"
 - Modify: `packages/core/src/effects/lamp.ts`
 - Test: `packages/core/test/effects/lamp.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/core/test/effects/lamp.test.ts`:
 
@@ -333,8 +339,8 @@ describe('lamp', () => {
   it('is brightest at its centre and dark past its radius', () => {
     const piece = lamp({ source: fixed(0, 0), radius: 1, strength: 2 });
     expect(piece.at(0, partAt(0), NO_POINTER).light?.amount).toBeCloseTo(2);
-    expect(piece.at(0, partAt(1), NO_POINTER).light?.amount).toBeCloseTo(0);
-    expect(piece.at(0, partAt(5), NO_POINTER).light?.amount).toBeCloseTo(0);
+    expect(piece.at(0, partAt(1), NO_POINTER).light?.amount ?? 0).toBeCloseTo(0);
+    expect(piece.at(0, partAt(5), NO_POINTER).light?.amount ?? 0).toBeCloseTo(0);
   });
 
   it('falls off between the two', () => {
@@ -365,15 +371,21 @@ describe('lamp', () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/core/test/effects/lamp.test.ts -t "lamp"`
 Expected: FAIL — `lamp` is not exported.
 
-- [ ] **Step 3: Give `EffectPiece.at` the context**
+- [x] **Step 3: Give `EffectPiece.at` the context**
 
-In `packages/core/src/effects/types.ts`, change the `at` signature. A third parameter is additive:
-an existing piece that declares two keeps typechecking.
+In `packages/core/src/effects/types.ts`, change the `at` signature. A piece that *implements*
+`at(t, part)` keeps typechecking — TypeScript allows an implementation to declare fewer parameters.
+**Callers are a different matter, and this plan originally got it wrong:** `render/word.ts` and
+`effects/roving.ts` both call `.at(t, part)` with two arguments, and both fail to compile once `ctx`
+is required. `roving` is a wrapper and forwards the `ctx` it receives; `word.ts` has no real `ctx`
+until Task 7, so it passes an explicit rest constant. Do **not** make `ctx` optional to dodge this —
+a lamp reached without a `ctx` would silently emit no light, which is the defect class this design
+exists to fix.
 
 ```ts
 export interface EffectPiece {
@@ -384,9 +396,9 @@ export interface EffectPiece {
 }
 ```
 
-Import the type at the top: `import type { FrameCtx } from '../render/lighting.js';`
+`FrameCtx` is declared in this file (see the amendment note under Task 2), so no import is needed.
 
-- [ ] **Step 4: Write `lamp`**
+- [x] **Step 4: Write `lamp`**
 
 Append to `packages/core/src/effects/lamp.ts`:
 
@@ -434,17 +446,18 @@ export function lamp(spec: LampSpec = {}): EffectPiece {
 }
 ```
 
-- [ ] **Step 5: Run the test**
+- [x] **Step 5: Run the test**
 
 Run: `npx vitest run packages/core/test/effects/lamp.test.ts`
-Expected: PASS, 13 tests.
+Expected: PASS. The count is 16 — the plan supplies 5 and both review rounds added more.
 
-- [ ] **Step 6: Run the whole suite — the `at` signature touched every piece**
+- [x] **Step 6: Run the whole suite — the `at` signature touched every piece**
 
 Run: `npm run typecheck && npx vitest run`
-Expected: PASS. `flicker`, `hue`, `chase` and `roving` declare two parameters and are unaffected.
+Expected: PASS — but only after the two call sites above are updated. `flicker`, `hue` and `chase`
+implement `at(t, part)` and are genuinely unaffected; `roving` is not, because it calls `inner.at`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/core/src/effects/lamp.ts packages/core/src/effects/types.ts packages/core/test/effects/lamp.test.ts
@@ -462,7 +475,7 @@ that for `tint`; this exposes the resolved value.
 - Modify: `packages/core/src/render/looks.ts`
 - Test: `packages/core/test/render/looks.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/core/test/render/looks.test.ts`:
 
@@ -491,17 +504,30 @@ describe('lightBase', () => {
       0x445566,
     );
   });
+
+  it('reads the tint the material was actually built with', () => {
+    expect(lightBase('gold', 0xff2d6f)).toEqual({ emissive: 0x000000, hue: 0xff2d6f });
+  });
+
+  // A tinted neon's emissive IS the tint; reading the look's own would reset it every frame.
+  it('moves the base emissive too when the tint landed on it', () => {
+    expect(lightBase('neon', 0xff2d6f)).toEqual({ emissive: 0xff2d6f, hue: 0xff2d6f });
+  });
+
+  it('falls back to the defaults for a look that declares no colour', () => {
+    expect(lightBase({ metalness: 1 })).toEqual({ emissive: 0x000000, hue: 0xffffff });
+  });
 });
 ```
 
 Add `lightBase` to the file's existing import from `../../src/render/looks.js`.
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/core/test/render/looks.test.ts -t "lightBase"`
 Expected: FAIL — `lightBase` is not exported.
 
-- [ ] **Step 3: Export it**
+- [x] **Step 3: Export it**
 
 In `packages/core/src/render/looks.ts`, below `tintTargetOf`. It takes a `Look` and resolves
 against `DEFAULTS`, mirroring `frameOwnedBase` — which is the function `word.ts` already calls for
@@ -515,24 +541,28 @@ export interface LightBase {
   hue: number;
 }
 
-export function lightBase(look: Look): LightBase {
+export function lightBase(look: Look, tint?: number): LightBase {
   const spec = specOf(look);
   const params = resolveParams(spec);
-  return {
-    emissive: params.emissive,
-    hue: params[tintTargetOf(params, spec.tintTarget)] as number,
-  };
+  const target = tintTargetOf(params, spec.tintTarget);
+  if (tint !== undefined) params[target] = tint;
+  return { emissive: params.emissive, hue: params[target] };
 }
 ```
 
 The declared override is `spec.tintTarget` — `LookSpec` has no `tint` field.
 
-- [ ] **Step 4: Run the test**
+It takes `tint` for the same reason `applyLook` does: `applyLook` writes the tint over
+`params[tintTargetOf(...)]`, so on a tinted word the hue on the material is the tint and the look's
+own colour is not on screen anywhere. Reading the untinted one would light a pink letter gold, and
+on a look whose tint target is `emissive` it would reset the tint on every frame.
+
+- [x] **Step 4: Run the test**
 
 Run: `npx vitest run packages/core/test/render/looks.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/render/looks.ts packages/core/test/render/looks.test.ts
@@ -543,6 +573,18 @@ git commit -m "expose the emissive and hue a lamp resolves against"
 
 ### Task 5: `word.ts` resolves the light channel
 
+**Decide this first: does the light channel sum in sRGB or in linear?** Task 1's review raised it
+and deferred it here. `ResolvedOffset.light` accumulates sRGB-encoded bytes over 255, and
+`litEmissive` below stays in that space and hands the result to `THREE.Color.setHex()`, which does
+the sRGB-to-linear conversion. That is self-consistent, but summing sRGB is not summing radiance:
+two lamps at half strength do not add to the brightness one lamp at full strength gives.
+
+It matters only where two lamps overlap, which is why the design did not catch it. **Decided: ship
+the sRGB version below unchanged.** Task 9 Step 3 renders two overlapping lamps and looks at the
+seam; if it reads wrong, the fix is to decode in `rgb()` and encode once in `litEmissive`, not to
+change the channel's shape.
+
+
 This is the task no unit test can prove. Write the unit test anyway for the arithmetic, then prove
 it on screen in Task 9.
 
@@ -550,7 +592,7 @@ it on screen in Task 9.
 - Modify: `packages/core/src/render/word.ts`
 - Test: `packages/core/test/render/word-light.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `packages/core/test/render/word-light.test.ts`:
 
@@ -585,12 +627,12 @@ describe('litEmissive', () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/core/test/render/word-light.test.ts`
 Expected: FAIL — `litEmissive` is not exported.
 
-- [ ] **Step 3: Write the resolver**
+- [x] **Step 3: Write the resolver**
 
 In `packages/core/src/render/word.ts`, near `setEmissiveIntensity`:
 
@@ -602,48 +644,70 @@ const clamp255 = (n: number): number => Math.min(255, Math.max(0, Math.round(n))
  * material's identity — a white lamp on gold reflects gold, and adding white reflects cream.
  * @internal exported for test; not part of the public surface.
  */
-export function litEmissive(base: number, hue: number, light: readonly number[]): number {
-  if (!light[0] && !light[1] && !light[2]) return base;
-  const out: number[] = [];
-  for (let i = 0; i < 3; i++) {
-    const shift = 16 - i * 8;
-    const b = (base >> shift) & 0xff;
-    const h = ((hue >> shift) & 0xff) / 255;
-    out.push(clamp255(b + (light[i] as number) * h * 255));
-  }
-  return ((out[0] as number) << 16) | ((out[1] as number) << 8) | (out[2] as number);
+export function litEmissive(base: number, hue: number, light: Vec3): number {
+  const [lr, lg, lb] = light;
+  if (!lr && !lg && !lb) return base;
+  // A non-finite channel contributes nothing rather than blacking the channel out: clamp255(NaN)
+  // is NaN, and NaN << 16 is 0, so the base would vanish on one channel and survive on the others.
+  const ch = (shift: number, l: number): number =>
+    clamp255(((base >> shift) & 0xff) + (Number.isFinite(l) ? l : 0) * ((hue >> shift) & 0xff));
+  return (ch(16, lr) << 16) | (ch(8, lg) << 8) | ch(0, lb);
 }
 ```
 
-- [ ] **Step 4: Run the test**
+The hue byte is not divided by 255 and re-multiplied — `light` is already a 0..n multiplier.
+
+- [x] **Step 4: Run the test**
 
 Run: `npx vitest run packages/core/test/render/word-light.test.ts`
 Expected: PASS, 4 tests.
 
-- [ ] **Step 5: Apply it in `writePart`**
+- [x] **Step 5: Apply it in `writePart`**
 
 `writePart` currently branches on `part.kind`. Give each branch the light.
 
-For a `body` part, the light lands on the material's emissive. Add one field beside `bodyBase`,
-and set it on the line after `this.bodyBase = frameOwnedBase(spec);` (`word.ts:221`):
+For a `body` part, the light lands on the material's emissive. The hue belongs to the letter rather
+than the word — `tint` takes a per-letter function — so this is an array pushed in `buildCell`
+beside `bodyMaterials`, reusing the `hue` already resolved there and pushing `null` on the
+empty-glyph path that pushes `null` to the others:
 
 ```ts
-  private readonly bodyLight: LightBase;
+  private readonly bodyLights: (LightBase | null)[] = [];
+```
+Hoist the tint expression rather than writing it twice — `applyLook` and `lightBase` resolving
+against different hues is silent, and is the defect Task 4 exists to prevent:
+
+```ts
+    const bodyTint = tintMaterialOf(spec) === 'body' ? hue : undefined;
 ```
 ```ts
-    this.bodyLight = lightBase(spec);
+    this.bodyLights.push(lightBase(look, bodyTint));
 ```
+
+Clear it in `dispose` where `bodyMaterials.length = 0`.
 
 Import `lightBase` and `type LightBase` from `./looks.js` alongside the existing `frameOwnedBase`.
-Then in the `body` branch:
+Then in the `body` branch. Key it on `partSlot`, not on `part.letter.index`: `LetterInfo.index` is
+the letter's place in the word, which `regroup` renumbers, while `bodyLights` is filled per slot.
 
 ```ts
     if (part.kind === 'body') {
       const material = mesh.material as THREE.MeshPhysicalMaterial;
-      material.emissive.setHex(litEmissive(this.bodyLight.emissive, this.bodyLight.hue, out.light));
+      const light = this.bodyLights[this.partSlot[index] as number];
+      if (light) material.emissive.setHex(litEmissive(light.emissive, light.hue, out.light));
       setEmissiveIntensity(material, this.bodyBase.emissiveIntensity * out.gain);
       return;
     }
+```
+
+`apply`'s per-letter loop already resets `emissiveIntensity` every frame for every letter, retired
+ones included, because `retiredPart` skips `writePart` for a letter a regroup dropped. `emissive` now
+needs the same reset beside it — otherwise a letter that was lit when it was dropped keeps that lamp
+frozen on it for the whole exit:
+
+```ts
+        const light = this.bodyLights[i];
+        if (light) material.emissive.setHex(light.emissive);
 ```
 
 For a `run` part, the hue is the run's own colour, and the light adds into the vertex colour
@@ -656,41 +720,63 @@ already being written. Replace the colour computation with:
       .multiplyScalar(out.gain);
 ```
 
-- [ ] **Step 6: Thread the context through `applyEffects`**
+- [x] **Step 6: Thread the context through `applyEffects`**
 
 Change `apply(driver, elapsed)` to `apply(driver, elapsed, ctx: FrameCtx)`, pass `ctx` down to
 `applyEffects(elapsed, ctx)`, and pass it to the piece: `effect.piece.at(t, part, ctx)`.
 
-- [ ] **Step 7: Add the extent accessor**
+- [x] **Step 7: Add the extent accessor**
 
 `fromPointer` needs the word's real extent to map into, and the design records that it is not
 centred on zero — `KLIEG` gives `x ∈ [-1.72, 0.89]`.
 
+**It must be the box of the letters' ink, not of their origins.** `part.x`/`part.y` are the glyph
+origin and the baseline, and `placement.ts` sets `y = -line * LINE_HEIGHT_EM` — constant per line.
+So a box built from `part.x`/`part.y` alone has **zero height on any single-line sign**, and Task 7's
+mapping would hand every pointer position the same `y`, costing `fromPointer` its vertical tracking
+entirely. On x it is short by the last glyph's advance.
+
+Fold each glyph's own bounds in, the way `fitOf` already does with `y + geoMinY[i]`. `geoMinY`/
+`geoMaxY` are per-slot on `Word`; store `geoMinX`/`geoMaxX` beside them from the same
+`geo.boundingBox`, and offset them by the part's own `x`/`y` so the box stays in the frozen pool's
+space. Glyph bounds are a property of the glyph, not of the layout, so they are constant across a
+regroup and mixing them with a frozen `part.x` is consistent.
+
+Test it on a single-line word: the extent must have non-zero height, and must be wider than the
+span of the origins alone.
+
 ```ts
-  /** The bounding box of the part pool in layout space, or null before any part exists. */
+  /**
+   * The ink bounding box of the part pool in layout space, or null before any part exists.
+   * Describes the pool as built: `regroup` re-lays the letters and leaves the pool alone.
+   * Each glyph's own bounds are folded in the way `fitOf` does. A box of origins alone would have
+   * zero height on a single-line sign, since every letter on a line shares its baseline.
+   */
   partExtent(): { minX: number; maxX: number; minY: number; maxY: number } | null {
     if (this.parts.length === 0) return null;
     let minX = Number.POSITIVE_INFINITY;
     let maxX = Number.NEGATIVE_INFINITY;
     let minY = Number.POSITIVE_INFINITY;
     let maxY = Number.NEGATIVE_INFINITY;
-    for (const part of this.parts) {
-      minX = Math.min(minX, part.x);
-      maxX = Math.max(maxX, part.x);
-      minY = Math.min(minY, part.y);
-      maxY = Math.max(maxY, part.y);
+    for (let i = 0; i < this.parts.length; i++) {
+      const part = this.parts[i] as PartInfo;
+      const slot = this.partSlot[i] as number;
+      minX = Math.min(minX, part.x + (this.geoMinX[slot] ?? 0));
+      maxX = Math.max(maxX, part.x + (this.geoMaxX[slot] ?? 0));
+      minY = Math.min(minY, part.y + (this.geoMinY[slot] ?? 0));
+      maxY = Math.max(maxY, part.y + (this.geoMaxY[slot] ?? 0));
     }
     return { minX, maxX, minY, maxY };
   }
 ```
 
-- [ ] **Step 8: Typecheck and run everything**
+- [x] **Step 8: Typecheck and run everything**
 
 Run: `npm run check`
 Expected: PASS. `index.ts` will not compile until it passes a ctx — fix it by passing
 `{ pointer: null, pointerInWord: null, dt }` at the call site for now; Task 7 fills it in.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add packages/core/src/render/word.ts packages/core/test/render/word-light.test.ts packages/core/src/index.ts
@@ -705,7 +791,7 @@ git commit -m "resolve lamp light onto a part's material"
 - Modify: `packages/core/src/render/lighting.ts`
 - Test: `packages/core/test/render/lighting.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `packages/core/test/render/lighting.test.ts`:
 
@@ -762,12 +848,12 @@ describe('track', () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/core/test/render/lighting.test.ts`
 Expected: FAIL — `sweep`, `track` and `mergeEnv` are not exported.
 
-- [ ] **Step 3: Rewrite `lighting.ts`**
+- [x] **Step 3: Rewrite `lighting.ts`**
 
 Keep `LightingName`, `LIGHTING` and `envRotationAt` exactly as they are — the existing tests cover
 them and the names stay as presets. Add:
@@ -785,8 +871,14 @@ export interface EnvPiece {
   env(t: number, ctx: FrameCtx): EnvOffset;
 }
 
+/** Everything `mergeEnv` resolved. Both axes rest at 0. */
+export interface ResolvedEnv {
+  yaw: number;
+  pitch: number;
+}
+
 /** Additive, matching the pose compositor: layering two pieces must show both. */
-export function mergeEnv(offsets: readonly EnvOffset[]): { yaw: number; pitch: number } {
+export function mergeEnv(offsets: readonly EnvOffset[]): ResolvedEnv {
   let yaw = 0;
   let pitch = 0;
   for (const o of offsets) {
@@ -806,8 +898,11 @@ export function still(): EnvPiece {
 }
 
 export interface TrackSpec {
+  /** Radians the environment swings between opposite edges of the canvas. */
   yawRange?: number;
+  /** Radians on the other axis. Shallower than yaw: tipping the studio far swings its floor into frame. */
   pitchRange?: number;
+  /** Milliseconds to cover ~63% of the way to a new pointer position. Zero snaps. */
   followMs?: number;
 }
 
@@ -826,7 +921,7 @@ export function track(spec: TrackSpec = {}): EnvPiece {
     duration: 0,
     env(_t, ctx) {
       if (ctx.pointer) {
-        const k = 1 - Math.exp(-Math.max(0, ctx.dt) / followMs);
+        const k = followMs > 0 ? 1 - Math.exp(-Math.max(0, ctx.dt) / followMs) : 1;
         yaw += (ctx.pointer.x * yawRange - yaw) * k;
         pitch += (ctx.pointer.y * pitchRange - pitch) * k;
       }
@@ -835,21 +930,29 @@ export function track(spec: TrackSpec = {}): EnvPiece {
   };
 }
 
-export const ENV_PIECES: Record<LightingName, () => EnvPiece> = {
+export const ENV_PIECES = {
   sweep,
   static: still,
   pointer: track,
-};
+} satisfies Record<LightingName, () => EnvPiece>;
 ```
 
 `still` rather than `static`: `static` is a reserved word and cannot be a function declaration name.
 
-- [ ] **Step 4: Run the test**
+`satisfies` rather than an annotation, matching `EFFECTS` in `effects/pieces.ts`, which carries the
+comment arguing for it. An annotation erases each factory's own spec parameter, so
+`ENV_PIECES.sweep({ periodMs: 1000 })` would stop compiling while still working at runtime.
+
+`followMs > 0` guards the follow: `Math.exp(-0 / 0)` is `NaN`, and because `track` accumulates its
+ease in a closure rather than recomputing it, one `NaN` frame means the piece never returns a number
+again for its whole life. Zero reads as "snap", which is the only sensible meaning.
+
+- [x] **Step 4: Run the test**
 
 Run: `npx vitest run packages/core/test/render/lighting.test.ts`
 Expected: PASS — the new cases plus every existing `envRotationAt` and `PointerLight` case.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/render/lighting.ts packages/core/test/render/lighting.test.ts
@@ -865,7 +968,7 @@ git commit -m "make lighting pieces that compose"
 - Modify: `packages/core/src/motion/types.ts`, `packages/core/src/motion/compositor.ts:53-54`
 - Test: `packages/core/test/render/lighting.test.ts`
 
-- [ ] **Step 1: Widen the option**
+- [x] **Step 1: Widen the option**
 
 In `packages/core/src/index.ts`:
 
@@ -877,7 +980,7 @@ export type LightingSlot = LightingName | EnvPiece | (LightingName | EnvPiece)[]
   lighting?: LightingSlot;
 ```
 
-- [ ] **Step 2: Resolve it**
+- [x] **Step 2: Resolve it**
 
 ```ts
 function resolveLighting(slot: LightingSlot): EnvPiece[] {
@@ -887,10 +990,14 @@ function resolveLighting(slot: LightingSlot): EnvPiece[] {
 }
 ```
 
-and in `fire`, replace the `const lighting = …` / `tracksPointer` lines with
+and in `run`, replace the `const lighting = …` / `tracksPointer` lines with
 `const envPieces = resolveLighting(opts.lighting ?? 'sweep');`
 
-- [ ] **Step 3: Build the context each frame**
+**Resolve once per run, never inside the frame callback.** `track` accumulates its ease in a
+closure, so rebuilding it every frame pins it at `1 - e^(-16/90)` — about 16% of the way to the
+pointer, forever. It reads as a damping bug rather than a lifecycle one.
+
+- [x] **Step 3: Build the context each frame**
 
 Replace the `PointerLight` instance at `:283` with a canvas-relative pointer. The bug this fixes is
 that `aimAt` normalized against `globalThis.innerWidth/innerHeight` — the viewport, never the box.
@@ -910,23 +1017,36 @@ and per frame, before `word.apply`:
       let pointerInWord: FrameCtx['pointerInWord'] = null;
       const box = stage.canvas?.getBoundingClientRect();
       if (pointerClient && box && box.width > 0 && box.height > 0) {
-        pointer = {
-          x: ((pointerClient.x - box.left) / box.width) * 2 - 1,
-          y: ((pointerClient.y - box.top) / box.height) * 2 - 1,
-        };
+        const nx = ((pointerClient.x - box.left) / box.width) * 2 - 1;
+        const ny = ((pointerClient.y - box.top) / box.height) * 2 - 1;
+        // FrameCtx promises -1..1, and the listener is document-wide: a pointer beside a small
+        // anchored canvas would otherwise aim past every range that scales it.
+        pointer = { x: Math.max(-1, Math.min(1, nx)), y: Math.max(-1, Math.min(1, ny)) };
         const extent = word.partExtent();
-        if (extent) {
+        if (extent && extent.maxX > extent.minX && extent.maxY > extent.minY) {
           // The word is not centred on zero, so map into its real extent rather than scaling.
+          // y flips: clientY grows downward and layout y grows upward, so passing the pointer
+          // straight through moves the lamp opposite the cursor on a multi-line sign.
           pointerInWord = {
             x: extent.minX + ((pointer.x + 1) / 2) * (extent.maxX - extent.minX),
-            y: extent.minY + ((pointer.y + 1) / 2) * (extent.maxY - extent.minY),
+            y: extent.maxY - ((pointer.y + 1) / 2) * (extent.maxY - extent.minY),
           };
         }
       }
       const ctx: FrameCtx = { pointer, pointerInWord, dt: still ? Number.POSITIVE_INFINITY : dt };
 ```
 
-- [ ] **Step 4: Drive the environment from the merged pieces**
+A degenerate extent leaves `pointerInWord` null, which `fromPointer` already reads as rest — better
+than mapping every pointer position onto one constant and calling it tracking.
+
+**The extent describes the pool as it was built.** `regroup` re-lays the letters but deliberately
+leaves the part pool alone, so after one, a pointer at fraction *f* across the canvas lights whatever
+was at fraction *f* in the original layout. Recomputing `PartInfo.x`/`y` per frame is the real fix
+and it is not this task's to make — `stagger`'s positional ordering reads the same fields and would
+change behavior on every regroup. Leave it; Task 9 should sweep the pointer across a regrouped sign
+and record what it looks like.
+
+- [x] **Step 4: Drive the environment from the merged pieces**
 
 Replace the whole `envDriven` / `tracksPointer` block at `:507-515` with:
 
@@ -943,18 +1063,23 @@ Replace the whole `envDriven` / `tracksPointer` block at `:507-515` with:
 Pass `ctx` to `word.apply(driver, elapsed, ctx)` at `:469`, and remove the `onMove` listener
 wherever the effect settles, beside the other teardown.
 
-- [ ] **Step 5: Retire `slotDrivesEnv`**
+- [x] **Step 5: Leave `slotDrivesEnv` to Task 8**
 
-Delete `slotDrivesEnv` from `packages/core/src/motion/compositor.ts` and its export from
-`index.ts`. Delete `envRotation?: boolean` from `MotionPiece` in `packages/core/src/motion/types.ts`
-and its doc line. Delete any test asserting on it.
+Stop *reading* `slotDrivesEnv` here — Step 4 already does — but delete nothing. The removal reaches
+further than this task's files: `CycleSpec.envRotation` (`motion/build.ts`) is a documented public
+option, so deleting `MotionPiece.envRotation` is a `tsc` error there and a README change. Task 8
+owns the public surface and does it in one piece.
 
-- [ ] **Step 6: Run everything**
+Between this task and that one, `cycle(3400, { envRotation: true })` sets a flag nothing reads. That
+is a public option silently doing nothing — the exact defect class this branch exists to fix — so it
+must not outlive Task 8.
+
+- [x] **Step 6: Run everything**
 
 Run: `npm run check`
 Expected: PASS. Any failure naming `slotDrivesEnv` or `envRotation` is a leftover reference.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/core/src packages/core/test
@@ -970,15 +1095,92 @@ git commit -m "drive the environment from a composable lighting slot"
 - Modify: `CHANGELOG.md`
 - Modify: `README.md`
 
-- [ ] **Step 1: Export the new surface**
+- [x] **Step 1: Export the new surface**
 
 ```ts
 export { type LampSpec, along, fixed, fromPointer, lamp, type LightPose, type LightSource, orbit, type OrbitSpec } from './effects/lamp.js';
-export { type EnvOffset, type EnvPiece, type FrameCtx, mergeEnv, still, sweep, track, type TrackSpec } from './render/lighting.js';
-export type { LightingSlot };
+export { ENV_PIECES, type EnvOffset, type EnvPiece, mergeEnv, type ResolvedEnv, still, sweep, track, type TrackSpec } from './render/lighting.js';
 ```
 
-- [ ] **Step 2: Write the CHANGELOG entry**
+`LightingSlot` is already exported at `index.ts:171` and `resolveLighting` lives in
+`render/lighting.ts` beside it — exported for its test, and deliberately not in the barrel. Do not
+add a second `export type { LightingSlot }`.
+
+Delete `PointerLight` and `envRotationAt` from `render/lighting.ts`, their exports, and their tests.
+`track` carries its own follow and `sweep` its own period, so once Task 7 rewrites the render loop
+nothing calls either. `PointerLight`'s viewport normalization is the bug the Fixed note below names —
+it must not survive as a second, wrong way to do this.
+
+**Three things must survive that deletion**, and two of them sit inside the block a reader would
+take for the `PointerLight` section. Keep `YAW_RANGE`, `PITCH_RANGE` and `FOLLOW_MS` with their doc
+comments — they are `track`'s defaults, and `PITCH_RANGE`'s note about a studio's floor swinging
+into frame is not derivable from anything else — but fix `YAW_RANGE`'s doc, which still says
+"viewport" where it means the canvas box. That is the exact word the Fixed note below calls a bug,
+and the public `TrackSpec.yawRange` beside it already says "canvas". Move `envRotationAt`'s
+"effect-relative: absolute
+clock time would start every effect at an arbitrary angle" onto `sweep`, whose `t` still carries
+that constraint. `tsc` catches a deleted binding; it does not catch a deleted reason.
+
+**Collapse what is left of `LIGHTING` rather than leaving it vestigial.** With `envRotationAt` gone,
+nothing reads `tracksPointer` or the `static`/`pointer` periods, and `sweep()` reads only
+`LIGHTING.sweep.periodMs`. Neither `LIGHTING` nor `LightingMode` is exported from the barrel, so
+this costs no public surface: replace the record with `const SWEEP_PERIOD_MS` carrying the period's
+doc line, delete `LightingMode`, drop the `tracksPointer` assertion from `lighting.test.ts`, and
+derive `LIGHTING_NAMES` from `ENV_PIECES` — which is the rule `index.ts` already states, "read off
+the records the effect itself indexes". `Object.keys(ENV_PIECES)` preserves the order `index.test.ts`
+pins.
+
+Also re-export `LightOffset` **and `FrameCtx`** from `./effects/types.js` beside the existing
+`PartOffset` export. `FrameCtx` names a parameter of three exported types — `EffectPiece.at`,
+`EnvPiece.env` and `LightSource` — so without it a consumer writing a standalone source or piece,
+which is the documented reason those types are public, cannot type the argument.
+Task 1 added it as a named interface following the `FlakeSpec` precedent but deliberately left the
+barrel alone, since `PartOffset` already re-exports and consumers get the shape structurally. It
+wants the name once callers are writing lamps.
+
+
+- [x] **Step 1b: Retire `envRotation` in one piece**
+
+Task 7 stopped reading it and deleted nothing, because the field reaches public API. The whole set:
+
+- `motion/types.ts` — drop `envRotation?: boolean` from `MotionPiece` and its doc line.
+- `motion/compositor.ts` — drop `slotDrivesEnv`. It is not in the barrel; `index.ts` was its only
+  caller and no longer reads it.
+- `motion/build.ts` — drop `CycleSpec.envRotation` (`:121`) and the flag it threads (`:156`), where
+  `cycle` collapses to a single `return`.
+- Delete the assertions at `test/motion/compositor.test.ts:243-245`, `test/motion/build.test.ts:172`
+  and `test/readme.test.ts:45`.
+- `README.md:330` — rewrite the sentence beginning "`envRotation: true` rakes the environment
+  highlight", which documents an option that no longer exists. The replacement is `lighting`.
+
+One of the tests Task 7 found here (`lets a caller-supplied active piece rake the highlight`) was a
+false green even before this change: the default `sweep` turns the environment anyway, so it passed
+without `envRotation` doing anything. Do not port its assertion forward.
+
+- [x] **Step 1c: Five doc lines the exported surface is wrong without**
+
+Each is one clause, and each is a silent wrong answer rather than a restatement:
+
+- **`track()` is stateful.** It accumulates its ease in a closure, and `resolveLighting` hands a
+  caller-supplied piece back by reference. So one `track()` shared across two concurrent fires is
+  stepped twice per frame, and a second sequential fire starts from the first's leftover angle
+  rather than rest. Say on `track` and on `FireOptions.lighting` that a constructed `track()`
+  belongs to one fire. The name form (`lighting: 'pointer'`) is safe — it builds a piece per run.
+- **`FrameCtx.dt` is `Infinity` under reduced motion.** The doc says "Milliseconds since the previous
+  frame." A piece that integrates (`phase += ctx.dt * rate`) then goes to `Infinity`, and the next
+  subtraction to `NaN`, permanently — the defect `track`'s `followMs` guard already exists for. Say
+  it must snap, not integrate.
+- **`FrameCtx.pointer` is +y down; `FrameCtx.pointerInWord` is +y up.** Two fields on one object with
+  opposite conventions, and neither says which. This is what the Task 7 y-inversion bug was.
+- **`pointerInWord` stretches, it does not project.** The canvas's full −1..1 maps onto the word's
+  extent per axis, so the lamp sits under the cursor only when the word fills the canvas; on a small
+  anchored sign it travels several times faster. That is a deliberate reach guarantee — the far
+  corners must be able to light every part — but the current doc, "the same pointer in the word's
+  layout space", oversells it as a projection.
+- **`EnvPiece.duration: 0` does not mean "holds still".** `track` reports 0 and moves. It means
+  aperiodic: `t` is always 0.
+
+- [x] **Step 2: Write the CHANGELOG entry**
 
 Under `## Unreleased`:
 
@@ -998,16 +1200,40 @@ Under `## Unreleased`:
 - `MotionPiece.envRotation`. Declare an env piece in `lighting` instead.
 ```
 
-- [ ] **Step 3: Document the option in the README**
+- [x] **Step 3: Document the option in the README**
 
 Find the `lighting` row in the options table and widen it to name the slot form and `lamp`.
 
-- [ ] **Step 4: Commit**
+**Give `lamp` its own entry under `### effects`.** `flicker`, `hue` and `roving` each get a
+signature and their spec fields there; `lamp` is the branch's headline piece and currently appears
+only as two cross-references. A reader who follows the CHANGELOG's "put a `lamp` in `effects`" lands
+in a section that never mentions it. Cover the four sources and say which of them needs a pointer.
+
+**Document `sweep`'s spec.** `TrackSpec` documents every field and `sweep` takes a bare inline
+`{ periodMs?: number }` with none, while the CHANGELOG advertises `sweep({ periodMs })`.
+
+**Say that layers keep their own periods.** The design's claim is "the same grammar as `active`", and
+the *shape* matches exactly — a name, a piece, or an array. The layering does not: `Timeline.poseAt`
+gives every member of a motion slot one shared `t` from the slot's duration, with phase weights,
+while each lighting piece gets its own `t` from its own `duration` and there are no phases. So
+`['sweep', sweep({ periodMs: 1000 })]` runs two independent periods, which `active` cannot express.
+The lighting behavior is the one we want; a reader who learned layering from `active` will expect
+phase-lock and needs telling.
+
+- [x] **Step 4: Commit**
 
 ```bash
-git add packages/core/src/index.ts CHANGELOG.md README.md
+git add packages/core/src packages/core/test CHANGELOG.md README.md
 git commit -m "export the lighting surface and record the change"
 ```
+
+The staging list covers more than the three files at the top of this task: Step 1b reaches
+`motion/types.ts`, `motion/compositor.ts`, `motion/build.ts` and three test files, and Steps 1 and 1c
+reach `render/lighting.ts` and `effects/types.ts`.
+
+Add `CycleSpec.envRotation` to the Removed block beside `MotionPiece.envRotation` — it is the half of
+that removal a caller actually wrote. `PointerLight` and `envRotationAt` need no entry: neither was
+ever in the barrel.
 
 ---
 
@@ -1020,7 +1246,7 @@ the compositor merged, the material was written, and the image did not change.
 - Create: `spikes/lamp-proof.mjs`
 - Modify: `spikes/.gitignore`
 
-- [ ] **Step 1: Write the proof script**
+- [x] **Step 1: Write the proof script**
 
 Copy `spikes/lamp-blend.mjs` to `spikes/lamp-proof.mjs` and replace its render loop body with a
 lamp-on/lamp-off pair per look, driving the real `lamp()` through `effects` rather than a hand-rolled
@@ -1033,20 +1259,92 @@ effects: [{ piece: lamp({ source: fixed(0, 0), radius: 0.6, strength: 2.5 }), ta
 Exit non-zero when any look renders lamp-on and lamp-off to the same md5, the way
 `tint-matrix.mjs` does for tints.
 
-- [ ] **Step 2: Build and run it**
+- [x] **Step 2: Build and run it**
 
-Run: `npm run build -w klieg && node spikes/lamp-proof.mjs --looks gold,chrome,gem,velvet,neon`
+Run: `npm run build -w klieg && node spikes/lamp-proof.mjs --looks gold,chrome,gem,velvet,neon,tubing`
 Expected: every look reports `reads`. A `NO-OP` row means the lamp never reached the GPU on that
 look, which is the exact failure this plan exists to fix.
+
+**`tubing` is in the list because none of the other five has a single `run` part**, and a lamp on a
+run takes a different write path from a lamp on a body — a vertex-buffer write gated on
+`partReadsRunColor` and an early return when the geometry carries no run-colour attribute, versus
+one `material.emissive.setHex`. The run path has strictly more places to silently do nothing, and it
+is the path under the two looks people will most want to light. Target it with `{ kind: 'run' }`.
+
+**Render `lamp({ source: orbit() })` on its bare defaults too.** Task 8 measured it and found zero
+lit samples across a full pass on a short sign: `orbit`'s default radius is 2 em and a lamp's default
+reach is 0.5 em, so the two defaults compose into a lamp that lights nothing. A part placed out at
+2 em does light, so the source works and the defaults do not meet. This script exists to catch
+exactly that, and a `NO-OP` row here is a real finding about the API rather than a bug in the render
+— decide whether the defaults move, and record which.
+
+**Do not let the docstring be the resolution.** `orbit` has never shipped, so moving its default
+costs a token now and a breaking change after release; a doc saying "these two defaults do not meet"
+documents the bug and then freezes it. If the render confirms the `NO-OP`, move `orbit`'s radius —
+not the lamp's reach, which is tuned and works with the other three sources — and delete the clause
+from `OrbitSpec`, which is the only place it is written.
 
 `sequin` will not pass and is out of scope — it has zero `run` parts and a near-black body. See
 the findings note.
 
-- [ ] **Step 3: Ignore its output**
+Three things the pixels are the only judge of, beyond the no-op check above. A lamp on a **run**
+passes the run's own colour as the hue and not `out.color`, so a part recoloured by `hue()` reflects
+the colour it started with — deliberate, and surprising enough to look at. On a **gradient** look the
+lamp multiplies against one blueprint stop while the pixel colour comes from the ramp in the shader,
+so lit and unlit stops disagree; this is pre-existing for `gain` and `color` and the lamp inherits
+it. And a lamp targeting **every** run rewrites and re-uploads each run's vertex buffer every frame —
+already true of `gain` and `chase`, but a lamp is the first effect that invites `by: 'all'`.
+
+- [x] **Step 3: Render the overlap**
+
+Task 5 ships the light channel summing in sRGB rather than in linear radiance. **Do not try to judge
+this from an offset seam.** Two half-strength lamps whose pools cross will read darker at the seam
+than one full lamp under *either* scheme. Measured: at the crossing each lamp is at half its reach and
+so gives half of its already-halved strength, landing the pair at 7.8 mean lift against the single
+lamp's 15.1 at its centre — half, spread over twice the width. The strengths, not the colour space,
+decide it, and the test fires either way.
+
+Nor does strength discriminate it: `amount` scales linearly in both schemes, so two coincident lamps
+at half strength and one at full strength are byte-identical whichever is in use.
+
+**What discriminates is the colour decode.** `rgb()` divides the byte by 255 with no gamma decode, so
+a mid-grey lamp contributes 0.502 where linear radiance would give it 0.216. Render two frames, same
+position, same everything else:
+
+- a lamp at `color: 0x808080, amount: 1`
+- a lamp at `color: 0xffffff, amount: 0.5`
+
+Under the shipped sRGB sum those are the same light (0.502 against 0.500) and the two frames must
+md5 to the same value. Under a linear sum they differ by 2.3x and plainly do not. That is one
+assertion, and it either holds or the channel is not doing what Task 5 says.
+
+Then render the offset seam as the thing you **look at** rather than assert on, and attach it — a
+seam nobody looked at is the same evidence `gain` had.
+
+- [x] **Step 3b: Render the pointer, and a regrouped sign**
+
+The md5 proof drives `fixed(0, 0)`, so `fromPointer` — the default source, and the headline of the
+whole feature — is never rendered by any of this. The script already drives a real page, so
+`page.mouse.move()` gives a pointer-off and pointer-over pair for nothing.
+
+That pair is also the only place the open question gets an answer: `pointerInWord` **stretches** the
+canvas onto the word's extent per axis rather than projecting through the camera, so on a sign that
+does not fill the frame the lamp travels further than the cursor. Render a small anchored sign and
+look at whether the light sits where the cursor is. If it reads wrong, `projectLetters` in
+`text/projection.ts` is a true inverse and `index.ts` already drives it for the DOM layer. Record the
+answer either way: the README now states the stretch and promises the light is under the cursor only
+for a word that fills the frame, and nothing has measured either case.
+
+Then sweep the pointer across a sign that has **regrouped**. The part pool is a construction-time
+snapshot, so a pointer at fraction *f* lights whatever was at *f* in the original layout. The handoff
+has promised this render since Task 5 and nothing has produced it. If it reads acceptably, say so and
+close it; if not, it is its own change, not this branch's.
+
+- [x] **Step 4: Ignore its output**
 
 `spikes/.gitignore` already carries `lamp-*/`, which covers it. Confirm with `git status`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add spikes/lamp-proof.mjs

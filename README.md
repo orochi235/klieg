@@ -104,6 +104,19 @@ slots.
 | `static` | holds the environment still |
 | `pointer` | aims the highlight wherever the cursor or finger is; `static` until one arrives |
 
+The slot takes a piece instead of a name, or an array mixing both — `sweep({ periodMs })`,
+`still()` and `track({ yawRange, pitchRange, followMs })` build one. Layering here is not
+`active`'s: each piece keeps its own `duration` rather than sharing the slot's, so the pieces run
+on unrelated clocks with nothing holding a phase between them.
+
+Layered pieces add per axis, so two that write the same axis give you one motion rather than two
+you can pick apart: `['sweep', sweep({ periodMs: 1000 })]` is a single uniform turn at the summed
+rate, once every 773ms. Layer pieces that write different axes — `['sweep', track({ yawRange: 0 })]`
+rakes on the clock while the pointer tips the pitch.
+
+All of these turn the one shared environment. For light on the letters near a position instead —
+a pool the cursor carries across the word — put a `lamp` in `effects`.
+
 Each list is also exported as a runtime array — `ENTER_NAMES`, `ACTIVE_NAMES`, `EXIT_NAMES`,
 `LOOK_NAMES`, `LIGHTING_NAMES`, `POLICY_NAMES` — for building a picker.
 
@@ -239,6 +252,24 @@ rather than a name, because a name cannot carry the piece it wraps. Give it `{ a
 its holder from the whole pool of that kind, so against a subset the fault can land on a part the
 effect does not drive and nothing happens at all.
 
+**`lamp({ source, radius, strength, color, duration })`** — puts light on the parts near a position
+rather than changing what they are made of. `radius` is its reach in em of layout space, `strength`
+the light at the centre falling to nothing at that edge, and `color` the lamp's own, multiplied
+against the look's hue. `source` says where the light is on each pass: `fromPointer()` is the
+default and follows the cursor — the canvas's whole extent maps onto the word's ink, so the
+cursor's whole travel is compressed onto the letters: the light runs ahead of the cursor at one end
+of the sign and behind it at the other, and sits under it only where the ink fills the canvas.
+`fixed(x, y)` pins the light, `orbit({ radius, x, y })` circles it, and `along([...])` walks a
+polyline at constant time per segment rather than constant speed.
+`duration` is one pass for the sources that read the clock, `orbit` and `along`, and does nothing
+to `fixed` or `fromPointer`, which ignore it. A pointer source stays dark until the pointer has
+been inside the canvas, so an untouched page gets no lamp rather than one parked at the origin.
+
+**A lamp does not follow a `stages` regroup.** It lights by position, and the part pool is fixed at
+construction, so after the letters re-lay the light still lands where they used to be — on a centred
+sign that has dropped letters, a cursor over the type can light nothing at all. Combine the two and
+the lamp is a silent no-op, not a smaller effect.
+
 Effects layer. Brightness multiplies and colour is replaced, so `flicker` and `hue` compose without
 either knowing about the other — but two pieces both writing colour fight, and the last one wins.
 A hue piece writes colour every frame, which overrides `tint`: `tubing` tints its decoration, so a
@@ -331,8 +362,8 @@ controls per-letter delay: `spread` fixes the total ramp, `each` fixes per-lette
 measuring it radially over a multiline block.
 
 `cycle(duration, spec)` builds a looping idle from a per-channel `amplitude`, an optional
-`harmonic`, and a `phase` function. `envRotation: true` rakes the environment highlight instead
-of moving the letters, and overrides the `lighting` option for as long as that piece is active.
+`harmonic`, and a `phase` function. Motion moves the letters; to rake the environment highlight
+instead, declare an env piece in [`lighting`](#lighting).
 
 `spring({ stiffness, damping, mass })` returns a curve, not an animation — it is the closed-form
 solution, so it stays a pure `(t) => number` and can go anywhere an easing goes.
@@ -367,7 +398,7 @@ const bounce = transition(700, { from: { scale: 0 }, ease: easeElasticOut });
 | `active` | `'none'` | what it does while it holds |
 | `exit` | `'fade'` | how it leaves |
 | `look` | `'gold'` | the material — a name, or a spec of your own |
-| `lighting` | `'sweep'` | how the environment lights it |
+| `lighting` | `'sweep'` | how the environment lights it — a name, an env piece, or an array of them; a `lamp` effect lights the letters instead of the scene |
 | `tint` | none | recolors the look, as `0xff2d6f`, or a rule consulted per letter |
 | `hold` | `1200` | milliseconds in the active phase, or `'click'` to hold until dismissed; `'click'` is refused under an element `placement` |
 | `stages` | none | stages played after the enter, each regrouping what survives it |

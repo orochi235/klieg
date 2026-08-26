@@ -42,6 +42,15 @@ export interface PartOffset {
   /** Shifts the colour ramp along the part. Needs a look with a `gradient`; without a
    * ramp there is nothing to shift. */
   crawl?: number;
+  /** Light landing on the part, added from zero. Lamps sum. A multiplier cannot express this:
+   * `emissive` defaults to black, so scaling it is a no-op on every look but `neon`. */
+  light?: LightOffset;
+}
+
+/** One lamp's contribution to a part. */
+export interface LightOffset {
+  color: number;
+  amount: number;
 }
 
 /** Everything a merge resolved. Multiplicative channels rest at 1, additive at 0. */
@@ -53,13 +62,33 @@ export interface ResolvedOffset {
   rotation: Vec3;
   scale: number;
   crawl: number;
+  /** Accumulated lamp colour, premultiplied by amount. sRGB-encoded 0..1 per channel, matching
+   * the hex the authoring form takes — not linear radiance. */
+  light: Vec3;
+}
+
+/** What every lighting piece and light source reads for one frame. */
+export interface FrameCtx {
+  /** -1..1 over the canvas box, +y down, or null until the pointer has been inside it. */
+  pointer: { x: number; y: number } | null;
+  /** The same pointer stretched onto the word's layout space — the em, block-relative space
+   * `PartInfo.x/y` uses, +y up. The canvas's whole -1..1 covers the word's extent per axis
+   * rather than projecting onto it, so on a sign that does not fill the canvas the point
+   * travels further than the cursor. The extent is the one the word was built with, so after a
+   * `stages` regroup this addresses the original layout rather than where the letters now are.
+   * Null whenever `pointer` is. */
+  pointerInWord: { x: number; y: number } | null;
+  /** Milliseconds since the previous frame, and `Infinity` under reduced motion. Read it to snap
+   * to a target, never to integrate: one infinite frame leaves an accumulator `NaN` for good. */
+  dt: number;
 }
 
 export interface EffectPiece {
-  /** Milliseconds for one pass. Loops. */
+  /** Milliseconds for one pass. Loops. Zero does not hold a piece still — the pass never advances,
+   * which pins a time-driven source such as `orbit` at its starting angle for good. */
   duration: number;
   /** `t` is normalized 0..1 within this pass. */
-  at(t: number, part: PartInfo): PartOffset;
+  at(t: number, part: PartInfo, ctx: FrameCtx): PartOffset;
 }
 
 export type EffectName = 'flicker' | 'hue' | 'chase';

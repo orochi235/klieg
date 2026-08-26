@@ -31,12 +31,56 @@ number of bouts-plus-calms — so the 60s asked for above comes back as 57.05s, 
 one cycle grows to fit it. Either scale on its own does nothing: a `calm` without a `spell` leaves the
 tube flickering throughout, as before.
 
+### Lighting composes, and light can land on one letter
+
+`lighting` takes a piece, or an array of them, wherever it took a name — the shape `enter`,
+`active` and `exit` already had. `sweep({ periodMs })`, `still()` and
+`track({ yawRange, pitchRange, followMs })` build one, so the periods and swing ranges that were
+module constants are arguments now. The layering is not the motion slots', though: each piece runs
+on its own `duration` rather than sharing the slot's, with nothing holding a phase between them.
+Pieces add per axis, so layer ones that write different axes — two sweeps give a single turn at the
+summed rate, not two you can tell apart.
+
+Every one of those turns the whole environment at once. `lamp()` is the other half — an effect
+piece that puts light on the parts near a position and leaves the rest of the sign alone, so the
+cursor can light the letters it passes. `fixed(x, y)`, `orbit({ radius })`, `along([...])` and
+`fromPointer()` say where the light is; `fromPointer` is the default, and it contributes nothing
+until the pointer has been inside the canvas rather than parking a lamp in the middle of an
+untouched page.
+
+Light lands on `PartOffset.light`, a new additive channel carrying a lamp's colour and amount. A
+multiplier could not carry it: `emissive` defaults to black, so scaling it is a no-op on every look
+but `neon`.
+
+A lamp lights by position against a part pool fixed at construction, so it does not follow a
+`stages` regroup: after the letters re-lay, the light stays where they were, and on a centred sign
+that has dropped letters a cursor over the type can light nothing at all.
+
+### `lighting: 'pointer'` now sees the canvas rather than the window
+
+It normalized the cursor against the viewport instead of the canvas box, so an anchored sign in a
+small element only ever saw the slice of the yaw range its own box covered — the highlight barely
+moved while the cursor crossed the type. It reads the canvas box now, and the swing that was a
+module constant is `track({ yawRange, pitchRange })`.
+
 ### Changed
 
 - A `flicker` step is now derived from the pass rather than fixed at 24 a pass, holding it near 58ms —
   about three frames, which is what keeps a drop reading as a failing tube rather than as noise.
   `flicker()` at the default 1400ms duration is unchanged. A custom `duration` renders differently,
   and a long one no longer strobes: 30s used to mean 24 steps of 1250ms each.
+
+### Breaking
+
+`EffectPiece.at` takes a third parameter: `at(t, part, ctx)`, where `ctx` carries the pointer and
+the milliseconds since the last frame. Implementing the interface is unaffected, since a piece that
+ignores the parameter is still assignable — but code that *calls* `.at(t, part)`, which is what
+wrapping or unit-testing a piece of your own looks like, no longer typechecks. `FrameCtx` and
+`LightOffset` are exported for it.
+
+`MotionPiece.envRotation` and `CycleSpec.envRotation` are gone. Hijacking a motion piece was the
+old way to rake the highlight, and the slot says it directly now. An `active` of
+`cycle(3000, { envRotation: true })` becomes `lighting: sweep({ periodMs: 3000 })`.
 
 ## 0.7.0
 

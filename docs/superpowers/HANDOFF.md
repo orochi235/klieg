@@ -1,19 +1,22 @@
 # Handoff — klieg, 2026-08-25
 
-**For:** the next session picking this up. **Answers:** what is on `main`, what is in flight, and
-what is worth doing next.
+**For:** the next session picking this up. **Answers:** what is on `main`, what each merged branch
+learned that its design doc does not carry, and what is worth doing next.
 
-## In flight
+## Branch state
 
-**`flicker-spell`, all three tasks done, unmerged.** Cut from `main` at `f670adf`, nothing pushed.
-Implements [the plan](plans/2026-08-26-flicker-macro-spell.md): `flicker` gained `spell` and `calm`,
-and its step count is now derived from the pass rather than fixed at 24. `npm run check` is green at
-**987 tests**, up from 977 at the branch point.
+**Nothing is in flight. `composable-lighting` and `flicker-spell` are both merged into `main`,
+along with `framing-align` (PR #3) and `show-fills-its-frame`.** `npm run check` is green at
+**1110 tests**. The sections below are what those branches learned; treat every claim about their
+*status* as historical.
 
-**This branch does not contain `composable-lighting`.** That is a separate nine-task branch on the
-`/Users/mike/src/klieg` checkout, complete and also unmerged, and its own handoff section lives
-there. Neither depends on the other; `flicker-spell` was cut from `main` deliberately so they could
-land in either order.
+**`sign-wrapper` is a design doc and no code.** One commit off `main`, in its own worktree,
+proposing `sign()` and a `<klieg-sign>` element over a framework-free core — and a `hold: 'forever'`
+that core does not have yet. It was deliberately left unmerged.
+
+**`flicker-spell` — three tasks, merged.** `flicker` gained `spell` and `calm`, and its step count
+is derived from the pass rather than fixed at 24. See
+[the plan](plans/2026-08-26-flicker-macro-spell.md).
 
 **What the two review gates found, and it is the same lesson twice.** Both were tests that pass
 against the defect they name. The design's central claim — that folding the gate into `flicker`
@@ -53,19 +56,151 @@ duration equals the inner pass for any inner over ~17s, so one afflicted tube re
 time means nothing in the sign flickers for 15 of every 19 seconds. Legitimate, but not what
 "one bad tube that jumps every few seconds" prepares a reader for.
 
-## Landed since this section was written
+**`composable-lighting` — nine tasks, merged.** Every task passed both gates — spec compliance clean on the first pass, code quality after one fix
+round each. Task 1 (`9425be1`, `e637b33`) added the additive `light` channel on `PartOffset` and
+summed it in the effects compositor. Task 2 (`13d1c62`, `4a61f72`) added the four light sources —
+`fixed`, `fromPointer`, `orbit`, `along` — in the new `effects/lamp.ts`, plus `FrameCtx`. Task 3
+(`36511b9`, `7dadd2d`, `1a59f88`, `822afe4`) added the `lamp()` piece, gave `EffectPiece.at` a
+required `ctx`, and moved `FrameCtx` into `effects/types.ts`. Task 4 (`61cbfb0`, `0e6f9a0`,
+`ee63418`) exported `lightBase`, the emissive and hue a lamp resolves against. Task 5 (`a39aaed`,
+`03f59d4`, `789d83b`) landed `litEmissive` and wrote the light onto both a body's emissive and a
+run's colour buffer, threaded the `ctx`, and added `partExtent()`. Task 6 (`b883659`, `295bce7`,
+`f3d4f5e`) added `EnvPiece`, `mergeEnv` and the `sweep`/`still`/`track` factories. Task 7
+(`8a778f9`, `3b69ca8`, `6d3b3d3`, `ad60629`, `5589976`) made `lighting` a slot, built the per-frame
+`FrameCtx`, and moved the pointer arithmetic into a new pure `src/pointer.ts`. Task 8 (`4a68519`,
+`9bc93a1`, `c50c5b1`, `88aeb0c`) exported the surface, retired `envRotation` and `PointerLight`, and
+wrote the CHANGELOG and README. Task 9 (`369b328`, `116fa4f`, `785a475`, `cfbf02b`, `0a4fbd8`) is
+the render proof. `npm run check` is green at **1100 tests**, up from 977 at the branch point.
 
-**`selectable-text` shipped in 0.7.0.** The text below described it as complete and unmerged, and it
-is neither now — it is on `main` and released. Kept only for the three things it learned that its
-design doc does not carry; treat every claim about its *status* as historical.
+**Task 9 proved it reaches the screen.** `spikes/lamp-proof.mjs` drives a real page for 49 shots and
+8 contact sheets: **the lamp reads on all six looks, including `tubing` on `{ kind: 'run' }`**, so the
+vertex-buffer path is live and this is not another `gain`. The light channel sums in sRGB as Task 5
+labelled it, verified byte-exactly by the one comparison that can tell — a mid-grey lamp at full
+strength against a white one at `128/255`, which are the same float and must render identically.
+Results and every open question it settled are in
+[the findings note](specs/2026-08-25-material-lighting-findings.md), sections 9-13.
 
-**`selectable-text`, complete and unmerged.** 14 commits off `main`, nothing uncommitted, not
-pushed. `npm run check` is green at 977 unit tests and `npm run test:visual` at 33. It implements
+**Two things the render proof does not cover.** There is no per-frame cost anywhere in it —
+SwiftShader flattens it, so the plan's worry that a lamp on `by: 'all'` re-uploads every run's
+vertex buffer each frame is still unmeasured. And every shot is a single-line sign, so `part.y` is 0
+on every part in all 49: the y-axis convention Task 7 fixed (`clientY` grows down, layout y grows
+up — `effects/types.ts:72-75`) is exercised by no pixel on this branch. The script now asserts that
+the light's x centroid rises with the cursor rather than merely differing; the vertical half of that
+check wants a multi-line sign, which nothing renders yet.
+
+**The whole-branch review has now run, and its six findings are fixed.** Every one of the nine tasks
+passed a spec-compliance review and a code-quality review, so the gap was the seams *between* them;
+that pass found no incorrect condition, off-by-one or dropped guard in the new arithmetic. What it
+did find: the pointer's canvas box was measured every frame of every sign once the cursor had moved
+anywhere on the page, whether or not any piece read it — `FrameCtx.pointer` and `pointerInWord` are
+lazy getters now, resolved once a frame and only when something asks. A lamp on a run took its hue
+from the colour the run was *built* with rather than the one it is showing, so a `hue` piece and a
+lamp on one tube drifted into two colours. `LightPose.direction` was public, documented and read by
+nothing, and is gone. `sweep`'s spec is a named, exported `SweepSpec` like its siblings. The rest
+were doc fixes, below.
+Three findings from Task 9's gate are recorded and deliberately unfixed.
+
+The execution method was subagent-driven — one implementer per task, then a spec-compliance review,
+then a code-quality review. Read the plan rather than the design doc: review rounds amended Tasks 5,
+7, 8 and 9, and the design predates all of it.
+
+**The lesson of the whole branch: a proof script can reproduce the defect it was written to catch.**
+Task 9's first version drew a cursor crosshair into the same clip it md5'd, so four pointer checks
+compared frames differing only by where the crosshair sat. Two frames in which the lamp contributed
+*nothing* — `lit=0` on both — hashed differently and were reported as `reads`, on `fromPointer`, the
+headline source. With the crosshair moved out of the hashed clip those frames collapse to
+byte-identical with the unlit frame. **Anything drawn for a human to look at must sit outside
+anything a machine compares.**
+
+**Two doc claims the review falsified.** The layering example `['sweep', sweep({ periodMs: 1000 })]`
+was described as turning two periods at once. It cannot: both pieces write only `yaw`, `mergeEnv`
+sums them, and the result is one uniform turn at the summed rate — 772.7ms, measured, with no seam,
+since each piece's wrap is exactly 2pi. Layered env pieces add per axis, so a reader who wants two
+layers they can tell apart has to write different axes. And the `lamp` reference documented the
+pointer compression but not `stages`: a lamp lights by position against a pool frozen at
+construction, so a regroup leaves the light where the letters used to be. Both now say so.
+
+**Three findings the renders settled, recorded and unfixed.** A cursor anywhere on a **regrouped**
+sign lights nothing: the part pool is frozen at construction, so the light lives where the letters
+used to be, and only a cursor past the right edge lights a centred `NOW`. A lamp on a
+`mode: 'replace'` **gradient** is a total no-op — that shader branch never reads the attribute a lamp
+writes — and `hue` rendered as a control is equally dead, so it is pre-existing and not lamp-specific.
+And the pointer mapping compresses the cursor's whole travel onto the ink, so the light **leads the
+cursor at one end of the sign and lags it at the other** — §9 measures both ends on two framings, and
+the README now describes that shape instead of promising a match.
+
+**`orbit`'s default moved 2 → 0.3, and the first justification for it was wrong.** Its table was
+sampled at an uncontrolled phase. §12 of the findings note carries the eight-phase replacement, the
+two claims of `369b328` it falsifies, and why 0.3 rather than 0.4; the move stands.
+
+**What Task 8 learned: verify your own prose against the built package.** Two claims written in this
+task were false and both were caught by a throwaway script that imported `dist` and asserted each
+sentence. `duration` is read by `orbit` and `along` only — `fixed` ignores `t` exactly as
+`fromPointer` does, and `LampSpec`'s own doc named just one of the two, which is how the wrong
+sentence got written. And `lamp({ source: orbit() })` **on bare defaults lights nothing at all**:
+`orbit` sits at 2 em, a lamp reaches 0.5 em, and a short sign's parts live inside 1.3 em. Not a
+ratio problem — the same 4:1 works at a larger scale. Task 9 renders it and decides whether the
+default moves; it has never shipped, so it is free to change now and a breaking change later.
+
+**Two things Task 2 learned that the plan did not say.** The plan's supplied tests are vacuous on
+the two things worth testing. `along` is only exercised on a 2-point path, where `last === 1` so the
+segment index is always 0 — an `along` that ignored every interior point and lerped first-to-last
+passes every assertion the plan gives. `orbit` is only called with its centre defaulted to the
+origin, so a transposed `cx`/`cy` passes too. Both gaps were closed in the review round and both new
+tests were confirmed red against the defect they target; the suite is 9, not the 7 the plan writes
+out. **Assume the same of tasks 3-8** — the plan's test bodies are a floor, and the parameter a test
+leaves at its default is the one the implementation gets wrong for free.
+
+**`FrameCtx` moved to `effects/types.ts`, and the plan is amended to match.** The plan's file table
+put it in `render/lighting.ts`. Task 3 is the step that would have made `effects/types.ts` — the
+module every effects consumer imports — depend on `render/lighting.ts`, whose other export is
+`PointerLight`, a class that attaches DOM `pointermove` listeners. `FrameCtx` is a pure data shape
+with nothing rendering-specific in it, so it went to `effects/types.ts` alongside `PartInfo` and
+`EffectPiece`, and `effects/` now imports nothing from `render/`. Task 6 imports it back when
+`EnvPiece` needs it. The plan carries an amendment note under Task 2; read every
+`from '../render/lighting.js'` in Task 2's step text as `from './types.js'`.
+
+**The unit suite times out under load too, not just the visual one.** `vitest.config.ts` sets no
+`testTimeout`, so the default 5s applies, and the three tests that do a dynamic
+`import('../../src/index.js')` — `pieces.test.ts`'s registry check and `motion/enter`/`motion/exit`
+— pull three.js through a cold Vite transform. At load average 134 those failed and then passed on
+re-run with nothing changed. **A timeout in those three is not evidence of a regression; check
+`uptime` before believing it.** The handoff already said this of `npm run test:visual`; it is true
+of `npm run check` as well.
+
+**Three things Task 3 learned, and the first two are about the plan itself.** The plan's `lamp` test
+asserted `.light?.amount` where the plan's own literal code returns a shared `REST` — so the spec
+could not pass itself. Both are corrected in the plan now; the test gained `?? 0`, matching the
+idiom its own fourth case already used. And **"a third parameter is additive" is true of
+implementations and false of callers**: `word.ts` and `roving.ts` both call `.at(t, part)` and both
+broke the moment `ctx` was required. Do not resolve that by making `ctx` optional — a lamp reached
+without a ctx would silently emit nothing, which is this design's own defect class one level up.
+`word.ts` passes an explicit placeholder until Task 5 threads the real one, and biome's
+`noUnusedVariables` makes forgetting it loud.
+
+**`roving(lamp(...))` does not work, and it is structural.** `holderOf` substitutes `part.index` but
+keeps the calling part's `x`/`y`, so `roving`'s holder walk assumes the inner keys off index. `lamp`
+reads position. Measured: order-dependent between iteration directions, nothing lit across 16 frames
+of a pointer sweep at a narrow radius, and the fault pinned to one part forever at a wide one — at a
+wide radius the lamp never rests, so no handover ever defers. Documented on `roving` rather than
+fixed, because the honest answer is that a position-dependent piece is not a valid inner. **Task 8
+should not export both without that line.**
+
+**A red-then-green claim can be red for the wrong reason.** `roving` forwards `ctx` at two call
+sites; a test covered one, and the reported verification mutated only the covered one. Mutating the
+other left the suite green. When a review fix claims mutation evidence, mutate the exact `file:line`
+the finding names and check each site separately.
+
+**Green units still mean nothing here.** Tasks 1-8 are all pure functions and all unit-testable, and
+none of them can show that light reaches the screen. That is Task 9's whole job, and it is the
+defect this design exists to fix — `gain` ran, merged, wrote to the material, and changed no pixels.
+
+
+**`selectable-text` is merged into `main`.** It implements
 [the design](specs/2026-08-25-selectable-text-design.md) in full — one `FireOptions.selectable` of
-`'hidden' | 'layer' | 'none'`, defaulting to `'hidden'`. The next step is a PR; nothing is
-half-done.
+`'hidden' | 'layer' | 'none'`, defaulting to `'hidden'`. Nothing is outstanding on it.
 
-Three things the branch knows that the design doc does not:
+Three things it knows that the design doc does not:
 
 **The Playwright suite is the only evidence any of this works.** The unit harness stubs
 `Stage.mount`, so `stage.textLayer` is never set and no unit test has ever seen one of these DOM
@@ -277,24 +412,86 @@ working — it needs a caller-supplied `TubeSpec.gradient`.
 
 Roughly in order of value; the items are independent of each other.
 
-- ~~**Selectable text**~~ — built. See the `## In flight` section; it wants a PR, not a plan.
+- ~~**Selectable text**~~ — built and merged into `main`.
 
-- **Composable lighting — planned, not built. This is the next thing to execute.** See
-  [the plan](plans/2026-08-25-composable-lighting.md), nine TDD tasks, and behind it
-  [the design](specs/2026-08-25-composable-lighting-design.md): `lighting` becomes a composable slot
-  posing the environment, a `lamp` effect piece carries light landing on a part, and light sources
-  are `(t, ctx)` functions with the cursor as one of them. It also folds in the `PointerLight.aimAt`
-  viewport bug and retires `slotDrivesEnv`.
-
-  The plan is self-contained — it carries every signature and test it needs, so it can be executed
-  from a cold session. Task 9 is the only one that proves anything reaches the screen; treat green
-  units from tasks 1-8 as meaning nothing, for the reason the findings note gives.
+- **Composable lighting — all nine tasks built, on the branch, unmerged.** See the "In flight"
+  section at the top. `PointerLight` and `slotDrivesEnv` are gone and the `aimAt` viewport bug with
+  them. What is left is the decision to merge.
 
   **Two spikes are the evidence, and they re-run.** `spikes/lamp-falloff.mjs` proves
   `PartOffset.gain` is a byte-identical no-op on seven of eight looks; `spikes/lamp-blend.mjs`
   compares five ways to combine a lamp with the material under it. Both compare lamp-on and lamp-off
   renders by md5, which is the only thing that caught the no-op — the effect ran, the compositor
   merged, the material was written, and the image did not change.
+
+- **The rendered word does not register against the text it stands in for. Asked for directly.**
+  Two settings, one theme: klieg replaces real DOM text and does not currently agree with it.
+
+  **Where the word sits in its box is settable now — `framing.align` on the `framing-align` branch,
+  pushed and unmerged, seven commits off `d15979c`.** `Align` is `'start' | 'center' | 'end'`, it
+  places the word at whatever size the framing fractions chose, it measures against the painted edge
+  (bevel included), and an anchored word defaults to the page's text edge. That is the half of this
+  ask that answers the original complaint. It aligns the **block**, computing one `offsetX` for the
+  group off the painted extent.
+
+  **Per-line alignment inside a block is still open, and centred is still the wrong default.** `text/placement.ts`
+  centres every line on `x = 0` across the glyphs that draw ink, and nothing exposes a choice. It
+  wants `'left' | 'center' | 'right'`, defaulting to **left**, with the `selectable` layer reading
+  the same setting so its spans keep matching the ink. `apps/lab/test/visual.spec.ts` already
+  compares span boxes to the drawing buffer's ink — centres within 10px, bounds within 8 — so that
+  test is the guard, and it is the one that has to be re-pointed per alignment. Changing the default
+  moves every multi-line baseline — a breaking visual change, and a minor.
+
+  **The neon renders smaller than the fallback it replaces.** Observed under `placement: element`,
+  not yet measured. Size comes from `framing` (0.62 wide, 0.3 tall) through `FIT_CAP` in
+  `text/layout.ts`, which an anchored placement already lifts — so what to expose is a scale and
+  offset trim on top of the fit, not another fit. Do not name it for fudging; name it for what it
+  does. **Measure the gap before adding the knob:** a fallback is styled type with its own
+  line-height and cap-height, and if the neon comes out smaller by a consistent ratio that is a fit
+  bug to fix rather than a knob to hand the caller.
+
+- **A macro spell for `flicker`, so a tube stops flickering for ~15s and starts again. Asked for
+  directly, and prototyped.** `flicker` is already intermittent per part, but only on a micro scale:
+  `unrest` is the share of a pass spent stuttering across 24 steps of a 1400ms pass, which is a tube
+  buzzing. Two more params give it the long scale — `spell`, the milliseconds of one flickering
+  bout, and `calm`, the quiet between. `calm: 0` is today's behaviour, so every current caller is
+  unchanged.
+
+  **Do this rather than an `intermittent(inner)` wrapper**, which was the first shape considered.
+  A wrapper runs two independent clocks, and when the gate period lands on a whole multiple of the
+  inner duration, the inner phase at the start of every burst is 0 — so every burst opens on the
+  same phase and they all look identical, silently deleting the variation the wrapper exists for.
+  `roving` documents the same resonance from the other side, above its `duration` arithmetic: do not
+  make the epoch a multiple of the inner pass, or every handover samples one fixed phase. Folding
+  the spell into `flicker` derives both scales from the one `t` and the trap cannot exist.
+
+  **`STEPS` has to stop being a constant, and that is the whole risk.** It is hardcoded 24 against
+  the 1400ms default — 58.3ms a step, which the file's own comment ties to ~3 frames at 60fps. A
+  57s pass at 24 steps is a 2.4-second strobe, not a flicker. Derive it as `round(duration / 58.3)`:
+  that returns exactly 24 at the default, so nothing shipped moves, and holds 58.4ms a step at any
+  length. `node spikes/flicker-macro.mjs` prints the derivation and walks a fitted pass — measured
+  57ms shortest drop and a ~16s lit stretch against a 15s calm.
+
+  **The pass length adjusts to fit whole spells**, as `roving` already does for epochs: 60s asked
+  with a 4s spell and 15s calm gives 57s and three spells. `roving` reads `inner.duration`, and
+  `roving(flicker())` against a 57s inner degrades sanely — 18 epochs of ~3.2s.
+
+  **Snap the spell to a whole number of steps, or it clips drops to single frames.** The spell gate
+  runs on its own schedule, so a boundary lands wherever it lands inside a step — measured 5 of 5
+  boundaries mid-step, producing drops as short as 29ms against a 58.3ms step. `flicker`'s own
+  comment above `STEPS` says a one-frame drop "reads as noise rather than as a failing tube", so
+  this quietly breaks the thing that comment exists to protect. Make the spell a whole number of
+  steps and the boundaries fall on step edges.
+
+  **If the wrapper is wanted anyway — for `roving` or `hue`, which this does not cover — derive its
+  period from `inner.duration`.** The ask was for something that wraps "things like roving", and
+  folding `spell`/`calm` into `flicker` only serves flicker. A general wrapper is fine as long as
+  the caller cannot set a period independent of the inner's: the wrapper picks a period off integer
+  ratios with `inner.duration`, the same accommodation `roving` already makes when it rounds its
+  epoch. The semantics are the ones asked for — the gate swallows the inner's output for a stretch
+  rather than resetting it — and the trap is not reset-versus-swallow but which phases the swallowing
+  leaves visible: on an integer ratio the surviving windows land on the same phases every time, so
+  every burst looks identical while the inner genuinely never resets.
 
 - **A composition lab, so effect pieces get built by hand rather than through a plan.** Asked for
   directly. `roving` and `hue` were specified in prose, and the wrapper's epoch arithmetic came out
@@ -328,27 +525,6 @@ Roughly in order of value; the items are independent of each other.
   Each item names the spike that proves it and the flags to reproduce it. The env fix moves every
   visual baseline, so it is its own change rather than a footnote to lighting.
 
-- **A composition lab, so effect pieces get built by hand rather than through a plan.** Asked for
-  directly. `roving` and `hue` were specified in prose, and the wrapper's epoch arithmetic came out
-  wrong in a way that read as *more* correct than the fix — a prototype found it in one run and
-  review had not. A piece is a pure function of `(t, part)` with no GL anywhere in it, so a lab can
-  plot one against time, layer several, scrub a pinned clock, and show the merged offset per part.
-  That is most of what a session currently burns tokens reconstructing, and it is also where the
-  numbers the design deferred get picked: `roving`'s `dwell` ships at a stated-provisional 3200ms
-  precisely because there was nothing to measure against. Nothing is designed yet.
-
-  It is a **different lab** from **kliegsminister**, the stage-and-repair lab in
-  [the pipeline lab design](specs/2026-08-23-pipeline-lab-design.md) — that one is about tube
-  geometry, this one about time.
-
-- ~~**An effects pipeline for the tube looks**~~ — shipped, along with `roving` and `hue` on top of
-  it. See the `## In flight` section.
-
-- ~~**Playwright reuses whatever owns port 5180**~~ — fixed in `484692b`: `playwright.config.ts`
-  derives a port from the checkout's own path and starts vite `--strictPort`. Before that, a run in
-  one worktree silently answered from another's dev server and returned confident wrong answers —
-  four bogus failures, and two sessions judging appearance off contaminated runs. A checkout without
-  that commit is still exposed.
 - **`envMapIntensity` has never been applied, on any look.** `looks.ts` constructs every material
   with `envMapIntensity: 2.2`, but klieg lights through `scene.environment` and the property only
   scales a material's *own* `envMap`, which none of them have.

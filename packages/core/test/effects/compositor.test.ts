@@ -56,6 +56,7 @@ describe('mergeOffsets', () => {
       rotation: [0, 0, 0],
       scale: 1,
       crawl: 0,
+      light: [0, 0, 0],
     });
   });
 
@@ -95,5 +96,41 @@ describe('isRest', () => {
   it('calls a written colour not rest, at any value', () => {
     expect(isRest({ color: 0x000000 })).toBe(false);
     expect(isRest({ color: 0xffffff })).toBe(false);
+  });
+});
+
+describe('the light channel', () => {
+  it('rests at no light', () => {
+    expect(mergeOffsets([]).light).toEqual([0, 0, 0]);
+  });
+
+  it('scales a lamp colour by its amount', () => {
+    const out = mergeOffsets([{ light: { color: 0xff0000, amount: 0.5 } }]);
+    expect(out.light[0]).toBeCloseTo(0.5);
+    expect(out.light[1]).toBeCloseTo(0);
+    expect(out.light[2]).toBeCloseTo(0);
+  });
+
+  // Two lamps reaching one part must add. Overwriting would make the second lamp delete the first.
+  it('sums lamps of different colours', () => {
+    const out = mergeOffsets([
+      { light: { color: 0xff0000, amount: 1 } },
+      { light: { color: 0x0000ff, amount: 0.25 } },
+    ]);
+    expect(out.light[0]).toBeCloseTo(1);
+    expect(out.light[2]).toBeCloseTo(0.25);
+  });
+
+  it('reads a lamp at zero amount as rest', () => {
+    expect(isRest({ light: { color: 0xffffff, amount: 0 } })).toBe(true);
+    expect(isRest({ light: { color: 0xffffff, amount: 0.1 } })).toBe(false);
+  });
+
+  // Red and blue alone would pass with the green byte masked wrong.
+  it('decomposes all three channels', () => {
+    const out = mergeOffsets([{ light: { color: 0x336699, amount: 1 } }]);
+    expect(out.light[0]).toBeCloseTo(0x33 / 255);
+    expect(out.light[1]).toBeCloseTo(0x66 / 255);
+    expect(out.light[2]).toBeCloseTo(0x99 / 255);
   });
 });

@@ -9,7 +9,12 @@ export const REST_OFFSET: ResolvedOffset = {
   rotation: [0, 0, 0],
   scale: 1,
   crawl: 0,
+  light: [0, 0, 0],
 };
+
+function rgb(hex: number): Vec3 {
+  return [((hex >> 16) & 0xff) / 255, ((hex >> 8) & 0xff) / 255, (hex & 0xff) / 255];
+}
 
 /**
  * Folds layered contributions into one. Multiplicative channels fade toward 1 and additive ones
@@ -19,6 +24,7 @@ export const REST_OFFSET: ResolvedOffset = {
 export function mergeOffsets(offsets: readonly PartOffset[]): ResolvedOffset {
   const position: Vec3 = [0, 0, 0];
   const rotation: Vec3 = [0, 0, 0];
+  const light: Vec3 = [0, 0, 0];
   let gain = 1;
   let scale = 1;
   let dark = 0;
@@ -44,9 +50,15 @@ export function mergeOffsets(offsets: readonly PartOffset[]): ResolvedOffset {
     // Strongest wins rather than compounding: two layers each half-dead should not read as dead.
     if (o.dark !== undefined) dark = Math.max(dark, o.dark);
     if (o.color !== undefined) color = o.color;
+    if (o.light?.amount) {
+      const c = rgb(o.light.color);
+      for (let i = 0; i < 3; i++) {
+        light[i] = (light[i] as number) + (c[i] as number) * o.light.amount;
+      }
+    }
   }
 
-  return { gain, color, dark, position, rotation, scale, crawl };
+  return { gain, color, dark, position, rotation, scale, crawl, light };
 }
 
 /** Whether a piece is contributing nothing on this part — every channel it wrote at its identity. */
@@ -58,5 +70,6 @@ export function isRest(o: PartOffset): boolean {
   if (o.color !== undefined) return false;
   if (o.position?.some((n) => n !== 0)) return false;
   if (o.rotation?.some((n) => n !== 0)) return false;
+  if (o.light?.amount) return false;
   return true;
 }

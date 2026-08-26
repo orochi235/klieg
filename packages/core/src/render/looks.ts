@@ -73,7 +73,9 @@ export type LookParams = {
  * touches: body, lit decoration and dark decoration each resolve their own base and each get
  * their own per-frame write. A look still declares the base and `resolveParams` still clamps it;
  * what must not happen is `applyLook` writing a value that the next frame overwrites, which is
- * two writers for one property.
+ * two writers for one property. `emissive` is the deliberate exception: `Word` rewrites it per
+ * frame on the body alone, through a `lightBase` the same `resolveParams` and tint resolved, so
+ * the two writers cannot disagree.
  */
 const FRAME_OWNED = ['opacity', 'emissiveIntensity'] as const;
 type FrameOwned = (typeof FRAME_OWNED)[number];
@@ -426,4 +428,19 @@ export function frameOwnedBase(look: Look): FrameOwnedBase {
     opacity: Math.min(Math.max(spec.opacity ?? 1, 0), 1),
     emissiveIntensity: resolveParams(spec).emissiveIntensity,
   };
+}
+
+export interface LightBase {
+  /** The look's own emissive, which lamp light adds onto rather than replacing. */
+  emissive: number;
+  /** The colour the look reads as, whichever property carries it. What a lamp multiplies against. */
+  hue: number;
+}
+
+export function lightBase(look: Look, tint?: number): LightBase {
+  const spec = specOf(look);
+  const params = resolveParams(spec);
+  const target = tintTargetOf(params, spec.tintTarget);
+  if (tint !== undefined) params[target] = tint;
+  return { emissive: params.emissive, hue: params[target] };
 }

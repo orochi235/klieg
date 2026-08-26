@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   blankPose,
-  slotDrivesEnv,
   slotMovesLetters,
   Timeline,
   type TimelineOptions,
@@ -234,15 +233,6 @@ describe('Timeline layers', () => {
 
     // Local t runs over 400ms, so 200ms in is halfway rather than back at the start.
     expect(tl.poseAt(200, L).position[0]).toBeCloseTo(0.5, 10);
-  });
-
-  it('reads envRotation off any member of the slot', () => {
-    const plain: MotionPiece = { duration: 100, offset: () => ({}) };
-    const driver: MotionPiece = { duration: 100, offset: () => ({}), envRotation: true };
-
-    expect(slotDrivesEnv([plain, driver])).toBe(true);
-    expect(slotDrivesEnv([plain])).toBe(false);
-    expect(slotDrivesEnv(driver)).toBe(true);
   });
 
   it('takes a bare piece exactly as it did before slots held layers', () => {

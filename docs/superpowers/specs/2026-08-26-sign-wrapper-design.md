@@ -32,7 +32,7 @@ export interface SignOptions {
   look?: Look
   tint?: number | string          // a CSS colour, `currentColor` or `var(--x)`, resolved off `anchor`
   framing?: Framing               // including `align`
-  lighting?: LightingSlot
+  lighting?: LightingName
   bloom?: boolean
   effects?: EffectSpec[]
   fire?: FireOptions              // merged over everything above
@@ -161,3 +161,8 @@ asking for it; the `sign()`/adapter split is the seam it would arrive through.
   wrapper.
 - **`align` is passed through, not compensated for.** `Framing.align` defaults to `'start'` under an
   element placement, so a sign meets its container's text edge with nothing on this side.
+
+- **`lighting` is `LightingName` here, and will not stay that way.** This branch is cut from
+  `origin/main`, where the option is the three names. The unmerged `composable-lighting` work
+  replaces it with `LightingSlot`, which composes pieces. When that lands, `SignOptions.lighting`
+  widens to match and nothing else in the wrapper moves.

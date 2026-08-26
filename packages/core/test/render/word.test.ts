@@ -11,6 +11,7 @@ import { type LookSpec, specOf } from '../../src/render/looks.js';
 import type { GradientSpec } from '../../src/render/tube/gradient.js';
 import { Word } from '../../src/render/word.js';
 import type { LoadedFont } from '../../src/text/font.js';
+import { DEFAULT_GLYPH_OPTIONS } from '../../src/text/glyphs.js';
 import type { Budget } from '../../src/text/layout.js';
 import { fromEuler } from '../../src/transform.js';
 
@@ -1811,5 +1812,79 @@ describe('layoutVersion', () => {
     word.regroup((l) => l.index < 2, 'line');
 
     expect(word.layoutVersion).not.toBe(before);
+  });
+});
+
+describe('framing alignment', () => {
+  /** 'AA' spans 1.2 em of advance; a 1.2-wide budget scales it by 1 and its outline ends at 0.5. */
+  const START: Budget = { width: 1.2, height: 100, extent: 4, align: 'start' };
+  const END: Budget = { width: 1.2, height: 100, extent: 4, align: 'end' };
+  /**
+   * Cap-bound, so the word is narrower than its budget. A width-bound fit lands the paint on
+   * `-width / 2` whatever the letters are, which would leave a regroup nothing to move.
+   */
+  const LOOSE: Budget = { width: 100, height: 100, extent: 4, align: 'start' };
+  /** The bevel is lit geometry, so the paint runs this much wider than the glyph outline. */
+  const BEVEL = DEFAULT_GLYPH_OPTIONS.bevelSize;
+
+  it('leaves a centred word on the origin', () => {
+    expect(new Word('AA', stubFont(), 'gold', ROOMY).group.position.x).toBe(0);
+  });
+
+  it('puts the leftmost paint on the box edge', () => {
+    const word = new Word('AA', stubFont(), 'gold', START);
+
+    expect(word.group.position.x + (-STEP - BEVEL) * word.group.scale.x).toBeCloseTo(-2, 6);
+  });
+
+  it('puts the rightmost paint on the box edge', () => {
+    const word = new Word('AA', stubFont(), 'gold', END);
+
+    expect(word.group.position.x + (0.5 + BEVEL) * word.group.scale.x).toBeCloseTo(2, 6);
+  });
+
+  it('meets the edge with the bevel, not with the outline it swells past', () => {
+    const word = new Word('AA', stubFont(), 'gold', START);
+
+    // Aligning the outline alone would leave the lit edge of the sign hanging over the box.
+    expect(word.group.position.x + -STEP * word.group.scale.x).toBeGreaterThan(-2);
+  });
+
+  it('moves the alignment with the fit across a regroup', () => {
+    const word = new Word('AA', stubFont(), 'gold', LOOSE);
+    const before = word.group.position.x;
+    expect(before + (-STEP - BEVEL) * word.group.scale.x).toBeCloseTo(-2, 6);
+
+    word.regroup((letter) => letter.index === 0);
+    word.setFitProgress(0);
+    expect(word.group.position.x).toBeCloseTo(before, 6);
+
+    word.setFitProgress(1);
+    const after = word.group.position.x;
+    // One letter re-centres, so its paint starts half an advance nearer the origin.
+    expect(after + (-STEP / 2 - BEVEL) * word.group.scale.x).toBeCloseTo(-2, 6);
+    expect(after).not.toBeCloseTo(before, 6);
+
+    word.setFitProgress(0.5);
+    expect(word.group.position.x).toBeCloseTo((before + after) / 2, 6);
+  });
+
+  it('is not at rest until the alignment has landed', () => {
+    const word = new Word('AA', stubFont(), 'gold', LOOSE);
+    word.regroup((letter) => letter.index === 0);
+    // The survivor onto its new layout position, the way a finished timeline leaves it.
+    word.apply(timelineOf(() => ({})), 0);
+
+    word.setFitProgress(0.5);
+    expect(word.atRest()).toBe(false);
+
+    word.setFitProgress(1);
+    expect(word.atRest()).toBe(true);
+  });
+
+  it('reports the offset in the readout the text layer projects from', () => {
+    const word = new Word('AA', stubFont(), 'gold', START);
+
+    expect(word.readout().fit.offsetX).toBe(word.group.position.x);
   });
 });

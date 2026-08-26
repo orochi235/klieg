@@ -249,7 +249,8 @@ rather than changing what they are made of. `radius` is its reach in em of layou
 the light at the centre falling to nothing at that edge, and `color` the lamp's own, multiplied
 against the look's hue. `source` says where the light is on each pass: `fromPointer()` is the
 default and follows the cursor — the canvas's whole extent maps onto the word's, so the pool sits
-under the cursor on a word that fills the frame and ranges wider than it on one that does not.
+under the cursor only where the ink fills the canvas, and leads it everywhere else. Measured on a
+`framing` of 0.9 the lead still reaches 139px, because the fit is height-limited.
 `fixed(x, y)` pins the light, `orbit({ radius, x, y })` circles it, and `along([...])` walks a
 polyline at constant time per segment rather than constant speed.
 `duration` is one pass for the sources that read the clock, `orbit` and `along`, and does nothing

@@ -342,11 +342,15 @@ function filletFor(
  * tighter than rhoMin, with no corner stage left to fix them.
  */
 function dropHead(span: THREE.Vector3[], count: number): THREE.Vector3[] {
-  return span.slice(Math.min(count, Math.max(0, span.length - 2)));
+  const cut = Math.min(count, Math.max(0, span.length - 2));
+  RESUME_DROP.drop += polyLength(span.slice(0, cut + 1));
+  return span.slice(cut);
 }
 
 function dropTail(span: THREE.Vector3[], count: number): THREE.Vector3[] {
-  return span.slice(0, Math.max(2, span.length - count));
+  const keep = Math.max(2, span.length - count);
+  RESUME_DROP.drop += polyLength(span.slice(keep - 1));
+  return span.slice(0, keep);
 }
 
 /**
@@ -482,6 +486,8 @@ function mergeArc(
     trimTail(target, fillet.setback, fillet.corner);
     const second = fillet.points[1] as THREE.Vector3;
     const keep = resumeAt(target, target.length - 1, -1, entry, second, into, rhoMin, spacing);
+    RESUME_DROP.back += polyLength(target.slice(keep + 1));
+    if (keep < 0) RESUME_DROP.wipeBack++;
     target.length = keep + 1;
 
     decision.at = fillet.points[n >> 1];
@@ -490,6 +496,8 @@ function mergeArc(
     const start = indexPast(next, decision.groupAfter + 1, fillet.setback, fillet.corner);
     const penult = fillet.points[n - 2] as THREE.Vector3;
     const from = resumeAt(next, start, 1, exit, penult, outOf, rhoMin, spacing);
+    RESUME_DROP.fwd += polyLength(next.slice(0, Math.min(from + 1, next.length)));
+    if (from >= next.length) RESUME_DROP.wipeFwd++;
     for (let i = from; i < next.length; i++) {
       target.push(next[i] as THREE.Vector3);
     }
@@ -497,6 +505,9 @@ function mergeArc(
   }
   for (let i = 1; i < next.length; i++) target.push(next[i] as THREE.Vector3);
 }
+
+/** Instrumentation only, for spikes/corner-coverage.mjs. @internal */
+export const RESUME_DROP = { back: 0, fwd: 0, drop: 0, wipeBack: 0, wipeFwd: 0 };
 
 const EPS = 1e-9;
 

@@ -29,7 +29,7 @@ const letters = process.argv[3] ?? 'WAV';
 const spec = { ...specOf(look).decoration, pathSource: SOURCE };
 const rhoMin = minBendRadius(spec.radius, spec.bend);
 const rhoStyle = spec.radius * STYLE_FACTOR;
-const OUT = process.env.OUT ?? 'hairpin.html';
+const OUT = process.env.OUT ?? new URL('hairpin.html', import.meta.url).pathname;
 const LEG_WINDOW = 4;
 /** Turn past which a fillet cuts enough of the apex to be worth replacing, in degrees. */
 const SHARP = Number(process.env.SHARP ?? 100);

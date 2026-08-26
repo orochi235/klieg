@@ -872,8 +872,13 @@ export interface EnvPiece {
   env(t: number, ctx: FrameCtx): EnvOffset;
 }
 
+export interface ResolvedEnv {
+  yaw: number;
+  pitch: number;
+}
+
 /** Additive, matching the pose compositor: layering two pieces must show both. */
-export function mergeEnv(offsets: readonly EnvOffset[]): { yaw: number; pitch: number } {
+export function mergeEnv(offsets: readonly EnvOffset[]): ResolvedEnv {
   let yaw = 0;
   let pitch = 0;
   for (const o of offsets) {
@@ -893,8 +898,11 @@ export function still(): EnvPiece {
 }
 
 export interface TrackSpec {
+  /** Radians the environment swings between opposite edges of the canvas. */
   yawRange?: number;
+  /** Radians on the other axis. Shallower than yaw by default; see the note on `PITCH_RANGE`. */
   pitchRange?: number;
+  /** Milliseconds to cover ~63% of the way to a new pointer position. Zero snaps. */
   followMs?: number;
 }
 
@@ -913,7 +921,7 @@ export function track(spec: TrackSpec = {}): EnvPiece {
     duration: 0,
     env(_t, ctx) {
       if (ctx.pointer) {
-        const k = 1 - Math.exp(-Math.max(0, ctx.dt) / followMs);
+        const k = followMs > 0 ? 1 - Math.exp(-Math.max(0, ctx.dt) / followMs) : 1;
         yaw += (ctx.pointer.x * yawRange - yaw) * k;
         pitch += (ctx.pointer.y * pitchRange - pitch) * k;
       }
@@ -922,14 +930,22 @@ export function track(spec: TrackSpec = {}): EnvPiece {
   };
 }
 
-export const ENV_PIECES: Record<LightingName, () => EnvPiece> = {
+export const ENV_PIECES = {
   sweep,
   static: still,
   pointer: track,
-};
+} satisfies Record<LightingName, () => EnvPiece>;
 ```
 
 `still` rather than `static`: `static` is a reserved word and cannot be a function declaration name.
+
+`satisfies` rather than an annotation, matching `EFFECTS` in `effects/pieces.ts`, which carries the
+comment arguing for it. An annotation erases each factory's own spec parameter, so
+`ENV_PIECES.sweep({ periodMs: 1000 })` would stop compiling while still working at runtime.
+
+`followMs > 0` guards the follow: `Math.exp(-0 / 0)` is `NaN`, and because `track` accumulates its
+ease in a closure rather than recomputing it, one `NaN` frame means the piece never returns a number
+again for its whole life. Zero reads as "snap", which is the only sensible meaning.
 
 - [ ] **Step 4: Run the test**
 
@@ -974,8 +990,12 @@ function resolveLighting(slot: LightingSlot): EnvPiece[] {
 }
 ```
 
-and in `fire`, replace the `const lighting = …` / `tracksPointer` lines with
+and in `run`, replace the `const lighting = …` / `tracksPointer` lines with
 `const envPieces = resolveLighting(opts.lighting ?? 'sweep');`
+
+**Resolve once per run, never inside the frame callback.** `track` accumulates its ease in a
+closure, so rebuilding it every frame pins it at `1 - e^(-16/90)` — about 16% of the way to the
+pointer, forever. It reads as a damping bug rather than a lifecycle one.
 
 - [ ] **Step 3: Build the context each frame**
 
@@ -997,10 +1017,11 @@ and per frame, before `word.apply`:
       let pointerInWord: FrameCtx['pointerInWord'] = null;
       const box = stage.canvas?.getBoundingClientRect();
       if (pointerClient && box && box.width > 0 && box.height > 0) {
-        pointer = {
-          x: ((pointerClient.x - box.left) / box.width) * 2 - 1,
-          y: ((pointerClient.y - box.top) / box.height) * 2 - 1,
-        };
+        const nx = ((pointerClient.x - box.left) / box.width) * 2 - 1;
+        const ny = ((pointerClient.y - box.top) / box.height) * 2 - 1;
+        // FrameCtx promises -1..1, and the listener is document-wide: a pointer beside a small
+        // anchored canvas would otherwise aim past every range that scales it.
+        pointer = { x: Math.max(-1, Math.min(1, nx)), y: Math.max(-1, Math.min(1, ny)) };
         const extent = word.partExtent();
         if (extent && extent.maxX > extent.minX && extent.maxY > extent.minY) {
           // The word is not centred on zero, so map into its real extent rather than scaling.
@@ -1071,7 +1092,8 @@ git commit -m "drive the environment from a composable lighting slot"
 
 ```ts
 export { type LampSpec, along, fixed, fromPointer, lamp, type LightPose, type LightSource, orbit, type OrbitSpec } from './effects/lamp.js';
-export { type EnvOffset, type EnvPiece, mergeEnv, still, sweep, track, type TrackSpec } from './render/lighting.js';
+export { type EnvOffset, type EnvPiece, mergeEnv, type ResolvedEnv, still, sweep, track, type TrackSpec } from './render/lighting.js';
+export { ENV_PIECES } from './render/lighting.js';
 export type { LightingSlot };
 ```
 
@@ -1079,6 +1101,22 @@ Delete `PointerLight` and `envRotationAt` from `render/lighting.ts`, their expor
 `track` carries its own follow and `sweep` its own period, so once Task 7 rewrites the render loop
 nothing calls either. `PointerLight`'s viewport normalization is the bug the Fixed note below names —
 it must not survive as a second, wrong way to do this.
+
+**Three things must survive that deletion**, and two of them sit inside the block a reader would
+take for the `PointerLight` section. Keep `YAW_RANGE`, `PITCH_RANGE` and `FOLLOW_MS` with their doc
+comments — they are `track`'s defaults, and `PITCH_RANGE`'s note about a studio's floor swinging
+into frame is not derivable from anything else. Move `envRotationAt`'s "effect-relative: absolute
+clock time would start every effect at an arbitrary angle" onto `sweep`, whose `t` still carries
+that constraint. `tsc` catches a deleted binding; it does not catch a deleted reason.
+
+**Collapse what is left of `LIGHTING` rather than leaving it vestigial.** With `envRotationAt` gone,
+nothing reads `tracksPointer` or the `static`/`pointer` periods, and `sweep()` reads only
+`LIGHTING.sweep.periodMs`. Neither `LIGHTING` nor `LightingMode` is exported from the barrel, so
+this costs no public surface: replace the record with `const SWEEP_PERIOD_MS` carrying the period's
+doc line, delete `LightingMode`, drop the `tracksPointer` assertion from `lighting.test.ts`, and
+derive `LIGHTING_NAMES` from `ENV_PIECES` — which is the rule `index.ts` already states, "read off
+the records the effect itself indexes". `Object.keys(ENV_PIECES)` preserves the order `index.test.ts`
+pins.
 
 Also re-export `LightOffset` from `./effects/types.js` beside the existing `PartOffset` export.
 Task 1 added it as a named interface following the `FlakeSpec` precedent but deliberately left the

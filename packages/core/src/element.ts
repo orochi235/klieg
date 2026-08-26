@@ -80,11 +80,9 @@ class KliegSign extends HTMLElement {
     this.#sign?.update(this.#options());
   }
 
-  /** Whatever the page put here, before klieg appends a canvas and a text layer of its own. */
+  /** Runs before klieg appends anything, so every child here is the page's own. */
   #markFallback(): void {
-    for (const child of this.children) {
-      if (child.tagName !== 'CANVAS') child.setAttribute(FALLBACK, '');
-    }
+    for (const child of [...this.children]) child.setAttribute(FALLBACK, '');
   }
 
   #options(): SignOptions {

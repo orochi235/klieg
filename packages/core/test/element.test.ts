@@ -39,27 +39,36 @@ describe('<klieg-sign>', () => {
   });
 
   it('installs exactly one stylesheet however many elements connect', async () => {
-    await mount(
-      '<klieg-sign font="/f.ttf"><h1>A</h1></klieg-sign>' +
-        '<klieg-sign font="/f.ttf"><h1>B</h1></klieg-sign>',
+    // One at a time: two concurrent dynamic imports of a mocked module leave the second pending
+    // forever under vitest 4.1, and the dropped promise outlives the test environment.
+    await mount('<klieg-sign font="/f.ttf"><h1>A</h1></klieg-sign>');
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      '<klieg-sign font="/f.ttf"><h1>B</h1></klieg-sign>',
     );
+    await settled();
 
-    // Both have to have connected for the count of one to mean anything, and the fallback mark is
-    // the observable each connect leaves. (Not `sign`: only the first of two concurrent dynamic
-    // imports of a mocked module ever settles under vitest 4.1.)
-    const marks = document.querySelectorAll('klieg-sign > [data-klieg-fallback]');
-    expect(marks).toHaveLength(2);
+    // Both have to have connected for the count of one to mean anything.
+    expect(sign).toHaveBeenCalledTimes(2);
 
     const styles = document.head.querySelectorAll('style[data-klieg-sign]');
     expect(styles).toHaveLength(1);
     expect(styles[0]?.textContent).toContain('@layer klieg');
   });
 
-  it('marks the fallback the page supplied, and not the canvas klieg appends', async () => {
+  it('marks every child the page supplied, a canvas of its own included', async () => {
+    const el = await mount(
+      '<klieg-sign font="/f.ttf"><h1>A Name</h1><canvas></canvas></klieg-sign>',
+    );
+
+    expect(el.querySelector('h1')?.hasAttribute('data-klieg-fallback')).toBe(true);
+    expect(el.querySelector('canvas')?.hasAttribute('data-klieg-fallback')).toBe(true);
+  });
+
+  it('leaves what klieg appends after connect unmarked', async () => {
     const el = await mount('<klieg-sign font="/f.ttf"><h1>A Name</h1></klieg-sign>');
     el.appendChild(document.createElement('canvas'));
 
-    expect(el.querySelector('h1')?.hasAttribute('data-klieg-fallback')).toBe(true);
     expect(el.querySelector('canvas')?.hasAttribute('data-klieg-fallback')).toBe(false);
   });
 
@@ -105,6 +114,23 @@ describe('<klieg-sign>', () => {
       await settled();
       expect(sign).toHaveBeenCalledOnce();
       expect(el.querySelector('h1')?.hasAttribute('data-klieg-fallback')).toBe(true);
+    } finally {
+      Object.defineProperty(document, 'readyState', { value: 'complete', configurable: true });
+    }
+  });
+
+  it('never touches an element removed before the parser finishes', async () => {
+    Object.defineProperty(document, 'readyState', { value: 'loading', configurable: true });
+    try {
+      document.body.innerHTML = '<klieg-sign font="/f.ttf"><h1>A Name</h1></klieg-sign>';
+      const el = document.querySelector('klieg-sign') as HTMLElement;
+      el.remove();
+
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+      await settled();
+
+      expect(sign).not.toHaveBeenCalled();
+      expect(el.querySelector('h1')?.hasAttribute('data-klieg-fallback')).toBe(false);
     } finally {
       Object.defineProperty(document, 'readyState', { value: 'complete', configurable: true });
     }

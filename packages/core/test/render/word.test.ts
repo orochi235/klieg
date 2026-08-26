@@ -1534,14 +1534,16 @@ describe('effects', () => {
   }
 
   /** Lit runs in pool order: they follow the body in each cell and share that cell's material. */
-  function runColorOf(word: Word, ordinal: number): number {
+  function runColorOf(word: Word, ordinal: number, channel: 'r' | 'g' | 'b' = 'r'): number {
     const meshes = groups(word).flatMap((cell) => {
       const lit = (cell.children[1] as THREE.Mesh).material;
       return (cell.children.slice(1) as THREE.Mesh[]).filter((m) => m.material === lit);
     });
     const mesh = meshes[ordinal];
     if (!mesh) throw new Error(`the word has no run ${ordinal}`);
-    return mesh.geometry.getAttribute('runColor').getX(0);
+    const runColor = mesh.geometry.getAttribute('runColor');
+    if (channel === 'g') return runColor.getY(0);
+    return channel === 'b' ? runColor.getZ(0) : runColor.getX(0);
   }
 
   /** The crawl buffer only exists where the look declared a gradient. */
@@ -1665,6 +1667,18 @@ describe('effects', () => {
     at: () => ({ light: { color: 0xffffff, amount: 0.5 } }),
   };
 
+  // Origins alone give a single-line sign a box of zero height: placement puts every letter on a
+  // line at the same baseline, and a pointer mapped into that box could never move vertically.
+  it('measures the part extent by the letters ink rather than by their origins', () => {
+    const word = new Word('AA', stubFont(), 'gold', ROOMY);
+    const extent = word.partExtent();
+    if (!extent) throw new Error('the word has no parts');
+
+    // The stub glyph rises 0.7 em; the extrusion's bevel makes the real box a little taller.
+    expect(extent.maxY - extent.minY).toBeGreaterThanOrEqual(0.7);
+    expect(extent.maxX - extent.minX).toBeGreaterThan(STEP);
+  });
+
   it('lights every body part off its own letter, blanks in the word included', () => {
     const word = new Word(
       'A B',
@@ -1696,6 +1710,35 @@ describe('effects', () => {
     const emissive = materialOf(word).emissive;
     expect(emissive.r).toBe(0);
     expect(emissive.g).toBeGreaterThan(new THREE.Color(0x008000).g);
+  });
+
+  // tubing's runs are 0xff2d95, so red is already saturated and clamping cannot raise it: a lamp
+  // this test can see has to be read off green or blue.
+  it('adds lamp light into a run colour', () => {
+    const word = tubingWith([{ piece: lamplight, target: { kind: 'run', by: 'index' } }]);
+    const before = runColorOf(word, 0, 'g');
+
+    word.apply(STILL, 0, NO_CTX);
+
+    expect(runColorOf(word, 0, 'g')).toBeGreaterThan(before);
+  });
+
+  it('lets a lamp go when a regroup drops the letter it was lighting', () => {
+    const word = new Word(
+      'AB',
+      stubFont(),
+      { ...specOf('neon'), effects: [{ piece: lamplight, target: { kind: 'body', ...FIRST } }] },
+      ROOMY,
+    );
+    const unlit = new THREE.Color(0xff2d95);
+
+    word.apply(STILL, 0, NO_CTX);
+    const lit = materialOf(word).emissive.g;
+    word.regroup((letter) => letter.index === 1, 'line');
+    word.apply(STILL, 0, NO_CTX);
+
+    expect(lit).toBeGreaterThan(unlit.g);
+    expect(materialOf(word).emissive.g).toBeCloseTo(unlit.g, 6);
   });
 
   it('skips a run whose material came from a debug override and has no run-colour contract', () => {

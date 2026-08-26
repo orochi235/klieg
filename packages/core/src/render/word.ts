@@ -14,7 +14,7 @@ import { blankPose } from '../motion/compositor.js';
 import type { RegroupResult } from '../motion/sequence.js';
 import type { LetterInfo, StaggerSpec } from '../motion/types.js';
 import { stagger } from '../motion/types.js';
-import type { Pose } from '../pose.js';
+import type { Pose, Vec3 } from '../pose.js';
 import { selectIndices } from '../select.js';
 import type { LoadedFont } from '../text/font.js';
 import {
@@ -104,16 +104,14 @@ const clamp255 = (n: number): number => Math.min(255, Math.max(0, Math.round(n))
  * material's identity — a white lamp on gold reflects gold, and adding white reflects cream.
  * @internal exported for test; not part of the public surface.
  */
-export function litEmissive(base: number, hue: number, light: readonly number[]): number {
-  if (!light[0] && !light[1] && !light[2]) return base;
-  const out: number[] = [];
-  for (let i = 0; i < 3; i++) {
-    const shift = 16 - i * 8;
-    const b = (base >> shift) & 0xff;
-    const h = ((hue >> shift) & 0xff) / 255;
-    out.push(clamp255(b + (light[i] as number) * h * 255));
-  }
-  return ((out[0] as number) << 16) | ((out[1] as number) << 8) | (out[2] as number);
+export function litEmissive(base: number, hue: number, light: Vec3): number {
+  const [lr, lg, lb] = light;
+  if (!lr && !lg && !lb) return base;
+  // A non-finite channel contributes nothing rather than blacking the channel out: clamp255(NaN)
+  // is NaN, and NaN << 16 is 0, so the base would vanish on one channel and survive on the others.
+  const ch = (shift: number, l: number): number =>
+    clamp255(((base >> shift) & 0xff) + (Number.isFinite(l) ? l : 0) * ((hue >> shift) & 0xff));
+  return (ch(16, lr) << 16) | (ch(8, lg) << 8) | ch(0, lb);
 }
 
 /**
@@ -143,9 +141,11 @@ export class Word {
   private readonly columnOf: number[] = [];
   /** Every glyph's character, so a regroup can lay the survivors out again. */
   private readonly charOf: string[] = [];
-  /** Per-letter vertical bounds in em; null where the glyph drew nothing. */
+  /** Per-letter ink bounds in em, relative to the glyph origin; null where it drew nothing. */
   private readonly geoMinY: (number | null)[] = [];
   private readonly geoMaxY: (number | null)[] = [];
+  private readonly geoMinX: (number | null)[] = [];
+  private readonly geoMaxX: (number | null)[] = [];
   private readonly metrics: GlyphMetrics;
   /** Font units to em, so a regroup can re-place the survivors on the same scale. */
   private readonly scaleToEm: number;
@@ -295,6 +295,8 @@ export class Word {
       this.frozenInfo.push(null);
       this.geoMinY.push(drawn ? drawn.min.y : null);
       this.geoMaxY.push(drawn ? drawn.max.y : null);
+      this.geoMinX.push(drawn ? drawn.min.x : null);
+      this.geoMaxX.push(drawn ? drawn.max.x : null);
     }
     this.liveCount = placed.x.length;
     this.fit = fitOf(placed, this.geoMinY, this.geoMaxY, budget);
@@ -416,18 +418,26 @@ export class Word {
     return this.parts.filter((p) => p.kind === kind);
   }
 
-  /** The bounding box of the part pool in layout space, or null before any part exists. */
+  /**
+   * The ink bounding box of the part pool in layout space, or null before any part exists.
+   * Describes the pool as built: `regroup` re-lays the letters and leaves the pool alone.
+   *
+   * Each glyph's own bounds are folded in the way `fitOf` does. A box of origins alone would have
+   * zero height on a single-line sign, since every letter on a line shares its baseline.
+   */
   partExtent(): { minX: number; maxX: number; minY: number; maxY: number } | null {
     if (this.parts.length === 0) return null;
     let minX = Number.POSITIVE_INFINITY;
     let maxX = Number.NEGATIVE_INFINITY;
     let minY = Number.POSITIVE_INFINITY;
     let maxY = Number.NEGATIVE_INFINITY;
-    for (const part of this.parts) {
-      minX = Math.min(minX, part.x);
-      maxX = Math.max(maxX, part.x);
-      minY = Math.min(minY, part.y);
-      maxY = Math.max(maxY, part.y);
+    for (let i = 0; i < this.parts.length; i++) {
+      const part = this.parts[i] as PartInfo;
+      const slot = this.partSlot[i] as number;
+      minX = Math.min(minX, part.x + (this.geoMinX[slot] ?? 0));
+      maxX = Math.max(maxX, part.x + (this.geoMaxX[slot] ?? 0));
+      minY = Math.min(minY, part.y + (this.geoMinY[slot] ?? 0));
+      maxY = Math.max(maxY, part.y + (this.geoMaxY[slot] ?? 0));
     }
     return { minX, maxX, minY, maxY };
   }
@@ -620,9 +630,10 @@ export class Word {
     }
 
     const hue = typeof tint === 'function' ? tint(this.letterInfo(i)) : tint;
+    const bodyTint = tintMaterialOf(spec) === 'body' ? hue : undefined;
 
     const material = createMaterial();
-    applyLook(material, look, tintMaterialOf(spec) === 'body' ? hue : undefined);
+    applyLook(material, look, bodyTint);
     // Enters and exits animate opacity, and flipping this mid-run would recompile the shader.
     material.transparent = true;
     // A near-transparent backing still writes depth by default, which culls the tube drawn
@@ -632,7 +643,7 @@ export class Word {
     material.opacity = this.bodyBase.opacity;
     material.emissiveIntensity = this.bodyBase.emissiveIntensity;
     this.bodyMaterials.push(material);
-    this.bodyLights.push(lightBase(look, tintMaterialOf(spec) === 'body' ? hue : undefined));
+    this.bodyLights.push(lightBase(look, bodyTint));
 
     const cell = new THREE.Group();
     const bodyMesh = new THREE.Mesh(geo, material);
@@ -929,6 +940,8 @@ export class Word {
       if (material) {
         material.opacity = pose.opacity * this.bodyBase.opacity;
         material.emissiveIntensity = this.bodyBase.emissiveIntensity;
+        const light = this.bodyLights[i];
+        if (light) material.emissive.setHex(light.emissive);
       }
       const decor = this.decorMaterials[i];
       if (decor) {

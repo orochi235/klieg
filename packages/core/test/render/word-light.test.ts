@@ -26,6 +26,11 @@ describe('litEmissive', () => {
     expect(out).toBe(0xffffff);
   });
 
+  // clamp255(NaN) is NaN and NaN << 16 is 0, so a channel that blacks out takes the base with it.
+  it('lets a non-finite channel contribute nothing rather than blacking it out', () => {
+    expect(litEmissive(0x102030, 0xffffff, [Number.NaN, 0.25, 0])).toBe(0x106030);
+  });
+
   it('keeps each light channel on its own channel', () => {
     expect(litEmissive(0x000000, 0x40ff80, [0.5, 0, 1])).toBe(0x200080);
   });

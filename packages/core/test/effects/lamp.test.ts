@@ -36,6 +36,16 @@ describe('orbit', () => {
     expect(source(0.25, NO_CTX)?.y).toBeCloseTo(2);
   });
 
+  // The default radius and a lamp's default reach have to meet, and only the pair proves it:
+  // orbit at 2 em cleared a lamp's 0.5 em reach and `lamp({ source: orbit() })` lit nothing at
+  // any phase, with every unit test on this file green.
+  it('stays inside a default lamp on every quarter of its pass', () => {
+    const piece = lamp({ source: orbit() });
+    for (const t of [0, 0.25, 0.5, 0.75]) {
+      expect(piece.at(t, partAt(0), NO_CTX).light?.amount ?? 0, `t=${t}`).toBeGreaterThan(0.5);
+    }
+  });
+
   it('orbits around a non-zero, non-symmetric center', () => {
     const source = orbit({ radius: 1, x: 5, y: 7 });
     expect(source(0, NO_CTX)).toEqual({ x: 6, y: 7 });

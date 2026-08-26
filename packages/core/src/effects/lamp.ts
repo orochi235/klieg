@@ -28,8 +28,9 @@ export function fromPointer(map?: (p: { x: number; y: number }) => LightPose): L
 }
 
 export interface OrbitSpec {
-  /** Em of layout space. Defaults to 2, outside the parts of a short sign, which a lamp's 0.5 em
-   * default reach does not close: `lamp({ source: orbit() })` on bare defaults lights nothing. */
+  /** Em of layout space. Defaults to 0.3, inside a lamp's 0.5 em default reach: every part of a
+   * single-line sign sits on the baseline, so a circle wider than the reach goes dark at the top
+   * and bottom of its pass. A taller or wider sign wants a wider circle. */
   radius?: number;
   /** Centre of the circle, in layout space. Both default to 0, the middle of the word. */
   x?: number;
@@ -37,7 +38,7 @@ export interface OrbitSpec {
 }
 
 export function orbit(spec: OrbitSpec = {}): LightSource {
-  const radius = spec.radius ?? 2;
+  const radius = spec.radius ?? 0.3;
   const cx = spec.x ?? 0;
   const cy = spec.y ?? 0;
   return (t) => ({ x: cx + Math.cos(t * TAU) * radius, y: cy + Math.sin(t * TAU) * radius });

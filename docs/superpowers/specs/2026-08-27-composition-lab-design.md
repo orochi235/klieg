@@ -66,7 +66,7 @@ Extract `word.ts`'s effect resolution into a pure function in `effects/frame.ts`
 resolveFrame(effects, parts, elapsed, ctx) → Map<partIndex, ResolvedOffset>
 ```
 
-`WordView` calls it and keeps only mesh writing. The lab calls the same function.
+`Word` calls it and keeps only mesh writing. The lab calls the same function.
 
 This is the point: targeting, `stagger` and merging all happen *around* a piece, not inside it. A
 lab that reimplements them drifts and then lies — the failure the tube lab already documents as
@@ -76,7 +76,7 @@ lab that reimplements them drifts and then lies — the failure the tube lab alr
 
 Two sources, switchable. Synthetic: N parts with deliberately **uneven** `at`/`span`, because real
 run lengths are uneven and an even pool flatters every `spread`. Real: `partsOf(kind)` off a
-`WordView`, which needs no GL context.
+`Word`, which needs no GL context.
 
 The lab shows pool size per `kind` for the chosen look, and flags any layer whose target resolved
 to nothing — because **only `tubing` and `piping` have `run` parts**. On the other ten looks,
@@ -115,12 +115,13 @@ tenure and jump can.
 **`dwell` is honest about tenure.** 3200ms asked delivers 3.15s measured, and every value from 800
 to 9000 lands within 1.6% of what it asked for.
 
-**`EPOCHS` is the number that decides how the effect reads, and it has no knob.** It is hardcoded 8
-in `roving.ts`, so a pass gets ~8 epochs whatever the pool size. On a 24-part sign a pass visits
-**7 distinct parts of 24** and then loops identically: 17 parts never flicker, ever, and the same 7
-do in the same order forever. Mean jump is 8.3 parts of 24 — a third of the sign, so it does read
-as jumping rather than travelling, which is what the doc comment claims and nothing had measured.
-This is the coverage overlay's reason to exist.
+**`EPOCHS` was the number that decided how the effect reads, and it had no knob** — hardcoded 8, so
+a pass visited 7 distinct parts of 24 and then looped, leaving 17 that never flickered. Fixed in
+`bb2767f`: a permutation walk and a default of 96, measured. Kept here because it is the coverage
+overlay's reason to exist — the lab has to be able to show this class of fault, and it is the
+worked example of a number that lost to measurement. Mean jump was 8.3 parts of 24, a third of the
+sign, so it does read as jumping rather than travelling, which the doc comment claimed and nothing
+had measured.
 
 **The cheap sampler agrees with the renderer.** A numeric 19.9% dark share against 3 of 14 real
 sampled frames showing a drop (21%). That agreement is what licenses putting plots under a render

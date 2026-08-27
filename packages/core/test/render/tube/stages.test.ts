@@ -210,9 +210,13 @@ describe('onStage', () => {
   it('builds the same blueprint whether or not anyone is watching', () => {
     const watched = buildTubeBlueprint([square()], SPEC, 0.3, 0, { onStage: () => {} });
     const plain = buildTubeBlueprint([square()], SPEC, 0.3, 0);
-    expect(watched.runs.map((r) => [r.points.length, r.lit, r.color])).toEqual(
-      plain.runs.map((r) => [r.points.length, r.lit, r.color]),
-    );
+    expect.soft(watched.paths).toHaveLength(plain.paths.length);
+    expect.soft(watched.corners).toHaveLength(plain.corners.length);
+    expect.soft(watched.lit).toHaveLength(plain.lit.length);
+    expect.soft(watched.dark).toHaveLength(plain.dark.length);
+    expect
+      .soft(watched.runs.map((r) => [r.points.length, r.lit, r.color]))
+      .toEqual(plain.runs.map((r) => [r.points.length, r.lit, r.color]));
     watched.dispose();
     plain.dispose();
   });
@@ -229,28 +233,37 @@ describe('the stages gate', () => {
   it('builds what no options builds when every stage is named', () => {
     const gated = buildTubeBlueprint([square()], SPEC, 0.3, 0, { stages: ALL });
     const plain = buildTubeBlueprint([square()], SPEC, 0.3, 0);
-    expect(gated.runs.map((r) => r.points.length)).toEqual(plain.runs.map((r) => r.points.length));
+    expect
+      .soft(gated.runs.map((r) => [r.points.length, r.lit, r.color]))
+      .toEqual(plain.runs.map((r) => [r.points.length, r.lit, r.color]));
+    expect.soft(gated.lit).toHaveLength(plain.lit.length);
+    expect.soft(gated.dark).toHaveLength(plain.dark.length);
     gated.dispose();
     plain.dispose();
   });
 
-  it('leaves the paths flat with wander off, exactly as amplitude zero does', () => {
+  it('is indistinguishable from amplitude zero with wander off', () => {
     const off = buildTubeBlueprint([square()], RICH, 0.3, 7, { stages: without('wander') });
-    const flat = buildTubeBlueprint([square()], { ...RICH, amplitude: 0 }, 0.3, 7);
+    const zero = buildTubeBlueprint([square()], { ...RICH, amplitude: 0 }, 0.3, 7);
     expect(off.runs.map((r) => r.points.map((p) => p.z))).toEqual(
-      flat.runs.map((r) => r.points.map((p) => p.z)),
+      zero.runs.map((r) => r.points.map((p) => p.z)),
     );
     off.dispose();
-    flat.dispose();
+    zero.dispose();
   });
 
   it('passes each whole path through as one run with cut off', () => {
     const bp = buildTubeBlueprint([square()], RICH, 0.3, 7, { stages: without('cut') });
-    expect.soft(bp.runs).toHaveLength(bp.paths.length);
-    expect.soft(bp.runs.map((r) => r.points.length)).toEqual(bp.paths.map((p) => p.points.length));
+    expect.soft(bp.paths).toHaveLength(5);
+    expect.soft(bp.runs).toHaveLength(5);
+    expect.soft(bp.runs.map((r) => r.points.length)).toEqual([200, 200, 200, 3, 3]);
+    expect
+      .soft(bp.runs.map((r) => r.surface))
+      .toEqual(['front', 'back', 'wall', 'connector', 'connector']);
     expect.soft(bp.runs.map((r) => r.surface)).toEqual(bp.paths.map((p) => p.surface));
     // Nothing was built, so every vertex still resolves to a contour vertex.
     expect.soft(bp.runs.every((r) => r.from.every((s) => s !== null))).toBe(true);
+    expect.soft(bp.runs.every((r) => r.from.length > 0)).toBe(true);
     expect.soft(bp.corners).toHaveLength(0);
     bp.dispose();
   });
@@ -282,6 +295,7 @@ describe('the stages gate', () => {
     expect.soft(bp.paths).toHaveLength(0);
     expect.soft(bp.runs).toHaveLength(0);
     expect.soft(bp.lit).toHaveLength(0);
+    expect.soft(bp.dark).toHaveLength(0);
     expect(() => bp.dispose()).not.toThrow();
   });
 });

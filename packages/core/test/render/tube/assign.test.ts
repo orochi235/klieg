@@ -83,6 +83,13 @@ describe('assign', () => {
     const out = assign(runs(6), { by: 'index', amount: 1, stride: 2 }, [0xff0000, 0x00ff00], 3);
     expect(out.filter((r) => r.lit).map((r) => r.color)).toEqual([0xff0000, 0x00ff00, 0xff0000]);
   });
+
+  it('returns the same array it was handed', () => {
+    const given = runs(4);
+    const out = assign(given, { by: 'seed', amount: 1 }, COLORS, 3);
+    expect(out).toBe(given);
+    expect(given.some((r) => r.color !== 0)).toBe(true);
+  });
 });
 
 describe('assign with a per-run gradient', () => {
@@ -179,11 +186,5 @@ describe('assign with a per-run gradient', () => {
     const before = assign(runs(7), { by: 'seed', amount: 0.6 }, COLORS, 11);
     const after = assign(runs(7), { by: 'seed', amount: 0.6 }, COLORS, 11, undefined, ['front']);
     expect(after.map((r) => [r.lit, r.color])).toEqual(before.map((r) => [r.lit, r.color]));
-  });
-
-  it('mutates the run list it was handed rather than returning a new one', () => {
-    const given = runs(4);
-    const out = assign(given, { by: 'seed', amount: 1 }, COLORS, 3);
-    expect(out).toBe(given);
   });
 });

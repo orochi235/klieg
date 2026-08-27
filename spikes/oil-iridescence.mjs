@@ -8,8 +8,10 @@
  * the fill flattened it. Thickness sets how fast the film's hue cycles with view angle, so a
  * thicker film makes the hue range the look's own property instead of the room's.
  *
- * `before` is rendered from `git show HEAD:` for both files — the old studio and the old spec —
- * so the sweep is judged against what actually shipped, not against the flattened version.
+ * `before` is rendered from `git show <--base>:` for every file this working tree changes, so the
+ * sweep is judged against a real reference rather than against a half-swapped tree. It defaults to
+ * `HEAD`, which is only the shipped look until the change lands — pass `--base deebe56~1` to keep
+ * comparing against the studio and spec that preceded it.
  *
  * Rewrites `oil`'s spec in `render/looks.ts` and restores it on the way out, including on a
  * crash: check `git status` if a run is killed.
@@ -55,7 +57,8 @@ const ENV_FILE = resolve(ROOT, 'packages/core/src/render/environment.ts');
 // Every changed file, not just these two: a half-swapped tree is not the shipped one. Leaving the
 // new stage.ts over HEAD's looks.ts sets `scene.environmentIntensity` from a `DEFAULTS` that has
 // no `envMapIntensity` yet, and the whole sign renders black.
-const CHANGED = execFileSync('git', ['-C', ROOT, 'diff', '--name-only'], { encoding: 'utf8' })
+const BASE = arg('base', 'HEAD');
+const CHANGED = execFileSync('git', ['-C', ROOT, 'diff', '--name-only', BASE], { encoding: 'utf8' })
   .split('\n')
   .filter((f) => f.endsWith('.ts') && !f.includes('/test/'))
   .map((f) => resolve(ROOT, f));
@@ -64,7 +67,7 @@ const NOW = Object.fromEntries(CHANGED.map((f) => [f, readFileSync(f, 'utf8')]))
 const HEAD = Object.fromEntries(
   CHANGED.map((f) => [
     f,
-    execFileSync('git', ['-C', ROOT, 'show', `HEAD:${f.slice(ROOT.length + 1)}`], {
+    execFileSync('git', ['-C', ROOT, 'show', `${BASE}:${f.slice(ROOT.length + 1)}`], {
       encoding: 'utf8',
       maxBuffer: 1 << 26,
     }),
@@ -118,6 +121,7 @@ const measure = (page, png) =>
     let lum = 0;
     let lit = 0;
     let coloured = 0;
+    let satc = 0;
     for (let i = 0; i < data.length; i += 4) {
       if (data[i + 3] < 8) continue;
       const r = data[i] / 255;
@@ -137,12 +141,16 @@ const measure = (page, png) =>
       else if (max === g) h = 60 * ((b - r) / (max - min)) + 120;
       else h = 60 * ((r - g) / (max - min)) + 240;
       buckets[Math.floor(h / 30) % 12] += 1;
+      satc += s;
       coloured += 1;
     }
     return {
       sat: sat / lit,
       lum: lum / lit,
       coloured: coloured / lit,
+      // How saturated the coloured pixels themselves are, and above it how much of the letter is
+      // coloured at all: mean saturation over all ink cannot tell a rim from a whole face.
+      satc: coloured ? satc / coloured : 0,
       hues: coloured === 0 ? 0 : buckets.filter((n) => n / coloured >= 0.02).length,
       buckets: buckets.map((n) => (coloured ? +(n / coloured).toFixed(3) : 0)),
       coverage: lit,
@@ -191,13 +199,16 @@ try {
     // Lit-but-black is the failure a coverage check sails past: a broken tree still draws glyphs.
     if (m.coverage === 0) throw new Error(`${label} measured no ink — background removal failed`);
     if (m.lum === 0) throw new Error(`${label} rendered black — the tree is not in a valid state`);
-    console.log(`${n}/${total} ${label}  hues ${m.hues}  sat ${m.sat.toFixed(3)}  lum ${m.lum.toFixed(3)}`);
+    console.log(
+      `${n}/${total} ${label}  hues ${m.hues}  sat ${m.sat.toFixed(3)}  lum ${m.lum.toFixed(3)}` +
+        `  area ${(m.coloured * 100).toFixed(1)}%  satc ${m.satc.toFixed(3)}`,
+    );
     return m;
   };
 
   useTree(HEAD);
   await page.waitForTimeout(500);
-  rows.push({ label: 'before (shipped)', file: 'before', ...(await shoot('before (shipped)', 'before')) });
+  rows.push({ label: `before (${BASE})`, file: 'before', ...(await shoot(`before (${BASE})`, 'before')) });
 
   useTree(NOW);
   for (const rv of ROWVALS) {
@@ -238,8 +249,8 @@ writeFileSync(
 </style>
 <h1>oil — making the hue the film's, not the room's</h1>
 <p><b>hues</b> counts how many 30&deg; slices of the colour wheel the letter actually occupies.
-The shipped version scored <b>${ref.hues}</b>; green beats it. Click a shot for the full frame.</p>
-<h2>before — old studio, old spec</h2>
+<code>${BASE}</code> scored <b>${ref.hues}</b>; green beats it. Click a shot for the full frame.</p>
+<h2>before — ${BASE}</h2>
 <div class="scroll"><table><tbody><tr><th>shipped</th>${cell(ref)}</tr></tbody></table></div>
 <h2>warm studio, swept film</h2>
 <div class="scroll"><table>

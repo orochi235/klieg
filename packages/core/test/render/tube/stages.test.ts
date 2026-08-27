@@ -31,7 +31,7 @@ const RICH: TubeSpec = {
 /** Every corner filleted rather than cut, so the corner stage builds analytic points. */
 const CONNECT: TubeSpec = {
   ...SPEC,
-  corners: { break: 0, connect: 1, hairpin: 0 },
+  corners: { break: 0, connect: 1 },
   radius: 0.05,
   runs: 3,
 };

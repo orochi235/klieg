@@ -69,6 +69,11 @@ path whose surface is not `front` or `back`, and connectors are `'connector'`. I
 goes, this changes behavior silently. `Run.from.path` indexes into the concatenated array, and the
 order (contours then links) is unchanged, so indices still mean what they meant.
 
+**`CornerWeights` has no `return` weight.** It is `{ break, connect, hairpin? }`. `return` is a
+`CornerStrategy` the cut produces from `blockout`, not something a spec weights — and an excess
+property on an object literal is only a type error where TypeScript checks it, so a scratch script
+run through vitest alone will not catch one.
+
 **Do not measure a pipeline through `JSON.stringify`.** `tightestBend` returns `Infinity` for a run
 with no curvature, and `JSON.stringify(Infinity)` is `null` — so a script that prints its findings
 as JSON reports six straight runs as `null` and pins the artifact rather than the value. This plan
@@ -132,7 +137,7 @@ const RICH: TubeSpec = {
 /** Every corner filleted rather than cut, so the corner stage builds analytic points. */
 const CONNECT: TubeSpec = {
   ...SPEC,
-  corners: { break: 0, connect: 1, return: 0 },
+  corners: { break: 0, connect: 1 },
   radius: 0.05,
   runs: 3,
 };

@@ -155,3 +155,11 @@ body {
   margin: 0 0 8px;
   color: var(--cl-dim);
 }
+
+.cl-emit {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 11px;
+  color: var(--cl-dim);
+  margin-top: 8px;
+}

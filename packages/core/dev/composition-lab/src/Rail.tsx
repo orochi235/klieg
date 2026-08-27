@@ -2,6 +2,7 @@ import type { PartKind } from '@core/effects/types.js';
 import { LOOK_NAMES } from '@core/index.js';
 import type { LookName } from '@core/render/looks.js';
 import type { Composition, EffectLayer, RovingWrap } from './composition.js';
+import { emit } from './emit.js';
 import { defaultParams, PARAMS, type PieceKind } from './pieces.js';
 
 export interface RailProps {
@@ -218,6 +219,12 @@ export function Rail({ composition, onChange, counts }: RailProps) {
           </button>
         ))}
       </div>
+
+      <h2>emit</h2>
+      <button type="button" onClick={() => void navigator.clipboard.writeText(emit(composition))}>
+        copy fire() call
+      </button>
+      <pre className="cl-emit">{emit(composition)}</pre>
     </>
   );
 }

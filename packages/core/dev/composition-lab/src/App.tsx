@@ -1,8 +1,10 @@
 import { EffectFrame, planEffects } from '@core/effects/frame.js';
 import type { FrameCtx } from '@core/effects/types.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { type Composition, DEFAULT_COMPOSITION, toFireOptions } from './composition.js';
+import { type Composition, toFireOptions } from './composition.js';
+import { CHANNELS, type Channel, Plot } from './Plot.js';
 import { Preview } from './Preview.js';
+import { restore, save } from './persist.js';
 import { poolCounts, syntheticPool } from './pool.js';
 import { Rail } from './Rail.js';
 import { Raster } from './Raster.js';
@@ -15,10 +17,12 @@ const TAIL_MS = 2000;
 const CTX: FrameCtx = { pointer: null, pointerInWord: null, dt: 16.7 };
 
 export function App() {
-  const [composition, setComposition] = useState<Composition>(DEFAULT_COMPOSITION);
+  const [composition, setComposition] = useState<Composition>(restore);
   const [elapsed, setElapsed] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [epoch, setEpoch] = useState(0);
+  const [channel, setChannel] = useState<Channel>('gain');
+  const [focus, setFocus] = useState(0);
   const last = useRef(performance.now());
   const span = composition.hold + TAIL_MS;
 
@@ -33,12 +37,21 @@ export function App() {
       .map(({ index }) => index);
   }, [composition, parts]);
 
+  /** A shorter row list can strand `focus` past its end, so clamp rather than index out. */
+  const row = Math.min(focus, Math.max(0, rows.length - 1));
+  const focused = parts[rows[row] ?? 0];
+  const label = focused ? `${focused.kind} ${focused.index}` : 'no part';
+
   const sampled = useMemo(() => {
     const specs = toFireOptions(composition).effects ?? [];
     const frame = new EffectFrame(planEffects(specs, parts));
     const pass = Math.max(1, ...specs.map((s) => (s.piece as { duration: number }).duration));
     return { pass, data: samplePass(frame, parts, pass, 600, CTX) };
   }, [composition, parts]);
+
+  useEffect(() => {
+    save(composition);
+  }, [composition]);
 
   useEffect(() => {
     if (!playing) return;
@@ -93,6 +106,31 @@ export function App() {
         </section>
         <section className="cl-panels">
           <Raster samples={sampled.data} rows={rows} at={(elapsed % sampled.pass) / sampled.pass} />
+          <div className="cl-row">
+            <select value={channel} onChange={(e) => setChannel(e.target.value as Channel)}>
+              {CHANNELS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <input
+              type="range"
+              min={0}
+              max={Math.max(0, rows.length - 1)}
+              step={1}
+              value={row}
+              onChange={(e) => setFocus(Number(e.target.value))}
+            />
+            <output>{label}</output>
+          </div>
+          <Plot
+            samples={sampled.data}
+            channel={channel}
+            part={rows[row] ?? 0}
+            label={label}
+            at={(elapsed % sampled.pass) / sampled.pass}
+          />
         </section>
       </main>
     </div>

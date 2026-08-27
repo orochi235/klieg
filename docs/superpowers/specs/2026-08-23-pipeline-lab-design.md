@@ -110,15 +110,16 @@ too, so a lab draws a bypassed step rather than a blank panel. Both absent is ex
 behavior, which is what every shipped caller passes.
 
 **Two things have to be fixed before a repair toggle means anything**, both found while measuring
-the above and neither caused by the refactor:
+the above and neither caused by the refactor. The first is done:
 
-- **A conditional `draw()` desyncs the seed stream.** `stitchPath` consumes a draw per corner in
-  `pickStrategy`, then a second one only when the strategy is `break` — `strategy === 'break' &&
-  draw() < blockout` short-circuits. Whether a corner is `break` depends on whether `filletFor`
-  succeeded, so switching the `fillet` repair off consumes an extra draw at each newly-broken corner
-  and shifts the stream for *every later corner in the glyph*. The lab would show a toggle changing
-  corners it has nothing to do with. Make the draw unconditional, or key the stream per corner
-  index rather than per draw — the latter changes shipped output.
+- **The seed stream keys per corner rather than per draw** — shipped. `stitchPath` used to take one
+  draw in `pickStrategy` and a second only when the strategy was `break`, so switching the `fillet`
+  repair off shifted the stream for *every later corner in the glyph* and the lab would have shown
+  a toggle changing corners it has nothing to do with. Each corner's two draws now key on its own
+  index. Forcing the second draw unconditionally is not a separate, output-preserving option: it is
+  the same change, and produces byte-identical geometry, because the old key was already `corner +
+  breaks before it`. Only `tubing` re-renders — `piping`'s corners never break and every other
+  look's always do.
 - **`relaxOnto` clones, so `rejoin: 'relax'` loses provenance.** It builds its window with
   `p.clone()`, and when the chain already clears `rhoMin` on the first pass it returns those clones
   unmoved — bit-identical copies that `Run.from` resolves to `null`, which reads as fillet-built

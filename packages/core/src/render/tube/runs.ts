@@ -145,8 +145,18 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }
 
-function cornerSeed(seed: number, counter: number): number {
-  return (Math.round(seed * 2654435761) ^ 0x2f2f6a3d ^ counter) >>> 0;
+/** Which of a corner's two draws is being taken. */
+type Draw = 0 | 1;
+const STRATEGY_DRAW: Draw = 0;
+const BLOCKOUT_DRAW: Draw = 1;
+
+/**
+ * Keyed on the corner's own index rather than on a running counter: a corner that skips a draw
+ * would otherwise shift the stream for every corner after it, so switching a repair off would
+ * change corners it has nothing to do with.
+ */
+function cornerSeed(seed: number, corner: number, draw: Draw): number {
+  return (Math.round(seed * 2654435761) ^ 0x2f2f6a3d ^ (corner * 2 + draw)) >>> 0;
 }
 
 /** @internal */
@@ -871,7 +881,7 @@ function stitchPath(
   blockout: number,
   rejoin: Rejoin,
   shape: HairpinShape,
-  draw: () => number,
+  drawAt: (corner: number, draw: Draw) => number,
 ): { spans: Span[]; decisions: CornerDecision[] } {
   const { arcs, corners } = raw;
   if (corners.length === 0) return { spans: arcs.map((points) => ({ points })), decisions: [] };
@@ -887,7 +897,7 @@ function stitchPath(
 
   const decisions: CornerDecision[] = corners.map((c, k) => {
     const { before, after } = legsOf(k);
-    let strategy: CornerStrategy = pickStrategy(c.turn, weights, draw);
+    let strategy: CornerStrategy = pickStrategy(c.turn, weights, () => drawAt(k, STRATEGY_DRAW));
     // A hard corner drawn `connect` must fillet, and a fillet that will not fit breaks instead.
     // `CONNECT_LIMIT` used to guess this from the angle; now it is measured.
     let hairpin: Hairpin | null = null;
@@ -906,7 +916,7 @@ function stitchPath(
     // A cut end is an electrode, and a letter has two of those rather than thirty. Everywhere else
     // the bender bends the tube out of the plane and paints the return, so the glass carries
     // through and only the light stops — which is the same fillet a connect draws.
-    if (strategy === 'break' && draw() < blockout) {
+    if (strategy === 'break' && drawAt(k, BLOCKOUT_DRAW) < blockout) {
       fillet = filletFor(before, after, c, rhoMin, spacing, rejoin);
       if (fillet) strategy = 'return';
     }
@@ -1078,8 +1088,10 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
   const rejoin = opts.rejoin ?? DEFAULT_REJOIN;
   const shape = opts.hairpin ?? DEFAULT_HAIRPIN;
   const seed = opts.seed ?? 0;
-  let cornerCounter = 0;
-  const draw = () => rng(cornerSeed(seed, cornerCounter++))();
+  // Corner indices run across the whole glyph, so the order paths are concatenated in is what
+  // keeps a word building identically twice.
+  let cornerBase = 0;
+  const drawAt = (corner: number, draw: Draw) => rng(cornerSeed(seed, cornerBase + corner, draw))();
 
   // Resolvable in one pass because no stitch primitive clones: a span slices the input's own
   // objects or pushes geometry the corner stage built, so identity survives the whole cut.
@@ -1102,8 +1114,9 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
       opts.blockout ?? DEFAULT_BLOCKOUT,
       rejoin,
       shape,
-      draw,
+      drawAt,
     );
+    cornerBase += decisions.length;
     for (const d of decisions) {
       cornerRecords.push({
         point: d.at ?? (path.points[d.index] as THREE.Vector3),

@@ -132,10 +132,12 @@ test.describe('effects', () => {
    * that has already moved once rather than of where it started; and it is a moment the holder is
    * actually dark, which most pins are not — `flicker` rests about 82% of the time, so a carelessly
    * pinned roving shot is byte-identical to plain `tubing` and would pass with the effect deleted.
-   * The run down here is a different one from what `effect-flicker` takes down.
+   * The run down here is a different one from what `effect-flicker` takes down. Re-pinning after a
+   * change to run geometry means sweeping for a dark window again: check the new shot against
+   * `look-tubing` by hand, because a shot with no fault in it still passes.
    */
   test('roving takes down a different run than flicker, one epoch on', async ({ page }) => {
-    await still(page, '?pin=4725');
+    await still(page, '?pin=5868');
     await page.selectOption('#look', 'tubing');
     await page.check('#roving');
     await shoot(page, 'effect-roving');

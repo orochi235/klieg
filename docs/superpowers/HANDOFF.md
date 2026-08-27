@@ -587,14 +587,16 @@ Roughly in order of value; the items are independent of each other.
   floors under one name, and `hairpin` is a seventh repair the six ids never named. Branch
   `cut-repairs` is cut off this one and carries the correction and nothing else.
 
-  **Two live defects block a meaningful repair toggle, and neither is caused by the refactor.**
-  `stitchPath` consumes its second `draw()` only when a corner breaks — `strategy === 'break' &&
-  draw() < blockout` short-circuits — so switching the `fillet` repair off shifts the seed stream
-  for every later corner in the glyph, and the lab would show a toggle changing corners it has
-  nothing to do with. And `relaxOnto` clones its window, so `rejoin: 'relax'` returns bit-identical
-  copies that `Run.from` resolves to `null`; `cutIntoRuns`'s comment claiming "no stitch primitive
-  clones" is false under that branch. Latent today because `DEFAULT_REJOIN` is `drop` and no look
-  overrides it — which stops being true the moment the lab exposes the knob. Slice 3 is the lab.
+  **The seed-stream desync is fixed on `cut-repairs`.** `stitchPath` used to take its second
+  `draw()` only when a corner broke, so switching the `fillet` repair off shifted the stream for
+  every later corner in the glyph; each corner's two draws now key on its own index. The design's
+  claim that forcing the draw unconditionally would preserve shipped output was wrong — the two are
+  the same change and produce byte-identical geometry — so `tubing` re-rendered and its five
+  baselines are re-taken. **One defect is still live:** `relaxOnto` clones its window, so
+  `rejoin: 'relax'` returns bit-identical copies that `Run.from` resolves to `null`; `cutIntoRuns`'s
+  comment claiming "no stitch primitive clones" is false under that branch. Latent today because
+  `DEFAULT_REJOIN` is `drop` and no look overrides it — which stops being true the moment the lab
+  exposes the knob. Slice 3 is the lab.
 
   Two things slice 1 learned that its plan did not start with. **`wanderPaths` seeds its rng from
   the path's array index**, so the order paths are concatenated in — contours, then connectors — is
@@ -742,6 +744,14 @@ to move into `oil`'s own film.
   to the other. `spikes/run-decomposition.mjs`.
 
 ## Traps
+
+**`effect-flicker` and `effect-roving` cannot fail when the effect is deleted.** One run going dark
+changes about 200 pixels of a 1.92M-pixel shot, and `looks.spec.ts` gates on
+`maxDiffPixelRatio: 0.001` — 1920 pixels. So both shots pass against a baseline with no fault in
+them, which is how re-keying the corner draws left `effect-roving` byte-identical to `look-tubing`
+and still green. `effect-hue` recolours the whole sign and is 14x over the gate, so it is fine.
+After anything that moves run geometry, re-pin by sweeping a whole roving epoch a flicker step
+(~58ms) at a time and comparing each shot to plain `tubing` by hand; `-u` alone will not tell you.
 
 **Eliminate a cheap hypothesis about render state before an expensive one about geometry.** The tube
 vanishing when thinned was diagnosed twice as a geometry bug and was one line of render state: a

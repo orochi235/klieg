@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { buildTubeBlueprint, type TubeSpec } from '../../../src/render/tube/index.js';
-import { TUBE_STAGES } from '../../../src/render/tube/stages.js';
+import { TUBE_STAGES, type TubeStageId } from '../../../src/render/tube/stages.js';
 import { tightestBend } from '../../../src/render/tube/sweep.js';
 
 /**
@@ -163,5 +163,57 @@ describe('TUBE_STAGES', () => {
     for (const stage of TUBE_STAGES) {
       expect(stage.label.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('onStage', () => {
+  it('reports each stage in order, once', () => {
+    const seen: string[] = [];
+    const bp = buildTubeBlueprint([square()], SPEC, 0.3, 0, {
+      onStage: (id) => seen.push(id),
+    });
+    expect(seen).toEqual(['generate', 'wander', 'cut', 'assign', 'sweep']);
+    bp.dispose();
+  });
+
+  it('reports state that has grown by the time each stage is named', () => {
+    const at = new Map<string, { paths: number; runs: number; geo: number }>();
+    const bp = buildTubeBlueprint([square()], SPEC, 0.3, 0, {
+      onStage: (id, state) =>
+        at.set(id, {
+          paths: state.paths.length,
+          runs: state.runs.length,
+          geo: state.lit.length + state.dark.length,
+        }),
+    });
+    expect.soft(at.get('generate')).toEqual({ paths: 1, runs: 0, geo: 0 });
+    expect.soft(at.get('wander')).toEqual({ paths: 1, runs: 0, geo: 0 });
+    expect.soft(at.get('cut')).toEqual({ paths: 1, runs: 6, geo: 0 });
+    expect.soft(at.get('assign')).toEqual({ paths: 1, runs: 6, geo: 0 });
+    expect.soft(at.get('sweep')).toEqual({ paths: 1, runs: 6, geo: 6 });
+    bp.dispose();
+  });
+
+  it('marks a switched-off stage as not having run', () => {
+    const ran = new Map<string, boolean>();
+    const bp = buildTubeBlueprint([square()], SPEC, 0.3, 0, {
+      stages: new Set<TubeStageId>(['generate', 'wander', 'assign', 'sweep']),
+      onStage: (id, _state, didRun) => ran.set(id, didRun),
+    });
+    // Every stage is reported, so a lab can draw a bypassed step rather than a blank panel.
+    expect.soft([...ran.keys()]).toEqual(['generate', 'wander', 'cut', 'assign', 'sweep']);
+    expect.soft(ran.get('cut')).toBe(false);
+    expect.soft([...ran.values()].filter(Boolean)).toHaveLength(4);
+    bp.dispose();
+  });
+
+  it('builds the same blueprint whether or not anyone is watching', () => {
+    const watched = buildTubeBlueprint([square()], SPEC, 0.3, 0, { onStage: () => {} });
+    const plain = buildTubeBlueprint([square()], SPEC, 0.3, 0);
+    expect(watched.runs.map((r) => [r.points.length, r.lit, r.color])).toEqual(
+      plain.runs.map((r) => [r.points.length, r.lit, r.color]),
+    );
+    watched.dispose();
+    plain.dispose();
   });
 });

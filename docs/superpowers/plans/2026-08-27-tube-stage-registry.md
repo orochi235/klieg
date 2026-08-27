@@ -69,6 +69,11 @@ path whose surface is not `front` or `back`, and connectors are `'connector'`. I
 goes, this changes behavior silently. `Run.from.path` indexes into the concatenated array, and the
 order (contours then links) is unchanged, so indices still mean what they meant.
 
+**Do not measure a pipeline through `JSON.stringify`.** `tightestBend` returns `Infinity` for a run
+with no curvature, and `JSON.stringify(Infinity)` is `null` — so a script that prints its findings
+as JSON reports six straight runs as `null` and pins the artifact rather than the value. This plan
+had exactly that bug in its first draft.
+
 **The corner-record clone moves from after `assign` to the end of the `cut` stage.** Its comment
 says it must happen after `wander`, and it still does. Nothing between cut and assign moves a
 point, so the two placements are equivalent — but a lab reading an `onStage('cut', …)` snapshot
@@ -142,7 +147,9 @@ function square(): THREE.Shape {
   return s;
 }
 
-const round = (n: number | null) => (n === null ? null : Math.round(n * 1e6) / 1e6);
+// `tightestBend` returns Infinity for a run with no curvature, and Math.round(Infinity) is
+// Infinity — the guard is here so the rounding does not have to be read twice.
+const round = (n: number) => (Number.isFinite(n) ? Math.round(n * 1e6) / 1e6 : n);
 
 describe('buildTubeBlueprint holds its shape', () => {
   it('cuts a plain square into six runs', () => {
@@ -169,10 +176,11 @@ describe('buildTubeBlueprint holds its shape', () => {
     expect(bp.runs.map((r) => r.points.length)).toEqual([
       48, 48, 48, 48, 48, 48, 48, 48, 49, 49, 49, 49, 3, 3,
     ]);
+    // The four walls and the two connectors are straight, and a straight run has no curvature.
     expect(bp.runs.map((r) => round(tightestBend(r)))).toEqual([
       2.504733, 2.505336, 2.505336, 2.504733,
       3.22866, 3.229424, 3.229424, 3.22866,
-      null, null, null, null, null, null,
+      Infinity, Infinity, Infinity, Infinity, Infinity, Infinity,
     ]);
     expect(bp.runs.map((r) => r.lit)).toEqual([
       false, false, false, false, false, true, false, true,

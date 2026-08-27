@@ -128,11 +128,15 @@ test.describe('effects', () => {
   });
 
   /**
-   * The pin is load-bearing twice over. It sits in the second epoch, so the shot is of a fault
-   * that has already moved once rather than of where it started; and it is a moment the holder is
-   * actually dark, which most pins are not — `flicker` rests about 82% of the time, so a carelessly
-   * pinned roving shot is byte-identical to plain `tubing` and would pass with the effect deleted.
-   * The run down here is a different one from what `effect-flicker` takes down.
+   * The pin is load-bearing twice over. It sits in the second epoch (now 3193.75ms, so 4725 is
+   * 1.48 epochs in), so the shot is of a fault that has already moved once rather than of where it
+   * started; and it is a moment the holder is actually dark, which most pins are not — `flicker`
+   * rests about 82% of the time, so a carelessly pinned roving shot is byte-identical to plain
+   * `tubing` and would pass with the effect deleted.
+   *
+   * Both properties are measured, not assumed: this shot differs from `look-tubing` by 658 pixels
+   * and from `effect-flicker` by 1558. Re-measure them after any change to the holder walk — the
+   * permutation walk moved this baseline and left the pin landing on a dark moment by luck.
    */
   test('roving takes down a different run than flicker, one epoch on', async ({ page }) => {
     await still(page, '?pin=4725');

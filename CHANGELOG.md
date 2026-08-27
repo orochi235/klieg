@@ -20,7 +20,10 @@ value from 800 to 9000 lands within 1.6% of what it asked for. What it never con
 the sign flickers — dark share holds at ~20% across a 4x change in `dwell`, because `unrest` sets
 all of that. `dwell` picks who, `unrest` picks how much.
 
-No shipped look uses `roving`, so no visual baseline moves.
+No shipped look uses `roving`, so no look baseline moves. The one visual baseline that does is
+`effect-roving`, which pins a moment in the second epoch: a different run is afflicted now. Its
+pin still lands on a moment the holder is dark — measured 658 pixels from plain `tubing` and 1558
+from `effect-flicker`, which is what the test's two claims rest on.
 
 ## 0.8.0
 

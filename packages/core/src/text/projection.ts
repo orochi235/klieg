@@ -21,6 +21,8 @@ export interface ProjectionInput {
   cameraZ: number;
   /** Extrusion depth in em. */
   depth: number;
+  /** Bevel thickness in em. three lays the bevel outside the extrusion, not inside it. */
+  bevel: number;
   /** The camera's own aspect, which need not match `width / height`. */
   aspect: number;
   /** The canvas CSS box, not its drawing buffer. */
@@ -33,6 +35,12 @@ export interface ProjectionInput {
 export interface Projection {
   fontSize: number;
   boxes: LetterBox[];
+  /**
+   * Horizontal stretch the spans need, as px-per-world-x over px-per-world-y. `fontSize` can only
+   * carry one of the two, so where the camera's aspect and the canvas box disagree the letters
+   * land at the right x with the wrong width. 1 wherever they agree.
+   */
+  scaleX: number;
 }
 
 /**
@@ -40,9 +48,9 @@ export interface Projection {
  * scale and a translate rather than a per-frame matrix.
  */
 export function projectLetters(input: ProjectionInput): Projection {
-  // three extrudes a shape from z = 0 to z = +depth, so the shape plane is the letter's back and
-  // its flat front cap is a whole depth toward the camera.
-  const faceDistance = input.cameraZ - input.depth * input.fit.scale;
+  // three extrudes a shape from z = -bevel to z = depth + bevel, so the front cap clears the
+  // nominal depth by a bevel thickness. Measuring to `depth` puts the plane behind the face.
+  const faceDistance = input.cameraZ - (input.depth + input.bevel) * input.fit.scale;
   const vh = 2 * Math.tan((input.fov * Math.PI) / 360) * faceDistance;
   const pxPerWorldY = input.height / vh;
   const pxPerWorldX = input.width / (vh * input.aspect);
@@ -60,5 +68,5 @@ export function projectLetters(input: ProjectionInput): Projection {
     };
   });
 
-  return { fontSize, boxes };
+  return { fontSize, boxes, scaleX: pxPerWorldX / pxPerWorldY };
 }

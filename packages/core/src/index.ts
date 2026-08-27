@@ -587,11 +587,12 @@ export function createKlieg(options: KliegOptions): Klieg {
                   cameraZ: stage.camera.position.z,
                   aspect: stage.camera.aspect,
                   depth: DEFAULT_GLYPH_OPTIONS.depth,
+                  bevel: DEFAULT_GLYPH_OPTIONS.bevelThickness,
                   width: key.width,
                   height: key.height,
                   baselineRatio,
                 });
-                layer.setLayer(projected.boxes, projected.fontSize, family, key);
+                layer.setLayer(projected.boxes, projected.fontSize, family, key, projected.scaleX);
               } else {
                 layer.setVisible(true);
               }

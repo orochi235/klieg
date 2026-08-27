@@ -246,11 +246,16 @@ sign. The sweep holds Rec.709 luminance rather than saturation, so blues and vio
 and the sign glows evenly all the way round — at constant saturation it would brighten through yellow
 and fall out of the bloom threshold through blue.
 
-**`roving(inner, { dwell, seed })`** — takes another piece and moves its affliction from one part to
-another, so `roving(EFFECTS.flicker())` is one bad tube that jumps every few seconds. It is a factory
-rather than a name, because a name cannot carry the piece it wraps. Give it `{ amount: 1 }`: it picks
-its holder from the whole pool of that kind, so against a subset the fault can land on a part the
-effect does not drive and nothing happens at all.
+**`roving(inner, { dwell, seed, epochs })`** — takes another piece and moves its affliction from one
+part to another, so `roving(EFFECTS.flicker())` is one bad tube that jumps every few seconds. It is a
+factory rather than a name, because a name cannot carry the piece it wraps. Give it `{ amount: 1 }`:
+it picks its holder from the whole pool of that kind, so against a subset the fault can land on a
+part the effect does not drive and nothing happens at all.
+
+`dwell` is roughly how long one part keeps the fault, and it picks *who* flickers, not how much —
+that is the inner piece's `unrest`. `epochs` is how many handovers fill a pass, and so the ceiling
+on how many parts a pass can reach before it loops; the default of 96 covers a pool of 29 entirely
+and most of a pool of 55, which is about as wide as a real sign gets. Raise it for a wider one.
 
 **`lamp({ source, radius, strength, color, duration })`** — puts light on the parts near a position
 rather than changing what they are made of. `radius` is its reach in em of layout space, `strength`

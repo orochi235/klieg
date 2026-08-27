@@ -1,4 +1,4 @@
-# Handoff — klieg, 2026-08-25
+# Handoff — klieg, 2026-08-27
 
 **For:** the next session picking this up. **Answers:** what is on `main`, what each merged branch
 learned that its design doc does not carry, and what is worth doing next.
@@ -15,10 +15,11 @@ to grow — a per-letter `look` is the intended growth and does not fit yet, `lo
 reaching the material pipeline long before a letter is addressable. See
 [the design](specs/2026-08-26-acronym-routine-design.md).
 
-**Open request: bundle `spikes/svg-tube/` into a standalone HTML with a wallpaper download.** Not
-started. Two constraints: that lab reads a **gitignored** `art.svg` which is a client mark, so the
-bundled file must not be committed to this public repo — it is work, and belongs under the `ccw`
-harness. And a page-initiated download only works when the file is opened locally.
+**The `spikes/svg-tube/` standalone bundle shipped** (`360334a`). `bundle.mjs` inlines `art.svg`
+as a data URI and refuses an `--out` path inside this repo, because that art is a client mark and
+this repo is public; `wallpaper.mjs` resizes the drawing buffer only, so a 4K shot comes off the
+lab's own renderer without touching the CSS box. A page-initiated download still only works from
+a locally-opened file.
 
 
 **`composable-lighting` and `flicker-spell` are both merged into `main` and pushed**, along with
@@ -60,11 +61,16 @@ nesting by containment depth rather than winding, which is what lets it take art
 One `<path>` is treated as one letter — that is what keeps `runs` and `seed` meaning what they mean
 for text, and it is the shape a real feature would take.
 
-**`sign-wrapper` is the one branch still open, and `v0.8.0` waits for it.** One commit off `26fde30`
-in its own worktree, carrying [a design](specs/2026-08-26-sign-wrapper-design.md) and no code:
-`sign()` and a `<klieg-sign>` element over a framework-free core, plus a `hold: 'forever'` that core
-does not have yet. **The decision is to land it before tagging**, so 0.8.0 ships the sign wrapper
-with the lighting surface rather than making it 0.9.0 a week later.
+**`sign-wrapper` is the one branch still open, and it is 0.9.0 now.** One commit off `26fde30` in
+its own worktree at `576afb2`, carrying [a design](specs/2026-08-26-sign-wrapper-design.md) and no
+code: `sign()` and a `<klieg-sign>` element over a framework-free core, plus a `hold: 'forever'`
+that core does not have yet.
+
+**The decision to hold `v0.8.0` for it was overtaken, not reversed on its merits.** 0.8.0 was tagged
+and published on 2026-08-27 without it, by a session that had read this doc only as far as the
+release note about telling the portfolio session first. Nothing was cut from the release — the
+branch has no code — so the only loss is that the two no longer ship together. **Read the whole of
+this section before tagging anything**, which is the failure that produced this paragraph.
 
 Two things whoever picks it up needs. Its base predates the lighting and flicker merges, so merge
 `main` into it first. And it was cut *after* `framing.align` landed and already accounts for it —
@@ -321,20 +327,16 @@ artifact is immutable and the script regenerates them exactly.
 
 ## State
 
-**0.7.0 is published and is `latest`**, carrying the `selectable` option, the `tubing` tint fix, the
-`LookKey` literal union, and `crawl` with the `chase` piece. Releases are automatic: push a `v*` tag
-and `release.yml` publishes through npm trusted publishing, checking first that the tag matches
+**0.8.0 is published and is `latest`**, carrying the `lamp`/`EnvPiece` lighting surface,
+`framing.align`, `flicker`'s `spell` and `calm`, `lineAlign`, the `acronym` routine, and per-look
+`envMapIntensity` over a warm-balanced studio. Releases are automatic: push a `v*` tag and
+`release.yml` publishes through npm trusted publishing, checking first that the tag matches
 `packages/core/package.json` and skipping a version already on the registry. `npm view` reports a
 stale version straight after a publish — read `https://registry.npmjs.org/klieg` to see what
 actually landed.
 
-**`main` is unpushed and carries an unreleased minor.** Everything under `## Unreleased` is post-0.7.0:
-the `lamp`/`EnvPiece` lighting surface, `framing.align`, `flicker`'s `spell` and `calm`. That is a
-minor rather than a patch — it adds public surface, changes what an element placement defaults to,
-and breaks `EffectPiece.at`'s signature — so the next tag is `v0.8.0`. **It is held for
-`sign-wrapper`**; see the branch state above. **The portfolio session asked to be told before a tag
-goes up**, and since releases are tag-triggered there is a window between telling them and pushing
-it.
+**`main` is pushed and clean at `9e0ecd8`**, green at 1144 unit tests and 33 visual. `## Unreleased`
+is empty — the next change opens it again.
 
 **`main` carries the tube lab, the tube geometry rewrite, the colour gradients, the junction
 reconciliation, direct paths by default, element-anchored placement and the effects pipeline, all
@@ -474,6 +476,8 @@ working — it needs a caller-supplied `TubeSpec.gradient`.
 
 Roughly in order of value; the items are independent of each other.
 
+- **A composition lab is the live task.** See the section at the top.
+
 - ~~**Selectable text**~~ — built and merged into `main`.
 
 - **Composable lighting — all nine tasks built, on the branch, unmerged.** See the "In flight"
@@ -587,27 +591,8 @@ Roughly in order of value; the items are independent of each other.
   Each item names the spike that proves it and the flags to reproduce it. The env fix moves every
   visual baseline, so it is its own change rather than a footnote to lighting.
 
-- **`envMapIntensity` has never been applied, on any look.** `looks.ts` constructs every material
-  with `envMapIntensity: 2.2`, but klieg lights through `scene.environment` and the property only
-  scales a material's *own* `envMap`, which none of them have.
-  `node spikes/lamp-blend.mjs --blends envown --env 1` reproduces the shipped render byte for byte;
-  `--env 2.2` is visibly richer. Assigning the scene's environment texture to each material makes
-  the authored value live — and moves every visual baseline, which is why it is its own change and
-  not a footnote to lighting.
 
-- **The extrusion walls read as cement because the studio is two-toned.** Faces and walls share one
-  material — `buildGlyphGeometry` makes a single `ExtrudeGeometry` and klieg passes one material, so
-  nothing differs in shading. A metal reflects `baseColor x envRadiance`, and `render/environment.ts`
-  puts blue bars on the left (`x: -14` at `[2.4, 4.0, 7]`, `x: -6` at `[2.4, 2.6, 3.4]`) against a
-  warm one on the right (`x: 14` at `[6, 4.4, 2.2]`). Gold is `0xffc44d`, so its left-facing walls
-  reflect warm-times-blue and go gray-lavender while the caps stay golden. Raising env intensity
-  brightens the cement without warming it. The fix is in the environment, not the material or any
-  lamp.
 
-- **klieg cannot author specular at all.** `specularIntensity`, `specularColor` and `reflectivity`
-  are absent from `LookKey`. `specularIntensity` tints specular reflection at normal incidence for
-  non-metals, which is the knob that would let `gem` keep its red as it brightens — the wash is
-  specular sitting on the attenuation. Untested; the next thing to try on the gem problem.
 
 - **Another pass on light-up letters — medium priority.** The design picks a blend and a channel; it
   does not finish the look. **`gem` cannot be lit with one knob.** At `env=0` it reads red, its
@@ -619,7 +604,12 @@ Roughly in order of value; the items are independent of each other.
   unsampled** — radius, strength and falloff were judged at one lamp position on a five-letter word,
   enough to choose a blend and not enough to ship numbers.
 
-- **`visual.spec.ts` is flaky under parallel load, and it is three tests now, not two.** `bloom path`,
+- **`visual.spec.ts`'s remaining flakiness is the sampled frame, not the wait.** The canvas waits
+  were fixed in `e90e7c8` — see the section below. What is left is `bloom path`, `two-line block`
+  and `wrap breaks a long line into rows`, which read the whole drawing buffer inside rAF and
+  assert on one sampled frame.
+
+- ~~**`visual.spec.ts` is flaky under parallel load, and it is three tests now, not two.**~~ `bloom path`,
   `two-line block` and `wrap breaks a long line into rows` have each failed intermittently in the full
   suite and passed on isolated re-run. It predates the particle work — `two-line block` was seen
   failing before the `index.ts` changes existed. All three read the whole drawing buffer inside rAF
@@ -660,6 +650,33 @@ Roughly in order of value; the items are independent of each other.
   chunk look drew 55 chunks or 1. Rejecting back-facing samples would raise visible chunks per
   letter by 39% and leave only 8.8% of positions surviving the reseed — a look change dressed as an
   optimization. The back cap is also genuinely on screen during two shipped enters.
+## What the studio and exposure change learned
+
+**A green test can be green for the whole life of the bug it covers.** `createMaterial`'s test
+asserted `envMapIntensity === 2.2` on the material it had just constructed. three overwrites that
+uniform with `scene.environmentIntensity` on every material that has no `envMap` of its own, every
+frame, so the property was right and the pixels were never lit by it. Assert the thing that reaches
+the screen, or assert nothing.
+
+**Bisecting a timing test reads load, not code.** `an effect held until click stays up` failed on
+`main` and passed at `63db866`, which pointed cleanly at two lab commits. Timing the operation says
+the opposite — 2486/3972/4519ms on `main` against 5133/5779/5654ms at `0fedd7c`. The first canvas
+attach takes 2.5-5.8s against a 5s default expect budget, so the outcome tracked `uptime`. What
+settled it was `--repeat-each=3 --workers=1`: first run red, next two green, which is cold start and
+cannot be behaviour. **Turn a flaky pass/fail into a measurement before bisecting it.**
+
+**Mean saturation over a dark look measures the dark, not the look.** Judging `oil`'s iridescence by
+mean ink saturation ranked a candidate carrying hue over 9.1% of the letter equal to one carrying it
+over 19.2%, because ~90% of `oil` is near-black either way. The metric that separates them is the
+size of the coloured region and its own saturation — `area` and `satc` in
+`spikes/oil-iridescence.mjs`. A hue-bucket count has the mirror flaw: it scored the muddiest
+candidate highest, by spreading a small weak region across more buckets.
+
+**A per-look knob does not always mean a per-look answer.** `envMapIntensity` became a `LookKey`,
+and it still could not save `oil` — raising exposure collapses hue buckets rather than adding them,
+and the one studio bar causing `gold`'s cement was the same bar giving `oil` its colour. The fix had
+to move into `oil`'s own film.
+
 ## What was learned that is not in the plan
 
 - **`M` and `W` are the worst case, not `N`.** The standing `NSRE` string missed both extremes: `M`

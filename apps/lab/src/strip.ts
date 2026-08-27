@@ -49,10 +49,12 @@ function instance(): Klieg {
 
 /**
  * Four ways to keep an anchored sign alive over a long hold. Each is built per call: `track` and the
- * clock-driven lamp sources carry their own state, so one piece belongs to one fire.
+ * clock-driven lamp sources carry their own state, so one piece belongs to one fire. Every preset
+ * states its `lighting` so it isolates the one mechanism it demonstrates: the fire default is
+ * `'sweep'`, so leaving the slot out is a 3.4-second strobe rather than stillness.
  */
 const LIVENESS: Record<string, () => Partial<FireOptions>> = {
-  none: () => ({}),
+  none: () => ({ lighting: 'static' }),
   // Turns the shared environment on a clock. Never moves a letter, so an anchored canvas has
   // nothing to crop, and it leaves `tint` alone.
   raking: () => ({ lighting: [sweep({ periodMs: 14000 }), track({ yawRange: 0 })] }),
@@ -69,10 +71,11 @@ const LIVENESS: Record<string, () => Partial<FireOptions>> = {
   }),
   // The only one that moves geometry, which is what an anchored canvas crops. Its yaw is small
   // enough to survive most framings; `float`'s bob is the one that wants a lower `framing` share.
-  shimmer: () => ({ active: 'shimmer' }),
+  shimmer: () => ({ lighting: 'static', active: 'shimmer' }),
   // A hue piece writes color every frame and so overrides `tint`. Only `span: 1` meets itself at
   // the loop seam; a narrow span stays near the tinted color and snaps back there once a pass.
   breathing: () => ({
+    lighting: 'static',
     effects: [
       {
         piece: EFFECTS.hue({ span: 0.08, spread: 0.3, duration: 12000 }),

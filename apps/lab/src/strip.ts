@@ -48,8 +48,8 @@ function instance(): Klieg {
 }
 
 /**
- * Four ways to keep an anchored sign alive over a long hold. Each is built per call: `track` and the
- * clock-driven lamp sources carry their own state, so one piece belongs to one fire. Every preset
+ * Four ways to keep an anchored sign alive over a long hold. Each is built per call: `track` carries
+ * its yaw across frames, so a shared one resumes from the last fire's angle. Every preset
  * states its `lighting` so it isolates the one mechanism it demonstrates: the fire default is
  * `'sweep'`, so leaving the slot out is a 3.4-second strobe rather than stillness.
  */

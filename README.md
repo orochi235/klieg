@@ -284,13 +284,15 @@ hue sweep and a tint on that look are the same fight, and the sweep wins.
 
 A sign anchored to a page element and held for hours is a different problem from a one-shot
 flourish: its motion runs thousands of times while someone reads past it, so it has to be slow
-enough to ignore. The default `lighting: 'sweep'` turns the environment once every 3.4 seconds —
-a flourish's pace, a strobe on a masthead. Four ways to keep one alive without that:
+enough to ignore. Name the [lighting](#lighting) either way — the default `sweep` turns the
+environment every 3.4 seconds, a strobe on a masthead, and `'pointer'` never moves at all on a page
+nobody has moused over. A sign meant to hold still asks for `'static'`, it does not omit the slot.
+Four ways to keep one moving at a pace it can hold:
 
 | | |
 |---|---|
 | `lighting: [sweep({ periodMs: 14000 }), track({ yawRange: 0 })]` | the highlight rakes on its own clock, and a pointer still tips the pitch |
-| a `lamp` on an `orbit` source | a pool of light circling the word rather than a turn of the whole room |
+| a `lamp` on an `orbit` source | a pool of light circling the word |
 | `EFFECTS.hue({ span: 0.08, spread: 0.3 })` | a narrow color breath that stays near the sign's own tint |
 | `active: 'shimmer'` | a yaw ripple letter to letter — the only one of the four that moves geometry |
 
@@ -309,25 +311,16 @@ await bk.fire('klieg', {
 });
 ```
 
-`look: 'tubing'` is load-bearing: `lamp` and `hue` reach run parts, and only `tubing` and `piping`
-have any — on `gold` a run target selects an empty pool and the piece does nothing, silently. Build
-the pieces inside the call, too: `track` and the clock-driven lamp sources carry their own state,
-and an anchored sign refires on every relayout, so a piece shared across fires resumes from the
-last one's angle rather than from rest.
-
-**`lighting: 'pointer'` on its own is a still image.** It is `static` until a pointer arrives, so on
-a phone, or any page nobody has moused over, nothing moves for the life of the sign. The layering
-above covers that: `sweep` writes yaw and `track` writes pitch, and layered pieces add per axis, so
-the clock motion is there whether or not a pointer turns up.
-
-**A hue piece against a `tint` costs something either way.** `span: 1` is the only value that meets
-itself at the loop seam, but a whole turn of the wheel leaves the tinted color behind for most of
-every pass; a narrow `span` stays near it and snaps back at the seam once per `duration`. Over an
-afternoon both are plainly visible, and the choice is which one the sign can afford.
+`look: 'tubing'` is load-bearing for that example: the target is a run, and only `tubing` and
+`piping` have run parts — on `gold` it selects an empty pool and does nothing, silently. A lamp
+lights body parts too, so the same one aimed at bodies works anywhere; `hue` is run-only. Build the
+pieces in the call, too: `track` carries its yaw across frames, and a shared one resumes from the
+last fire's angle rather than from rest.
 
 **A `roving` pass that cannot reach the whole pool never will.** Its walk is identical every pass,
-so a run past the `epochs` ceiling is not afflicted rarely — it is never afflicted at all, however
-long the sign runs. Count the runs and raise `epochs` past them.
+so a part it misses is never afflicted at all, however long the sign runs. Raising `epochs` past
+the run count is necessary but not sufficient — handovers are deferred, so even the default 96
+reaches 51 of a pool of 55, and the strays are an arbitrary slice of a seeded permutation.
 
 **Geometry is the only thing the anchor's box crops**, and the margin is whatever `framing` left
 unspent. `shimmer`'s few degrees of yaw survive most framings; a bob like `float`'s 0.12 em wants

@@ -610,6 +610,9 @@ export function createKlieg(options: KliegOptions): Klieg {
           );
           stage.scene.environmentRotation.x = env.pitch;
           stage.scene.environmentRotation.y = env.yaw;
+          // The scene write above reaches only a material with no `envMap` of its own; every
+          // material the word draws with carries one.
+          word.setEnvRotation(env.pitch, env.yaw);
 
           if (bloom) {
             bloom.render(stage.scene, stage.camera);

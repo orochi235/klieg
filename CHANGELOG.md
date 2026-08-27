@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### Every look renders at the exposure it was authored at, and can set its own
+
+`looks.ts` built every material with `envMapIntensity: 2.2` and no material ever rendered at it.
+three overwrites that uniform with `scene.environmentIntensity` whenever a material has no `envMap`
+of its own, and klieg lights through `scene.environment`, so the authored value was clobbered every
+frame and every look has rendered at an effective 1 since the value was written. Materials now carry
+the studio as their own `envMap`, which both makes the authored 2.2 live and turns
+**`envMapIntensity` into a `LookKey`** — so a look, or an inline spec, sets its own exposure. Every
+look is brighter: `gold` measures 0.203 to 0.291 mean luminance over its ink, `leather` 0.231 to
+0.343.
+
+### The extrusion walls are no longer gray
+
+A letter is one extruded mesh with one material, so its walls differ from its faces only in what
+they reflect — and the studio lit blue from the left against warm from the right. A metal reflects
+`baseColor x envRadiance`, and warm times blue is gray, so `gold`'s left-facing walls read as
+cement while its faces stayed golden. The fill bars and the shell are warm-balanced now and the two
+key lights are left white; `gold`'s mean ink saturation goes 0.497 to 0.664. `chrome` was reflecting
+a blue room and reads as neutral metal for the first time.
+
+### `oil` gets its colour from its own film rather than from the room
+
+`oil` is a near-black metal, so what you see is reflected light tinted by a thin film — which meant
+its oil-slick colour was really the studio being two-toned, and warming the fill flattened it to
+brown. Thickness sets how fast the film's hue cycles with view angle, so `iridescenceIOR` drops to
+1.4 and `iridescenceThicknessRange` to `[100, 520]`: a thinner film at a lower index cycles through
+more of the wheel across the angles an extruded letter presents. It now covers 10 of 12 hue buckets
+against the shipped 7, at higher saturation and slightly brighter.
+
+**Every visual baseline moves.** All 19 are regenerated.
+
 ### An anchored word now meets the page's text edge
 
 `framing` said how much of the anchor the type could fill and not where in it the word sat, so an

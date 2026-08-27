@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Align, Budget } from '../text/layout.js';
 import { buildEnvironment } from './environment.js';
+import { DEFAULTS } from './looks.js';
 
 /** Where the canvas lives: over the whole viewport, or inside one element of the page. */
 export type Placement = { kind: 'fullscreen' } | { kind: 'element'; el: HTMLElement };
@@ -151,6 +152,9 @@ export class Stage {
     this.renderer = renderer;
     this.environment = buildEnvironment(renderer);
     this.scene.environment = this.environment.texture;
+    // Only reached by a material with no `envMap` of its own; klieg's all carry one, so this is
+    // here so that such a material renders at the looks' exposure rather than silently at 1.
+    this.scene.environmentIntensity = DEFAULTS.envMapIntensity;
 
     const onResize = () => this.resize();
     // Kept for the anchored case too: moving the window to a display of another devicePixelRatio

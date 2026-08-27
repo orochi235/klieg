@@ -8,12 +8,16 @@ interface Bar {
 }
 
 // RGB values above 1.0 are the point — these are lights, not surfaces.
+//
+// The fill is warm-balanced and the two keys are white. A blue fill is what made the extrusion
+// walls read as cement: faces and walls share one material, so a metal's walls show only what
+// they reflect, and warm base colour times blue radiance is gray.
 const BARS: Bar[] = [
   { pos: [-9, 7, -6], size: [26, 2.2], rot: 0.3, rgb: [9, 9, 10] },
-  { pos: [11, 4, -4], size: [20, 1.4], rot: -0.22, rgb: [7, 7.6, 9] },
-  { pos: [-6, -8, 6], size: [22, 3.0], rot: 0.12, rgb: [2.4, 2.6, 3.4] },
+  { pos: [11, 4, -4], size: [20, 1.4], rot: -0.22, rgb: [9.043, 7.372, 5.246] },
+  { pos: [-6, -8, 6], size: [22, 3.0], rot: 0.12, rgb: [3.118, 2.538, 1.899] },
   { pos: [14, -3, 8], size: [14, 5.0], rot: -0.55, rgb: [6, 4.4, 2.2] },
-  { pos: [-14, -1, -9], size: [12, 4.0], rot: 0.48, rgb: [2.4, 4.0, 7] },
+  { pos: [-14, -1, -9], size: [12, 4.0], rot: 0.48, rgb: [4.274, 3.806, 3.403] },
   { pos: [0, 13, 4], size: [16, 2.0], rot: 0, rgb: [10, 10, 10] },
 ];
 
@@ -26,8 +30,8 @@ function buildShell(): THREE.Mesh<THREE.BufferGeometry, THREE.Material> {
     new THREE.ShaderMaterial({
       side: THREE.BackSide,
       uniforms: {
-        top: { value: new THREE.Color(0.05, 0.06, 0.12) },
-        bottom: { value: new THREE.Color(0.01, 0.01, 0.02) },
+        top: { value: new THREE.Color(0.072, 0.06, 0.057) },
+        bottom: { value: new THREE.Color(0.013, 0.01, 0.01) },
       },
       vertexShader: `
         varying vec3 vP;

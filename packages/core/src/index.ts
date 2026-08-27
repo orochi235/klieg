@@ -389,6 +389,8 @@ export function createKlieg(options: KliegOptions): Klieg {
         ),
         opts.wrap,
         opts.tint,
+        undefined,
+        stage.environment?.texture ?? null,
       );
     } catch (err) {
       // This rejects before the settle() that would otherwise free the bloom's render targets.

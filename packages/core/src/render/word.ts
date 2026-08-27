@@ -155,6 +155,9 @@ export class Word {
   private readonly geoMinX: (number | null)[] = [];
   private readonly geoMaxX: (number | null)[] = [];
   private readonly metrics: GlyphMetrics;
+
+  /** The studio, carried onto every material so each look's own `envMapIntensity` is honoured. */
+  private readonly envMap: THREE.Texture | null;
   /** Font units to em, so a regroup can re-place the survivors on the same scale. */
   private readonly scaleToEm: number;
   private readonly budget: Budget;
@@ -245,7 +248,9 @@ export class Word {
     wrap = false,
     tint?: number | ((letter: LetterInfo) => number | undefined),
     debug?: WordDebugHooks,
+    envMap: THREE.Texture | null = null,
   ) {
+    this.envMap = envMap;
     this.group.add(this.inner);
 
     const spec = specOf(look);
@@ -661,7 +666,7 @@ export class Word {
     const hue = typeof tint === 'function' ? tint(this.letterInfo(i)) : tint;
     const bodyTint = tintMaterialOf(spec) === 'body' ? hue : undefined;
 
-    const material = createMaterial();
+    const material = createMaterial(this.envMap);
     applyLook(material, look, bodyTint);
     // Enters and exits animate opacity, and flipping this mid-run would recompile the shader.
     material.transparent = true;
@@ -683,7 +688,7 @@ export class Word {
 
     if (decoration && decoration.kind === 'tube') {
       const litOverride = debug?.tubeMaterial?.('lit');
-      const decorMaterial = litOverride ?? createMaterial();
+      const decorMaterial = litOverride ?? createMaterial(this.envMap);
       if (!litOverride) {
         applyLook(
           decorMaterial as THREE.MeshPhysicalMaterial,
@@ -717,7 +722,7 @@ export class Word {
       this.decorMaterials.push(decorMaterial);
 
       const darkOverride = debug?.tubeMaterial?.('dark');
-      const darkMaterial = darkOverride ?? createMaterial();
+      const darkMaterial = darkOverride ?? createMaterial(this.envMap);
       if (!darkOverride) applyLook(darkMaterial as THREE.MeshPhysicalMaterial, decoration.dark);
       darkMaterial.transparent = true;
       darkMaterial.side = THREE.DoubleSide;
@@ -750,7 +755,7 @@ export class Word {
       this.litMeshes[i] = litMeshes;
       for (const geo of blueprint.dark) cell.add(new THREE.Mesh(geo, darkMaterial));
     } else if (decoration && decoration.kind === 'chunks') {
-      const decorMaterial = createMaterial();
+      const decorMaterial = createMaterial(this.envMap);
       applyLook(
         decorMaterial,
         decoration.look,

@@ -67,8 +67,8 @@ const LIVENESS: Record<string, () => Partial<FireOptions>> = {
       },
     ],
   }),
-  // The only one that moves geometry, which is the thing an anchored canvas crops. Widen
-  // `framing.height` if it clips.
+  // The only one that moves geometry, which is what an anchored canvas crops. Its yaw is small
+  // enough to survive most framings; `float`'s bob is the one that wants a lower `framing` share.
   shimmer: () => ({ active: 'shimmer' }),
   // A hue piece writes color every frame and so overrides `tint`. Only `span: 1` meets itself at
   // the loop seam; a narrow span stays near the tinted color and snaps back there once a pass.

@@ -53,6 +53,22 @@ describe('samplePass', () => {
     expect(s.gain[untouched]?.every((g) => g === 1)).toBe(true);
   });
 
+  // The failure this guards: EffectFrame writes every TARGETED part, contribution or not, so a
+  // piece like roving — which addresses the whole pool and afflicts one part of it — would mark
+  // the whole pool touched and make the coverage overlay blind to the fault it exists to show.
+  it('does not count a targeted part that no layer ever actually moved', () => {
+    const parts = pool(4);
+    const oneOnly: EffectPiece = {
+      duration: 1000,
+      at: (_t, part) => (part.index === 0 ? { gain: 0.5 } : {}),
+    };
+    const frame = new EffectFrame(
+      planEffects([{ piece: oneOnly, target: { kind: 'run', by: 'index', amount: 1 } }], parts),
+    );
+    const s = samplePass(frame, parts, 1000, 16, NO_CTX);
+    expect(s.touched).toEqual([true, false, false, false]);
+  });
+
   it('marks which parts the composition ever touches, so coverage is readable', () => {
     const parts = pool(4);
     const frame = new EffectFrame(

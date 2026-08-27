@@ -1,5 +1,5 @@
 import type { EffectFrame } from '@core/effects/frame.js';
-import type { FrameCtx, PartInfo } from '@core/effects/types.js';
+import type { FrameCtx, PartInfo, ResolvedOffset } from '@core/effects/types.js';
 
 /** One pass sampled on a grid: a row per part, a column per sample. */
 export interface PassSamples {
@@ -11,8 +11,18 @@ export interface PassSamples {
   crawl: number[][];
   /** Packed 0xRRGGBB, or -1 where no layer wrote a colour. */
   color: number[][];
-  /** Whether any layer ever reached this part across the whole pass. */
+  /** Whether any layer ever MOVED this part across the whole pass. Being targeted is not enough:
+   * a piece like `roving` addresses the whole pool and afflicts one part of it, and counting the
+   * pool would make this blind to exactly the fault it exists to show. */
   touched: boolean[];
+}
+
+/** Whether a merged offset is doing anything. Multiplicative channels rest at 1, additive at 0. */
+function moved(o: ResolvedOffset): boolean {
+  if (o.gain !== 1 || o.scale !== 1 || o.dark !== 0 || o.crawl !== 0) return true;
+  if (o.color !== undefined) return true;
+  if (o.position.some((n) => n !== 0) || o.rotation.some((n) => n !== 0)) return true;
+  return o.light.some((n) => n !== 0);
 }
 
 /**
@@ -42,7 +52,7 @@ export function samplePass(
   for (let s = 0; s < samples; s++) {
     const resolved = frame.resolve(parts, (s / samples) * duration, ctx);
     for (const [index, o] of resolved) {
-      out.touched[index] = true;
+      if (moved(o)) out.touched[index] = true;
       (out.gain[index] as number[])[s] = o.gain;
       (out.scale[index] as number[])[s] = o.scale;
       (out.dark[index] as number[])[s] = o.dark;

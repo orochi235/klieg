@@ -16,6 +16,7 @@ export type { HairpinShape } from './hairpin.js';
 export { DEFAULT_HAIRPIN, HAIRPIN_SHAPES } from './hairpin.js';
 export type { CornerRecord, CornerStrategy, CornerWeights, Rejoin, Run, ShortRun } from './runs.js';
 export { ALL_BREAK, ALL_CONNECT, DEFAULT_REJOIN, REJOINS } from './runs.js';
+/** @internal */
 export type { TubeStageId, TubeStageState } from './stages.js';
 export type { SurfaceKind } from './surfaces.js';
 
@@ -103,8 +104,11 @@ export interface TubeBuildOptions {
    * left out runs its `bypass` instead, where it has one.
    */
   stages?: ReadonlySet<TubeStageId>;
-  /** Called after each stage that ran, with the live state — nothing is cloned. */
-  onStage?(id: TubeStageId, state: TubeStageState): void;
+  /**
+   * Called after every stage with the live state — nothing is cloned. `ran` is false when the
+   * stage was switched off, whether or not a `bypass` stood in for it.
+   */
+  onStage?(id: TubeStageId, state: TubeStageState, ran: boolean): void;
 }
 
 export function buildTubeBlueprint(
@@ -118,12 +122,10 @@ export function buildTubeBlueprint(
   const state: TubeStageState = { paths: [], runs: [], corners: [], lit: [], dark: [] };
 
   for (const stage of TUBE_STAGES) {
-    if (opts?.stages && !opts.stages.has(stage.id)) {
-      stage.bypass?.(state, ctx);
-      continue;
-    }
-    stage.run(state, ctx);
-    opts?.onStage?.(stage.id, state);
+    const ran = !opts?.stages || opts.stages.has(stage.id);
+    if (ran) stage.run(state, ctx);
+    else stage.bypass?.(state, ctx);
+    opts?.onStage?.(stage.id, state, ran);
   }
 
   return {
@@ -134,6 +136,7 @@ export function buildTubeBlueprint(
     lit: state.lit,
     dark: state.dark,
     dispose() {
+      // `paths` stays: the geometries hold GPU memory, paths are plain data.
       for (const g of state.lit) g.dispose();
       for (const g of state.dark) g.dispose();
       state.lit.length = 0;

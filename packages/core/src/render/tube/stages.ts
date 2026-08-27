@@ -14,18 +14,17 @@ const PAD = 0.35;
 /** @internal */
 export type TubeStageId = 'generate' | 'wander' | 'cut' | 'assign' | 'sweep';
 
-/** What every stage reads and none of them writes. @internal */
+/** @internal */
 export interface TubeStageContext {
-  shapes: THREE.Shape[];
-  spec: TubeSpec;
-  depth: number;
-  seed: number;
+  readonly shapes: readonly THREE.Shape[];
+  readonly spec: TubeSpec;
+  readonly depth: number;
+  readonly seed: number;
 }
 
 /**
- * What the pipeline carries from one stage to the next. Every field is `readonly` because
- * `buildTubeBlueprint` returns these arrays and disposes through them: a stage that reassigned one
- * would leave the blueprint holding the old array. Push and splice, never assign.
+ * What the pipeline carries from one stage to the next. `buildTubeBlueprint` returns these arrays
+ * and disposes through them, so a stage pushes and splices — it never reassigns.
  * @internal
  */
 export interface TubeStageState {
@@ -41,7 +40,10 @@ export interface TubeStage {
   id: TubeStageId;
   label: string;
   run(state: TubeStageState, ctx: TubeStageContext): void;
-  /** Runs in `run`'s place when the stage is switched off, to pass the pipeline through. */
+  /**
+   * Runs in `run`'s place when the stage is switched off, to pass the pipeline through. Without
+   * one the stage is simply skipped and the pipeline carries on with whatever state it has.
+   */
   bypass?(state: TubeStageState, ctx: TubeStageContext): void;
 }
 
@@ -49,7 +51,7 @@ export interface TubeStage {
 export const TUBE_STAGES: readonly TubeStage[] = [
   {
     id: 'generate',
-    label: 'Generate paths',
+    label: 'paths',
     run(state, { shapes, spec, depth }) {
       const surfaces = surfacesOf(shapes, depth);
       const paths = generatePaths(surfaces, spec.surfaces, {
@@ -68,20 +70,21 @@ export const TUBE_STAGES: readonly TubeStage[] = [
               overshoot: spec.connectorOvershoot ?? 0.05,
             })
           : [];
+      // Connectors last: `wanderPaths` seeds from the array index, so putting them first would
+      // shift every face path's seed and silently re-render every wandered look.
       state.paths.push(...paths, ...links);
     },
   },
   {
     id: 'wander',
-    label: 'Wander off the plane',
+    label: 'wander',
     run(state, { spec, seed }) {
-      // Before the cut: a bend wander introduces is a bend the corner stage has to see.
       wanderPaths(state.paths, spec.amplitude ?? 0, seed);
     },
   },
   {
     id: 'cut',
-    label: 'Cut into runs',
+    label: 'runs',
     run(state, { spec, seed }) {
       const cut = cutIntoRuns(state.paths, {
         runs: spec.runs,
@@ -118,7 +121,7 @@ export const TUBE_STAGES: readonly TubeStage[] = [
   },
   {
     id: 'assign',
-    label: 'Light and colour',
+    label: 'light and colour',
     run(state, { spec, seed }) {
       assign(
         state.runs,
@@ -133,7 +136,7 @@ export const TUBE_STAGES: readonly TubeStage[] = [
   },
   {
     id: 'sweep',
-    label: 'Sweep to geometry',
+    label: 'geometry',
     run(state, { spec }) {
       // The letter domain needs each run's slice of the glyph's lit length, and this is the only
       // place that has the glyph's whole run list.

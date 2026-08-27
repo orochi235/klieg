@@ -37,7 +37,7 @@ function contourPoints(contour: THREE.Shape | THREE.Path): Point2[] {
   return resample(raw, RING_SPACING);
 }
 
-export function surfacesOf(shapes: THREE.Shape[], depth: number): Surface[] {
+export function surfacesOf(shapes: readonly THREE.Shape[], depth: number): Surface[] {
   const polygons: Point2[][] = [];
   const walls: WallSurface[] = [];
 

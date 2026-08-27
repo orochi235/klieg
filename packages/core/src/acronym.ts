@@ -1,4 +1,4 @@
-import type { ActiveSlot, ExitSlot, FireOptions, Stage, TweenSpec } from './index.js';
+import type { ActiveSlot, Align, ExitSlot, FireOptions, Stage, TweenSpec } from './index.js';
 import type { LetterInfo } from './motion/types.js';
 
 /**
@@ -28,6 +28,11 @@ export interface AcronymOptions {
   active?: ActiveSlot;
   /** Timing for the gather. */
   tween?: TweenSpec;
+  /**
+   * How the block's lines range while it is up. `'start'` by default, not the usual `'center'`:
+   * an acrostic is a column of initials, and centring the lines is what stops it being one.
+   */
+  lineAlign?: Align;
 }
 
 const CAPS_TINT = 0x2df0ff;
@@ -73,6 +78,7 @@ export function acronym(text: string, options: AcronymOptions = {}): [string, Fi
     text,
     {
       hold: options.read ?? 'click',
+      lineAlign: options.lineAlign ?? 'start',
       tint: (letter) => (keep(letter) ? caps.tint : body.tint),
       stages,
     },

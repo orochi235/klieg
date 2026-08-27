@@ -256,6 +256,13 @@ export interface FireOptions {
   blendMs?: number;
   /** @deprecated Unread. Placement is fixed per instance — pass it to `createKlieg` instead. */
   placement?: Placement;
+  /**
+   * How the lines of a multi-line block range against each other, in reading order. Defaults to
+   * `'center'`. `'start'` is what an acrostic wants: centred lines scatter its initials across as
+   * many x positions as there are lines. Distinct from `framing.align`, which places the whole
+   * block in the frame.
+   */
+  lineAlign?: Align;
   /** Break long lines to whatever arrangement renders largest. Explicit newlines always break. */
   wrap?: boolean;
   /** Let the overlay swallow the dismissing click instead of passing it through to the page. */
@@ -378,6 +385,7 @@ export function createKlieg(options: KliegOptions): Klieg {
           options.framing?.width,
           options.framing?.height,
           options.framing?.align,
+          opts.lineAlign,
         ),
         opts.wrap,
         opts.tint,

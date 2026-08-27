@@ -12,8 +12,8 @@ const STEP = ADVANCE / UPEM;
 const metrics: GlyphMetrics = { advanceOf: () => ADVANCE, kernOf: () => 0 };
 const drawsInk = (char: string) => char.trim().length > 0;
 
-const place = (text: string) =>
-  placeBlock(layoutBlock(text, metrics), SCALE_TO_EM, metrics, drawsInk);
+const place = (text: string, lineEdge?: 'left' | 'right') =>
+  placeBlock(layoutBlock(text, metrics), SCALE_TO_EM, metrics, drawsInk, lineEdge);
 
 describe('placeBlock', () => {
   it('centres a single line on x = 0', () => {
@@ -26,6 +26,23 @@ describe('placeBlock', () => {
   it('centres each line independently', () => {
     const p = place('AB\nA');
     expect(p.x[2]).toBeCloseTo(-STEP / 2);
+  });
+
+  it('ranges every line from one left edge', () => {
+    // An acrostic's whole claim is a column of initials: centred lines put them at three x's.
+    const p = place('AB\nA', 'left');
+    expect(p.x[2]).toBeCloseTo(p.x[0] as number);
+  });
+
+  it('ranges every line to one right edge', () => {
+    const p = place('AB\nA', 'right');
+    expect((p.x[2] as number) + STEP).toBeCloseTo((p.x[1] as number) + STEP);
+  });
+
+  it('leaves the block centred on x = 0 whatever the lines do', () => {
+    const p = place('AB\nA', 'left');
+    expect(Math.min(...p.x)).toBeCloseTo(-STEP);
+    expect(Math.max(...p.x) + STEP).toBeCloseTo(STEP);
   });
 
   it('excludes a trailing space from the centring', () => {

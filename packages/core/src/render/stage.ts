@@ -220,7 +220,7 @@ export class Stage {
    * `resize` measured — the viewport, or the anchor's box — because `aspect` comes from it and
    * the frustum height at this depth is fixed.
    */
-  viewportBudget(widthFrac = 0.62, heightFrac = 0.3, align?: Align): Budget {
+  viewportBudget(widthFrac = 0.62, heightFrac = 0.3, align?: Align, lineAlign?: Align): Budget {
     const vh = 2 * Math.tan((this.camera.fov * Math.PI) / 360) * this.camera.position.z;
     return {
       width: vh * this.camera.aspect * widthFrac,
@@ -228,6 +228,7 @@ export class Stage {
       extent: vh * this.camera.aspect,
       cameraZ: this.camera.position.z,
       edge: edgeFor(align ?? this.defaultAlign(), this.direction()),
+      lineEdge: lineAlign ? edgeFor(lineAlign, this.direction()) : undefined,
       // The anchor's box is the bound already, and filling it is the whole point of anchoring.
       cap: this.placement.kind === 'element' ? Number.POSITIVE_INFINITY : undefined,
     };

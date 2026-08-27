@@ -31,12 +31,18 @@ export function arrange(chars: readonly string[], as: Arrangement): string {
 /**
  * Positions every glyph of a laid-out block. Each line centres on x = 0 across the glyphs that
  * draw ink — spanning `line.width` instead would push a line with a trailing space off centre.
+ *
+ * `lineEdge` ranges the lines against one another instead: every line's ink starts (or ends) at
+ * the same x, and the block as a whole is re-centred afterwards so the word still sits on x = 0.
+ * An acrostic needs this — centred lines put its initials at as many x positions as there are
+ * lines, which is the one thing the form cannot survive.
  */
 export function placeBlock(
   block: Block,
   scaleToEm: number,
   metrics: GlyphMetrics,
   drawsInk: (char: string) => boolean,
+  lineEdge?: 'left' | 'right',
 ): Placement {
   const out: Placement = {
     x: [],
@@ -72,7 +78,14 @@ export function placeBlock(
       }
     }
 
-    const shift = inkStart === null ? 0 : -(inkStart + inkEnd) / 2;
+    const shift =
+      inkStart === null
+        ? 0
+        : lineEdge === 'left'
+          ? -inkStart
+          : lineEdge === 'right'
+            ? -inkEnd
+            : -(inkStart + inkEnd) / 2;
     for (let i = first; i < out.x.length; i++) out.x[i] = (out.x[i] as number) + shift;
     if (inkStart !== null) {
       blockInkStart = Math.min(blockInkStart, inkStart + shift);
@@ -81,6 +94,11 @@ export function placeBlock(
   }
 
   out.inkWidth = Number.isFinite(blockInkStart) ? blockInkEnd - blockInkStart : 0;
+  // Ranged lines leave the block off x = 0 by construction; centred ones are already there.
+  if (lineEdge && Number.isFinite(blockInkStart)) {
+    const recentre = -(blockInkStart + blockInkEnd) / 2;
+    for (let i = 0; i < out.x.length; i++) out.x[i] = (out.x[i] as number) + recentre;
+  }
   return out;
 }
 

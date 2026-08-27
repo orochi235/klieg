@@ -285,7 +285,13 @@ export class Word {
     this.metrics = font.metrics;
     this.budget = budget;
 
-    const placed = placeBlock(block, this.scaleToEm, font.metrics, (char) => this.drawsInk(char));
+    const placed = placeBlock(
+      block,
+      this.scaleToEm,
+      font.metrics,
+      (char) => this.drawsInk(char),
+      budget.lineEdge,
+    );
     this.lineCount = placed.lineCount;
     this.columnCount = placed.columnCount;
 
@@ -900,7 +906,13 @@ export class Word {
 
     const chars = kept.map((i) => this.charOf[i] as string);
     const block = layoutBlock(arrange(chars, as), this.metrics);
-    const placed = placeBlock(block, this.scaleToEm, this.metrics, (char) => this.drawsInk(char));
+    const placed = placeBlock(
+      block,
+      this.scaleToEm,
+      this.metrics,
+      (char) => this.drawsInk(char),
+      this.budget.lineEdge,
+    );
 
     this.lineCount = placed.lineCount;
     this.columnCount = placed.columnCount;

@@ -73,6 +73,8 @@ export interface Budget {
   cameraZ?: number;
   /** The physical edge the word meets, direction already resolved. Absent leaves it centred. */
   edge?: 'left' | 'right';
+  /** The physical edge every line ranges against, direction already resolved. Absent centres each. */
+  lineEdge?: 'left' | 'right';
 }
 
 /** Keeps one short word on a fullscreen overlay from blowing up to fill the viewport. */

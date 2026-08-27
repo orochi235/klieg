@@ -194,7 +194,9 @@ const klieg = createKlieg({
   placement: { kind: 'element', el: stage },
   // Nothing shares this page with the type, so it takes far more of the frame than the library
   // leaves an overlay. Tuned on a 390x844 phone, where width is what binds a single line.
-  framing: { width: 0.84, height: 0.46 },
+  // `align` is explicit because an element placement defaults to `start`: the stage is the whole
+  // page rather than a column of prose, so there is no text edge here for the word to meet.
+  framing: { width: 0.84, height: 0.46, align: 'center' },
 });
 
 let index = 0;

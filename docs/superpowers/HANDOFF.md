@@ -580,8 +580,21 @@ Roughly in order of value; the items are independent of each other.
   reporting each. 1162 tests, 33 visual, look snapshots byte-identical. See
   [the plan](plans/2026-08-27-tube-stage-registry.md), whose "Left for slice 2" section names what
   it inherits. **Slice 2 is `CUT_REPAIRS` and it is the hard one:** `mergeArc` (`runs.ts:755`)
-  interleaves the bridge, relax and resume paths with the arc push, so the `applies`/`apply` seam
-  the design asks for is not visible from outside yet. Slice 3 is the lab itself.
+  interleaves the bridge, relax and resume paths with the arc push. **Slice 2 has been measured and
+  the design corrected — read the revised "The two registries" before writing any of it.** It is not
+  a fold and it does not live in `mergeArc`: three of the six repairs never enter that function,
+  `close` and `return` are span-*list* operations, `stretch` is two implementations with different
+  floors under one name, and `hairpin` is a seventh repair the six ids never named. Branch
+  `cut-repairs` is cut off this one and carries the correction and nothing else.
+
+  **Two live defects block a meaningful repair toggle, and neither is caused by the refactor.**
+  `stitchPath` consumes its second `draw()` only when a corner breaks — `strategy === 'break' &&
+  draw() < blockout` short-circuits — so switching the `fillet` repair off shifts the seed stream
+  for every later corner in the glyph, and the lab would show a toggle changing corners it has
+  nothing to do with. And `relaxOnto` clones its window, so `rejoin: 'relax'` returns bit-identical
+  copies that `Run.from` resolves to `null`; `cutIntoRuns`'s comment claiming "no stitch primitive
+  clones" is false under that branch. Latent today because `DEFAULT_REJOIN` is `drop` and no look
+  overrides it — which stops being true the moment the lab exposes the knob. Slice 3 is the lab.
 
   Two things slice 1 learned that its plan did not start with. **`wanderPaths` seeds its rng from
   the path's array index**, so the order paths are concatenated in — contours, then connectors — is

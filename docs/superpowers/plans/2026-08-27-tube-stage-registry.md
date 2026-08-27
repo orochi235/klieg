@@ -90,6 +90,26 @@ says it must happen after `wander`, and it still does. Nothing between cut and a
 point, so the two placements are equivalent — but a lab reading an `onStage('cut', …)` snapshot
 gets safe clones this way instead of vectors aliasing the paths.
 
+## Left for slice 2, deliberately
+
+**`TubeStageContext` carries no build options, so the `cut` stage cannot forward repair toggles
+down to `cutIntoRuns`.** Slice 2's first move is to widen it — either a field on the context or a
+third `run` parameter. It was left undone rather than guessed at: the context is internal with one
+construction site and five consumers, so adding the field once `CUT_REPAIRS` exists costs the same
+one line it would cost now, with the benefit of knowing the shape it has to accept. Decide at the
+same time whether `TubeStageId` stays a flat union and whether `onStage` needs a nested channel for
+repair-level events.
+
+**The type-only cycle has a sharp edge worth knowing before slice 2 widens it.** `stages.ts` imports
+`TubeSpec` from `index.ts` as a type, which is erased. The day something there needs a *value* from
+`index.ts` it becomes a real cycle — and because `TUBE_STAGES` is a module-level array initializer,
+it would fail at import time rather than at first call. Moving `TubeSpec` to its own module breaks
+the edge permanently.
+
+**`dev/tube-lab/src/render/skeleton.ts` reaches core through `../../../../src/render/tube/...`
+while `dev/corner-lab/src/scene.ts` uses the `@core/*` alias.** Slice 3 adds `stages.js` imports to
+that same deep path; fix the alias before it multiplies.
+
 ## No CHANGELOG entry
 
 Every new symbol is `@internal` and nothing on the public entry changes. There is nothing here for

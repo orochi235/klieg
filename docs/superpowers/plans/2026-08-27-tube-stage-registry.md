@@ -101,125 +101,37 @@ refactor must not start until that is understood.
 **Files:**
 - Create: `packages/core/test/render/tube/stages.test.ts`
 
-- [ ] **Step 1: Write the characterization test**
+- [x] **Step 1: Write the characterization test**
 
-```ts
-import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
-import { buildTubeBlueprint, type TubeSpec } from '../../../src/render/tube/index.js';
-import { tightestBend } from '../../../src/render/tube/sweep.js';
+**Done — the file is committed at `166717d`.** It is the source of truth; this plan does not carry a
+second copy to rot. What it pins, so a reader knows what a red run means:
 
-const SPEC: TubeSpec = {
-  kind: 'tube',
-  radius: 0.03,
-  segments: 6,
-  spacing: 0.02,
-  surfaces: ['front'],
-  level: 0,
-  runs: 6,
-  minRun: 0.05,
-  select: { by: 'seed', amount: 1 },
-  colors: [0xff2d95],
-  look: {},
-  dark: {},
-};
+| Fixture | What it reaches that the others do not | Pinned |
+| --- | --- | --- |
+| `SPEC` | all-break corners, one surface, everything lit | run point counts, geometry vertex counts, 1 path, 4 corners, 6 lit, 0 dark |
+| `RICH` | wander, connectors, three surfaces, partial selection | surfaces, point counts, tightest bends, lit flags, path surfaces, `from.path` per run, 5 paths, 12 corners, 7 lit, 7 dark |
+| `CONNECT` | fillets, so the corner stage builds analytic points | corner strategies, point counts, bends at `0.1`, null-`from` counts, geometry vertex counts |
 
-/** Front/back/wall, wandered, with connectors — every surface kind in one build. */
-const RICH: TubeSpec = {
-  ...SPEC,
-  surfaces: ['front', 'back', 'wall'],
-  amplitude: 0.04,
-  connectors: 2,
-  runs: 8,
-  select: { by: 'seed', amount: 0.5 },
-};
+Three things the review changed, which anyone re-deriving this file should not undo:
 
-/** Every corner filleted rather than cut, so the corner stage builds analytic points. */
-const CONNECT: TubeSpec = {
-  ...SPEC,
-  corners: { break: 0, connect: 1 },
-  radius: 0.05,
-  runs: 3,
-};
+- **Assertions are `expect.soft` and ordered along the pipeline** — generate, cut, assign, sweep. A
+  hard `expect` stops at the first failure, so a broken `generate` reported a run-point-count
+  mismatch and never reached the path-count assertion that names the real stage.
+- **`RICH` pins `bp.paths.map(p => p.surface)` and `bp.runs.map(r => r.from.find(s => s)?.path)`** —
+  `['front', 'back', 'wall', 'connector', 'connector']` and `[0,0,0,0,1,1,1,1,2,2,2,2,3,4]`. This is
+  the guard on the concatenation trap below: if the fold ever hands `cutIntoRuns` one array while
+  exposing another as `blueprint.paths`, provenance indexes into the wrong one with nothing thrown.
+- **`round` is plain `Math.round(n * 1e6) / 1e6`.** `Math.round(Infinity)` is already `Infinity`, so
+  a `Number.isFinite` guard is dead code — and the twelve `Infinity` literals in the assertions
+  already say the walls and connectors are straight.
 
-function square(): THREE.Shape {
-  const s = new THREE.Shape();
-  s.moveTo(-0.5, -0.5);
-  s.lineTo(0.5, -0.5);
-  s.lineTo(0.5, 0.5);
-  s.lineTo(-0.5, 0.5);
-  s.closePath();
-  return s;
-}
-
-// `tightestBend` returns Infinity for a run with no curvature, and Math.round(Infinity) is
-// Infinity — the guard is here so the rounding does not have to be read twice.
-const round = (n: number) => (Number.isFinite(n) ? Math.round(n * 1e6) / 1e6 : n);
-
-describe('buildTubeBlueprint holds its shape', () => {
-  it('cuts a plain square into six runs', () => {
-    const bp = buildTubeBlueprint([square()], SPEC, 0.3, 0);
-    expect(bp.runs.map((r) => r.points.length)).toEqual([48, 48, 25, 24, 25, 24]);
-    expect(bp.lit.map((g) => g.getAttribute('position').count)).toEqual([
-      392, 392, 231, 224, 231, 224,
-    ]);
-    expect(bp.paths).toHaveLength(1);
-    expect(bp.corners).toHaveLength(4);
-    expect(bp.lit).toHaveLength(6);
-    expect(bp.dark).toHaveLength(0);
-    bp.dispose();
-  });
-
-  it('carries every surface kind through at its own bend', () => {
-    const bp = buildTubeBlueprint([square()], RICH, 0.3, 7);
-    expect(bp.runs.map((r) => r.surface)).toEqual([
-      'front', 'front', 'front', 'front',
-      'back', 'back', 'back', 'back',
-      'wall', 'wall', 'wall', 'wall',
-      'connector', 'connector',
-    ]);
-    expect(bp.runs.map((r) => r.points.length)).toEqual([
-      48, 48, 48, 48, 48, 48, 48, 48, 49, 49, 49, 49, 3, 3,
-    ]);
-    // The four walls and the two connectors are straight, and a straight run has no curvature.
-    expect(bp.runs.map((r) => round(tightestBend(r)))).toEqual([
-      2.504733, 2.505336, 2.505336, 2.504733,
-      3.22866, 3.229424, 3.229424, 3.22866,
-      Infinity, Infinity, Infinity, Infinity, Infinity, Infinity,
-    ]);
-    expect(bp.runs.map((r) => r.lit)).toEqual([
-      false, false, false, false, false, true, false, true,
-      true, true, true, true, true, false,
-    ]);
-    expect(bp.paths).toHaveLength(5);
-    expect(bp.corners).toHaveLength(12);
-    expect(bp.lit).toHaveLength(7);
-    expect(bp.dark).toHaveLength(7);
-    bp.dispose();
-  });
-
-  it('holds the bend floor exactly where every corner is filleted', () => {
-    const bp = buildTubeBlueprint([square()], CONNECT, 0.3, 2);
-    expect(bp.corners.map((c) => c.strategy)).toEqual([
-      'connect', 'connect', 'connect', 'connect',
-    ]);
-    expect(bp.runs.map((r) => r.points.length)).toEqual([72, 80, 71]);
-    expect(bp.runs.map((r) => round(tightestBend(r)))).toEqual([0.1, 0.1, 0.1]);
-    // Fillet points have no contour vertex behind them, so `from` is null across each arc.
-    expect(bp.runs.map((r) => r.from.filter((s) => s === null).length)).toEqual([17, 34, 17]);
-    expect(bp.lit.map((g) => g.getAttribute('position').count)).toEqual([560, 616, 553]);
-    bp.dispose();
-  });
-});
-```
-
-- [ ] **Step 2: Run it and confirm it is green on today's code**
+- [x] **Step 2: Run it and confirm it is green on today's code**
 
 Run: `npx vitest run packages/core/test/render/tube/stages.test.ts`
 Expected: PASS, 3 tests. A failure means the pinned numbers are stale — stop and re-measure before
 refactoring anything.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add packages/core/test/render/tube/stages.test.ts

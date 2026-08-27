@@ -199,6 +199,7 @@ const CONTROLS = [
   { id: 'background', type: 'select', value: BACKGROUNDS[0], options: BACKGROUNDS,
     hint: 'transparent is the raw canvas; page dark is what you see' },
   { id: 'save', type: 'button', label: 'save PNG' },
+  { id: 'copyConfig', type: 'button', label: 'copy config' },
 ];
 
 const ui = {};
@@ -319,9 +320,26 @@ function rebuild() {
 }
 
 for (const [id, input] of Object.entries(ui)) {
-  if (id === 'save') continue;
+  if (id === 'save' || id === 'copyConfig') continue;
   input.addEventListener(input.tagName === 'SELECT' ? 'change' : 'input', rebuild);
 }
+
+/**
+ * A blob rather than a link: this page is opened from `file://` with no origin to build a URL
+ * against, and its `art.svg` is not ours to put in one.
+ */
+ui.copyConfig.addEventListener('click', () => {
+  const text = JSON.stringify(tuneFromUi(), null, 2);
+  const was = ui.copyConfig.textContent;
+  const done = (word) => {
+    ui.copyConfig.textContent = word;
+    setTimeout(() => { ui.copyConfig.textContent = was; }, 2000);
+  };
+  navigator.clipboard?.writeText(text).then(
+    () => done('copied'),
+    () => { console.log(text); done('logged'); },
+  );
+});
 
 const saveWallpaper = createWallpaper({
   stage,

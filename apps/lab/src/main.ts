@@ -22,6 +22,8 @@ import {
   specOf,
 } from 'klieg';
 
+import { encodeConfig, type ShowConfig } from './show-config.js';
+
 const DEG = Math.PI / 180;
 
 function el<T extends HTMLElement>(id: string): T {
@@ -62,6 +64,7 @@ const tintOnInput = el<HTMLInputElement>('tintOn');
 const holdClickInput = el<HTMLInputElement>('holdClick');
 const modalInput = el<HTMLInputElement>('modal');
 const lineAlignInput = el<HTMLSelectElement>('lineAlign');
+const shareChromeInput = el<HTMLInputElement>('shareChrome');
 const acronymInput = el<HTMLInputElement>('acronym');
 const capsTintInput = el<HTMLInputElement>('capsTint');
 const grainInput = el<HTMLInputElement>('grain');
@@ -494,6 +497,63 @@ const sequenceButtons = SEQUENCES.map((sequence) => {
   button.addEventListener('click', () => void play(sequence));
   sequenceRow.append(button);
   return button;
+});
+
+/**
+ * The performance, not the look authoring: `/show/` validates every field on the way back in, and
+ * the tube and chunk sliders would each need their own clamp for a link nobody could paste.
+ * See `docs/superpowers/specs/2026-08-26-share-links-design.md`.
+ */
+function shareConfig(): Partial<ShowConfig> {
+  const click = holdClickInput.checked;
+  const yaw = number('yaw');
+  const pitch = number('pitch');
+  const roll = number('roll');
+  return {
+    text: textInput.value,
+    look: look.get(),
+    lighting: lighting.get(),
+    enter: enter.get(),
+    active: active.get(),
+    exit: exit.get(),
+    lineAlign: lineAlignInput.value as Align,
+    transform: yaw || pitch || roll ? { yaw, pitch, roll } : undefined,
+    tint: tintOnInput.checked ? Number.parseInt(tintInput.value.slice(1), 16) : undefined,
+    bloom: bloomInput.value === 'auto' ? undefined : bloomInput.value === 'on',
+    hold: click ? 'click' : number('hold'),
+    blendMs: number('blend'),
+    wrap: wrapInput.checked,
+    chrome: shareChromeInput.checked,
+    // `cycleMs: 0` never advances: a link presents what was composed rather than a slideshow.
+    cycleMs: 0,
+    acronym: acronymInput.checked
+      ? {
+          caps: Number.parseInt(capsTintInput.value.slice(1), 16),
+          read: click ? 'click' : number('read'),
+          settle: number('settle'),
+          hold: click ? 'click' : number('acroHold'),
+        }
+      : undefined,
+  };
+}
+
+const copyLinkButton = el<HTMLButtonElement>('copyLink');
+copyLinkButton.addEventListener('click', () => {
+  const url = new URL('show/', location.href);
+  url.hash = encodeConfig(shareConfig());
+  const link = url.toString();
+  const done = (word: string) => {
+    copyLinkButton.textContent = word;
+    log(`${word}: ${link}`);
+    setTimeout(() => {
+      copyLinkButton.textContent = 'copy link';
+    }, 2000);
+  };
+  // The log carries the link either way, so a denied clipboard still leaves it reachable.
+  navigator.clipboard?.writeText(link).then(
+    () => done('copied'),
+    () => done('logged'),
+  );
 });
 
 const fireCurrent = () => fire(textInput.value);

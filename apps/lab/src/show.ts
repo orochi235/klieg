@@ -1,10 +1,12 @@
 import {
   type ActiveSlot,
+  acronym,
   type Clock,
   createKlieg,
   type EnterSlot,
   type ExitSlot,
   type FireOptions,
+  fromEuler,
   type LookName,
   type MotionPiece,
   type PoseOffset,
@@ -138,12 +140,15 @@ const pivot: MotionPiece = {
 
 // Layered into all three slots rather than just `active`: the slot weights are complementary, so
 // this way the pivot holds steady through the enter and the exit instead of unwinding to head-on.
-const enter: EnterSlot = config.pivot ? ['rise', pivot] : 'rise';
-const active: ActiveSlot = config.pivot ? ['float', pivot] : 'float';
-const exit: ExitSlot = config.pivot ? ['recede', pivot] : 'recede';
+const layer = <T>(name: T, on: boolean): T | [T, typeof pivot] => (on ? [name, pivot] : name);
+const enter = layer(config.enter ?? 'rise', config.pivot) as EnterSlot;
+const active = layer(config.active ?? 'float', config.pivot) as ActiveSlot;
+const exit = layer(config.exit ?? 'recede', config.pivot) as ExitSlot;
+
+const DEG = Math.PI / 180;
 
 function options(look: LookName): FireOptions {
-  return {
+  const base: FireOptions = {
     look,
     lighting: config.lighting,
     bloom: config.bloom,
@@ -151,10 +156,31 @@ function options(look: LookName): FireOptions {
     enter,
     active,
     exit,
-    hold: cycling ? config.cycleMs : STILL_HOLD_MS,
+    lineAlign: config.lineAlign,
+    hold: cycling ? config.cycleMs : (config.hold ?? STILL_HOLD_MS),
+    blendMs: config.blendMs,
+    transform: config.transform
+      ? fromEuler(
+          config.transform.pitch * DEG,
+          config.transform.yaw * DEG,
+          config.transform.roll * DEG,
+        )
+      : undefined,
     // A long word in portrait is unreadable on one line; wrapping picks whatever fits largest.
-    wrap: true,
+    wrap: config.wrap,
   };
+  if (!config.acronym) return base;
+  const [, routine] = acronym(config.text, {
+    caps: { tint: config.acronym.caps },
+    read: config.acronym.read,
+    settle: config.acronym.settle,
+    hold: config.acronym.hold,
+    exit: config.exit ?? 'fade',
+    active: config.active ?? 'none',
+  });
+  // The routine owns `hold`, `tint`, `stages` and `lineAlign`; applying the config's own `hold`
+  // after it would silently replace the read beat with the cycle's.
+  return { ...base, ...routine };
 }
 
 const clock = new ShowClock(() => veil.classList.add('veil--gone'));
@@ -195,7 +221,7 @@ const chips = config.looks.map((name, at) => {
   return chip;
 });
 
-if (chips.length < 2) looks.classList.add('looks--hidden');
+if (chips.length < 2 || !config.chrome) looks.classList.add('looks--hidden');
 
 function markActive(at: number): void {
   for (const [k, chip] of chips.entries()) {

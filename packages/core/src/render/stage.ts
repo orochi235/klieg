@@ -4,7 +4,19 @@ import { buildEnvironment } from './environment.js';
 import { DEFAULTS } from './looks.js';
 
 /** Where the canvas lives: over the whole viewport, or inside one element of the page. */
-export type Placement = { kind: 'fullscreen' } | { kind: 'element'; el: HTMLElement };
+export type Placement =
+  | { kind: 'fullscreen' }
+  | {
+      kind: 'element';
+      el: HTMLElement;
+      /**
+       * Lets this anchor take `hold: 'click'`. The dismissal is a press anywhere in the window,
+       * so set it only where that reads as dismissing the type — an anchor filling the viewport,
+       * as a `/show/` page's does. On a strip sharing a page, every unrelated click ends the
+       * effect, which is why an anchor does not take a click hold unless it says so.
+       */
+      clickAnywhere?: boolean;
+    };
 
 export interface StageOptions {
   /** Resolved at mount, not at construction, so a document-less environment can still get here. */

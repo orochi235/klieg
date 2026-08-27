@@ -191,7 +191,9 @@ const klieg = createKlieg({
   // Anchored to the stage, which is `inset: 0` — the same box a fullscreen overlay would take, but
   // an anchored placement lifts `FIT_CAP`. Without that the framing below never binds: a short word
   // stops at 2.2x its natural size, which is the cap protecting a page the overlay is guest on.
-  placement: { kind: 'element', el: stage },
+  // `clickAnywhere` because the stage is `inset: 0`: there is no click on this page that is not a
+  // click on the type, so a shared link may hold until the viewer presses.
+  placement: { kind: 'element', el: stage, clickAnywhere: true },
   // Nothing shares this page with the type, so it takes far more of the frame than the library
   // leaves an overlay. Tuned on a 390x844 phone, where width is what binds a single line.
   framing: { width: 0.84, height: 0.46 },

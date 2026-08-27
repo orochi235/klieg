@@ -1568,20 +1568,38 @@ describe('element placement', () => {
     expect(klieg.supported).toBe(true);
   });
 
-  it("refuses hold: 'click', which could only ever hang", () => {
+  it("refuses hold: 'click' from an anchor that has not opted in", () => {
     const klieg = create({ placement: { kind: 'element', el }, target: undefined });
 
-    expect(() => klieg.fire('hi', { hold: 'click' })).toThrow(
-      /no meaning for an element placement/,
-    );
+    expect(() => klieg.fire('hi', { hold: 'click' })).toThrow(/only with `clickAnywhere`/);
   });
 
   it("refuses a stage holding on 'click' too, not just the top level", () => {
     const klieg = create({ placement: { kind: 'element', el }, target: undefined });
 
     expect(() => klieg.fire('hi', { stages: [{ hold: 'click' }] })).toThrow(
-      /no meaning for an element placement/,
+      /only with `clickAnywhere`/,
     );
+  });
+
+  it("takes hold: 'click' once the anchor says a press anywhere dismisses it", () => {
+    const klieg = create({
+      placement: { kind: 'element', el, clickAnywhere: true },
+      target: undefined,
+    });
+
+    expect(() => klieg.fire('hi', { hold: 'click' })).not.toThrow();
+    klieg.destroy();
+  });
+
+  it('takes a click-held stage under the same opt-in, which is what a routine builds', () => {
+    const klieg = create({
+      placement: { kind: 'element', el, clickAnywhere: true },
+      target: undefined,
+    });
+
+    expect(() => klieg.fire('hi', { stages: [{ hold: 'click' }] })).not.toThrow();
+    klieg.destroy();
   });
 
   it("leaves hold: 'click' alone for a fullscreen overlay", () => {

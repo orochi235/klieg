@@ -322,6 +322,7 @@ export interface Klieg {
 export function createKlieg(options: KliegOptions): Klieg {
   const placement = options.placement ?? { kind: 'fullscreen' };
   const anchored = placement.kind === 'element';
+  const clickAnywhere = placement.kind === 'element' && placement.clickAnywhere === true;
   if (anchored && options.target) {
     throw new Error('klieg: an element placement is its own parent, so `target` cannot apply');
   }
@@ -640,11 +641,18 @@ export function createKlieg(options: KliegOptions): Klieg {
   return {
     supported,
     fire(text, opts = {}) {
-      // Every honest meaning for it hangs: a window listener dismisses on clicks that have nothing
-      // to do with the strip, and one scoped to the anchor never fires once the anchor scrolls off,
-      // stalling the effect and blocking the queue for good.
-      if (anchored && (opts.hold === 'click' || opts.stages?.some((s) => s.hold === 'click'))) {
-        throw new Error("klieg: `hold: 'click'` has no meaning for an element placement");
+      // The dismissal is a press anywhere in the window, which on a strip sharing a page ends the
+      // effect on clicks that have nothing to do with it. An anchor filling the viewport has no
+      // such clicks, so it may opt in; one that has not stays out rather than stall on a listener
+      // it never wanted.
+      if (
+        anchored &&
+        !clickAnywhere &&
+        (opts.hold === 'click' || opts.stages?.some((s) => s.hold === 'click'))
+      ) {
+        throw new Error(
+          "klieg: an element placement takes `hold: 'click'` only with `clickAnywhere` set on it",
+        );
       }
       if (!supported || destroyed) return Promise.resolve();
       return queue.push(`${counter++}:${text}`, (signal) => run(text, opts, signal));

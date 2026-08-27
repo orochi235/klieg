@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0
 
 ### Every look renders at the exposure it was authored at, and can set its own
 

@@ -54,20 +54,78 @@ Do this on its own, with the look snapshots as the guard, before any registry wo
 `generate`, `wander`, `cut`, `assign`, `sweep`, and `buildTubeBlueprint` becomes a fold over it.
 Behavior is unchanged; the sequence is merely named.
 
-**Repairs.** `CUT_REPAIRS` is the same shape one level down, over `fillet`, `stretch`, `setback`,
-`resume`, `close`, `return`, and `mergeArc` folds over it instead of doing the work inline.
+**Repairs.** `CUT_REPAIRS` is the same idea one level down, over `fillet`, `stretch`, `setback`,
+`resume`, `close`, `return`. Each repair splits into `applies(ctx)` and `apply(span, ctx)`. The split
+is the point: with a repair switched off the lab still runs `applies`, so it can draw where the
+repair would have fired and what it would have drawn, instead of showing a worse path and leaving
+the reader to infer why.
 
-Each repair splits into `applies(ctx)` and `apply(span, ctx) → span`. The split is the point: with a
-repair switched off the lab still runs `applies`, so it can draw where the repair would have fired
-and what it would have drawn, instead of showing a worse path and leaving the reader to infer why.
+**It is not a fold, and it does not live in `mergeArc`.** This paragraph replaces an earlier draft
+that said both; the draft was written from the function names rather than from the call graph, and
+measuring it found five independent reasons a linear
+`repairs.reduce((span, r) => r.apply(span, ctx), span)` cannot express the corner stage:
 
-Four of the six are already shaped this way — `resumeAt` returns an index, `eatenBy` and `legGap`
-return numbers, `dropHead`, `dropTail` and `splitReturn` return new arrays. Only `trimTail` (returns
-`void`) and `closeLoop` (mutates both arguments) need real surgery.
+- **The accumulator is not one span.** `mergeArc`'s state is the pair (`target`, `next` plus a
+  cursor into it). `trimTail` acts on `target`; `indexPast` yields a `start` into `next` that three
+  later branches read. `next` is never mutated, deliberately — the same array is the leg for the
+  neighbouring corner's decision.
+- **Each id fires twice, on opposite sides, with incompatible bodies.** `setback` is
+  `trimTail(target, …): void` entering and `indexPast(next, …): number` leaving. `resume` is
+  `target.length = keep + 1` entering and `push(next[from..])` leaving.
+- **`fillet` is spliced into the middle of `resume`.** The real order is side-major, not id-major:
+  entry `stretch` → entry `setback` → entry `resume` → `fillet` → exit `stretch`+`setback` → exit
+  `resume`. A fold runs each id once, in id order.
+- **Two branches return out of the middle** (the exit-side `bridge` and `relax`). A reducer step
+  cannot terminate the fold.
+- **`apply` produces output that is not the span.** `decision.at` is written into the
+  `CornerDecision` that `stitchPath` returns and `cutIntoRuns` turns into `CornerRecord`s.
 
-`cutIntoRuns` and `buildTubeBlueprint` each gain two optional parameters: `enabled?:
-ReadonlySet<string>` and `onStage?(id, snapshot)`. Both absent is exactly today's behavior, which is
-what every shipped caller passes.
+**Three of the six never enter `mergeArc` at all.** `close` (`closeLoop`) and `return`
+(`splitReturn`) are called only from `stitchPath`, and they are span-*list* operations —
+`splitReturn` turns one span into three, `closeLoop` acts on two spans at once — so neither fits a
+fold whose accumulator is a single span. `stretch` is two unrelated implementations under one name:
+a bare `target.pop()` loop in `mergeArc` and `dropHead`/`dropTail` in `stitchPath`, **with different
+floors** (the pop can empty the span; `dropTail` floors at 2). `fillet` straddles both scopes,
+decided in `stitchPath` and applied in `mergeArc`. Only `setback` and `resume` are wholly inside
+`mergeArc`, and both fire twice.
+
+**`applies` must return a site, not a boolean** — a leg index plus the geometry that would have been
+drawn, which is exactly what the lab needs to ghost. `bridgeBefore`/`bridgeAfter` already return
+`{ points, at }` and `resumeAt` already returns an index, so the split is genuinely latent for
+`resume` — but as *three* candidate providers behind one id (`bridge` → `relax` → walk), chosen by
+`rejoin` with fallback.
+
+**The shape that fits** is three registries, not one: a per-side inner pass inside `mergeArc` over
+`[stretch, setback, resume]` run twice with `side: 'entry' | 'exit'` in a shared context, the
+`fillet` splice fixed between the two passes; an outer registry at the `stitchPath` level for
+`close`, `return` and the break-path half of `stretch`; and `hairpin` — a seventh repair the six ids
+never named — as a whole-corner alternative that bypasses both.
+
+`cutIntoRuns` and `buildTubeBlueprint` each gain two optional parameters. Slice 1 shipped
+`buildTubeBlueprint`'s as `stages?: ReadonlySet<TubeStageId>` and
+`onStage?(id, state, ran: boolean)`, typed per level rather than as one `ReadonlySet<string>`
+shared by both registries: a caller passing only repair ids into a shared set would switch off all
+five stages and get an empty blueprint with nothing thrown. `onStage` fires for switched-off stages
+too, so a lab draws a bypassed step rather than a blank panel. Both absent is exactly today's
+behavior, which is what every shipped caller passes.
+
+**Two things have to be fixed before a repair toggle means anything**, both found while measuring
+the above and neither caused by the refactor:
+
+- **A conditional `draw()` desyncs the seed stream.** `stitchPath` consumes a draw per corner in
+  `pickStrategy`, then a second one only when the strategy is `break` — `strategy === 'break' &&
+  draw() < blockout` short-circuits. Whether a corner is `break` depends on whether `filletFor`
+  succeeded, so switching the `fillet` repair off consumes an extra draw at each newly-broken corner
+  and shifts the stream for *every later corner in the glyph*. The lab would show a toggle changing
+  corners it has nothing to do with. Make the draw unconditional, or key the stream per corner
+  index rather than per draw — the latter changes shipped output.
+- **`relaxOnto` clones, so `rejoin: 'relax'` loses provenance.** It builds its window with
+  `p.clone()`, and when the chain already clears `rhoMin` on the first pass it returns those clones
+  unmoved — bit-identical copies that `Run.from` resolves to `null`, which reads as fillet-built
+  geometry and stops `smoothedPoints` smoothing them. `cutIntoRuns`'s own comment claiming "no
+  stitch primitive clones" is false under this branch. No shipped look sets `rejoin`
+  (`DEFAULT_REJOIN` is `drop`), so it is latent — until the lab exposes the knob, which is the point
+  of the lab.
 
 `wanderPaths` stays where it is in the order and stays in place. It runs before the cut so the corner
 stage sees the bends it introduces, and corner records alias the vectors it moves. It is a stage in
@@ -126,6 +184,14 @@ sourceless run vertex must sit where no contour vertex already sits. Counting nu
 fillets contributed needs plumbing that does not exist, and a null-block-length threshold does not
 work — a clone inside a loop nulls every point that loop touches, giving a long block rather than an
 isolated one.
+
+**`closeLoop` can be handed the same array twice.** Its call site passes
+`closedSpans[0]?.points ?? current` as `head`, so when no return fired on that contour, `head` and
+`current` are the same object: it shifts the span's own front and then pushes that shifted first
+element onto the span's own end. That vertex now appears twice in one span, so the provenance map
+resolves two run positions to one `VertexSource` — the same one-to-many the `slice` trap describes,
+arriving by a different route. A pure version has to return both arrays, and must return the *same*
+array for both when it was given the same array for both, or the no-return branch loses its shift.
 
 **`slice` shares boundary points.** `cur = [span[i]]` reuses the object, so one source vertex maps
 to the end of one run and the start of the next. Vertex to source is unambiguous; source to vertex

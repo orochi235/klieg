@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { buildTubeBlueprint, type TubeSpec } from '../../../src/render/tube/index.js';
+import { TUBE_STAGES } from '../../../src/render/tube/stages.js';
 import { tightestBend } from '../../../src/render/tube/sweep.js';
 
 /**
@@ -150,5 +151,17 @@ describe('buildTubeBlueprint, pinned against the stage refactor', () => {
     expect.soft(bp.runs.map((r) => r.from.filter((s) => s === null).length)).toEqual([17, 34, 17]);
     expect.soft(bp.lit.map((g) => g.getAttribute('position').count)).toEqual([560, 616, 553]);
     bp.dispose();
+  });
+});
+
+describe('TUBE_STAGES', () => {
+  it('names the pipeline in the order it runs', () => {
+    expect(TUBE_STAGES.map((s) => s.id)).toEqual(['generate', 'wander', 'cut', 'assign', 'sweep']);
+  });
+
+  it('gives every stage a label to put in a lab', () => {
+    for (const stage of TUBE_STAGES) {
+      expect(stage.label.length).toBeGreaterThan(0);
+    }
   });
 });

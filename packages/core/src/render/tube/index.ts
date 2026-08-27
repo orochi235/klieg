@@ -1,26 +1,13 @@
 import type * as THREE from 'three';
 import type { MaterialSpec } from '../decoration.js';
-import { assign, type SelectSpec } from './assign.js';
-import {
-  type GeneratedPath,
-  generateConnectors,
-  generatePaths,
-  type PathSource,
-} from './generators.js';
+import type { SelectSpec } from './assign.js';
+import type { GeneratedPath, PathSource } from './generators.js';
 import type { GradientSpec } from './gradient.js';
 import type { HairpinShape } from './hairpin.js';
-import {
-  type CornerRecord,
-  type CornerWeights,
-  cutIntoRuns,
-  type Rejoin,
-  type Run,
-  type ShortRun,
-} from './runs.js';
+import type { CornerRecord, CornerWeights, Rejoin, Run, ShortRun } from './runs.js';
+import type { TubeStageId, TubeStageState } from './stages.js';
+import { TUBE_STAGES } from './stages.js';
 import type { SurfaceKind } from './surfaces.js';
-import { surfacesOf } from './surfaces.js';
-import { sweepRun } from './sweep.js';
-import { wanderPaths } from './wander.js';
 
 export type { SelectSpec } from './assign.js';
 export type { PathSource } from './generators.js';
@@ -29,6 +16,7 @@ export type { HairpinShape } from './hairpin.js';
 export { DEFAULT_HAIRPIN, HAIRPIN_SHAPES } from './hairpin.js';
 export type { CornerRecord, CornerStrategy, CornerWeights, Rejoin, Run, ShortRun } from './runs.js';
 export { ALL_BREAK, ALL_CONNECT, DEFAULT_REJOIN, REJOINS } from './runs.js';
+export type { TubeStageId, TubeStageState } from './stages.js';
 export type { SurfaceKind } from './surfaces.js';
 
 export interface TubeSpec {
@@ -108,104 +96,50 @@ export interface TubeBlueprint {
   dispose(): void;
 }
 
-/** Grid cells per side for the face field, and the margin exterior levels need. */
-const RESOLUTION = 256;
-const PAD = 0.35;
+/** @internal */
+export interface TubeBuildOptions {
+  /**
+   * Which stages run. Absent runs all five, which is what every shipped caller passes. A stage
+   * left out runs its `bypass` instead, where it has one.
+   */
+  stages?: ReadonlySet<TubeStageId>;
+  /** Called after each stage that ran, with the live state — nothing is cloned. */
+  onStage?(id: TubeStageId, state: TubeStageState): void;
+}
 
 export function buildTubeBlueprint(
   shapes: THREE.Shape[],
   spec: TubeSpec,
   depth: number,
   seed: number,
+  opts?: TubeBuildOptions,
 ): TubeBlueprint {
-  const surfaces = surfacesOf(shapes, depth);
-  const paths = generatePaths(surfaces, spec.surfaces, {
-    level: spec.level,
-    spacing: spec.spacing,
-    wallDepth: spec.wallDepth ?? 0.5,
-    wallRise: spec.wallRise,
-    resolution: RESOLUTION,
-    pad: PAD,
-    source: spec.pathSource,
-  });
-  const links =
-    spec.connectors && spec.connectors > 0
-      ? generateConnectors(paths, {
-          count: spec.connectors,
-          overshoot: spec.connectorOvershoot ?? 0.05,
-        })
-      : [];
-  // Before the cut: a bend wander introduces is a bend the corner stage has to see.
-  wanderPaths(paths, spec.amplitude ?? 0, seed);
-  const cutPaths = [...paths, ...links];
-  const cut = cutIntoRuns(cutPaths, {
-    runs: spec.runs,
-    minRun: spec.minRun,
-    corners: spec.corners,
-    spacing: spec.spacing,
-    bend: spec.bend,
-    radius: spec.radius,
-    blockout: spec.blockout,
-    shortRun: spec.shortRun,
-    rejoin: spec.rejoin,
-    hairpin: spec.hairpin,
-    seed,
-  });
-  const runs = assign(
-    cut.runs,
-    spec.select,
-    spec.colors,
-    seed,
-    spec.surfaceColors,
-    spec.surfaces,
-    spec.gradient,
-  );
-  // Cloned after wander, not before: wander moves run points in place, and every corner interior
-  // to a run — every `connect` and `loop` — moves with them.
-  const corners = cut.corners.map((c) => ({ ...c, point: c.point.clone() }));
+  const ctx = { shapes, spec, depth, seed };
+  const state: TubeStageState = { paths: [], runs: [], corners: [], lit: [], dark: [] };
 
-  // The letter domain needs each run's slice of the glyph's lit length, and this is the only
-  // place that has the glyph's whole run list.
-  const litRuns = runs.filter((r) => r.lit);
-  const litTotal = litRuns.reduce((a, r) => a + r.length, 0);
-  const spans = new Map<number, { start: number; span: number }>();
-  let walked = 0;
-  for (const run of litRuns) {
-    spans.set(run.index, {
-      start: litTotal > 0 ? walked / litTotal : 0,
-      span: litTotal > 0 ? run.length / litTotal : 0,
-    });
-    walked += run.length;
-  }
-
-  const lit: THREE.BufferGeometry[] = [];
-  const dark: THREE.BufferGeometry[] = [];
-  for (const run of runs) {
-    const place = spec.gradient && run.lit ? spans.get(run.index) : undefined;
-    const geo = sweepRun(
-      run,
-      spec.radius,
-      spec.segments,
-      spec.gradient && place ? { domain: spec.gradient.domain, place } : undefined,
-    );
-    if (!geo) continue;
-    (run.lit ? lit : dark).push(geo);
+  for (const stage of TUBE_STAGES) {
+    if (opts?.stages && !opts.stages.has(stage.id)) {
+      stage.bypass?.(state, ctx);
+      continue;
+    }
+    stage.run(state, ctx);
+    opts?.onStage?.(stage.id, state);
   }
 
   return {
     kind: 'tube',
-    runs,
-    corners,
-    paths: cutPaths,
-    lit,
-    dark,
+    runs: state.runs,
+    corners: state.corners,
+    paths: state.paths,
+    lit: state.lit,
+    dark: state.dark,
     dispose() {
-      for (const g of lit) g.dispose();
-      for (const g of dark) g.dispose();
-      lit.length = 0;
-      dark.length = 0;
-      runs.length = 0;
-      corners.length = 0;
+      for (const g of state.lit) g.dispose();
+      for (const g of state.dark) g.dispose();
+      state.lit.length = 0;
+      state.dark.length = 0;
+      state.runs.length = 0;
+      state.corners.length = 0;
     },
   };
 }

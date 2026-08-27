@@ -149,7 +149,8 @@ function cornerSeed(seed: number, counter: number): number {
   return (Math.round(seed * 2654435761) ^ 0x2f2f6a3d ^ counter) >>> 0;
 }
 
-function polyLength(points: THREE.Vector3[]): number {
+/** @internal */
+export function polyLength(points: THREE.Vector3[]): number {
   let total = 0;
   for (let i = 1; i < points.length; i++) {
     total += (points[i] as THREE.Vector3).distanceTo(points[i - 1] as THREE.Vector3);

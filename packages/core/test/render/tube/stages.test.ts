@@ -285,3 +285,11 @@ describe('the stages gate', () => {
     expect(() => bp.dispose()).not.toThrow();
   });
 });
+
+describe('the registry is internal', () => {
+  it('is not reachable from the published entry', async () => {
+    const published = await import('../../../src/index.js');
+    expect.soft(Object.keys(published)).not.toContain('TUBE_STAGES');
+    expect.soft(Object.keys(published)).not.toContain('buildTubeBlueprint');
+  });
+});

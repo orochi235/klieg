@@ -572,6 +572,24 @@ Roughly in order of value; the items are independent of each other.
   [the pipeline lab design](specs/2026-08-23-pipeline-lab-design.md) — that one is about tube
   geometry, this one about time.
 
+  **kliegsminister is under way, in three slices, on branch `kliegsminister`.** The design's
+  prerequisite shipped long ago: `markAuthored`'s `WeakSet` is gone, `Run.from` provenance replaced
+  it, and `corner-lab`'s `scene.ts` already finds its run through it. **Slice 1 is done** —
+  `buildTubeBlueprint` folds over `TUBE_STAGES` (`render/tube/stages.ts`) over the ids `generate`,
+  `wander`, `cut`, `assign`, `sweep`, with `stages` naming which run and `onStage(id, state, ran)`
+  reporting each. 1162 tests, 33 visual, look snapshots byte-identical. See
+  [the plan](plans/2026-08-27-tube-stage-registry.md), whose "Left for slice 2" section names what
+  it inherits. **Slice 2 is `CUT_REPAIRS` and it is the hard one:** `mergeArc` (`runs.ts:755`)
+  interleaves the bridge, relax and resume paths with the arc push, so the `applies`/`apply` seam
+  the design asks for is not visible from outside yet. Slice 3 is the lab itself.
+
+  Two things slice 1 learned that its plan did not start with. **`wanderPaths` seeds its rng from
+  the path's array index**, so the order paths are concatenated in — contours, then connectors — is
+  what keeps every wandered look byte-identical; reordering it re-renders them all with nothing
+  thrown. And **`enabled` as one untyped set of strings across both registries is a trap**: a caller
+  passing only repair ids would switch off all five stages and get an empty blueprint. Slice 1 types
+  the stage set instead, and slice 2 should add `repairs` as its own typed set beside it.
+
 - ~~**An effects pipeline for the tube looks**~~ — shipped, along with `roving` and `hue` on top of
   it. See the `## In flight` section.
 

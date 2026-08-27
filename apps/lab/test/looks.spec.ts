@@ -128,16 +128,22 @@ test.describe('effects', () => {
   });
 
   /**
-   * The pin is load-bearing twice over. It sits in the second epoch, so the shot is of a fault
-   * that has already moved once rather than of where it started; and it is a moment the holder is
-   * actually dark, which most pins are not — `flicker` rests about 82% of the time, so a carelessly
-   * pinned roving shot is byte-identical to plain `tubing` and would pass with the effect deleted.
-   * The run down here is a different one from what `effect-flicker` takes down. Re-pinning after a
-   * change to run geometry means sweeping for a dark window again: check the new shot against
-   * `look-tubing` by hand, because a shot with no fault in it still passes.
+   * The pin is load-bearing twice over. It sits in the second epoch (now 3193.75ms, so 4725 is
+   * 1.48 epochs in), so the shot is of a fault that has already moved once rather than of where it
+   * started; and it is a moment the holder is actually dark, which most pins are not — `flicker`
+   * rests about 82% of the time, so a carelessly pinned roving shot is byte-identical to plain
+   * `tubing` and would pass with the effect deleted.
+   *
+   * Both properties are measured, not assumed: this shot differs from `look-tubing` by 258 pixels
+   * and from `effect-flicker` by 445. Re-measure them after any change to the holder walk or to run
+   * geometry — keying the corner draws per corner index moved these from 658 and 1558.
+   *
+   * 258 is under this file's own `maxDiffPixelRatio` gate of 480, so the shot no longer fails on
+   * its own if the effect is deleted; walking the whole second epoch a flicker step at a time found
+   * no pin in it that clears the gate. See the handoff's Traps section.
    */
   test('roving takes down a different run than flicker, one epoch on', async ({ page }) => {
-    await still(page, '?pin=5868');
+    await still(page, '?pin=4725');
     await page.selectOption('#look', 'tubing');
     await page.check('#roving');
     await shoot(page, 'effect-roving');

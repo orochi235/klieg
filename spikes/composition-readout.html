@@ -1,0 +1,271 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>composition readout — design prototype</title>
+<style>
+  :root {
+    --bg: #0e1013; --panel: #171a1f; --edge: #262b33;
+    --ink: #d7dce4; --dim: #7e8896; --hot: #ffb347; --cool: #5aa9e6;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-size: 12px; }
+  .wrap { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .rail { background: var(--panel); border-right: 1px solid var(--edge); padding: 14px; overflow: hidden; }
+  .main { padding: 14px 18px; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 13px; margin: 0 0 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+  h2 { font-size: 11px; margin: 0 0 6px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 500; }
+  .row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .row label { flex: 0 0 62px; color: var(--dim); }
+  .row input[type=range] { flex: 1; min-width: 0; accent-color: var(--hot); }
+  .row output { flex: 0 0 46px; text-align: right; color: var(--ink); }
+  .card { background: var(--panel); border: 1px solid var(--edge); border-radius: 5px; padding: 12px; }
+  canvas { display: block; width: 100%; image-rendering: pixelated; }
+  .sweep { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .sweep .card { padding: 10px; }
+  .tag { color: var(--hot); }
+  .clock { display: flex; align-items: center; gap: 10px; }
+  .clock input[type=range] { flex: 1; accent-color: var(--cool); }
+  button { background: var(--edge); color: var(--ink); border: 0; border-radius: 4px; padding: 5px 11px; font: inherit; cursor: pointer; }
+  .note { color: var(--dim); line-height: 1.5; max-width: 74ch; }
+  .grid { display: block; }
+</style>
+<div class="wrap">
+  <div class="rail">
+    <h1>layers</h1>
+    <h2>flicker</h2>
+    <div class="row"><label>depth</label><input id=depth type=range min=0 max=1 step=.01 value=0><output></output></div>
+    <div class="row"><label>unrest</label><input id=unrest type=range min=0 max=1 step=.01 value=.18><output></output></div>
+    <div class="row"><label>spell ms</label><input id=spell type=range min=0 max=8000 step=100 value=0><output></output></div>
+    <div class="row"><label>calm ms</label><input id=calm type=range min=0 max=20000 step=100 value=0><output></output></div>
+    <h2 style="margin-top:16px">roving</h2>
+    <div class="row"><label>dwell ms</label><input id=dwell type=range min=400 max=9000 step=100 value=3200><output></output></div>
+    <div class="row"><label>seed</label><input id=seed type=range min=0 max=20 step=1 value=0><output></output></div>
+    <h2 style="margin-top:16px">pool</h2>
+    <div class="row"><label>parts</label><input id=parts type=range min=4 max=48 step=1 value=24><output></output></div>
+    <div class="row"><label>focus</label><input id=focus type=range min=0 max=47 step=1 value=0><output></output></div>
+    <h2 style="margin-top:16px">derived</h2>
+    <div id=derived class="note"></div>
+  </div>
+  <div class="main">
+    <div class="card">
+      <h2>swatch grid — merged offset, one cell per part</h2>
+      <canvas id=grid class=grid height=150></canvas>
+    </div>
+    <div class="card clock">
+      <button id=play>pause</button>
+      <input id=scrub type=range min=0 max=1 step=.0005 value=0>
+      <span id=readout class=tag></span>
+    </div>
+    <div class="card">
+      <h2>gain — focused part, one pass</h2>
+      <canvas id=plot height=120></canvas>
+    </div>
+    <div class="card">
+      <h2>part &times; time — who holds the fault</h2>
+      <canvas id=raster height=260></canvas>
+    </div>
+    <div class="card">
+      <h2>dwell sweep — same seed, same flicker, three candidate numbers</h2>
+      <div class="sweep">
+        <div class="card"><h2 id=sw0lab></h2><canvas class=swg id=sw0 height=110></canvas><canvas class=swr id=sw0r height=150></canvas></div>
+        <div class="card"><h2 id=sw1lab></h2><canvas class=swg id=sw1 height=110></canvas><canvas class=swr id=sw1r height=150></canvas></div>
+        <div class="card"><h2 id=sw2lab></h2><canvas class=swg id=sw2 height=110></canvas><canvas class=swr id=sw2r height=150></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script type="module">
+// Faithful ports of packages/core/src — motion/types.ts, effects/pieces.ts, effects/roving.ts,
+// effects/compositor.ts. If these drift from core the prototype lies, which is exactly why the
+// real lab imports core instead of copying it.
+const hash01 = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const clamp01 = (n) => Math.min(Math.max(n, 0), 1);
+const STEP_MS = 1400 / 24;
+const BITE = 0.35;
+const finiteMs = (ms) => (Number.isFinite(ms) ? Math.max(0, ms) : 0);
+
+function flicker(spec = {}) {
+  const depth = clamp01(spec.depth ?? 0);
+  const unrest = clamp01(spec.unrest ?? 0.18);
+  const wanted = spec.duration ?? 1400;
+  const calm = finiteMs(spec.calm), spell = finiteMs(spec.spell);
+  const spellSteps = Math.round(spell / STEP_MS), calmSteps = Math.round(calm / STEP_MS);
+  const gated = spellSteps > 0 && calmSteps > 0;
+  const cycleSteps = spellSteps + calmSteps;
+  const cycles = gated ? Math.max(1, Math.round(wanted / (cycleSteps * STEP_MS))) : 1;
+  const duration = gated ? cycles * cycleSteps * STEP_MS : wanted;
+  const steps = Math.max(1, Math.round(duration / STEP_MS));
+  const spellShare = spellSteps / cycleSteps;
+  return { duration, at(t, part) {
+    if (gated && (t * cycles) % 1 >= spellShare) return { gain: 1 };
+    const step = Math.floor(t * steps) % steps;
+    if (hash01(step + part.index * 977.3) > unrest) return { gain: 1 };
+    return { gain: depth + (1 - depth) * hash01(step * 3.7 + part.index * 131.1) * BITE };
+  } };
+}
+
+function isRest(o) {
+  if (o.gain !== undefined && o.gain !== 1) return false;
+  if (o.scale !== undefined && o.scale !== 1) return false;
+  if (o.dark || o.crawl) return false;
+  if (o.color !== undefined) return false;
+  if (o.light?.amount) return false;
+  return true;
+}
+
+const EPOCHS = 8;
+function roving(inner, spec = {}) {
+  const seed = spec.seed ?? 0;
+  const innerDuration = inner.duration > 0 ? inner.duration : 1000;
+  const wanted = spec.dwell ?? 3200;
+  const duration = Math.max(1, Math.round((EPOCHS * wanted) / innerDuration)) * innerDuration;
+  const epochs = Math.max(1, Math.round(duration / wanted));
+  const epoch = duration / epochs;
+  const nominal = (n, count) => Math.min(count - 1, Math.floor(hash01(n * 1.7 + seed * 91.3) * count));
+  const holderOf = (n, part, ctx) => {
+    const count = Math.max(1, part.count);
+    let held = nominal(0, count);
+    for (let lap = 0; lap < 2; lap++) {
+      for (let e = 0; e < epochs; e++) {
+        const phase = ((e * epoch) % innerDuration) / innerDuration;
+        if (isRest(inner.at(phase, { ...part, index: held }, ctx))) held = nominal(e, count);
+        if (lap === 1 && e === n) return held;
+      }
+    }
+    return held;
+  };
+  let memoT = NaN, memoCount = -1, memoHolder = 0;
+  return { duration, epochs, epoch, at(t, part, ctx) {
+    if (t !== memoT || part.count !== memoCount) {
+      memoT = t; memoCount = part.count;
+      memoHolder = holderOf(Math.min(epochs - 1, Math.floor((t * duration) / epoch)), part, ctx);
+    }
+    if (part.index !== memoHolder) return {};
+    return inner.at(((t * duration) % innerDuration) / innerDuration, part, ctx);
+  } };
+}
+
+const mergeGain = (offsets) => offsets.reduce((g, o) => g * (o.gain ?? 1), 1);
+
+// A synthetic pool with UNEVEN run lengths, because a real word's are uneven and `at`/`span` are
+// what `chase`/`hue` spread read. An evenly spaced pool would flatter every spread.
+function pool(count) {
+  const lens = Array.from({ length: count }, (_, i) => 0.4 + hash01(i * 5.9 + 2.3) * 1.6);
+  const total = lens.reduce((a, b) => a + b, 0);
+  let walked = 0;
+  return lens.map((len, i) => {
+    const at = walked / total, span = len / total;
+    walked += len;
+    return { kind: 'run', index: i, count, at, span, x: 0, y: 0, letter: { index: 0, count: 1 } };
+  });
+}
+
+const $ = (id) => document.getElementById(id);
+const ctx0 = { pointer: null, pointerInWord: null, dt: 16.7 };
+let playing = true, elapsed = 0, last = performance.now();
+
+function build() {
+  const inner = flicker({
+    depth: +$('depth').value, unrest: +$('unrest').value,
+    spell: +$('spell').value, calm: +$('calm').value,
+  });
+  return { inner, piece: roving(inner, { dwell: +$('dwell').value, seed: +$('seed').value }) };
+}
+
+function fit(c) {
+  const w = c.clientWidth || 600;
+  if (c.width !== w * devicePixelRatio) { c.width = w * devicePixelRatio; }
+  const g = c.getContext('2d');
+  g.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  g.clearRect(0, 0, w, c.height / devicePixelRatio);
+  return [g, w, c.height / devicePixelRatio];
+}
+
+function drawGrid(canvas, piece, parts, t) {
+  const [g, w, h] = fit(canvas);
+  const cols = Math.ceil(Math.sqrt(parts.length * (w / h)));
+  const rows = Math.ceil(parts.length / cols);
+  const cw = w / cols, ch = h / rows;
+  for (const p of parts) {
+    const gain = mergeGain([piece.at(t, p, ctx0)]);
+    const v = Math.round(clamp01(gain) * 255);
+    g.fillStyle = `rgb(${Math.round(v * 1.0)},${Math.round(v * 0.72)},${Math.round(v * 0.35)})`;
+    const x = (p.index % cols) * cw, y = Math.floor(p.index / cols) * ch;
+    g.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+  }
+}
+
+function drawRaster(canvas, piece, parts, t, samples) {
+  const [g, w, h] = fit(canvas);
+  const rh = h / parts.length;
+  const img = g.createImageData(samples, parts.length);
+  for (let s = 0; s < samples; s++) {
+    const tt = s / samples;
+    for (const p of parts) {
+      const gain = clamp01(mergeGain([piece.at(tt, p, ctx0)]));
+      const lit = gain > 0.999;
+      const o = (p.index * samples + s) * 4;
+      img.data[o] = lit ? 26 : 255;
+      img.data[o + 1] = lit ? 30 : Math.round(90 + gain * 90);
+      img.data[o + 2] = lit ? 37 : Math.round(40 + gain * 40);
+      img.data[o + 3] = 255;
+    }
+  }
+  createImageBitmap(img).then((bmp) => {
+    g.imageSmoothingEnabled = false;
+    g.drawImage(bmp, 0, 0, w, h);
+    g.strokeStyle = '#5aa9e6'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(t * w, 0); g.lineTo(t * w, h); g.stroke();
+  });
+}
+
+function drawPlot(canvas, piece, part, t, samples) {
+  const [g, w, h] = fit(canvas);
+  g.strokeStyle = '#262b33'; g.beginPath(); g.moveTo(0, h - 1); g.lineTo(w, h - 1); g.stroke();
+  g.strokeStyle = '#ffb347'; g.lineWidth = 1; g.beginPath();
+  for (let s = 0; s <= samples; s++) {
+    const tt = s / samples;
+    const y = h - 2 - clamp01(mergeGain([piece.at(tt, part, ctx0)])) * (h - 6);
+    s ? g.lineTo((s / samples) * w, y) : g.moveTo(0, y);
+  }
+  g.stroke();
+  g.strokeStyle = '#5aa9e6'; g.beginPath(); g.moveTo(t * w, 0); g.lineTo(t * w, h); g.stroke();
+}
+
+function frame(now) {
+  const dt = now - last; last = now;
+  const parts = pool(+$('parts').value);
+  $('focus').max = parts.length - 1;
+  const { inner, piece } = build();
+  if (playing) { elapsed = (elapsed + dt) % piece.duration; $('scrub').value = elapsed / piece.duration; }
+  const t = playing ? elapsed / piece.duration : +$('scrub').value;
+  if (!playing) elapsed = t * piece.duration;
+
+  for (const r of document.querySelectorAll('.row input')) {
+    r.nextElementSibling.textContent = r.value;
+  }
+  $('derived').innerHTML =
+    `flicker pass <span class=tag>${inner.duration.toFixed(0)}ms</span><br>` +
+    `roving pass <span class=tag>${piece.duration.toFixed(0)}ms</span><br>` +
+    `epochs <span class=tag>${piece.epochs}</span> &times; ` +
+    `<span class=tag>${piece.epoch.toFixed(0)}ms</span><br>` +
+    `<span style="color:#7e8896">asked ${$('dwell').value}ms &rarr; got ${piece.epoch.toFixed(0)}ms</span>`;
+  $('readout').textContent = `t=${t.toFixed(3)}  ${(t * piece.duration / 1000).toFixed(1)}s / ${(piece.duration / 1000).toFixed(1)}s`;
+
+  drawGrid($('grid'), piece, parts, t);
+  drawPlot($('plot'), piece, parts[+$('focus').value] ?? parts[0], t, 900);
+  drawRaster($('raster'), piece, parts, t, 700);
+
+  [1600, +$('dwell').value, 6400].forEach((d, i) => {
+    const p = roving(inner, { dwell: d, seed: +$('seed').value });
+    $(`sw${i}lab`).innerHTML = `dwell ${d} &rarr; epoch <span class=tag>${p.epoch.toFixed(0)}ms</span>, ${p.epochs} epochs`;
+    drawGrid($(`sw${i}`), p, parts, (elapsed % p.duration) / p.duration);
+    drawRaster($(`sw${i}r`), p, parts, (elapsed % p.duration) / p.duration, 400);
+  });
+  requestAnimationFrame(frame);
+}
+
+$('play').onclick = () => { playing = !playing; $('play').textContent = playing ? 'pause' : 'play'; };
+$('scrub').oninput = () => { playing = false; $('play').textContent = 'play'; };
+requestAnimationFrame(frame);
+</script>

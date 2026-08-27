@@ -59,7 +59,13 @@ export class TextLayer {
     return !sameKey(this.built, key);
   }
 
-  setLayer(boxes: readonly LetterBox[], fontSize: number, family: string, key: LayerKey): void {
+  setLayer(
+    boxes: readonly LetterBox[],
+    fontSize: number,
+    family: string,
+    key: LayerKey,
+    scaleX = 1,
+  ): void {
     this.clear();
     let line: number | null = null;
     for (const box of boxes) {
@@ -74,6 +80,8 @@ export class TextLayer {
       span.style.top = `${box.top}px`;
       span.style.fontSize = `${fontSize}px`;
       span.style.fontFamily = family;
+      // `transform-origin` is already the box's own left edge, so this stretches without moving it.
+      if (scaleX !== 1) span.style.transform = `scaleX(${scaleX})`;
       // Whitespace is carried so a copy keeps it, but it is not ink and must not take a click.
       if (box.char.trim() === '') span.style.pointerEvents = 'none';
       span.textContent = box.char;

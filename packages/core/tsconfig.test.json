@@ -5,6 +5,7 @@
   "references": [
     { "path": "./tsconfig.json" },
     { "path": "./dev/tube-lab" },
-    { "path": "./dev/corner-lab" }
+    { "path": "./dev/corner-lab" },
+    { "path": "./dev/composition-lab" }
   ]
 }

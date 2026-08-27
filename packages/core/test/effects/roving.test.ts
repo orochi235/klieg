@@ -29,6 +29,33 @@ function afflicted(piece: EffectPiece, t: number): number[] {
 /** A piece that is never at rest, so a deferred handover can never resolve. */
 const STUCK: EffectPiece = { duration: 100, at: () => ({ gain: 0.1 }) };
 
+/** Always at rest, so every epoch hands over — and `{ gain: 1 }` still marks the holder, which
+ * a bare `{}` could not. Coverage is a property of the walk, not of any inner's stutter. */
+const RESTING: EffectPiece = { duration: 100, at: () => ({ gain: 1 }) };
+
+function poolOf(count: number): PartInfo[] {
+  return Array.from({ length: count }, (_, index) => ({
+    ...partAt(index),
+    count,
+    at: index / count,
+    span: 1 / count,
+  }));
+}
+
+/** The holder at each of `samples` evenly spaced points of one pass, against `pool`. */
+function holderRun(piece: EffectPiece, pool: PartInfo[], samples: number): number[] {
+  return Array.from({ length: samples }, (_, n) => {
+    const t = n / samples;
+    const held = pool.find((p) => Object.keys(piece.at(t, p, NO_CTX)).length > 0);
+    return held?.index ?? -1;
+  });
+}
+
+/** Holders in order, with consecutive repeats collapsed: the handover sequence. */
+function handovers(piece: EffectPiece, pool: PartInfo[], samples: number): number[] {
+  return holderRun(piece, pool, samples).filter((h, i, all) => i === 0 || h !== all[i - 1]);
+}
+
 const SAMPLES = 500;
 
 describe('roving', () => {
@@ -67,8 +94,31 @@ describe('roving', () => {
     expect(holders.size).toBeGreaterThan(2);
   });
 
+  // A pass that visits 7 of 24 parts and then loops leaves 17 parts that never flicker, ever,
+  // and the same 7 that always do. Measured at 7 before the walk became a permutation.
+  it('visits every part of a real-sized pool within one pass', () => {
+    const pool = poolOf(55);
+    const seen = new Set(handovers(roving(RESTING), pool, 4000));
+    expect(seen.size).toBe(55);
+  });
+
+  it('gives every part the fault once before giving any of them a second turn', () => {
+    const pool = poolOf(24);
+    const seq = handovers(roving(RESTING), pool, 4000).slice(0, 24);
+    expect(new Set(seq).size).toBe(seq.length);
+  });
+
+  it('takes an epoch count, which sets how many handovers a pass holds', () => {
+    const few = roving(RESTING, { epochs: 4 });
+    const many = roving(RESTING, { epochs: 32 });
+    expect(many.duration).toBeGreaterThan(few.duration);
+    expect(handovers(few, poolOf(24), 2000).length).toBeLessThan(
+      handovers(many, poolOf(24), 4000).length,
+    );
+  });
+
   it('holds a part for a stretch rather than jumping every frame', () => {
-    const piece = roving(flicker());
+    const piece = roving(flicker(), { epochs: 8 });
     let changes = 0;
     let prev = afflicted(piece, 0)[0];
     for (let n = 1; n < SAMPLES; n++) {
@@ -76,7 +126,8 @@ describe('roving', () => {
       if (now !== prev) changes++;
       prev = now;
     }
-    // Eight epochs to a pass, so at most eight handovers, and deferral only ever removes some.
+    // One handover per epoch at most, and deferral only ever removes some. Sampled at 500 across
+    // a pass, so a pass with more epochs than samples would undercount — hence the explicit cap.
     expect(changes).toBeGreaterThan(0);
     expect(changes).toBeLessThanOrEqual(8);
   });

@@ -5,6 +5,12 @@ learned that its design doc does not carry, and what is worth doing next.
 
 ## Branch state
 
+**Most recent work, 2026-08-27 overnight.** `main` is green at **1179 tests**. Two things landed:
+`roving` got a permutation walk and a 96-epoch pass (it was visiting 7 parts of 24 and looping),
+and the **composition lab** is built — see its entry under "What is worth doing next", which is now
+a description rather than a proposal. Every "main is at `<sha>`, green at N tests" claim further
+down predates this and should be read as historical.
+
 **`acronym` shipped.** `acronym(text, opts)` returns the arguments to `fire()` for a block whose
 capitals are picked out, held, then gathered into a line once the lower case has left — the
 README's hand-assembled acrostic, pre-baked. It needed two additive things: `char` on `LetterInfo`
@@ -559,14 +565,40 @@ Roughly in order of value; the items are independent of each other.
   leaves visible: on an integer ratio the surviving windows land on the same phases every time, so
   every burst looks identical while the inner genuinely never resets.
 
-- **A composition lab, so effect pieces get built by hand rather than through a plan.** Asked for
-  directly. `roving` and `hue` were specified in prose, and the wrapper's epoch arithmetic came out
-  wrong in a way that read as *more* correct than the fix — a prototype found it in one run and
-  review had not. A piece is a pure function of `(t, part)` with no GL anywhere in it, so a lab can
-  plot one against time, layer several, scrub a pinned clock, and show the merged offset per part.
-  That is most of what a session currently burns tokens reconstructing, and it is also where the
-  numbers the design deferred get picked: `roving`'s `dwell` ships at a stated-provisional 3200ms
-  precisely because there was nothing to measure against. Nothing is designed yet.
+- **The composition lab is built and on `main`.** `npm run dev:composition-lab -w klieg`, port 5183.
+  You build a whole `fire()` in the rail — look, hold, effect layers with their params, targeting,
+  and a `roving` wrapper — and watch it render live on a clock the lab owns. Playing advances the
+  clock; scrubbing backward remounts the fire and jumps straight to the target, which
+  `spikes/seek-rebuild/` measures as byte-identical to playing there at 60fps. The **part × time
+  raster** is the panel worth knowing about: it strikes through every part no layer ever moved, and
+  drops the `epochs` slider to 8 to watch 18 of 24 parts go untouched. The rail warns when a
+  layer's target kind resolves to an empty pool, which is not hypothetical — only `tubing` and
+  `piping` build `run` parts, and a run-targeted layer on the other ten looks does nothing silently.
+  The emit panel prints a pasteable `fire()` call with its own import line.
+
+  **It is honest about time and dishonest about intensity.** No bloom threshold reaches the plots,
+  so a `gain` of 0.65 plots as 0.65 whether or not it reads as a dropout. Judge timing off the
+  raster and the plot; judge depth off the render above them. Where the two disagree is the
+  threshold, and that gap is information.
+
+  **Nothing in the lab reimplements targeting, `stagger` or merging** — `effects/frame.ts` holds
+  `planEffects` and `EffectFrame`, `Word` calls them, and so does the lab. That extraction is the
+  point: an instrument that re-derives what happens *around* a piece drifts and then reports
+  confident wrong answers, which is the failure the tube lab already documents as "the instrument
+  cannot know".
+
+  **One trap it already fell into, and the shape generalizes.** `EffectFrame` writes every
+  *targeted* part whether or not a layer moved it, so a coverage readout keyed on "did the frame
+  write this" marks the whole pool covered under `roving` — which addresses everything and afflicts
+  one part. The lab shipped that bug for about ten minutes and it was invisible in the UI until the
+  count refused to move with `epochs`. `samplePass` counts *moved*, and
+  `packages/core/test/composition-lab/sample.test.ts` pins it.
+
+  See [the design](specs/2026-08-27-composition-lab-design.md) and
+  [the plan](plans/2026-08-27-composition-lab.md). The plan's Tasks 1–11 are done; its self-review
+  section lists what was deliberately deferred — timeline lanes, the swatch grid, a tenure/jump
+  readout, a param sweep, and the draft editing pane. `draft.ts` compiles a hand-authored piece
+  already; only its editing UI is missing.
 
   It is a **different lab** from **kliegsminister**, the stage-and-repair lab in
   [the pipeline lab design](specs/2026-08-23-pipeline-lab-design.md) — that one is about tube
@@ -745,13 +777,15 @@ to move into `oil`'s own film.
 
 ## Traps
 
-**`effect-flicker` and `effect-roving` cannot fail when the effect is deleted.** One run going dark
-changes about 200 pixels of a 1.92M-pixel shot, and `looks.spec.ts` gates on
-`maxDiffPixelRatio: 0.001` — 1920 pixels. So both shots pass against a baseline with no fault in
-them, which is how re-keying the corner draws left `effect-roving` byte-identical to `look-tubing`
-and still green. `effect-hue` recolours the whole sign and is 14x over the gate, so it is fine.
-After anything that moves run geometry, re-pin by sweeping a whole roving epoch a flicker step
-(~58ms) at a time and comparing each shot to plain `tubing` by hand; `-u` alone will not tell you.
+**`effect-flicker` and `effect-roving` cannot fail when the effect is deleted, and this is unfixed.**
+One run going dark changes 187 and 258 pixels of an 800x600 baseline; `looks.spec.ts` gates on
+`maxDiffPixelRatio: 0.001` — 480 pixels. So both pass against a baseline with no fault in it, which
+is how re-keying the corner draws briefly left `effect-roving` byte-identical to `look-tubing` and
+still green. `effect-hue` recolours the whole sign, 14x over the gate, and is fine. Walking the
+whole second roving epoch a flicker step (~58ms) at a time found no pin in it that clears the gate,
+so the shot cannot be rescued by re-pinning — the gate is what needs deciding. Note the baselines
+are `scale: 'css'` at 800x600 while `page.screenshot()` defaults to device scale at 1600x1200:
+measure against the stored size or the count is 4x off and compares to the wrong gate.
 
 **Eliminate a cheap hypothesis about render state before an expensive one about geometry.** The tube
 vanishing when thinned was diagnosed twice as a geometry bug and was one line of render state: a

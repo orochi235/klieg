@@ -1,22 +1,11 @@
 import * as THREE from 'three';
-import { mergeOffsets } from '../effects/compositor.js';
-import { EFFECTS } from '../effects/pieces.js';
-import type {
-  EffectPiece,
-  EffectSpec,
-  FrameCtx,
-  PartInfo,
-  PartKind,
-  PartOffset,
-  ResolvedOffset,
-} from '../effects/types.js';
+import { EffectFrame, planEffects } from '../effects/frame.js';
+import type { EffectSpec, FrameCtx, PartInfo, PartKind, ResolvedOffset } from '../effects/types.js';
 import { blankPose } from '../motion/compositor.js';
 import type { RegroupResult } from '../motion/sequence.js';
-import type { LetterInfo, StaggerSpec } from '../motion/types.js';
-import { stagger } from '../motion/types.js';
+import type { LetterInfo } from '../motion/types.js';
 import type { WordExtent } from '../pointer.js';
 import type { Pose, Vec3 } from '../pose.js';
-import { selectIndices } from '../select.js';
 import type { LoadedFont } from '../text/font.js';
 import {
   buildGlyphGeometry,
@@ -204,17 +193,8 @@ export class Word {
   private readonly partReadsRunColor: boolean[] = [];
   /** Per part, the letter slot it hangs off, so a retired letter's parts can be left alone. */
   private readonly partSlot: number[] = [];
-  /** Per effect: the resolved piece and the part indices it drives. Selection is not per frame. */
-  private readonly effects: {
-    piece: EffectPiece;
-    parts: number[];
-    stagger?: number | StaggerSpec;
-  }[] = [];
-  /**
-   * Layer buffers for the targeted parts only, keyed by part index. Held rather than rebuilt: the
-   * selection is seeded, so what a frame writes never changes, and an untargeted part costs nothing.
-   */
-  private readonly effectLayers = new Map<number, PartOffset[]>();
+  /** Planned once from the specs; holds the per-frame layer buffers. Null until built. */
+  private effectFrame: EffectFrame | null = null;
   /** One scratch colour for the whole word; `writePart` runs per targeted part per frame. */
   private readonly partColor = new THREE.Color();
   private readonly cache: GlyphCache;
@@ -466,27 +446,7 @@ export class Word {
    * frame would pick the same parts at the cost of re-selecting and re-allocating every frame.
    */
   private buildEffects(specs: readonly EffectSpec[]): void {
-    for (const spec of specs) {
-      // Pool positions carry their index into `this.parts`: a part's `index` numbers its own kind,
-      // and the two differ for every run part.
-      const pool = this.parts
-        .map((part, index) => ({ part, index }))
-        .filter(({ part }) => part.kind === spec.target.kind);
-      const chosen = selectIndices(
-        pool.map(({ part }) => ({ index: part.index, length: part.span })),
-        spec.target,
-        spec.seed ?? 0,
-      );
-      const parts = pool.filter(({ part }) => chosen.has(part.index)).map(({ index }) => index);
-      this.effects.push({
-        piece: typeof spec.piece === 'string' ? EFFECTS[spec.piece]() : spec.piece,
-        stagger: spec.stagger,
-        parts,
-      });
-      for (const index of parts) {
-        if (!this.effectLayers.has(index)) this.effectLayers.set(index, []);
-      }
-    }
+    this.effectFrame = specs.length > 0 ? new EffectFrame(planEffects(specs, this.parts)) : null;
   }
 
   /**
@@ -495,23 +455,11 @@ export class Word {
    * longer describes it, and the mesh it would write is on its way off screen.
    */
   private applyEffects(elapsed: number, ctx: FrameCtx): void {
-    for (const layers of this.effectLayers.values()) layers.length = 0;
-
-    for (const effect of this.effects) {
-      const duration = effect.piece.duration;
-      const pass = duration > 0 ? (elapsed % duration) / duration : 0;
-      for (const index of effect.parts) {
-        if (this.retiredPart(index)) continue;
-        const part = this.parts[index] as PartInfo;
-        const t = effect.stagger === undefined ? pass : stagger(pass, part, effect.stagger);
-        (this.effectLayers.get(index) as PartOffset[]).push(effect.piece.at(t, part, ctx));
-      }
-    }
-
-    for (const [index, layers] of this.effectLayers) {
-      if (this.retiredPart(index)) continue;
-      this.writePart(index, mergeOffsets(layers));
-    }
+    const resolved = this.effectFrame?.resolve(this.parts, elapsed, ctx, (index) =>
+      this.retiredPart(index),
+    );
+    if (!resolved) return;
+    for (const [index, out] of resolved) this.writePart(index, out);
   }
 
   private retiredPart(index: number): boolean {
@@ -1007,7 +955,7 @@ export class Word {
       }
     }
 
-    if (this.effects.length > 0) this.applyEffects(elapsed, ctx);
+    if (this.effectFrame) this.applyEffects(elapsed, ctx);
   }
 
   dispose(): void {
@@ -1028,8 +976,7 @@ export class Word {
     this.partBaseColor.length = 0;
     this.partReadsRunColor.length = 0;
     this.partSlot.length = 0;
-    this.effects.length = 0;
-    this.effectLayers.clear();
+    this.effectFrame = null;
     this.bodyMeshes.length = 0;
     this.litMeshes.length = 0;
     this.gradientRamp?.dispose();

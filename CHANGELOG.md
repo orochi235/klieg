@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.9.0
+
+### `roving` visits the whole sign instead of the same seven parts forever
+
+A pass held eight epochs, and each one drew its holder independently, so the fault landed on about
+seven distinct parts of a pool of 24 and then looped — the same seven flickering forever, the other
+seventeen never once. It got worse the longer the sign: 5 of 55 parts on a word the length of
+`CONGRATULATIONS`, which is exactly where a travelling fault most needs to travel.
+
+Two changes. The holder walk is a **seeded permutation** rather than an independent draw per epoch,
+so a lap gives every part exactly one turn and each lap reshuffles. And the epoch count is a knob,
+**`roving({ epochs })`**, defaulting to 96 rather than 8: a pass now visits every part of a pool up
+to 29 and 51 of 55, with deferred handovers costing the rest. The pass lengthens to match — 204s at
+the default `dwell`, against 25s.
+
+`dwell` itself was already honest and is unchanged: 3200ms asked delivers 3.15s measured, and every
+value from 800 to 9000 lands within 1.6% of what it asked for. What it never controlled is how much
+the sign flickers — dark share holds at ~20% across a 4x change in `dwell`, because `unrest` sets
+all of that. `dwell` picks who, `unrest` picks how much.
+
+No shipped look uses `roving`, so no look baseline moves. The one visual baseline that does is
+`effect-roving`, which pins a moment in the second epoch: a different run is afflicted now. Its
+pin still lands on a moment the holder is dark — measured 658 pixels from plain `tubing` and 1558
+from `effect-flicker`, which is what the test's two claims rest on.
+
+### The selectable layer sits on the glyphs instead of behind them
+
+`selectable: 'layer'` positions one transparent span per letter by projecting the word onto the
+plane of its front cap. It measured that plane at `cameraZ - depth * scale`, but glyphs are built
+with `bevelEnabled: true` and three lays the bevel *outside* the extrusion — the geometry spans
+`-bevelThickness` to `depth + bevelThickness`, so the cap clears the nominal depth by 0.055 em.
+That plane sets the frustum height, which sets both the span font size and the pixels-per-world
+the letter positions scale by, so the error skewed the whole layer rather than shifting it.
+
+Spans also take a `scaleX()` where the camera's aspect and the canvas box disagree. A font size
+can carry only one axis, so letters otherwise land at the right x with the wrong width. It is 1
+for every placement today; nothing enforces the agreement, since the renderer is sized with
+`updateStyle: false` and the camera's aspect comes from the measured box.
+
+### An anchored word can hold until a click
+
+`hold: 'click'` threw for every element placement, which crashed the `/show/` route whenever a
+share link carried one. The dismissal is a global pointerdown, which works the same anchored; what
+the refusal protected against is a strip sharing a page, where a press anywhere ends an effect for
+reasons unrelated to it. An anchor filling the viewport has no such press, so the element placement
+now takes **`clickAnywhere`** and an anchor that sets it may hold on a click at the top level or in
+any stage. One that has not still refuses, naming the flag. `/show/` sets it, which is what lets a
+click-held link and an acrostic's click-to-read beat play there.
+
 ## 0.8.0
 
 ### Every look renders at the exposure it was authored at, and can set its own

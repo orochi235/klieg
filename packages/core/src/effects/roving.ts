@@ -8,12 +8,32 @@ export interface RovingSpec {
   dwell?: number;
   /** Fixes which part is afflicted in which epoch, so a pinned frame reproduces. */
   seed?: number;
+  /**
+   * Handovers to a pass, and so the ceiling on how many parts a pass can visit before it loops.
+   * A pool larger than this never has all of its parts afflicted, however long the sign runs.
+   * Raise it for a sign wider than the default covers; lower it for a shorter cycle.
+   */
+  epochs?: number;
 }
 
-/** Epochs to a wrapper pass. */
-const EPOCHS = 8;
+/** Real words measure 3 to 55 run parts. At 96 a pass visits every part of a pool up to 29 and
+ * 51 of 55, deferral being what costs the rest; raising it further buys little for a much longer
+ * cycle. Was 8, which visited 5 of 55 and then looped. */
+const EPOCHS = 96;
 
 const NONE: PartOffset = {};
+
+/** A seeded permutation of `0..count`, by Fisher-Yates over `hash01`. Pure in `(count, seed)`. */
+function shuffle(count: number, seed: number): number[] {
+  const out = Array.from({ length: count }, (_, i) => i);
+  for (let i = count - 1; i > 0; i--) {
+    const j = Math.min(i, Math.floor(hash01(i * 2.3 + seed * 57.1) * (i + 1)));
+    const swap = out[i] as number;
+    out[i] = out[j] as number;
+    out[j] = swap;
+  }
+  return out;
+}
 
 /**
  * Moves an inner piece's affliction from part to part. Exactly one part of the pool is afflicted at
@@ -29,6 +49,7 @@ const NONE: PartOffset = {};
  */
 export function roving(inner: EffectPiece, spec: RovingSpec = {}): EffectPiece {
   const seed = spec.seed ?? 0;
+  const wantedEpochs = Math.max(1, Math.round(spec.epochs ?? EPOCHS));
   const innerDuration = inner.duration > 0 ? inner.duration : 1000;
   const wanted = spec.dwell ?? 3200;
   // A whole number of inner passes, so the inner's reconstructed phase is continuous across the
@@ -36,12 +57,28 @@ export function roving(inner: EffectPiece, spec: RovingSpec = {}): EffectPiece {
   // Do NOT make the epoch itself a multiple of the inner pass: every handover would then sample the
   // inner at one fixed phase, where its rest is a per-part constant, and the first part that blocks
   // its own handover keeps the fault forever.
-  const duration = Math.max(1, Math.round((EPOCHS * wanted) / innerDuration)) * innerDuration;
+  const duration = Math.max(1, Math.round((wantedEpochs * wanted) / innerDuration)) * innerDuration;
   const epochs = Math.max(1, Math.round(duration / wanted));
   const epoch = duration / epochs;
 
-  const nominal = (n: number, count: number) =>
-    Math.min(count - 1, Math.floor(hash01(n * 1.7 + seed * 91.3) * count));
+  /**
+   * The nth part to take the fault. A seeded permutation rather than an independent draw per
+   * epoch: independent draws are coupon-collecting, which visited 7 parts of a pool of 24 over a
+   * whole pass and then looped, so 17 parts never flickered at all. A lap gives every part exactly
+   * one turn, and each lap reshuffles, so a pool smaller than `epochs` does not repeat one order.
+   */
+  let permCount = -1;
+  let permLap = -1;
+  let perm: number[] = [];
+  const nominal = (n: number, count: number) => {
+    const lap = Math.floor(n / count);
+    if (count !== permCount || lap !== permLap) {
+      permCount = count;
+      permLap = lap;
+      perm = shuffle(count, seed + lap * 7.3);
+    }
+    return perm[n % count] as number;
+  };
 
   /**
    * Who holds the fault in epoch `n`. Two laps over the pass: `t` is normalized within a pass, so

@@ -10,6 +10,22 @@
 
 **Design:** [`specs/2026-08-27-composition-lab-design.md`](../specs/2026-08-27-composition-lab-design.md)
 
+**Status: built, Tasks 1–12, on `main` at 1179 tests.** Five things came out differently from what
+is written below; the code is right and this section is the record.
+
+1. `SelectSpec` requires `by`, which every `target` literal in this plan omits. They are all
+   `{ kind, by: 'index', amount }`.
+2. `Word` had two more references to the fields Task 1 deletes — a guard in the frame loop and a
+   line in `dispose`. `buildEffects` sets `effectFrame` to null when no spec targets, and the guard
+   reads that.
+3. The root `vitest.config.ts` had to learn the `@core/*` alias, or no test can import a lab module.
+4. An element placement takes `el` and refuses `target`, so `Preview` passes
+   `placement: { kind: 'element', el: target }` and no `target`.
+5. Task 4's `touched` as specified means *targeted*, which makes the coverage overlay blind to
+   `roving` — the one fault it exists to show. It means *moved*, and `sample.test.ts` pins that.
+
+`roving`'s `EPOCHS` fix landed first, separately, in `bb2767f`.
+
 **Conventions this repo already has, which every task follows:**
 - `@core/*` path alias, in both `tsconfig.json` `paths` and `vite.config.ts` `resolve.alias`. Copy `dev/corner-lab/` exactly; never write `../../../src/`.
 - Comments are 1–2 lines and only for what the code cannot say. Most steps below need none.
@@ -28,7 +44,7 @@ The lab must not reimplement targeting, `stagger` and merging. Those happen *aro
 - Create: `packages/core/test/effects/frame.test.ts`
 - Modify: `packages/core/src/render/word.ts` (the `effects` field, `buildEffects`, `applyEffects`)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `packages/core/test/effects/frame.test.ts`:
 
@@ -134,12 +150,12 @@ describe('EffectFrame', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run packages/core/test/effects/frame.test.ts`
 Expected: FAIL — `Failed to resolve import "../../src/effects/frame.js"`.
 
-- [ ] **Step 3: Write `effects/frame.ts`**
+- [x] **Step 3: Write `effects/frame.ts`**
 
 Create `packages/core/src/effects/frame.ts`:
 
@@ -239,12 +255,12 @@ export class EffectFrame {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run packages/core/test/effects/frame.test.ts`
 Expected: PASS, 9 tests.
 
-- [ ] **Step 5: Point `Word` at it**
+- [x] **Step 5: Point `Word` at it**
 
 In `packages/core/src/render/word.ts`:
 
@@ -287,13 +303,13 @@ Then delete the now-unused imports: `mergeOffsets` from `'../effects/compositor.
 the `PartOffset` type import if nothing else references it. `npm run lint` names any that are still
 needed — do not guess, let it tell you.
 
-- [ ] **Step 6: Verify nothing moved**
+- [x] **Step 6: Verify nothing moved**
 
 Run: `npm run check`
 Expected: lint clean, typecheck clean, **1147 tests pass**. That count is the assertion: this task
 must not change any behaviour, so a changed count means something broke.
 
-- [ ] **Step 7: Verify the extraction by mutation**
+- [x] **Step 7: Verify the extraction by mutation**
 
 Temporarily change `resolve` so it does not clear the layer buffers (delete the
 `for (const layers of this.layers.values()) layers.length = 0;` line).
@@ -301,7 +317,7 @@ Temporarily change `resolve` so it does not clear the layer buffers (delete the
 Run: `npx vitest run packages/core/test/effects/frame.test.ts`
 Expected: FAIL on "does not leak one frame layers into the next". Restore the line and confirm PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/core/src/effects/frame.ts packages/core/test/effects/frame.test.ts packages/core/src/render/word.ts
@@ -330,7 +346,7 @@ No behaviour change: 1147 tests, unchanged."
 - Modify: `tsconfig.json` (references)
 - Modify: `packages/core/tsconfig.test.json` (references)
 
-- [ ] **Step 1: Write the config files**
+- [x] **Step 1: Write the config files**
 
 `packages/core/dev/composition-lab/vite.config.ts`:
 
@@ -383,7 +399,7 @@ export default defineConfig({
 </html>
 ```
 
-- [ ] **Step 2: Register it with the build**
+- [x] **Step 2: Register it with the build**
 
 In `packages/core/package.json`, add to `scripts`:
 
@@ -403,7 +419,7 @@ In `packages/core/tsconfig.test.json`, add to `references`:
 { "path": "./dev/composition-lab" }
 ```
 
-- [ ] **Step 3: Write the shell**
+- [x] **Step 3: Write the shell**
 
 `packages/core/dev/composition-lab/src/main.tsx`:
 
@@ -460,13 +476,13 @@ export function App() {
 }
 ```
 
-- [ ] **Step 4: Verify it boots**
+- [x] **Step 4: Verify it boots**
 
 Run: `npm run dev:composition-lab -w klieg`
 Open `http://localhost:5183`. Expected: the three placeholder regions, no console errors.
 Then `npm run check` — expected clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/dev/composition-lab tsconfig.json packages/core/tsconfig.test.json packages/core/package.json
@@ -484,7 +500,7 @@ One serialisable object describing a whole `fire()`, and a pure function turning
 - Create: `packages/core/dev/composition-lab/src/composition.ts`
 - Create: `packages/core/test/composition-lab/composition.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `packages/core/test/composition-lab/composition.test.ts`:
 
@@ -537,12 +553,12 @@ describe('toFireOptions', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `npx vitest run packages/core/test/composition-lab/composition.test.ts`
 Expected: FAIL — cannot resolve `composition.js`.
 
-- [ ] **Step 3: Write the model**
+- [x] **Step 3: Write the model**
 
 Create `packages/core/dev/composition-lab/src/composition.ts`:
 
@@ -635,7 +651,7 @@ export function toFireOptions(c: Composition): {
 }
 ```
 
-- [ ] **Step 4: Write the piece registry it depends on**
+- [x] **Step 4: Write the piece registry it depends on**
 
 Create `packages/core/dev/composition-lab/src/pieces.ts`:
 
@@ -697,7 +713,7 @@ export function buildPiece(
 }
 ```
 
-- [ ] **Step 5: Write the draft compiler stub it depends on**
+- [x] **Step 5: Write the draft compiler stub it depends on**
 
 Create `packages/core/dev/composition-lab/src/draft.ts`. This is the real implementation, not a
 stub — Task 9 only adds the editing UI around it:
@@ -752,12 +768,12 @@ export async function loadDraft(source: string): Promise<DraftResult> {
 }
 ```
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `npx vitest run packages/core/test/composition-lab/composition.test.ts`
 Expected: PASS, 4 tests.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/core/dev/composition-lab/src packages/core/test/composition-lab
@@ -775,7 +791,7 @@ tested without a canvas.
 - Create: `packages/core/dev/composition-lab/src/sample.ts`
 - Create: `packages/core/test/composition-lab/sample.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `packages/core/test/composition-lab/sample.test.ts`:
 
@@ -836,12 +852,12 @@ describe('samplePass', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `npx vitest run packages/core/test/composition-lab/sample.test.ts`
 Expected: FAIL — cannot resolve `sample.js`.
 
-- [ ] **Step 3: Write the sampler**
+- [x] **Step 3: Write the sampler**
 
 Create `packages/core/dev/composition-lab/src/sample.ts`:
 
@@ -902,12 +918,12 @@ export function samplePass(
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `npx vitest run packages/core/test/composition-lab/sample.test.ts`
 Expected: PASS, 4 tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/dev/composition-lab/src/sample.ts packages/core/test/composition-lab/sample.test.ts
@@ -922,7 +938,7 @@ git commit -m "sample a composition's pass through the renderer's own EffectFram
 - Create: `packages/core/dev/composition-lab/src/pool.ts`
 - Create: `packages/core/test/composition-lab/pool.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `packages/core/test/composition-lab/pool.test.ts`:
 
@@ -954,12 +970,12 @@ describe('poolCounts', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `npx vitest run packages/core/test/composition-lab/pool.test.ts`
 Expected: FAIL — cannot resolve `pool.js`.
 
-- [ ] **Step 3: Write it**
+- [x] **Step 3: Write it**
 
 Create `packages/core/dev/composition-lab/src/pool.ts`:
 
@@ -1007,12 +1023,12 @@ export function poolCounts(parts: readonly PartInfo[]): Record<PartKind, number>
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `npx vitest run packages/core/test/composition-lab/pool.test.ts`
 Expected: PASS, 4 tests.
 
-- [ ] **Step 5: Add the real pool source**
+- [x] **Step 5: Add the real pool source**
 
 Append to `packages/core/dev/composition-lab/src/pool.ts`:
 
@@ -1031,7 +1047,7 @@ export function realPool(text: string, font: LoadedFont, look: LookName): PartIn
 }
 ```
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run: `npm run check`
 Expected: clean.
@@ -1050,7 +1066,7 @@ git commit -m "give the composition lab a synthetic pool with uneven spans, and 
 - Create: `packages/core/dev/composition-lab/src/font.ts`
 - Modify: `packages/core/dev/composition-lab/src/App.tsx`
 
-- [ ] **Step 1: Write the font module**
+- [x] **Step 1: Write the font module**
 
 Create `packages/core/dev/composition-lab/src/font.ts`, mirroring `tube-lab/src/font.ts`:
 
@@ -1062,7 +1078,7 @@ import fontUrl from '../../../../../apps/lab/public/font.ttf?url';
 export { fontUrl };
 ```
 
-- [ ] **Step 2: Write the preview**
+- [x] **Step 2: Write the preview**
 
 Create `packages/core/dev/composition-lab/src/Preview.tsx`:
 
@@ -1127,7 +1143,7 @@ export function Preview({ composition, elapsed }: PreviewProps) {
 }
 ```
 
-- [ ] **Step 3: Wire it into the App with a transport**
+- [x] **Step 3: Wire it into the App with a transport**
 
 Replace `packages/core/dev/composition-lab/src/App.tsx`:
 
@@ -1192,7 +1208,7 @@ export function App() {
 }
 ```
 
-- [ ] **Step 4: Style the preview host**
+- [x] **Step 4: Style the preview host**
 
 Append to `packages/core/dev/composition-lab/src/styles.css`:
 
@@ -1214,7 +1230,7 @@ Append to `packages/core/dev/composition-lab/src/styles.css`:
 }
 ```
 
-- [ ] **Step 5: Verify by eye**
+- [x] **Step 5: Verify by eye**
 
 Run: `npm run dev:composition-lab -w klieg`, open `http://localhost:5183`.
 Expected: `ACRONYM` renders in `tubing` and plays; pause holds it; dragging the scrubber backward
@@ -1222,7 +1238,7 @@ re-renders at that time rather than freezing. No console errors.
 
 Then `npm run check` — expected clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/core/dev/composition-lab/src
@@ -1241,7 +1257,7 @@ explicit mark on parts the composition never touches.
 - Modify: `packages/core/dev/composition-lab/src/App.tsx`
 - Modify: `packages/core/dev/composition-lab/src/styles.css`
 
-- [ ] **Step 1: Write the raster**
+- [x] **Step 1: Write the raster**
 
 Create `packages/core/dev/composition-lab/src/Raster.tsx`:
 
@@ -1311,7 +1327,7 @@ export function Raster({ samples, at }: RasterProps) {
 }
 ```
 
-- [ ] **Step 2: Feed it from the App**
+- [x] **Step 2: Feed it from the App**
 
 In `App.tsx`, add the imports:
 
@@ -1351,7 +1367,7 @@ Replace the `panels` section with:
         </section>
 ```
 
-- [ ] **Step 3: Style the panel**
+- [x] **Step 3: Style the panel**
 
 Append to `styles.css`:
 
@@ -1382,7 +1398,7 @@ Append to `styles.css`:
 }
 ```
 
-- [ ] **Step 4: Verify by eye, then commit**
+- [x] **Step 4: Verify by eye, then commit**
 
 Run the lab. With no effect layers the raster is empty and reports 24 of 24 never touched — that
 is correct, and is the empty-target warning doing its job before any layer exists.
@@ -1403,7 +1419,7 @@ git commit -m "draw the part-by-time raster with an untouched-part overlay"
 - Modify: `packages/core/dev/composition-lab/src/App.tsx`
 - Modify: `packages/core/dev/composition-lab/src/styles.css`
 
-- [ ] **Step 1: Write the rail**
+- [x] **Step 1: Write the rail**
 
 Create `packages/core/dev/composition-lab/src/Rail.tsx`:
 
@@ -1600,7 +1616,7 @@ export function Rail({ composition, onChange, counts }: RailProps) {
 }
 ```
 
-- [ ] **Step 2: Wire it in**
+- [x] **Step 2: Wire it in**
 
 In `App.tsx`, replace `<aside className="cl-rail">rail</aside>` with:
 
@@ -1613,7 +1629,7 @@ In `App.tsx`, replace `<aside className="cl-rail">rail</aside>` with:
 Change `const [composition] = useState(...)` to `const [composition, setComposition] = useState(...)`,
 and add `import { Rail } from './Rail.js';` and `poolCounts` to the `./pool.js` import.
 
-- [ ] **Step 3: Style the rail**
+- [x] **Step 3: Style the rail**
 
 Append to `styles.css`:
 
@@ -1651,7 +1667,7 @@ Append to `styles.css`:
 }
 ```
 
-- [ ] **Step 4: Verify by eye**
+- [x] **Step 4: Verify by eye**
 
 Run the lab. Add a `flicker` layer, tick `roving`, and confirm: the raster fills, the untouched
 count falls, and dragging `epochs` down to 8 makes the untouched count climb — which is the
@@ -1661,7 +1677,7 @@ Switch the look to `neon` and confirm the rail warns that the look builds no `ru
 
 Run: `npm run check`. Expected clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/dev/composition-lab/src
@@ -1676,7 +1692,7 @@ git commit -m "give the composition lab a control rail with an empty-target warn
 - Create: `packages/core/dev/composition-lab/src/Plot.tsx`
 - Modify: `packages/core/dev/composition-lab/src/App.tsx`
 
-- [ ] **Step 1: Write it**
+- [x] **Step 1: Write it**
 
 Create `packages/core/dev/composition-lab/src/Plot.tsx`:
 
@@ -1744,7 +1760,7 @@ export function Plot({ samples, channel, part, at }: PlotProps) {
 }
 ```
 
-- [ ] **Step 2: Wire it in with a channel and part selector**
+- [x] **Step 2: Wire it in with a channel and part selector**
 
 In `App.tsx`, add state and render it in the panels section:
 
@@ -1774,7 +1790,7 @@ In `App.tsx`, add state and render it in the panels section:
 
 Add `import { Plot, type Channel } from './Plot.js';`.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run the lab, confirm the plot tracks the raster's playhead and that switching to `crawl` with a
 `chase` layer shows a ramp.
@@ -1795,7 +1811,7 @@ git commit -m "plot one part's channel across a pass"
 - Create: `packages/core/test/composition-lab/emit.test.ts`
 - Modify: `packages/core/dev/composition-lab/src/Rail.tsx`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `packages/core/test/composition-lab/emit.test.ts`:
 
@@ -1848,12 +1864,12 @@ describe('emit', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `npx vitest run packages/core/test/composition-lab/emit.test.ts`
 Expected: FAIL — cannot resolve `emit.js`.
 
-- [ ] **Step 3: Write it**
+- [x] **Step 3: Write it**
 
 Create `packages/core/dev/composition-lab/src/emit.ts`:
 
@@ -1895,12 +1911,12 @@ export function emit(c: Composition): string {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `npx vitest run packages/core/test/composition-lab/emit.test.ts`
 Expected: PASS, 4 tests.
 
-- [ ] **Step 5: Add the copy button to the rail**
+- [x] **Step 5: Add the copy button to the rail**
 
 In `Rail.tsx`, add `import { emit } from './emit.js';` and append before the closing fragment:
 
@@ -1923,7 +1939,7 @@ Append to `styles.css`:
 }
 ```
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run: `npm run check`. Expected clean.
 
@@ -1940,7 +1956,7 @@ git commit -m "emit the tuned composition as a pasteable fire() call"
 - Create: `packages/core/dev/composition-lab/src/persist.ts`
 - Modify: `packages/core/dev/composition-lab/src/main.tsx`, `src/App.tsx`
 
-- [ ] **Step 1: Write it**
+- [x] **Step 1: Write it**
 
 Create `packages/core/dev/composition-lab/src/persist.ts`, mirroring `tube-lab/src/persist.ts`:
 
@@ -1977,7 +1993,7 @@ export function clear(): void {
 }
 ```
 
-- [ ] **Step 2: Use it**
+- [x] **Step 2: Use it**
 
 In `App.tsx`, change the initial state to `useState<Composition>(restore)` and add:
 
@@ -1989,7 +2005,7 @@ In `App.tsx`, change the initial state to `useState<Composition>(restore)` and a
 
 Add `import { restore, save } from './persist.js';`.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run the lab, add a layer, reload, confirm it survives.
 
@@ -2008,7 +2024,7 @@ git commit -m "persist the composition lab's state across reloads"
 - Modify: `docs/superpowers/HANDOFF.md`
 - Modify: `README.md` (dev labs list, if one exists; otherwise skip)
 
-- [ ] **Step 1: Write the handoff entry**
+- [x] **Step 1: Write the handoff entry**
 
 Replace the "A composition lab, so effect pieces get built by hand" bullet in
 `docs/superpowers/HANDOFF.md` with what shipped: the command to run it, what each panel answers,
@@ -2016,7 +2032,7 @@ and the two things it is honest and dishonest about (time, intensity). Note that
 `spikes/seek-rebuild/` is the evidence for the scrub, and that its ports are copies while the lab
 imports core.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add docs/superpowers/HANDOFF.md README.md

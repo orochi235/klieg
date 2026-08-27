@@ -69,6 +69,12 @@ path whose surface is not `front` or `back`, and connectors are `'connector'`. I
 goes, this changes behavior silently. `Run.from.path` indexes into the concatenated array, and the
 order (contours then links) is unchanged, so indices still mean what they meant.
 
+**And the concat order reaches further than provenance.** `wanderPaths` seeds its rng from the
+`forEach` index, so a path's index is part of how it bends. Connectors sorting after contours is
+what keeps every contour's index — and therefore every wander seed — byte-identical to before the
+fold. Reordering the concatenation would silently re-baseline every wandered look, which no type
+and no test outside the look snapshots would catch.
+
 **`CornerWeights` has no `return` weight.** It is `{ break, connect, hairpin? }`. `return` is a
 `CornerStrategy` the cut produces from `blockout`, not something a spec weights — and an excess
 property on an object literal is only a type error where TypeScript checks it, so a scratch script

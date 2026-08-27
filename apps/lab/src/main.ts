@@ -1,5 +1,7 @@
 import {
   ACTIVE_NAMES,
+  type Align,
+  acronym,
   type Clock,
   createKlieg,
   EFFECTS,
@@ -59,6 +61,9 @@ const tintInput = el<HTMLInputElement>('tint');
 const tintOnInput = el<HTMLInputElement>('tintOn');
 const holdClickInput = el<HTMLInputElement>('holdClick');
 const modalInput = el<HTMLInputElement>('modal');
+const lineAlignInput = el<HTMLSelectElement>('lineAlign');
+const acronymInput = el<HTMLInputElement>('acronym');
+const capsTintInput = el<HTMLInputElement>('capsTint');
 const grainInput = el<HTMLInputElement>('grain');
 const densityInput = el<HTMLInputElement>('density');
 const surfacesInput = el<HTMLSelectElement>('surfaces');
@@ -130,6 +135,12 @@ const CONTROL_IDS = [
   'selectable',
   'holdClick',
   'modal',
+  'lineAlign',
+  'acronym',
+  'capsTint',
+  'read',
+  'settle',
+  'acroHold',
 ];
 
 type ControlState = Record<string, string | boolean>;
@@ -339,10 +350,12 @@ const message = (err: unknown) => (err instanceof Error ? err.message : String(e
 
 function fire(text: string): void {
   log(`fire ${JSON.stringify(text)}`);
-  bk.fire(text, {
+  const acrostic = acronymInput.checked;
+  // `active` and `exit` move inside the routine when it is on: they describe how the lower case
+  // leaves and what the gathered acronym does, which are stages rather than the fire's own slots.
+  const options: FireOptions = {
     enter: enter.get(),
-    active: active.get(),
-    exit: exit.get(),
+    ...(acrostic ? {} : { active: active.get(), exit: exit.get() }),
     look: chosenLook(),
     effects: chosenEffects(),
     lighting: lighting.get(),
@@ -354,11 +367,28 @@ function fire(text: string): void {
     // Three-way rather than a checkbox: FireOptions.bloom wins over a look's own request, so an
     // unchecked box could only mean "unset" — leaving no way to switch neon's own bloom off.
     bloom: bloomInput.value === 'auto' ? undefined : bloomInput.value === 'on',
+    lineAlign: lineAlignInput.value as Align,
     wrap: wrapInput.checked,
     selectable: selectableInput.value as SelectableMode,
     modal: modalInput.checked,
     placement: { kind: 'fullscreen' },
-  }).then(
+  };
+  if (acrostic) {
+    const click = holdClickInput.checked;
+    const [, routine] = acronym(text, {
+      caps: { tint: Number.parseInt(capsTintInput.value.slice(1), 16) },
+      read: click ? 'click' : number('read'),
+      settle: number('settle'),
+      hold: click ? 'click' : number('acroHold'),
+      exit: exit.get(),
+      active: active.get(),
+    });
+    // The routine owns `hold`, `tint` and `stages`; everything else above is still the lab's.
+    Object.assign(options, routine);
+    const caps = [...text].filter((c) => c !== c.toLowerCase() && c === c.toUpperCase()).length;
+    if (caps < 2) log(`  acronym: only ${caps} capital(s) — nothing to gather`);
+  }
+  bk.fire(text, options).then(
     () => log(`done  ${JSON.stringify(text)}`),
     (err: unknown) => {
       log(`FAILED ${JSON.stringify(text)}: ${message(err)}`);

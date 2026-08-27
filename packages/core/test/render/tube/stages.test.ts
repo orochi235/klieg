@@ -217,3 +217,71 @@ describe('onStage', () => {
     plain.dispose();
   });
 });
+
+const ALL = new Set<TubeStageId>(['generate', 'wander', 'cut', 'assign', 'sweep']);
+const without = (...off: TubeStageId[]) => {
+  const on = new Set(ALL);
+  for (const id of off) on.delete(id);
+  return on;
+};
+
+describe('the stages gate', () => {
+  it('builds what no options builds when every stage is named', () => {
+    const gated = buildTubeBlueprint([square()], SPEC, 0.3, 0, { stages: ALL });
+    const plain = buildTubeBlueprint([square()], SPEC, 0.3, 0);
+    expect(gated.runs.map((r) => r.points.length)).toEqual(plain.runs.map((r) => r.points.length));
+    gated.dispose();
+    plain.dispose();
+  });
+
+  it('leaves the paths flat with wander off, exactly as amplitude zero does', () => {
+    const off = buildTubeBlueprint([square()], RICH, 0.3, 7, { stages: without('wander') });
+    const flat = buildTubeBlueprint([square()], { ...RICH, amplitude: 0 }, 0.3, 7);
+    expect(off.runs.map((r) => r.points.map((p) => p.z))).toEqual(
+      flat.runs.map((r) => r.points.map((p) => p.z)),
+    );
+    off.dispose();
+    flat.dispose();
+  });
+
+  it('passes each whole path through as one run with cut off', () => {
+    const bp = buildTubeBlueprint([square()], RICH, 0.3, 7, { stages: without('cut') });
+    expect.soft(bp.runs).toHaveLength(bp.paths.length);
+    expect.soft(bp.runs.map((r) => r.points.length)).toEqual(bp.paths.map((p) => p.points.length));
+    expect.soft(bp.runs.map((r) => r.surface)).toEqual(bp.paths.map((p) => p.surface));
+    // Nothing was built, so every vertex still resolves to a contour vertex.
+    expect.soft(bp.runs.every((r) => r.from.every((s) => s !== null))).toBe(true);
+    expect.soft(bp.corners).toHaveLength(0);
+    bp.dispose();
+  });
+
+  it('still draws an uncut contour', () => {
+    // Sweeping a raw contour through unsoftened corners self-intersects; it must not throw.
+    const bp = buildTubeBlueprint([square()], SPEC, 0.3, 0, { stages: without('cut') });
+    expect(bp.lit.length + bp.dark.length).toBeGreaterThan(0);
+    bp.dispose();
+  });
+
+  it("leaves the cut's own light and colour with assign off", () => {
+    const bp = buildTubeBlueprint([square()], RICH, 0.3, 7, { stages: without('assign') });
+    expect.soft(bp.runs.every((r) => r.color === 0)).toBe(true);
+    expect.soft(bp.runs.every((r) => r.lit)).toBe(true);
+    bp.dispose();
+  });
+
+  it('keeps the runs but drops the geometry with sweep off', () => {
+    const bp = buildTubeBlueprint([square()], SPEC, 0.3, 0, { stages: without('sweep') });
+    expect.soft(bp.runs).toHaveLength(6);
+    expect.soft(bp.lit).toHaveLength(0);
+    expect.soft(bp.dark).toHaveLength(0);
+    bp.dispose();
+  });
+
+  it('empties out rather than throwing with generate off', () => {
+    const bp = buildTubeBlueprint([square()], SPEC, 0.3, 0, { stages: without('generate') });
+    expect.soft(bp.paths).toHaveLength(0);
+    expect.soft(bp.runs).toHaveLength(0);
+    expect.soft(bp.lit).toHaveLength(0);
+    expect(() => bp.dispose()).not.toThrow();
+  });
+});

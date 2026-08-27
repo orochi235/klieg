@@ -180,4 +180,10 @@ describe('assign with a per-run gradient', () => {
     const after = assign(runs(7), { by: 'seed', amount: 0.6 }, COLORS, 11, undefined, ['front']);
     expect(after.map((r) => [r.lit, r.color])).toEqual(before.map((r) => [r.lit, r.color]));
   });
+
+  it('mutates the run list it was handed rather than returning a new one', () => {
+    const given = runs(4);
+    const out = assign(given, { by: 'seed', amount: 1 }, COLORS, 3);
+    expect(out).toBe(given);
+  });
 });

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.8.1
+## 0.9.0
 
 ### `roving` visits the whole sign instead of the same seven parts forever
 

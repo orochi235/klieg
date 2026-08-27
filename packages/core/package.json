@@ -1,6 +1,6 @@
 {
   "name": "klieg",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "Shiny extruded 3D type, slammed over the web app you already have, on a transparent WebGL overlay",
   "keywords": [
     "webgl",

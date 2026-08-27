@@ -44,7 +44,8 @@
     "dev:tube-lab": "vite dev/tube-lab",
     "prepack": "npm run build && cp ../../README.md README.md",
     "prepublishOnly": "npm --prefix ../.. run check",
-    "dev:corner-lab": "vite dev/corner-lab"
+    "dev:corner-lab": "vite dev/corner-lab",
+    "dev:composition-lab": "vite dev/composition-lab"
   },
   "dependencies": {
     "opentype.js": "^2.0.0"

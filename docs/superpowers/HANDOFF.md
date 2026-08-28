@@ -5,19 +5,30 @@ learned that its design doc does not carry, and what is worth doing next.
 
 ## Branch state
 
-**Host-driven effects are designed, not built.** Branch `host-driven-effects`, worktree
-`~/src/klieg-worktrees/host-driven-effects`, one commit, unpushed. The design is
-[the spec](specs/2026-08-27-host-driven-effects-design.md); it carries the surface, the phase
-instants, and the two traps that make a naive implementation pass its tests and still be wrong.
-Next step is a plan, not code.
+**Host-driven effects are planned, not built.** Branch `host-driven-effects`, worktree
+`~/src/klieg-worktrees/host-driven-effects`, three commits, unpushed and one behind `main`. The
+design is [the spec](specs/2026-08-27-host-driven-effects-design.md); the fourteen-task
+[plan](plans/2026-08-27-host-driven-effects.md) is ready to execute and opens with the four places
+it departs from the spec. Next step is Task 0.
 
-Four things the spec cannot carry. Its account of sherpa's model is pinned to `v1-runtime` /
-`9addc1e` with sherpa's tree dirty and its IPC surface being revised, so re-read sherpa before
-trusting the alignment claims. `spikes/double-dispatch.mjs` reproduces the problem `dismiss: 'host'`
-removes but has never been run against the lab. The decision to name it `advance()` rather than
-sherpa's `goto()` came with an undertaking to add `advance` to sherpa too. And **0.9.0 is already
-on npm** — `clickAnywhere` is public API now, so the spec's treatment of it is a change to shipped
-surface, not a greenfield choice.
+The load-bearing departure: the spec declares `FireHandle extends PromiseLike<void>` and argues
+that widens `fire()`'s return type harmlessly. It narrows it — `PromiseLike` has no `.catch`, and
+`dev/composition-lab/src/Preview.tsx:30` already calls `.catch()` on a fire — so the plan extends
+`Promise<void>` instead. The other three are in the plan; do not implement the spec where they
+disagree.
+
+Three things neither document can settle for itself. The spec's account of sherpa is pinned to
+`v1-runtime` / `9addc1e` with sherpa's tree dirty and its IPC surface being revised, so re-read
+sherpa before trusting the alignment claims (plan Task 12). `spikes/double-dispatch.mjs` reproduces
+the problem `dismiss: 'host'` removes but has never been run against the lab (Task 11). And naming
+it `advance()` rather than sherpa's `goto()` came with an undertaking to add `advance` to sherpa
+too, which nothing in klieg will remind anyone about.
+
+**0.9.0 is already on npm**, so `clickAnywhere` is shipped API and this revises public surface
+rather than choosing it freely. Releases are tag-triggered; never `npm publish` by hand.
+
+`FEATURE-REQUESTS.md` — which the spec cites as where the three asks are recorded — is untracked in
+`~/src/klieg` and in no commit on any branch. Plan Task 1 commits it.
 
 **Watch the worktree.** The main checkout at `~/src/klieg` was switched to another branch by a
 concurrent session mid-task during this work. Check `git branch --show-current` before committing

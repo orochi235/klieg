@@ -14,6 +14,7 @@ import {
 } from '@core/render/tube/generators.js';
 import { buildTubeBlueprint, type Run } from '@core/render/tube/index.js';
 import type { Rejoin } from '@core/render/tube/runs.js';
+import type { TubeStageId } from '@core/render/tube/stages.js';
 import { surfacesOf } from '@core/render/tube/surfaces.js';
 import { tightestBend } from '@core/render/tube/sweep.js';
 import type { LoadedFont } from '@core/text/font.js';
@@ -27,6 +28,8 @@ export interface SceneRequest {
   source: PathSource;
   corner: number;
   rejoin: Rejoin;
+  stages: ReadonlySet<TubeStageId>;
+  drawAt: TubeStageId;
 }
 
 export interface Measure {
@@ -87,6 +90,10 @@ export interface CornerScene {
   measures: Measure[];
   /** Radius at each vertex around the corner, in tube radii, `at` counted from the corner. */
   profile: { at: number; rho: number }[];
+  /** Paths as they stood after the selected stage, in the glyph's own space. */
+  staged: THREE.Vector3[][];
+  /** Stages that were switched off, so the panel can say a step was bypassed rather than empty. */
+  skipped: TubeStageId[];
 }
 
 const PAD = 0.3;
@@ -210,6 +217,8 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
       cornerCount: 0,
       measures: [{ label: 'hard corners', value: 'none' }],
       profile: [],
+      staged: [],
+      skipped: [],
     };
   }
 
@@ -228,11 +237,24 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
   const replaced: THREE.Vector3[] = [];
   for (let k = lo - 1; k <= hi + 1; k++) replaced.push(at(points, k));
 
+  const staged: THREE.Vector3[][] = [];
+  const skipped: TubeStageId[] = [];
   const blueprint = buildTubeBlueprint(
     glyphToShapes(font.font, req.letter, 1),
     { ...spec, pathSource: req.source, rejoin: req.rejoin },
     PAD,
     0,
+    {
+      stages: req.stages,
+      onStage: (id, state, ran) => {
+        if (!ran) skipped.push(id);
+        if (id !== req.drawAt) return;
+        // Copied, not referenced: later stages push into these same arrays, so holding the
+        // reference shows the end state under every setting of `draw at`.
+        const source = state.runs.length > 0 ? state.runs : state.paths;
+        for (const item of source) staged.push(item.points.map((p) => p.clone()));
+      },
+    },
   );
   const corners: CornerMark[] = found.map((f, i) => ({
     at: at(f.path.points, f.corner.index).clone(),
@@ -324,5 +346,7 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
     cornerCount: found.length,
     measures,
     profile,
+    staged,
+    skipped,
   };
 }

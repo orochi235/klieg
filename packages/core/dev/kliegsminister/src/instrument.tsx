@@ -1,11 +1,13 @@
 import type { PathSource } from '@core/render/tube/generators.js';
 import { DEFAULT_REJOIN, REJOINS, type Rejoin } from '@core/render/tube/runs.js';
+import { TUBE_STAGES, type TubeStageId } from '@core/render/tube/stages.js';
 import type { LoadedFont } from '@core/text/font.js';
 import { CanvasStackContext, defineInstrument, type ViewTransform } from '@weasel-js/labkit';
 import { useContext, useEffect, useRef, useState } from 'react';
 import type * as THREE from 'three';
 import { Legend } from './LegendPanel.js';
 import { INK } from './legend.js';
+import { NODE_KEY, STAGE_NODES } from './pipeline.js';
 import { buildScene, type CornerMark, type CornerScene, type GlyphBounds } from './scene.js';
 import { isTubeLook, type TubeLook } from './spec.js';
 
@@ -15,6 +17,9 @@ interface Config {
   source: string;
   corner: number;
   rejoin: string;
+  drawAt: string;
+  /** One key per stage and, from Task 13, per repair — `stage:<id>` and `repair:<id>`. */
+  [stageOrRepair: string]: unknown;
 }
 
 function requestOf(config: Config) {
@@ -24,6 +29,10 @@ function requestOf(config: Config) {
     source: config.source as PathSource,
     corner: Math.max(0, Math.round(config.corner) - 1),
     rejoin: (REJOINS.includes(config.rejoin as Rejoin) ? config.rejoin : DEFAULT_REJOIN) as Rejoin,
+    stages: new Set(TUBE_STAGES.map((s) => s.id).filter((id) => config[`stage:${id}`] !== false)),
+    drawAt: (TUBE_STAGES.some((t) => t.id === config.drawAt)
+      ? config.drawAt
+      : 'sweep') as TubeStageId,
   };
 }
 
@@ -281,6 +290,8 @@ export const junction = defineInstrument<CornerScene, Config>({
     source: 'direct',
     corner: 1,
     rejoin: DEFAULT_REJOIN,
+    drawAt: 'sweep',
+    ...Object.fromEntries(TUBE_STAGES.map((stage) => [`stage:${stage.id}`, true])),
   }),
 
   configSchema: () => [
@@ -313,6 +324,19 @@ export const junction = defineInstrument<CornerScene, Config>({
       type: 'select',
       default: DEFAULT_REJOIN,
       options: REJOINS.map((r) => ({ value: r, label: r })),
+    },
+    ...TUBE_STAGES.map((stage) => ({
+      key: `stage:${stage.id}`,
+      label: `run · ${stage.label}`,
+      type: 'checkbox' as const,
+      default: true,
+    })),
+    {
+      key: 'drawAt',
+      label: 'draw at',
+      type: 'select',
+      default: 'sweep',
+      options: TUBE_STAGES.map((s) => ({ value: s.id, label: s.label })),
     },
   ],
 
@@ -357,6 +381,15 @@ export const junction = defineInstrument<CornerScene, Config>({
           }),
       },
       {
+        id: 'staged',
+        draw: (ctx, { state, zoom }) =>
+          centred(ctx, zoom, () => {
+            for (const span of state.staged) {
+              stroke(ctx, span, state.centre, INK.staged, 1.6 / zoom);
+            }
+          }),
+      },
+      {
         id: 'repair',
         draw: (ctx, { state, zoom }) =>
           centred(ctx, zoom, () => {
@@ -366,11 +399,26 @@ export const junction = defineInstrument<CornerScene, Config>({
     ],
   },
 
-  layers: { ids: ['floor', 'contour', 'built', 'repair'] },
+  layers: { ids: ['floor', 'contour', 'staged', 'built', 'repair'] },
 
   render: ({ state, config, setConfig, setState }) => (
     <>
       <div className="junction">
+        <ol className="junction__pipeline">
+          {STAGE_NODES.map((node) => {
+            const off = state.skipped.includes(node.id);
+            const shown = node.id === requestOf(config).drawAt;
+            return (
+              <li
+                key={NODE_KEY(node)}
+                className={`stagechip${off ? ' stagechip--off' : ''}${shown ? ' stagechip--shown' : ''}`}
+                title={off ? `${node.label} — switched off` : node.label}
+              >
+                <span className="stagechip__name">{node.label}</span>
+              </li>
+            );
+          })}
+        </ol>
         <dl className="junction__measures">
           {state.measures.map((m) => (
             <div className={m.bad ? 'measure measure--bad' : 'measure'} key={m.label}>

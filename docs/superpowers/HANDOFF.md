@@ -1,27 +1,39 @@
-# Handoff — klieg, 2026-08-27
+# Handoff — klieg, 2026-08-28
 
 **For:** the next session picking this up. **Answers:** what is on `main`, what each merged branch
 learned that its design doc does not carry, and what is worth doing next.
 
 ## Branch state
 
-**Host-driven effects are planned, not built.** Branch `host-driven-effects`, worktree
-`~/src/klieg-worktrees/host-driven-effects`, three commits, unpushed and one behind `main`. The
-design is [the spec](specs/2026-08-27-host-driven-effects-design.md); the fourteen-task
-[plan](plans/2026-08-27-host-driven-effects.md) is ready to execute and opens with the four places
-it departs from the spec. Next step is Task 0.
+**Host-driven effects are built.** Branch `host-driven-effects`, worktree
+`~/src/klieg-worktrees/host-driven-effects`, rebased on `main`, **unpushed and unreviewed**. Every
+task in the [plan](plans/2026-08-27-host-driven-effects.md) is done; the
+[spec](specs/2026-08-27-host-driven-effects-design.md) carries the reasoning. Green at **1274 tests
+/ 64 files**, lint, typecheck and `npm run build -w klieg` all clean. Next step is review, then a
+PR.
 
-The load-bearing departure: the spec declares `FireHandle extends PromiseLike<void>` and argues
-that widens `fire()`'s return type harmlessly. It narrows it — `PromiseLike` has no `.catch`, and
-`dev/composition-lab/src/Preview.tsx:30` already calls `.catch()` on a fire — so the plan extends
-`Promise<void>` instead. The other three are in the plan; do not implement the spec where they
-disagree.
+`fire()` now returns a `FireHandle` and takes `onPhase`, `dismiss` and `signal`. The changelog entry
+sits under `## Unreleased`: `0.9.2` is on npm, so releasing needs a minor bump in
+`packages/core/package.json` before the tag — the release workflow refuses a tag that does not match
+it.
+
+The four places the build departs from the spec are listed at the top of the plan. Two were proven
+rather than argued, by reverting them and watching the build break: `FireHandle extends
+PromiseLike<void>` fails typecheck at `dev/composition-lab/src/Preview.tsx:30`, which calls
+`.catch()` on a fire; and dropping the reduced-motion branch in the tick leaves `active` firing and
+`exit` never arriving, because that path pins `elapsed` to the settled pose.
 
 **The premise is now evidence, not assertion.** `spikes/double-dispatch.mjs` was aimed at a control
 the lab does not have (`acrostic` is an `<h2>`, not a button); repointed at `#holdClick` + `#fire`
 it runs and prints `DOUBLE DISPATCH REPRODUCED` — one press on FIRE both dismisses the held effect
 and fires a new one. sherpa reached the same conclusion independently and hard-blocked it: its klieg
 provider *throws* on `hold: 'click'` or `stages`.
+
+It still prints that after this branch, which is expected rather than a regression: the spike drives
+the lab, and the lab has no control for `dismiss: 'host'`, so it exercises the `'window'` path.
+Turning it into an after-check means adding that control beside the lab's `hold click` checkbox.
+What proves the fix today is the unit test `attaches no window listeners under dismiss: 'host'`,
+verified by mutation.
 
 **sherpa has moved on from the snapshot the spec was written against, and it moved toward this
 design.** Re-checked at `main` / `923df22`; the spec's "How sherpa consumes this" section carries
@@ -31,14 +43,8 @@ replaced by `PageHandle.seek(offset)` — "absolute, idempotent, press-space; ne
 `advance()` is a different verb and the provider does the translation. The undertaking to give
 sherpa an `advance` is still open, and nothing in klieg will remind anyone about it.
 
-**0.9.0 is already on npm**, so `clickAnywhere` is shipped API and this revises public surface
-rather than choosing it freely. Releases are tag-triggered; never `npm publish` by hand.
-
-`FEATURE-REQUESTS.md` — which the spec cites as where the three asks are recorded — is untracked in
-`~/src/klieg` and in no commit on any branch. Plan Task 1 commits it. sherpa's
-`docs/upstream-asks.md` is the mirror of it and lists the same three.
-
-The branch is green as it stands: **1203 tests, 62 files**, lint and typecheck clean.
+`FEATURE-REQUESTS.md` is now committed here; sherpa's `docs/upstream-asks.md` is its mirror and
+lists the same three asks. Both can be retired once this ships.
 
 **Watch the worktree.** The main checkout at `~/src/klieg` was switched to another branch by a
 concurrent session mid-task during this work. Check `git branch --show-current` before committing

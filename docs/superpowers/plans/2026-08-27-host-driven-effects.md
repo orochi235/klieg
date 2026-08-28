@@ -100,8 +100,7 @@ npm install
 npm test 2>&1 | tail -5
 ```
 
-Expected: `Test Files 62 passed (62)`, `Tests 1203 passed (1203)`. Measured on this branch before
-the rebase; `main` adds one commit, so the count may be a little higher after Step 2.
+Expected: `Test Files 63 passed (63)`, `Tests 1249 passed (1249)` — measured after the rebase.
 
 ---
 
@@ -1731,7 +1730,8 @@ git commit -m "document the host-driven effect surface"
 npm run check
 ```
 
-Expected: green, at 1203 plus roughly 20 new tests.
+Expected: `Test Files 64 passed (64)`, `Tests 1274 passed (1274)` — 25 tests added across the
+branch.
 
 - [ ] **Step 2: Confirm no public surface leaked**
 
@@ -1763,8 +1763,9 @@ after-check means giving the lab a `dismiss` control beside its `hold click` che
 - [ ] **Step 5: Hand off**
 
 Use `superpowers:finishing-a-development-branch`. The branch is unpushed; there is no remote branch
-yet. `0.9.0` is already on npm, so this is a minor version, not a patch — releases are tag-triggered,
-so do not `npm publish` by hand.
+yet. `0.9.2` is on npm and the changelog entry is under `## Unreleased`, so a release needs a minor
+bump in `packages/core/package.json` first — the release workflow refuses a tag that does not match
+it. Releases are tag-triggered; never `npm publish` by hand.
 
 Two things downstream, neither of them klieg's to do here. sherpa's klieg provider throws on
 `hold: 'click'` and declares `caps: { steppable: false, abortable: false }`; all three are now

@@ -9,6 +9,14 @@ import {
 } from '../../../src/render/tube/repairs.js';
 import { ALL_BREAK, ALL_CONNECT, cutIntoRuns } from '../../../src/render/tube/runs.js';
 
+/** An open path with one sharp interior apex — a V whose walls meet sharp enough to hairpin. */
+const sharpV = () => {
+  const pts: THREE.Vector3[] = [];
+  for (let i = 40; i >= 0; i--) pts.push(new THREE.Vector3(-0.18 * (i / 40), i / 40, 0));
+  for (let i = 1; i <= 40; i++) pts.push(new THREE.Vector3(0.18 * (i / 40), i / 40, 0));
+  return pts;
+};
+
 /** Sampled at the pipeline's 0.02 spacing — load-bearing: at 0.1 no corner is detected at all. */
 const square = () => {
   const corners = [
@@ -256,5 +264,85 @@ describe('the span registry', () => {
     });
     expect(on.runs.filter((r) => r.dark).length).toBeGreaterThan(0);
     expect(off.runs.filter((r) => r.dark)).toHaveLength(0);
+  });
+});
+
+describe('the whole-corner decisions', () => {
+  const OPTS = { runs: 1, minRun: 0, radius: 0.03, bend: 2, spacing: 0.02, seed: 0 };
+
+  it('breaks every hard corner when fillet is switched off', () => {
+    const { corners } = cutIntoRuns(
+      [{ points: square(), surface: 'front' as const, closed: true }],
+      {
+        ...OPTS,
+        corners: ALL_CONNECT,
+        repairs: new Set(['stretch', 'setback', 'resume', 'close', 'return', 'hairpin'] as const),
+      },
+    );
+    expect(corners.every((c) => c.strategy === 'break')).toBe(true);
+  });
+
+  it('draws a hairpin at the sharp-V fixture when hairpin is enabled', () => {
+    const { corners } = cutIntoRuns(
+      [{ points: sharpV(), surface: 'front' as const, closed: false }],
+      { ...OPTS, corners: { break: 0, connect: 0, hairpin: 1 } },
+    );
+    expect(corners.some((c) => c.strategy === 'hairpin')).toBe(true);
+  });
+
+  it('breaks a hairpin corner when hairpin is switched off', () => {
+    const { corners } = cutIntoRuns(
+      [{ points: sharpV(), surface: 'front' as const, closed: false }],
+      {
+        ...OPTS,
+        corners: { break: 0, connect: 0, hairpin: 1 },
+        repairs: new Set(['stretch', 'setback', 'resume', 'fillet', 'close', 'return'] as const),
+      },
+    );
+    expect(corners.some((c) => c.strategy === 'hairpin')).toBe(false);
+  });
+
+  // The "everything on" contrast for this same fixture is already pinned by the span registry's
+  // "leaves a return span whole when return is switched off" test, which asserts dark runs > 0
+  // under this exact `corners: ALL_BREAK, blockout: 1` shape with the default (all-on) repairs.
+  it('never returns dark across a corner when fillet is switched off', () => {
+    const path = { points: square(), surface: 'front' as const, closed: true };
+    const off = cutIntoRuns([path], {
+      ...OPTS,
+      corners: ALL_BREAK,
+      blockout: 1,
+      repairs: new Set(['stretch', 'setback', 'resume', 'close', 'return', 'hairpin'] as const),
+    });
+    expect(off.runs.filter((r) => r.dark)).toHaveLength(0);
+  });
+
+  it('reports one fillet per hard corner, all skipped, when fillet is switched off', () => {
+    const reports: { site: unknown; ran: boolean }[] = [];
+    cutIntoRuns([{ points: square(), surface: 'front' as const, closed: true }], {
+      ...OPTS,
+      corners: ALL_CONNECT,
+      repairs: new Set(['stretch', 'setback', 'resume', 'close', 'return', 'hairpin'] as const),
+      onRepair: (id, site, ran) => {
+        if (id === 'fillet') reports.push({ site, ran });
+      },
+    });
+    expect(reports).toHaveLength(4);
+    expect(reports.every((r) => r.ran === false)).toBe(true);
+    expect(
+      reports.every((r) => r.site !== null && (r.site as { points: unknown[] }).points.length > 0),
+    ).toBe(true);
+  });
+
+  it('reports the fillet as run when fillet is switched on', () => {
+    const reports: { ran: boolean }[] = [];
+    cutIntoRuns([{ points: square(), surface: 'front' as const, closed: true }], {
+      ...OPTS,
+      corners: ALL_CONNECT,
+      onRepair: (id, _site, ran) => {
+        if (id === 'fillet') reports.push({ ran });
+      },
+    });
+    expect(reports).toHaveLength(4);
+    expect(reports.every((r) => r.ran === true)).toBe(true);
   });
 });

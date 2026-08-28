@@ -138,7 +138,11 @@ export interface CutOptions {
    * ids into a shared set would switch off all five stages and get an empty blueprint.
    */
   repairs?: ReadonlySet<CutRepairId>;
-  /** Fires for every repair considered, switched off ones included, so a lab can ghost them. */
+  /**
+   * Fires for every repair considered, switched off ones included, so a lab can ghost them —
+   * except the blockout branch's fillet candidate, which surfaces as the span-level `return`
+   * report instead.
+   */
   onRepair?(id: CutRepairId, site: RepairSite | null, ran: boolean): void;
 }
 
@@ -945,6 +949,7 @@ function stitchPath(
     // A hard corner drawn `connect` must fillet, and a fillet that will not fit breaks instead.
     // `CONNECT_LIMIT` used to guess this from the angle; now it is measured.
     let hairpin: Hairpin | null = null;
+    if (strategy === 'hairpin' && !on('hairpin')) strategy = 'break';
     if (strategy === 'hairpin') {
       hairpin = hairpinFor(before, after, c, shape, rhoMin, spacing);
       // Nothing worth turning around for: a hairpin leaves the contour on both approaches to buy
@@ -952,16 +957,20 @@ function stitchPath(
       // One that cannot be built has to cut like any other corner.
       if (!hairpin || apexLoss(c, rhoMin) <= rhoMin) strategy = 'break';
     }
-    let fillet =
-      strategy === 'connect' && c.hard
-        ? filletFor(before, after, c, rhoMin, spacing, rejoin)
-        : null;
-    if (strategy === 'connect' && c.hard && !fillet) strategy = 'break';
+    const wantsFillet = strategy === 'connect' && c.hard;
+    const filletSite = wantsFillet ? filletFor(before, after, c, rhoMin, spacing, rejoin) : null;
+    const ranFillet = on('fillet');
+    if (wantsFillet) {
+      report('fillet', filletSite ? { at: c.index, points: filletSite.points } : null, ranFillet);
+    }
+    let fillet = ranFillet ? filletSite : null;
+    if (wantsFillet && !fillet) strategy = 'break';
     // A cut end is an electrode, and a letter has two of those rather than thirty. Everywhere else
     // the bender bends the tube out of the plane and paints the return, so the glass carries
     // through and only the light stops — which is the same fillet a connect draws.
     if (strategy === 'break' && drawAt(k, BLOCKOUT_DRAW) < blockout) {
-      fillet = filletFor(before, after, c, rhoMin, spacing, rejoin);
+      const blockoutFillet = filletFor(before, after, c, rhoMin, spacing, rejoin);
+      fillet = ranFillet ? blockoutFillet : null;
       if (fillet) strategy = 'return';
     }
     if (strategy === 'hairpin' && hairpin) {

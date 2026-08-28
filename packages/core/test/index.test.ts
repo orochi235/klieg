@@ -1018,6 +1018,50 @@ describe('driving an effect from the host', () => {
     expect(seen).toEqual([]);
   });
 
+  it('aborts one running effect on its own signal and leaves the instance alive', async () => {
+    const ctrl = new AbortController();
+    const bk = create();
+    const done = bk.fire('HI', {
+      enter: 'none',
+      active: 'none',
+      exit: { duration: 500, offset: () => ({ opacity: 0 }) },
+      hold: 5000,
+      signal: ctrl.signal,
+    });
+    await flush();
+    clock.advance(16);
+    expect(words()).toHaveLength(1);
+
+    // No exit plays: the abort resolves the fire rather than rejecting it.
+    ctrl.abort();
+    await expect(done).resolves.toBeUndefined();
+    expect(words()).toHaveLength(0);
+
+    const next = bk.fire('AGAIN', INSTANT);
+    await flush();
+    clock.advance(16);
+    await expect(next).resolves.toBeUndefined();
+  });
+
+  it('drops a queued effect on its own signal, so it never mounts a word', async () => {
+    const ctrl = new AbortController();
+    const bk = create();
+    const first = bk.fire('ONE', HELD);
+    const second = bk.fire('TWO', { ...INSTANT, signal: ctrl.signal });
+    await flush();
+    clock.advance(16);
+    expect(peakWords).toBe(1);
+
+    ctrl.abort();
+    await expect(second).resolves.toBeUndefined();
+
+    dispatch('pointerdown');
+    clock.advance(16);
+    await first;
+
+    expect(peakWords).toBe(1);
+  });
+
   it('keeps rendering when onPhase throws, and hands the error to the microtask queue', async () => {
     const queued: (() => void)[] = [];
     vi.stubGlobal('queueMicrotask', (fn: () => void) => queued.push(fn));

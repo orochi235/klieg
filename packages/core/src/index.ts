@@ -290,6 +290,12 @@ export interface FireOptions {
    * wants. A listener that throws does not stop the render loop.
    */
   onPhase?: (event: PhaseEvent) => void;
+  /**
+   * Aborts this one effect without touching the instance. Composed with the queue's own signal
+   * rather than replacing it: an abort plays no exit, and the promise resolves rather than
+   * rejecting, which is what it already promises for an effect the queue drops.
+   */
+  signal?: AbortSignal;
 }
 
 /** Timing for the move into a new layout. `scale` addresses the viewport fit, not letter size. */
@@ -726,7 +732,11 @@ export function createKlieg(options: KliegOptions): Klieg {
       }
       if (!supported || destroyed) return handle(Promise.resolve());
       return handle(
-        queue.push(`${counter++}:${text}`, (signal) => run(text, opts, signal, control)),
+        queue.push(
+          `${counter++}:${text}`,
+          (signal) => run(text, opts, signal, control),
+          opts.signal,
+        ),
       );
     },
     destroy() {

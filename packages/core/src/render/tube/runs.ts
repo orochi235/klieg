@@ -274,9 +274,18 @@ function pickStrategy(turn: number, weights: CornerWeights, draw: () => number):
  * corner it replaced.
  */
 function trimTail(span: THREE.Vector3[], back: number, corner: THREE.Vector3): void {
-  while (span.length > 0 && (span[span.length - 1] as THREE.Vector3).distanceTo(corner) < back) {
-    span.pop();
-  }
+  span.length = keptByTail(span, back, corner);
+}
+
+/**
+ * How many vertices `trimTail` would leave. Split out so a site can name the stretch about to go
+ * without running the trim — the repair may be switched off, and the report has to be the same
+ * either way.
+ */
+function keptByTail(span: THREE.Vector3[], back: number, corner: THREE.Vector3): number {
+  let keep = span.length;
+  while (keep > 0 && (span[keep - 1] as THREE.Vector3).distanceTo(corner) < back) keep--;
+  return keep;
 }
 
 /**
@@ -816,12 +825,24 @@ function mergeArc(
 
   // Drop the corner's whole stretch before trimming by distance: a shallow turn's setback can be
   // shorter than one sample step, and would leave the stretch's own vertices in the path.
-  const stretchSite: RepairSite = { at: target.length - 1, points: [], removed: [] };
+  const stretchCount = Math.min(decision.groupBefore + 1, target.length);
+  const stretchSite: RepairSite = {
+    at: target.length - 1,
+    points: [],
+    removed: target.slice(target.length - stretchCount),
+    side: 'entry',
+  };
   const ranStretch = on('stretch');
   if (ranStretch) popStretch(target, decision.groupBefore + 1);
   report('stretch', stretchSite, ranStretch);
   // Indexes the accumulator before the trim; a consumer must not map it onto the post-trim span.
-  const setbackSite: RepairSite = { at: target.length - 1, points: [], removed: [] };
+  const setbackKeep = keptByTail(target, fillet.setback, fillet.corner);
+  const setbackSite: RepairSite = {
+    at: target.length - 1,
+    points: [],
+    removed: target.slice(setbackKeep),
+    side: 'entry',
+  };
   const ranSetback = on('setback');
   if (ranSetback) trimTail(target, fillet.setback, fillet.corner);
   report('setback', setbackSite, ranSetback);

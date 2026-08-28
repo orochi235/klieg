@@ -250,6 +250,36 @@ describe('the inner pass', () => {
     });
     expect(relaxPoints.some((n) => n > 0)).toBe(true);
   });
+
+  it('carries the vertices a removal would take out, not just an index', () => {
+    const sites: { id: string; removed: number; ran: boolean }[] = [];
+    cutIntoRuns([{ points: square(), surface: 'front' as const, closed: true }], {
+      ...OPTS,
+      onRepair: (id, site, ran) => {
+        if ((id === 'stretch' || id === 'setback') && site) {
+          sites.push({ id, removed: site.removed.length, ran });
+        }
+      },
+    });
+    // Every corner-side stretch drops the corner's whole group, so none of them is a no-op.
+    expect(sites.filter((s) => s.id === 'stretch').every((s) => s.removed > 0)).toBe(true);
+    // Entry setback trims by distance and reports what it took; the exit side removes nothing from
+    // the accumulator, it advances a cursor, so its `removed` is empty by construction.
+    expect(sites.filter((s) => s.id === 'setback').some((s) => s.removed > 0)).toBe(true);
+  });
+
+  it('reports the removal a switched-off repair would have made', () => {
+    const off: number[] = [];
+    cutIntoRuns([{ points: square(), surface: 'front' as const, closed: true }], {
+      ...OPTS,
+      repairs: new Set(['setback', 'resume', 'fillet', 'close', 'return', 'hairpin'] as const),
+      onRepair: (id, site, ran) => {
+        if (id === 'stretch' && !ran && site) off.push(site.removed.length);
+      },
+    });
+    expect(off.length).toBe(4);
+    expect(off.every((n) => n > 0)).toBe(true);
+  });
 });
 
 describe('the span registry', () => {

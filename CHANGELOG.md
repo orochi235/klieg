@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.9.2
+
+### An acronym gathers as the lower case finishes leaving
+
+The routine held two pauses between the block and the gather, and both defaulted long. `settle` was
+600ms, and the drop stage inherited the 700ms default move even though `place` moves nothing — so
+the stage ran 700ms against a 500ms fade and then held another 600. Against `Sequence`, with the
+fade landing at 500ms, the gather started at 1300.
+
+`settle` now defaults to 0, and the drop stage declares a zero-length move so its span is the exit's
+own length. The gather starts at 560ms — the 60ms being the blend's half-window, not dead air — and
+the beat tracks whatever exit it is given: 860ms under `shatter`. `settle` remains for anyone who
+wants the pause back.
+
+### A stage boundary no longer throws the word
+
+`Sequence` swapped one `Timeline` for the next and dropped whatever the outgoing one was holding.
+A looping `active` is mid-cycle when its phase runs out, so the word lost the loop's whole amplitude
+between two frames: `float` alone fell 0.12em and un-yawed 0.1rad in one frame, which reads on
+screen as the type jumping down and to the left just as it stops floating.
+
+Each stage's enter slot now carries the pose the outgoing phase ended on, eased to nothing over the
+stage. The curve is in-out rather than the usual out — a loop caught mid-swing is already moving,
+and an out curve leaves at its own top speed, which is the same jolt in miniature. Sampled either
+side of the switch at 60fps, y goes 0.1162 -> 0.1165 where it went 0.1162 -> 0. It costs nothing
+when the outgoing `active` is `none`, and applies at every boundary rather than the acronym's alone.
+
+### The tube's cut repairs are named, gated and reported
+
+`buildTubeBlueprint` folds over a named stage registry, and the corner repairs that used to be
+inline decisions are now separately named stages, each gated where its decision is made and each
+reporting what it did. A blueprint forwards repair toggles into the cut and gets a repair report
+back, a relaxed vertex inherits its leg's provenance, and every corner keys its draws on its own
+index rather than a shared counter.
+
 ## 0.9.1
 
 ### The lighting slot turns the studio across the letters again

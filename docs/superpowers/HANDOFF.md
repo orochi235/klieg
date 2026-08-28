@@ -777,15 +777,16 @@ to move into `oil`'s own film.
 
 ## Traps
 
-**`effect-flicker` and `effect-roving` cannot fail when the effect is deleted, and this is unfixed.**
-One run going dark changes 187 and 258 pixels of an 800x600 baseline; `looks.spec.ts` gates on
-`maxDiffPixelRatio: 0.001` — 480 pixels. So both pass against a baseline with no fault in it, which
-is how re-keying the corner draws briefly left `effect-roving` byte-identical to `look-tubing` and
-still green. `effect-hue` recolours the whole sign, 14x over the gate, and is fine. Walking the
-whole second roving epoch a flicker step (~58ms) at a time found no pin in it that clears the gate,
-so the shot cannot be rescued by re-pinning — the gate is what needs deciding. Note the baselines
-are `scale: 'css'` at 800x600 while `page.screenshot()` defaults to device scale at 1600x1200:
-measure against the stored size or the count is 4x off and compares to the wrong gate.
+**A whole-frame tolerance cannot guard a one-run effect.** One run going dark is 187 to 258 pixels
+of an 800x600 baseline, and `looks.spec.ts` gated everything at `maxDiffPixelRatio: 0.001` — 480
+pixels — so `effect-flicker` and `effect-roving` passed with their effect deleted. Re-keying the
+corner draws exposed it by leaving `effect-roving` byte-identical to `look-tubing` and still green.
+The three effect shots now gate on `EFFECT_RATIO`, 0.0002; deleting either effect reddens its test
+at 350 and 503 pixels, which is how the fix was checked. Re-pinning could not have fixed it: walking
+the whole second roving epoch a flicker step (~58ms) at a time found no pin a look-sized gate would
+catch. When measuring these by hand, note the baselines are `scale: 'css'` at 800x600 while
+`page.screenshot()` defaults to device scale at 1600x1200 — measure against the stored size or the
+count is 4x off and compares to the wrong gate.
 
 **Eliminate a cheap hypothesis about render state before an expensive one about geometry.** The tube
 vanishing when thinned was diagnosed twice as a geometry bug and was one line of render state: a

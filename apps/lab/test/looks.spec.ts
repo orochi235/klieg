@@ -47,7 +47,15 @@ async function hideChrome(page: Page): Promise<void> {
   await page.addStyleTag({ content: 'main, .dock { display: none; }' });
 }
 
-async function shoot(page: Page, name: string): Promise<void> {
+/** The whole-frame gate. A look fills the frame, so a change worth catching is far over this. */
+const LOOK_RATIO = 0.001;
+/**
+ * One run going dark is 187 to 258 pixels of an 800x600 shot — under `LOOK_RATIO`'s 480, so at the
+ * whole-frame gate an effect test passes with its effect deleted.
+ */
+const EFFECT_RATIO = 0.0002;
+
+async function shoot(page: Page, name: string, ratio = LOOK_RATIO): Promise<void> {
   await page.click('#fire');
   // The first frame draws on the next rAF after the font resolves; a beat covers both.
   await page.waitForTimeout(600);
@@ -56,7 +64,7 @@ async function shoot(page: Page, name: string): Promise<void> {
     // Bloom is a wide, low-amplitude halo: at Playwright's default threshold of 0.2 not one pixel
     // moves far enough to be counted, so a green run proved nothing however tight the ratio was.
     threshold: 0.02,
-    maxDiffPixelRatio: 0.001,
+    maxDiffPixelRatio: ratio,
     // A bloomed look at DPR 2 renders slowly enough that the default 5s budget can expire before
     // the stability loop gets two consecutive frames.
     timeout: 20000,
@@ -117,14 +125,14 @@ test.describe('effects', () => {
     await still(page, '?pin=960');
     await page.selectOption('#look', 'tubing');
     await page.check('#flicker');
-    await shoot(page, 'effect-flicker');
+    await shoot(page, 'effect-flicker', EFFECT_RATIO);
   });
 
   test('hue recolours the whole sign at once', async ({ page }) => {
     await still(page, '?pin=1500');
     await page.selectOption('#look', 'tubing');
     await page.check('#hue');
-    await shoot(page, 'effect-hue');
+    await shoot(page, 'effect-hue', EFFECT_RATIO);
   });
 
   /**
@@ -138,14 +146,13 @@ test.describe('effects', () => {
    * and from `effect-flicker` by 445. Re-measure them after any change to the holder walk or to run
    * geometry — keying the corner draws per corner index moved these from 658 and 1558.
    *
-   * 258 is under this file's own `maxDiffPixelRatio` gate of 480, so the shot no longer fails on
-   * its own if the effect is deleted; walking the whole second epoch a flicker step at a time found
-   * no pin in it that clears the gate. See the handoff's Traps section.
+   * 258 is under the whole-frame gate's 480, which is what `EFFECT_RATIO` exists for: walking the
+   * second epoch a flicker step at a time found no pin in it that a look-sized gate would catch.
    */
   test('roving takes down a different run than flicker, one epoch on', async ({ page }) => {
     await still(page, '?pin=4725');
     await page.selectOption('#look', 'tubing');
     await page.check('#roving');
-    await shoot(page, 'effect-roving');
+    await shoot(page, 'effect-roving', EFFECT_RATIO);
   });
 });

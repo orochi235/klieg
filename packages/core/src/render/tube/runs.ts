@@ -662,6 +662,12 @@ function bridgeAfter(
 }
 
 /**
+ * Records that `copy` stands in for `source`, so a vertex copied out of a leg keeps the leg's
+ * provenance instead of resolving to null and reading as geometry the corner stage built.
+ */
+type Inherit = (copy: THREE.Vector3, source: THREE.Vector3) => void;
+
+/**
  * Pushes the leg vertices next to the arc away from their own centre of curvature until the chain
  * through them clears `rhoMin`. Copies rather than moving the path's own vectors: a leg is shared
  * with the span on its other side, and with the provenance map that `from` is resolved through.
@@ -675,12 +681,15 @@ function relaxOnto(
   from: number,
   step: 1 | -1,
   rhoMin: number,
+  inherit: Inherit,
 ): THREE.Vector3[] | null {
   const moved: THREE.Vector3[] = [];
   for (let k = 0; k < RELAX_WINDOW; k++) {
     const p = leg[from + k * step] as THREE.Vector3 | undefined;
     if (!p) break;
-    moved.push(p.clone());
+    const copy = p.clone();
+    inherit(copy, p);
+    moved.push(copy);
   }
   if (moved.length < 2) return null;
 
@@ -771,6 +780,7 @@ function mergeArc(
   rhoMin: number,
   spacing: number,
   rejoin: Rejoin,
+  inherit: Inherit,
 ): void {
   if (decision.hairpin && decision.strategy === 'hairpin') {
     spliceHairpin(target, next, decision, decision.hairpin);
@@ -804,7 +814,7 @@ function mergeArc(
   if (!bridgedIn) {
     let relaxed: THREE.Vector3[] | null = null;
     if (rejoin === 'relax') {
-      relaxed = relaxOnto([second, entry], target, target.length - 1, -1, rhoMin);
+      relaxed = relaxOnto([second, entry], target, target.length - 1, -1, rhoMin, inherit);
       if (relaxed) {
         target.length = Math.max(0, target.length - relaxed.length);
         for (let i = relaxed.length - 1; i >= 0; i--) target.push(relaxed[i] as THREE.Vector3);
@@ -834,7 +844,7 @@ function mergeArc(
     }
   }
   if (rejoin === 'relax' && start < next.length) {
-    const relaxed = relaxOnto([penult, exit], next, start, 1, rhoMin);
+    const relaxed = relaxOnto([penult, exit], next, start, 1, rhoMin, inherit);
     if (relaxed) {
       for (const p of relaxed) target.push(p);
       for (let i = start + relaxed.length; i < next.length; i++) {
@@ -882,6 +892,7 @@ function stitchPath(
   rejoin: Rejoin,
   shape: HairpinShape,
   drawAt: (corner: number, draw: Draw) => number,
+  inherit: Inherit,
 ): { spans: Span[]; decisions: CornerDecision[] } {
   const { arcs, corners } = raw;
   if (corners.length === 0) return { spans: arcs.map((points) => ({ points })), decisions: [] };
@@ -972,7 +983,16 @@ function stitchPath(
         spans.push({ points: dropTail(current, decision.groupBefore + 1) });
         current = dropHead(next.slice(), decision.groupAfter + 1);
       } else {
-        mergeArc(current, next, decision, decision.fillet ?? null, rhoMin, spacing, rejoin);
+        mergeArc(
+          current,
+          next,
+          decision,
+          decision.fillet ?? null,
+          rhoMin,
+          spacing,
+          rejoin,
+          inherit,
+        );
         if (decision.strategy === 'return' && decision.fillet) {
           const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
           spans.push(head, dark);
@@ -997,7 +1017,7 @@ function stitchPath(
     const mid = Math.max(1, Math.min(first.length - 2, first.length >> 1));
     let current = first.slice(mid);
     const walk = (decision: CornerDecision, arc: THREE.Vector3[]) => {
-      mergeArc(current, arc, decision, decision.fillet ?? null, rhoMin, spacing, rejoin);
+      mergeArc(current, arc, decision, decision.fillet ?? null, rhoMin, spacing, rejoin, inherit);
       if (decision.strategy === 'return' && decision.fillet) {
         const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
         closedSpans.push(head, dark);
@@ -1033,6 +1053,7 @@ function stitchPath(
         rhoMin,
         spacing,
         rejoin,
+        inherit,
       );
       if (decision.strategy === 'return' && decision.fillet) {
         const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
@@ -1093,14 +1114,20 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
   let cornerBase = 0;
   const drawAt = (corner: number, draw: Draw) => rng(cornerSeed(seed, cornerBase + corner, draw))();
 
-  // Resolvable in one pass because no stitch primitive clones: a span slices the input's own
-  // objects or pushes geometry the corner stage built, so identity survives the whole cut.
+  // Resolvable in one pass because the only stitch primitive that copies, `relaxOnto`, registers
+  // each copy here: everything else slices the input's own objects or pushes geometry the corner
+  // stage built, so identity survives the whole cut.
   const origin = new Map<THREE.Vector3, VertexSource>();
   paths.forEach((path, p) => {
     path.points.forEach((point, index) => {
       if (!origin.has(point)) origin.set(point, { path: p, index });
     });
   });
+
+  const inherit: Inherit = (copy, source) => {
+    const from = origin.get(source);
+    if (from) origin.set(copy, from);
+  };
 
   const cornerRecords: CornerRecord[] = [];
   const spans: { points: THREE.Vector3[]; surface: SurfaceKind; dark?: boolean }[] = [];
@@ -1115,6 +1142,7 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
       rejoin,
       shape,
       drawAt,
+      inherit,
     );
     cornerBase += decisions.length;
     for (const d of decisions) {

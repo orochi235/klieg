@@ -624,11 +624,12 @@ Roughly in order of value; the items are independent of each other.
   every later corner in the glyph; each corner's two draws now key on its own index. The design's
   claim that forcing the draw unconditionally would preserve shipped output was wrong — the two are
   the same change and produce byte-identical geometry — so `tubing` re-rendered and its five
-  baselines are re-taken. **One defect is still live:** `relaxOnto` clones its window, so
-  `rejoin: 'relax'` returns bit-identical copies that `Run.from` resolves to `null`; `cutIntoRuns`'s
-  comment claiming "no stitch primitive clones" is false under that branch. Latent today because
-  `DEFAULT_REJOIN` is `drop` and no look overrides it — which stops being true the moment the lab
-  exposes the knob. Slice 3 is the lab.
+  baselines are re-taken. **The second defect is fixed too:** `relaxOnto`'s cloned window resolved
+  to `null` in `Run.from` and read as fillet-built, so `rejoin: 'relax'` quietly stopped those
+  vertices being smoothed; each copy now inherits its leg vertex's provenance through an `inherit`
+  callback threaded from `cutIntoRuns`. Both were latent because `DEFAULT_REJOIN` is `drop` and no
+  look overrides it — which stops being true the moment the lab exposes the knob. **Slice 2 is
+  unblocked; it is `CUT_REPAIRS` and it is the hard one.** Slice 3 is the lab.
 
   Two things slice 1 learned that its plan did not start with. **`wanderPaths` seeds its rng from
   the path's array index**, so the order paths are concatenated in — contours, then connectors — is

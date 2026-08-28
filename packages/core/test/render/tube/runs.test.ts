@@ -660,6 +660,27 @@ describe('vertex provenance', () => {
     }
     expect(checked).toBeGreaterThan(0);
   });
+
+  it('keeps a relaxed vertex sourced — relaxing moves a leg point, it does not build one', () => {
+    const points = squarePath();
+    const { runs } = cutIntoRuns([{ points, surface: 'front' as const, closed: true }], {
+      runs: 6,
+      minRun: 0.01,
+      spacing: 0.02,
+      radius: 0.022,
+      bend: 2,
+      corners: ALL_CONNECT,
+      rejoin: 'relax',
+    });
+
+    for (const run of runs) {
+      run.from.forEach((source, i) => {
+        if (source !== null) return;
+        const p = run.points[i] as THREE.Vector3;
+        expect(Math.min(...points.map((q) => p.distanceToSquared(q)))).toBeGreaterThan(0);
+      });
+    }
+  });
 });
 
 describe('the rejoin strategy', () => {

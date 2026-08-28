@@ -109,8 +109,8 @@ five stages and get an empty blueprint with nothing thrown. `onStage` fires for 
 too, so a lab draws a bypassed step rather than a blank panel. Both absent is exactly today's
 behavior, which is what every shipped caller passes.
 
-**Two things have to be fixed before a repair toggle means anything**, both found while measuring
-the above and neither caused by the refactor. The first is done:
+**Two things had to be fixed before a repair toggle meant anything**, both found while measuring the
+above and neither caused by the refactor. Both are done:
 
 - **The seed stream keys per corner rather than per draw** — shipped. `stitchPath` used to take one
   draw in `pickStrategy` and a second only when the strategy was `break`, so switching the `fillet`
@@ -120,13 +120,13 @@ the above and neither caused by the refactor. The first is done:
   the same change, and produces byte-identical geometry, because the old key was already `corner +
   breaks before it`. Only `tubing` re-renders — `piping`'s corners never break and every other
   look's always do.
-- **`relaxOnto` clones, so `rejoin: 'relax'` loses provenance.** It builds its window with
-  `p.clone()`, and when the chain already clears `rhoMin` on the first pass it returns those clones
-  unmoved — bit-identical copies that `Run.from` resolves to `null`, which reads as fillet-built
-  geometry and stops `smoothedPoints` smoothing them. `cutIntoRuns`'s own comment claiming "no
-  stitch primitive clones" is false under this branch. No shipped look sets `rejoin`
-  (`DEFAULT_REJOIN` is `drop`), so it is latent — until the lab exposes the knob, which is the point
-  of the lab.
+- **A relaxed vertex inherits the leg's provenance** — shipped. `relaxOnto` builds its window with
+  `p.clone()`, and those copies resolved to `null` in `Run.from`, which reads as fillet-built and
+  stops `smoothedPoints` smoothing them; when the chain already cleared `rhoMin` on the first pass
+  it returned them unmoved, so the copies were bit-identical to the leg vertices they stood for. It
+  now takes an `inherit` callback and registers each copy against its source in `cutIntoRuns`'s
+  provenance map. Threaded explicitly through `stitchPath` and `mergeArc` rather than kept in a
+  module-level map, which is the ambient state `markAuthored` was removed for.
 
 `wanderPaths` stays where it is in the order and stays in place. It runs before the cut so the corner
 stage sees the bends it introduces, and corner records alias the vectors it moves. It is a stage in

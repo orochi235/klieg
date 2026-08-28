@@ -464,7 +464,7 @@ vite config: `fs.allow` and the react/react-dom aliases existed only because a l
 resolves React out of its own tree, which is an "invalid hook call" from inside labkit. `npm
 install` here no longer needs a weasel checkout.
 
-**A second lab, `npm run dev:corner-lab -w klieg`, is where corner work happens now.** It is a
+**A second lab, `npm run dev:kliegsminister -w klieg`, is where corner work happens now.** It is a
 labkit instrument: pick a letter, look and path source, step through that letter's hard corners, and
 switch what the corner draws — `built` (what ships), `merge` (leave the path alone), `relax` (push
 the vertices out until they clear), `biarc`, `cut`. It reports the glyph's own bend, how far under
@@ -652,7 +652,7 @@ Roughly in order of value; the items are independent of each other.
 
   **kliegsminister is under way, in three slices, on branch `kliegsminister`.** The design's
   prerequisite shipped long ago: `markAuthored`'s `WeakSet` is gone, `Run.from` provenance replaced
-  it, and `corner-lab`'s `scene.ts` already finds its run through it. **Slice 1 is done** —
+  it, and the lab's `scene.ts` already finds its run through it. **Slice 1 is done** —
   `buildTubeBlueprint` folds over `TUBE_STAGES` (`render/tube/stages.ts`) over the ids `generate`,
   `wander`, `cut`, `assign`, `sweep`, with `stages` naming which run and `onStage(id, state, ran)`
   reporting each. 1162 tests, 33 visual, look snapshots byte-identical. See
@@ -683,23 +683,43 @@ Roughly in order of value; the items are independent of each other.
   level, and `fillet` and `hairpin` gated where the decision is made. `cutIntoRuns` takes
   `repairs` and `onRepair`; `buildTubeBlueprint` forwards both. Slice 3 is the lab.
 
-  What slice 2's reviews found that the slice 3 lab must design around. **`resume`'s `ran: false`
-  lies under `bridge`/`relax`** — the blend is applied regardless; the toggle gates only the walk's
-  trim (comment sits on `ranResume` in `runs.ts`), so a resume ghost under those rejoins would draw
+  Two things that stay true and shape how the lab reads. **`resume`'s `ran: false` lies under
+  `bridge`/`relax`** — the blend is applied regardless; the toggle gates only the walk's trim
+  (comment sits on `ranResume` in `runs.ts`), so a resume ghost under those rejoins would draw
   points already in the path. **Some toggles are geometry-invisible on typical paths**: `setback`
   and the corner-side `stretch` are subsumed by downstream walks under most rejoins (the repair
   tests document which rejoin makes each one bite — `relax` for exit-setback, triple-off for
-  stretch). **Setback-off under `rejoin: 'bridge'` cascades pathologically** (1505 points vs 241 on
-  the test square) — the leg-room math appears to assume the trim happened; investigate before the
-  lab exposes that combination. **Not everything reports**: `hairpin` is gate-only, exit-side
-  `resume` is unreported (so `CORNER_REPAIRS`' "twice per corner" holds only for `setback`), the
-  break-side `stretch` in `SPAN_REPAIRS` is enumerable but has no gate or report, a fillet-off
-  corner silences its `return` report entirely, and the blockout fillet candidate never reports
-  (documented on `CutOptions.onRepair`). `RepairSide` is declared but not wired through `onRepair`;
-  removal-type sites carry an anchor index and empty `points`, not the removed extent — widening
-  `RepairSite` is slice 3's call. And two plan fixtures were corrected in flight: a square never
-  hairpins (use `sharpV` in `repairs.test.ts`) and `openLPath`'s 0.1 sampling registers no corner
-  (use `fineOpenL` in `runs.test.ts`).
+  stretch), so switching them off moves the ghost layer without moving the built run. Two test
+  fixtures are traps: a square never hairpins (use `sharpV` in `repairs.test.ts`) and `openLPath`'s
+  0.1 sampling registers no corner (use `fineOpenL` in `runs.test.ts`).
+
+  **Slice 3 is done and kliegsminister is built.** `dev/corner-lab` is now `dev/kliegsminister`
+  (`npm --prefix packages/core run dev:kliegsminister`, port 5182), and its `junction` instrument
+  drives `stages`, `draw at`, seven repair toggles, `rejoin` and `subject` off the registries
+  through `src/pipeline.ts` — the graph `@weasel-js/diagram` reads when it ships. The lab's own
+  `blendAcross`/`relaxAcross` are deleted rather than moved: core draws all of it. See
+  [the plan](plans/2026-08-28-kliegsminister-lab.md).
+
+  **Every reporting gap slice 2 listed is closed.** `RepairSite` carries `removed` and `side`, the
+  exit-side `resume` gates and reports, and `hairpin`, the blockout fillet, the `return` it would
+  have carried, and the break-side `stretch` all report now. `test/render/tube/reports.test.ts`
+  pins it across twelve letters at both tube looks, including that all-repairs-on stays
+  byte-identical to repairs-absent. Gating the exit-side resume moved three off-state counts on the
+  test square: resume-off at `drop` 217 → **225**, and the stretch-off pair 225/229 → **241/245**.
+
+  **Left for whoever picks this up.** The `setback`-off-under-`rejoin: 'bridge'` cascade is **2769
+  points against 241**, not the 1505 recorded before; the leg-room math assumes the trim happened.
+  The lab reaches that combination and draws it without throwing. An exit-side `setback` site
+  reports only a cursor index — empty `points` and empty `removed` — so it has no ghost; placing it
+  needs the index resolved against the leg it names. **`hairpin`'s toggle is inert in the UI**:
+  neither `piping` nor `tubing` weights it and the look control offers nothing else, so the report
+  is only reachable from a test with a spec override. And `subject: 'letter'` does not re-zoom —
+  labkit's `initialView` is static per instrument, so the whole letter needs zooming out by hand
+  from 1600x.
+
+  **`npm run check` is green, and was not before.** `main` already failed `biome` on a
+  `useLiteralKeys` hit in `dev/tube-lab/src/Rail.tsx`; that is fixed here, so a red `check` from now
+  on is a real regression rather than the standing state.
 
   Two things slice 1 learned that its plan did not start with. **`wanderPaths` seeds its rng from
   the path's array index**, so the order paths are concatenated in — contours, then connectors — is

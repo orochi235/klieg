@@ -284,4 +284,72 @@ describe('EffectQueue', () => {
     expect(order).toEqual(['a:started', 'a:torn-down', 'c:started']);
     expect(q.current).toBeNull();
   });
+
+  it('drops a queued effect on the caller signal without ever running it', async () => {
+    const q = new EffectQueue('queue');
+    const ctrl = new AbortController();
+    let ran = false;
+
+    const first = q.push('a', (signal) => abortable(signal));
+    const second = q.push(
+      'b',
+      async () => {
+        ran = true;
+      },
+      ctrl.signal,
+    );
+
+    ctrl.abort();
+    await expect(second).resolves.toBeUndefined();
+    expect(ran).toBe(false);
+
+    await q.cancelAll();
+    await first;
+  });
+
+  it('aborts a running effect on the caller signal, leaving the queue alive', async () => {
+    const q = new EffectQueue('queue');
+    const ctrl = new AbortController();
+    // Boxed, not a bare `let`: TypeScript narrows a local assigned only inside a callback to
+    // `never`, and reading `.aborted` off it stops compiling.
+    const seen: { signal: AbortSignal | null } = { signal: null };
+
+    const done = q.push(
+      'a',
+      (signal) => {
+        seen.signal = signal;
+        return abortable(signal);
+      },
+      ctrl.signal,
+    );
+    await Promise.resolve();
+
+    ctrl.abort();
+    await expect(done).resolves.toBeUndefined();
+    expect(seen.signal?.aborted).toBe(true);
+
+    let after = false;
+    await q.push('b', async () => {
+      after = true;
+    });
+    expect(after).toBe(true);
+  });
+
+  it('never starts an effect whose signal aborted before the push', async () => {
+    const q = new EffectQueue('queue');
+    const ctrl = new AbortController();
+    ctrl.abort();
+    let ran = false;
+
+    await expect(
+      q.push(
+        'a',
+        async () => {
+          ran = true;
+        },
+        ctrl.signal,
+      ),
+    ).resolves.toBeUndefined();
+    expect(ran).toBe(false);
+  });
 });

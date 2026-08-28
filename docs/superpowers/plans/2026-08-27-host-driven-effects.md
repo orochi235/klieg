@@ -593,12 +593,14 @@ Append inside `describe('EffectQueue', …)` in `packages/core/test/queue.test.t
   it('aborts a running effect on the caller signal, leaving the queue alive', async () => {
     const q = new EffectQueue('queue');
     const ctrl = new AbortController();
-    let seen: AbortSignal | null = null;
+    // Boxed, not a bare `let`: TypeScript narrows a local assigned only inside a callback to
+    // `never`, and reading `.aborted` off it stops compiling.
+    const seen: { signal: AbortSignal | null } = { signal: null };
 
     const done = q.push(
       'a',
       (signal) => {
-        seen = signal;
+        seen.signal = signal;
         return abortable(signal);
       },
       ctrl.signal,
@@ -607,7 +609,7 @@ Append inside `describe('EffectQueue', …)` in `packages/core/test/queue.test.t
 
     ctrl.abort();
     await expect(done).resolves.toBeUndefined();
-    expect(seen?.aborted).toBe(true);
+    expect(seen.signal?.aborted).toBe(true);
 
     let after = false;
     await q.push('b', async () => {

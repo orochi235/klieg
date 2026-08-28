@@ -442,4 +442,44 @@ describe('Sequence', () => {
     seq.tick(400);
     expect(seq.isFinished(401)).toBe(true);
   });
+
+  it('eases the outgoing loop away instead of dropping it at the boundary', () => {
+    // `float`'s own amplitude, and a hold that ends on the loop's crest — where a frame of the
+    // loop moves nothing, so any step across the switch is the loop being discarded outright.
+    const AMPLITUDE = 0.12;
+    const swing: MotionPiece = {
+      duration: 4000,
+      offset: (t) => ({ position: [0, AMPLITUDE * Math.sin(t * Math.PI * 2), 0] }),
+    };
+    // Zero deltas so the only thing that can move at the switch is the loop coming off.
+    const t = target({
+      kept: [0],
+      dropped: [1],
+      delta: [
+        [0, 0],
+        [0, 0],
+      ],
+    });
+    const seq = new Sequence({
+      enter: NONE,
+      active: swing,
+      stages: [stage({ tween: { duration: 400 } })],
+      exit: NONE,
+      hold: 1000,
+      blendMs: 0,
+      target: t,
+    });
+
+    let previous = seq.poseAt(0, letter).position[1] as number;
+    let biggest = 0;
+    for (let ms = 16; ms <= 1400; ms += 16) {
+      seq.tick(ms);
+      const y = seq.poseAt(ms, letter).position[1] as number;
+      biggest = Math.max(biggest, Math.abs(y - previous));
+      previous = y;
+    }
+    // Discarding the crest steps the whole amplitude in one frame; easing it away over the stage
+    // is an order of magnitude less.
+    expect(biggest).toBeLessThan(AMPLITUDE / 4);
+  });
 });

@@ -1,4 +1,4 @@
-import { type Easing, easeOutCubic } from '../easing.js';
+import { type Easing, easeInOutCubic, easeOutCubic } from '../easing.js';
 import type { Pose } from '../pose.js';
 import type { Arrangement } from '../text/placement.js';
 import { partition, transition } from './build.js';
@@ -140,6 +140,7 @@ export class Sequence {
   }
 
   private enterNextPhase(): void {
+    const outgoing = this.timeline;
     // Rebasing on the outgoing phase's end rather than on `elapsed` is what lets `tick`'s loop
     // catch up: a frame long enough to span several stages would otherwise advance only one.
     this.phaseStart += this.timeline.duration;
@@ -182,7 +183,10 @@ export class Sequence {
 
     const last = this.phase === this.opts.stages.length - 1;
     this.timeline = new Timeline({
-      enter: partition(isKept, within(travel, span), within(asPiece(plan.exit), span)),
+      enter: [
+        partition(isKept, within(travel, span), within(asPiece(plan.exit), span)),
+        carry(outgoing, span),
+      ],
       active: plan.active,
       exit: last ? this.opts.exit : NONE,
       hold: plan.hold === 'click' ? 'until-release' : plan.hold,
@@ -224,6 +228,35 @@ function within(piece: MotionPiece, total: number): MotionPiece {
   return {
     duration: total,
     offset: (t, letter) => piece.offset(Math.min(1, t / fraction), letter),
+  };
+}
+
+/**
+ * The pose the outgoing phase ended on, eased away to nothing over the stage. A looping `active`
+ * is mid-cycle when its phase runs out, so without this the word loses the loop's whole amplitude
+ * in one frame — `float` alone drops it 0.12em and un-yaws it 0.1rad between two frames.
+ *
+ * The curve is in-out rather than the usual out: a loop caught mid-swing is already moving, and an
+ * out curve leaves at its own top speed, which is the jolt again in miniature.
+ */
+function carry(from: Timeline, span: number): MotionPiece {
+  const at = from.duration;
+  const scratch = blankPose();
+  return {
+    duration: span,
+    offset: (t, letter) => {
+      const w = 1 - easeInOutCubic(Math.min(1, Math.max(0, t)));
+      if (w <= 0) return {};
+      const pose = from.poseAt(at, letter, scratch);
+      const [x, y, z] = pose.position;
+      const [rx, ry, rz] = pose.rotation;
+      return {
+        position: [x * w, y * w, z * w],
+        rotation: [rx * w, ry * w, rz * w],
+        scale: 1 + (pose.scale - 1) * w,
+        opacity: 1 + (pose.opacity - 1) * w,
+      };
+    },
   };
 }
 

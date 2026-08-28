@@ -311,12 +311,32 @@ export interface Stage {
   tween?: TweenSpec;
 }
 
+/**
+ * What `fire()` hands back: the promise it has always been, plus control over this one effect.
+ * A `Promise` rather than a bare thenable — callers already use `.catch()` on a fire.
+ */
+export interface FireHandle extends Promise<void> {
+  /**
+   * Treats this as the dismissing press. A no-op unless a hold is waiting for one; called before
+   * the effect starts, it releases the first hold that effect reaches rather than being lost.
+   */
+  advance(): void;
+}
+
 export interface Klieg {
   readonly supported: boolean;
   /** Resolves when the effect leaves the screen, whether it played out or was cancelled. */
-  fire(text: string, options?: FireOptions): Promise<void>;
+  fire(text: string, options?: FireOptions): FireHandle;
   /** Cancels everything in flight; the stage comes down once the running effect has settled. */
   destroy(): void;
+}
+
+/** The live link between a `FireHandle` and its effect, which may not have started yet. */
+interface FireControl {
+  /** Set while the effect is waiting on a dismissal; null before it starts and after it settles. */
+  dismiss: (() => void) | null;
+  /** An `advance()` that arrived before the effect did, to spend on its first hold. */
+  latched: boolean;
 }
 
 export function createKlieg(options: KliegOptions): Klieg {
@@ -367,7 +387,12 @@ export function createKlieg(options: KliegOptions): Klieg {
     return fontPromise;
   }
 
-  async function run(text: string, opts: FireOptions, signal: AbortSignal): Promise<void> {
+  async function run(
+    text: string,
+    opts: FireOptions,
+    signal: AbortSignal,
+    control: FireControl,
+  ): Promise<void> {
     const loaded = await font();
     if (signal.aborted) return;
 
@@ -493,6 +518,7 @@ export function createKlieg(options: KliegOptions): Klieg {
       const settle = (done: () => void) => {
         if (settled) return;
         settled = true;
+        control.dismiss = null;
         off();
         detachDismiss();
         stage.scene.remove(word.group);
@@ -532,6 +558,12 @@ export function createKlieg(options: KliegOptions): Klieg {
           stage.setInteractive(false);
           detachDismiss = () => {};
         };
+
+        control.dismiss = dismiss;
+        if (control.latched) {
+          control.latched = false;
+          dismiss();
+        }
       }
 
       let lastTick = clock.now();
@@ -644,6 +676,15 @@ export function createKlieg(options: KliegOptions): Klieg {
   return {
     supported,
     fire(text, opts = {}) {
+      const control: FireControl = { dismiss: null, latched: false };
+      const handle = (promise: Promise<void>): FireHandle =>
+        Object.assign(promise, {
+          advance(): void {
+            if (control.dismiss) control.dismiss();
+            else control.latched = true;
+          },
+        });
+
       // The dismissal is a press anywhere in the window, which on a strip sharing a page ends the
       // effect on clicks that have nothing to do with it. An anchor filling the viewport has no
       // such clicks, so it may opt in; one that has not stays out rather than stall on a listener
@@ -657,8 +698,10 @@ export function createKlieg(options: KliegOptions): Klieg {
           "klieg: an element placement takes `hold: 'click'` only with `clickAnywhere` set on it",
         );
       }
-      if (!supported || destroyed) return Promise.resolve();
-      return queue.push(`${counter++}:${text}`, (signal) => run(text, opts, signal));
+      if (!supported || destroyed) return handle(Promise.resolve());
+      return handle(
+        queue.push(`${counter++}:${text}`, (signal) => run(text, opts, signal, control)),
+      );
     },
     destroy() {
       destroyed = true;

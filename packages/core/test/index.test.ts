@@ -870,6 +870,52 @@ describe('holding until dismissed', () => {
   });
 });
 
+describe('driving an effect from the host', () => {
+  const HELD = { enter: 'none', active: 'none', exit: 'none', hold: 'click' } as const;
+
+  it('advances a hold from the handle, whoever owns the listeners', async () => {
+    const bk = create();
+    const done = bk.fire('HI', HELD);
+    await flush();
+    clock.advance(1000);
+    expect(words()).toHaveLength(1);
+
+    done.advance();
+    clock.advance(16);
+    await done;
+
+    expect(words()).toHaveLength(0);
+  });
+
+  it('spends an advance that arrived before the effect did on its first hold', async () => {
+    const bk = create();
+    const first = bk.fire('ONE', HELD);
+    const second = bk.fire('TWO', HELD);
+    await flush();
+
+    // Queued behind a held effect: there is no hold yet for this press to release.
+    second.advance();
+
+    dispatch('pointerdown');
+    clock.advance(16);
+    await first;
+    await flush();
+
+    clock.advance(16);
+    await second;
+    expect(words()).toHaveLength(0);
+  });
+
+  it('leaves the handle inert rather than absent on an unsupported instance', async () => {
+    stubWebgl(false);
+    const bk = create();
+
+    const done = bk.fire('HI', HELD);
+    expect(() => done.advance()).not.toThrow();
+    await expect(done).resolves.toBeUndefined();
+  });
+});
+
 describe('published name lists', () => {
   // Literal rather than derived: the arrays are already exhaustive by construction, so what is
   // left to pin is the order a picker shows and the fact that dropping one is a breaking change.

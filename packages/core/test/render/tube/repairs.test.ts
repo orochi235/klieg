@@ -161,6 +161,30 @@ describe('the inner pass', () => {
     ).toBe(241);
   });
 
+  // Entry setback's distance trim subsumes whatever the corner-side stretch popped, so on/off
+  // geometry is byte-identical under every rejoin as long as setback stays on — the toggle only
+  // shows through once setback and resume are also excluded. Pinned by exact count, not
+  // inequality, so a mutation that pops unconditionally still fails.
+  it('moves the corner-side stretch geometry once setback and resume are also off', () => {
+    const path = [{ points: square(), surface: 'front' as const, closed: true }];
+    const countOf = (opts: Parameters<typeof cutIntoRuns>[1]) =>
+      cutIntoRuns(path, opts).runs.reduce((n, r) => n + r.points.length, 0);
+    expect(
+      countOf({
+        ...OPTS,
+        rejoin: 'drop',
+        repairs: new Set(['stretch', 'fillet', 'close', 'return', 'hairpin'] as const),
+      }),
+    ).toBe(225);
+    expect(
+      countOf({
+        ...OPTS,
+        rejoin: 'drop',
+        repairs: new Set(['fillet', 'close', 'return', 'hairpin'] as const),
+      }),
+    ).toBe(229);
+  });
+
   it('reports the resume provider that actually answered', () => {
     const points: number[] = [];
     let reports = 0;

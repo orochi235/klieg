@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { INK, LEGEND, MEASURE_ONLY } from '../../../dev/corner-lab/src/legend.js';
+import { INK, LEGEND, MEASURE_ONLY } from '../../../dev/kliegsminister/src/legend.js';
 
-describe('corner lab legend', () => {
+describe('kliegsminister legend', () => {
   it('has an entry for every ink the canvas draws', () => {
     const drawn = Object.keys(INK).filter((k) => !MEASURE_ONLY.includes(k));
     expect(LEGEND.map((e) => e.key).sort()).toEqual(drawn.sort());

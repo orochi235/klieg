@@ -11,6 +11,6 @@ export function isTubeLook(value: unknown): value is TubeLook {
 
 export function tubeSpecOf(name: TubeLook): TubeSpec {
   const decoration = specOf(name).decoration;
-  if (decoration?.kind !== 'tube') throw new Error(`corner lab: ${name} has no tube decoration`);
+  if (decoration?.kind !== 'tube') throw new Error(`kliegsminister: ${name} has no tube decoration`);
   return decoration;
 }

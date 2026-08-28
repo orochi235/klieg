@@ -44,7 +44,7 @@
     "dev:tube-lab": "vite dev/tube-lab",
     "prepack": "npm run build && cp ../../README.md README.md",
     "prepublishOnly": "npm --prefix ../.. run check",
-    "dev:corner-lab": "vite dev/corner-lab",
+    "dev:kliegsminister": "vite dev/kliegsminister",
     "dev:composition-lab": "vite dev/composition-lab"
   },
   "dependencies": {

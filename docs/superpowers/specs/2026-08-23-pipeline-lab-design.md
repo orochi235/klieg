@@ -216,6 +216,28 @@ through `tubeSpecOf` into the real build.
 where the corner lab uses the `@core/*` alias. Fix that before slice 3 adds `repairs.js` imports to
 the same deep path.
 
+## Built to become a flowchart
+
+`@weasel-js/diagram` is designed but not built (`weasel@6827cd04`), and names pipelines as a
+target: participants are ordinary scene nodes carrying a `DiagramNode` trait, a stage's body
+builder is `outline: 'rect', body: [title, ...portRows]`, and `layered` is its DAG layout. When it
+ships, the honest shape for this lab is the pipeline drawn as a graph — click a stage to draw at
+it, toggle it to switch it off, and hang the repairs off `cut`.
+
+Slice 3 does not build that and does not wait for it. What it does is make the lab's model a graph
+already, so the plugin later renders the structure that is there rather than one invented for it:
+
+- **The registries carry their attachment.** Each repair entry gains `stage: TubeStageId` and
+  `level: 'corner' | 'span' | 'decision'` — all seven attach to `cut`, but at three different
+  points, and today that fact lives only in prose. Nodes come from `TUBE_STAGES`; edges come from
+  the stage order plus these two fields.
+- **The lab derives its controls from the registries** rather than listing seven ids. Grouping the
+  toggles by attachment is worth doing on its own, and it means the panel and a future diagram read
+  the same source.
+
+This stays `@internal` along with the registries themselves. A published klieg must not gain a
+dependency on a lab plugin, and the topology is not public API.
+
 ## Traps
 
 **A switched-off repair can produce self-intersecting geometry.** That is the point of switching it

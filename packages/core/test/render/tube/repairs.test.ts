@@ -7,7 +7,41 @@ import {
   SPAN_REPAIRS,
   trimStretch,
 } from '../../../src/render/tube/repairs.js';
-import { ALL_CONNECT, cutIntoRuns } from '../../../src/render/tube/runs.js';
+import { ALL_BREAK, ALL_CONNECT, cutIntoRuns } from '../../../src/render/tube/runs.js';
+
+/** Sampled at the pipeline's 0.02 spacing — load-bearing: at 0.1 no corner is detected at all. */
+const square = () => {
+  const corners = [
+    [-0.5, -0.5],
+    [0.5, -0.5],
+    [0.5, 0.5],
+    [-0.5, 0.5],
+  ];
+  const pts: THREE.Vector3[] = [];
+  for (let c = 0; c < 4; c++) {
+    const [ax, ay] = corners[c] as number[];
+    const [bx, by] = corners[(c + 1) % 4] as number[];
+    for (let i = 0; i < 50; i++) {
+      const t = i / 50;
+      pts.push(
+        new THREE.Vector3(
+          (ax as number) + ((bx as number) - (ax as number)) * t,
+          (ay as number) + ((by as number) - (ay as number)) * t,
+          0,
+        ),
+      );
+    }
+  }
+  return pts;
+};
+
+/** Two straight legs meeting at one hard corner — the open-path counterpart to `square()`. */
+const openL = () => {
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i <= 50; i++) pts.push(new THREE.Vector3((i / 50) * 0.5, 0, 0));
+  for (let i = 1; i <= 50; i++) pts.push(new THREE.Vector3(0.5, (i / 50) * 0.5, 0));
+  return pts;
+};
 
 describe('the repair registries', () => {
   it('names every repair the design does, and nothing else', () => {
@@ -64,31 +98,6 @@ describe('the two stretches', () => {
 });
 
 describe('the inner pass', () => {
-  /** Sampled at the pipeline's 0.02 spacing — load-bearing: at 0.1 no corner is detected at all. */
-  const square = () => {
-    const corners = [
-      [-0.5, -0.5],
-      [0.5, -0.5],
-      [0.5, 0.5],
-      [-0.5, 0.5],
-    ];
-    const pts: THREE.Vector3[] = [];
-    for (let c = 0; c < 4; c++) {
-      const [ax, ay] = corners[c] as number[];
-      const [bx, by] = corners[(c + 1) % 4] as number[];
-      for (let i = 0; i < 50; i++) {
-        const t = i / 50;
-        pts.push(
-          new THREE.Vector3(
-            (ax as number) + ((bx as number) - (ax as number)) * t,
-            (ay as number) + ((by as number) - (ay as number)) * t,
-            0,
-          ),
-        );
-      }
-    }
-    return pts;
-  };
   const OPTS = {
     runs: 1,
     minRun: 0,
@@ -189,5 +198,63 @@ describe('the inner pass', () => {
       },
     });
     expect(relaxPoints.some((n) => n > 0)).toBe(true);
+  });
+});
+
+describe('the span registry', () => {
+  const OPTS = {
+    runs: 1,
+    minRun: 0,
+    radius: 0.03,
+    bend: 2,
+    spacing: 0.02,
+    seed: 0,
+  };
+
+  it('leaves a return span whole when return is switched off', () => {
+    const path = { points: square(), surface: 'front' as const, closed: true };
+    const on = cutIntoRuns([path], { ...OPTS, corners: ALL_BREAK, blockout: 1 });
+    const off = cutIntoRuns([{ ...path, points: square() }], {
+      ...OPTS,
+      corners: ALL_BREAK,
+      blockout: 1,
+      repairs: new Set(['stretch', 'setback', 'resume', 'fillet', 'close', 'hairpin'] as const),
+    });
+    expect(on.runs.filter((r) => r.dark).length).toBeGreaterThan(0);
+    expect(off.runs.filter((r) => r.dark)).toHaveLength(0);
+  });
+
+  // Under the default `drop` rejoin, a corner's own resume walk almost always lands exactly back on
+  // the vertex the loop split at, so `closeLoop`'s push is a no-op everywhere except where a fillet's
+  // minimum bend radius consumes an entire leg with no valid resume point in it. `bend: 16` against
+  // this square's leg length is what forces that — `bend: 2` (the OPTS above) never does, which is
+  // why this needs its own bend rather than reusing the shared constant.
+  it('pins the seam vertex closeLoop pushes when the entry-side resume exhausts a leg', () => {
+    const path = { points: square(), surface: 'front' as const, closed: true };
+    const bigBend = { ...OPTS, bend: 16, corners: ALL_CONNECT };
+    const countOf = (opts: Parameters<typeof cutIntoRuns>[1]) =>
+      cutIntoRuns([path], opts).runs.reduce((n, r) => n + r.points.length, 0);
+    expect(countOf(bigBend)).toBe(309);
+    expect(
+      countOf({
+        ...bigBend,
+        repairs: new Set(['stretch', 'setback', 'resume', 'fillet', 'return', 'hairpin'] as const),
+      }),
+    ).toBe(308);
+  });
+
+  // The closed-path test above only exercises the closed-loop return sites; this covers the third
+  // site, the open-path branch, which needs an open path to reach at all.
+  it("leaves an open path's return span whole when return is switched off", () => {
+    const path = { points: openL(), surface: 'front' as const, closed: false };
+    const on = cutIntoRuns([path], { ...OPTS, corners: ALL_BREAK, blockout: 1 });
+    const off = cutIntoRuns([{ ...path, points: openL() }], {
+      ...OPTS,
+      corners: ALL_BREAK,
+      blockout: 1,
+      repairs: new Set(['stretch', 'setback', 'resume', 'fillet', 'close', 'hairpin'] as const),
+    });
+    expect(on.runs.filter((r) => r.dark).length).toBeGreaterThan(0);
+    expect(off.runs.filter((r) => r.dark)).toHaveLength(0);
   });
 });

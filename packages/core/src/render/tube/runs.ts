@@ -1029,9 +1029,20 @@ function stitchPath(
           report,
         );
         if (decision.strategy === 'return' && decision.fillet) {
-          const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
-          spans.push(head, dark);
-          current = tail.points;
+          const ranReturn = on('return');
+          report(
+            'return',
+            {
+              at: current.indexOf(decision.fillet.points[0] as THREE.Vector3),
+              points: decision.fillet.points,
+            },
+            ranReturn,
+          );
+          if (ranReturn) {
+            const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
+            spans.push(head, dark);
+            current = tail.points;
+          }
         }
       }
     }
@@ -1065,9 +1076,20 @@ function stitchPath(
         report,
       );
       if (decision.strategy === 'return' && decision.fillet) {
-        const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
-        closedSpans.push(head, dark);
-        current = tail.points;
+        const ranReturn = on('return');
+        report(
+          'return',
+          {
+            at: current.indexOf(decision.fillet.points[0] as THREE.Vector3),
+            points: decision.fillet.points,
+          },
+          ranReturn,
+        );
+        if (ranReturn) {
+          const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
+          closedSpans.push(head, dark);
+          current = tail.points;
+        }
       }
     };
     for (let k = 1; k < n; k++) walk(decisions[k] as CornerDecision, arcs[k] as THREE.Vector3[]);
@@ -1075,7 +1097,10 @@ function stitchPath(
     // A return has already split the span the walk started on off from `current`; the loop closes
     // onto whichever span still begins at the seam.
     const head = closedSpans[0]?.points ?? current;
-    closeLoop(current, head, spacing);
+    const ranClose = on('close');
+    // The seam vertex the loop closes onto — closeLoop may shift it or skip the join entirely.
+    report('close', { at: current.length - 1, points: head.slice(0, 1) }, ranClose);
+    if (ranClose) closeLoop(current, head, spacing);
     closedSpans.push({ points: current });
     return { spans: closedSpans, decisions };
   }
@@ -1104,9 +1129,20 @@ function stitchPath(
         report,
       );
       if (decision.strategy === 'return' && decision.fillet) {
-        const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
-        spans.push(head, dark);
-        current = tail.points;
+        const ranReturn = on('return');
+        report(
+          'return',
+          {
+            at: current.indexOf(decision.fillet.points[0] as THREE.Vector3),
+            points: decision.fillet.points,
+          },
+          ranReturn,
+        );
+        if (ranReturn) {
+          const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
+          spans.push(head, dark);
+          current = tail.points;
+        }
       }
     }
   }

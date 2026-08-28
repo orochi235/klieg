@@ -853,7 +853,12 @@ function mergeArc(
   }
   for (const p of fillet.points) target.push(p);
 
-  const start = indexPast(next, decision.groupAfter + 1, fillet.setback, fillet.corner);
+  // `at` is the first vertex of `next` kept past the setback — the far-side boundary, opposite end
+  // from the entry-side site above.
+  const pastSetback = indexPast(next, decision.groupAfter + 1, fillet.setback, fillet.corner);
+  const ranExitSetback = on('setback');
+  report('setback', { at: pastSetback, points: [] }, ranExitSetback);
+  const start = ranExitSetback ? pastSetback : decision.groupAfter + 1;
   if (rejoin === 'bridge') {
     const blend = bridgeAfter(next, start, exit, outOf, rhoMin, spacing);
     if (blend) {

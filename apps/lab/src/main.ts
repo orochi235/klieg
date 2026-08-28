@@ -572,14 +572,6 @@ policy.select.addEventListener('change', () => {
   bk = create();
 });
 
-// Enter fires, Shift+Enter breaks the line — the convention every chat box uses.
-textInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    fireCurrent();
-  }
-});
-
 // Greyed rather than ignored: a look reads a grain, a tube or a chunk field only if its spec
 // carries one, and a live slider that does nothing reads as a broken slider.
 function syncDisabled(): void {

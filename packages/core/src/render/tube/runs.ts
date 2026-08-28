@@ -816,12 +816,12 @@ function mergeArc(
 
   // Drop the corner's whole stretch before trimming by distance: a shallow turn's setback can be
   // shorter than one sample step, and would leave the stretch's own vertices in the path.
-  const stretchSite: RepairSite = { at: target.length - 1, points: [] };
+  const stretchSite: RepairSite = { at: target.length - 1, points: [], removed: [] };
   const ranStretch = on('stretch');
   if (ranStretch) popStretch(target, decision.groupBefore + 1);
   report('stretch', stretchSite, ranStretch);
   // Indexes the accumulator before the trim; a consumer must not map it onto the post-trim span.
-  const setbackSite: RepairSite = { at: target.length - 1, points: [] };
+  const setbackSite: RepairSite = { at: target.length - 1, points: [], removed: [] };
   const ranSetback = on('setback');
   if (ranSetback) trimTail(target, fillet.setback, fillet.corner);
   report('setback', setbackSite, ranSetback);
@@ -837,7 +837,7 @@ function mergeArc(
   // Gates only the walk's trim below: bridge and relax apply their own geometry regardless, so a
   // `ran: false` report under either still describes points that are actually in the target.
   const ranResume = on('resume');
-  if (bridgedIn) report('resume', { at: target.length - 1, points: bridgedIn }, ranResume);
+  if (bridgedIn) report('resume', { at: target.length - 1, points: bridgedIn, removed: [] }, ranResume);
   if (!bridgedIn) {
     let relaxed: THREE.Vector3[] | null = null;
     if (rejoin === 'relax') {
@@ -848,10 +848,10 @@ function mergeArc(
       }
     }
     if (relaxed) {
-      report('resume', { at: target.length - 1, points: relaxed }, ranResume);
+      report('resume', { at: target.length - 1, points: relaxed, removed: [] }, ranResume);
     } else {
       const keep = resumeAt(target, target.length - 1, -1, entry, second, into, rhoMin, spacing);
-      report('resume', { at: keep, points: [] }, ranResume);
+      report('resume', { at: keep, points: [], removed: [] }, ranResume);
       if (ranResume) target.length = keep + 1;
     }
   }
@@ -868,7 +868,7 @@ function mergeArc(
   // from the entry-side site above.
   const pastSetback = indexPast(next, decision.groupAfter + 1, fillet.setback, fillet.corner);
   const ranExitSetback = on('setback');
-  report('setback', { at: pastSetback, points: [] }, ranExitSetback);
+  report('setback', { at: pastSetback, points: [], removed: [] }, ranExitSetback);
   const start = ranExitSetback ? pastSetback : decision.groupAfter + 1;
   if (rejoin === 'bridge') {
     const blend = bridgeAfter(next, start, exit, outOf, rhoMin, spacing);
@@ -961,7 +961,11 @@ function stitchPath(
     const filletSite = wantsFillet ? filletFor(before, after, c, rhoMin, spacing, rejoin) : null;
     const ranFillet = on('fillet');
     if (wantsFillet) {
-      report('fillet', filletSite ? { at: c.index, points: filletSite.points } : null, ranFillet);
+      report(
+        'fillet',
+        filletSite ? { at: c.index, points: filletSite.points, removed: [] } : null,
+        ranFillet,
+      );
     }
     let fillet = ranFillet ? filletSite : null;
     if (wantsFillet && !fillet) strategy = 'break';
@@ -1044,6 +1048,7 @@ function stitchPath(
             {
               at: current.indexOf(decision.fillet.points[0] as THREE.Vector3),
               points: decision.fillet.points,
+              removed: [],
             },
             ranReturn,
           );
@@ -1091,6 +1096,7 @@ function stitchPath(
           {
             at: current.indexOf(decision.fillet.points[0] as THREE.Vector3),
             points: decision.fillet.points,
+            removed: [],
           },
           ranReturn,
         );
@@ -1108,7 +1114,7 @@ function stitchPath(
     const head = closedSpans[0]?.points ?? current;
     const ranClose = on('close');
     // The seam vertex the loop closes onto — closeLoop may shift it or skip the join entirely.
-    report('close', { at: current.length - 1, points: head.slice(0, 1) }, ranClose);
+    report('close', { at: current.length - 1, points: head.slice(0, 1), removed: [] }, ranClose);
     if (ranClose) closeLoop(current, head, spacing);
     closedSpans.push({ points: current });
     return { spans: closedSpans, decisions };
@@ -1144,6 +1150,7 @@ function stitchPath(
           {
             at: current.indexOf(decision.fillet.points[0] as THREE.Vector3),
             points: decision.fillet.points,
+            removed: [],
           },
           ranReturn,
         );

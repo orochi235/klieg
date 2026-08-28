@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CORNER_REPAIRS,
   CUT_REPAIR_IDS,
+  DECISION_REPAIRS,
   popStretch,
   SPAN_REPAIRS,
   trimStretch,
@@ -73,6 +74,24 @@ describe('the repair registries', () => {
     for (const r of [...CORNER_REPAIRS, ...SPAN_REPAIRS]) {
       expect(r.label.length).toBeGreaterThan(0);
     }
+  });
+
+  it('hangs every repair off the stage it runs inside', () => {
+    for (const entry of [...CORNER_REPAIRS, ...SPAN_REPAIRS, ...DECISION_REPAIRS]) {
+      expect(entry.stage).toBe('cut');
+    }
+  });
+
+  it('separates the three levels a repair can attach at', () => {
+    expect(CORNER_REPAIRS.map((r) => r.level)).toEqual(['corner', 'corner', 'corner']);
+    expect(SPAN_REPAIRS.map((r) => r.level)).toEqual(['span', 'span', 'span']);
+    expect(DECISION_REPAIRS.map((r) => r.id)).toEqual(['fillet', 'hairpin']);
+    expect(DECISION_REPAIRS.map((r) => r.level)).toEqual(['decision', 'decision']);
+  });
+
+  it('names every id across the three registries exactly once per level', () => {
+    const all = [...CORNER_REPAIRS, ...SPAN_REPAIRS, ...DECISION_REPAIRS];
+    expect(new Set(all.map((r) => r.id))).toEqual(new Set(CUT_REPAIR_IDS));
   });
 });
 

@@ -1,4 +1,5 @@
 import type * as THREE from 'three';
+import type { TubeStageId } from './stages.js';
 
 /**
  * What the corner stage does to make a fillet meet its legs. `stretch` appears in both registries:
@@ -30,9 +31,9 @@ export const CUT_REPAIR_IDS: readonly CutRepairId[] = [
 export type RepairSide = 'entry' | 'exit';
 
 /**
- * Where a repair would act and what it would draw there. Returned by `applies` whether or not the
- * repair is switched on: a boolean cannot be ghosted, and showing a worse path without showing
- * what was skipped leaves the reader to infer the difference.
+ * Where a repair would act and what it would change there. Returned whether or not the repair is
+ * switched on: a boolean cannot be ghosted, and showing a worse path without showing what was
+ * skipped leaves the reader to infer the difference.
  * @internal
  */
 export interface RepairSite {
@@ -40,34 +41,46 @@ export interface RepairSite {
   at: number;
   /** The geometry it would put there, empty where the repair only removes vertices. */
   points: readonly THREE.Vector3[];
+  /**
+   * The vertices it would take out, empty where the repair only adds. An anchor index alone is not
+   * enough to ghost a removal — it draws a dot where a stretch of path was going to disappear.
+   */
+  removed: readonly THREE.Vector3[];
+  /** Which end of the corner this site is on; absent where the repair has no side. */
+  side?: RepairSide;
 }
 
 /**
- * Identity, label and order — no `apply`. Each id fires twice per corner with incompatible bodies
- * (`setback` trims a span entering and yields an index leaving), so no one signature spans them;
- * the gate and the site live at each call site and this is what the lab enumerates.
+ * Identity, label, order, and where the repair hangs in the pipeline — no `apply`. Each id fires
+ * with a body no one signature spans (`setback` trims a span entering and yields an index leaving),
+ * so the gate and the site live at each call site and this is what the lab enumerates.
  * @internal
  */
-export interface CornerRepair {
+export interface RepairEntry {
   id: CutRepairId;
   label: string;
+  /** The stage this repair runs inside. Every one of them is `cut`; the field is what a diagram
+   * reads, and the day a repair hangs off another stage nothing has to be rewritten to say so. */
+  stage: TubeStageId;
+  /** `corner` inside `mergeArc`, `span` at the `stitchPath` level, `decision` where a strategy is
+   * chosen before either runs. */
+  level: 'corner' | 'span' | 'decision';
 }
 
-/** As `CornerRepair`, at the level where the accumulator is a span list. @internal */
-export interface SpanRepair {
-  id: CutRepairId;
-  label: string;
-}
+/** @internal */
+export type CornerRepair = RepairEntry;
+/** @internal */
+export type SpanRepair = RepairEntry;
 
 /**
  * Runs inside `mergeArc`, twice per corner — once per side, with the `fillet` splice fixed between
  * the two passes. Order is the order the sides are worked, not the order of the ids.
  * @internal
  */
-export const CORNER_REPAIRS: readonly CornerRepair[] = [
-  { id: 'stretch', label: 'stretch' },
-  { id: 'setback', label: 'setback' },
-  { id: 'resume', label: 'resume' },
+export const CORNER_REPAIRS: readonly RepairEntry[] = [
+  { id: 'stretch', label: 'stretch', stage: 'cut', level: 'corner' },
+  { id: 'setback', label: 'setback', stage: 'cut', level: 'corner' },
+  { id: 'resume', label: 'resume', stage: 'cut', level: 'corner' },
 ];
 
 /**
@@ -77,10 +90,20 @@ export const CORNER_REPAIRS: readonly CornerRepair[] = [
  * `stretch` is a `pop()` loop that can empty the span.
  * @internal
  */
-export const SPAN_REPAIRS: readonly SpanRepair[] = [
-  { id: 'stretch', label: 'stretch (break)' },
-  { id: 'close', label: 'close the loop' },
-  { id: 'return', label: 'return' },
+export const SPAN_REPAIRS: readonly RepairEntry[] = [
+  { id: 'stretch', label: 'stretch (break)', stage: 'cut', level: 'span' },
+  { id: 'close', label: 'close the loop', stage: 'cut', level: 'span' },
+  { id: 'return', label: 'return', stage: 'cut', level: 'span' },
+];
+
+/**
+ * Gated where the corner's strategy is picked, ahead of both other registries: switching either off
+ * does not skip a step, it changes which step runs at all.
+ * @internal
+ */
+export const DECISION_REPAIRS: readonly RepairEntry[] = [
+  { id: 'fillet', label: 'fillet', stage: 'cut', level: 'decision' },
+  { id: 'hairpin', label: 'hairpin', stage: 'cut', level: 'decision' },
 ];
 
 /**

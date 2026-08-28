@@ -611,13 +611,14 @@ Roughly in order of value; the items are independent of each other.
   `wander`, `cut`, `assign`, `sweep`, with `stages` naming which run and `onStage(id, state, ran)`
   reporting each. 1162 tests, 33 visual, look snapshots byte-identical. See
   [the plan](plans/2026-08-27-tube-stage-registry.md), whose "Left for slice 2" section names what
-  it inherits. **Slice 2 is `CUT_REPAIRS` and it is the hard one:** `mergeArc` (`runs.ts:755`)
-  interleaves the bridge, relax and resume paths with the arc push. **Slice 2 has been measured and
-  the design corrected — read the revised "The two registries" before writing any of it.** It is not
-  a fold and it does not live in `mergeArc`: three of the six repairs never enter that function,
-  `close` and `return` are span-*list* operations, `stretch` is two implementations with different
-  floors under one name, and `hairpin` is a seventh repair the six ids never named. Branch
-  `cut-repairs` is cut off this one and carries the correction and nothing else.
+  it inherits. **Slice 2 is `CUT_REPAIRS` and it is the hard one:** `mergeArc` interleaves the
+  bridge, relax and resume paths with the arc push. It has been measured, the design corrected, and
+  **[the slice 2 plan](plans/2026-08-27-cut-repairs-registry.md) is written and ready to execute —
+  ten tasks, start at Task 1.** Read the revised "The two registries" before writing any of it: it
+  is not a fold and it does not live in `mergeArc`. Three of the six repairs never enter that
+  function, `close` and `return` are span-*list* operations, `stretch` is two implementations with
+  different floors under one name, and `hairpin` is a seventh repair the six ids never named. The
+  plan carries those five reasons at its top for that reason — the function names read as a fold.
 
   **The seed-stream desync is fixed on `cut-repairs`.** `stitchPath` used to take its second
   `draw()` only when a corner broke, so switching the `fillet` repair off shifted the stream for
@@ -628,8 +629,9 @@ Roughly in order of value; the items are independent of each other.
   to `null` in `Run.from` and read as fillet-built, so `rejoin: 'relax'` quietly stopped those
   vertices being smoothed; each copy now inherits its leg vertex's provenance through an `inherit`
   callback threaded from `cutIntoRuns`. Both were latent because `DEFAULT_REJOIN` is `drop` and no
-  look overrides it — which stops being true the moment the lab exposes the knob. **Slice 2 is
-  unblocked; it is `CUT_REPAIRS` and it is the hard one.** Slice 3 is the lab.
+  look overrides it — which stops being true the moment the lab exposes the knob. Both landed on
+  `main`, along with the slice 2 plan; `cut-repairs` and `main` are the same commit. **Slice 2 is
+  unblocked and planned.** Slice 3 is the lab.
 
   Two things slice 1 learned that its plan did not start with. **`wanderPaths` seeds its rng from
   the path's array index**, so the order paths are concatenated in — contours, then connectors — is

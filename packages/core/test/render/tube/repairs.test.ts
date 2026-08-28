@@ -194,14 +194,14 @@ describe('the inner pass', () => {
         rejoin: 'drop',
         repairs: new Set(['stretch', 'fillet', 'close', 'return', 'hairpin'] as const),
       }),
-    ).toBe(225);
+    ).toBe(241);
     expect(
       countOf({
         ...OPTS,
         rejoin: 'drop',
         repairs: new Set(['fillet', 'close', 'return', 'hairpin'] as const),
       }),
-    ).toBe(229);
+    ).toBe(245);
   });
 
   it('reports the resume provider that actually answered', () => {
@@ -219,15 +219,15 @@ describe('the inner pass', () => {
     });
     // A bridge answers with a blend; the plain walk answers with an index and no geometry.
     expect(points.some((n) => n > 0)).toBe(true);
-    // One entry-side resume report per corner.
-    expect(reports).toBe(4);
+    // Both sides of all four corners.
+    expect(reports).toBe(8);
   });
 
   // Under `relax`, a successful blend is applied whether or not `resume` is on, so on/off geometry
   // is bit-identical there — the walk-off gate only has bite under the default rejoin, where
   // switching it off leaves the fillet's own vertices in place instead of trimming to the walk.
   // Pinned by exact count, not inequality, so a mutation that trims unconditionally still fails.
-  it('pins the entry-side resume geometry the walk-off gate controls', () => {
+  it('pins the resume geometry both walk-off gates control', () => {
     const path = [{ points: square(), surface: 'front' as const, closed: true }];
     const countOf = (opts: Parameters<typeof cutIntoRuns>[1]) =>
       cutIntoRuns(path, opts).runs.reduce((n, r) => n + r.points.length, 0);
@@ -237,7 +237,7 @@ describe('the inner pass', () => {
         ...OPTS,
         repairs: new Set(['stretch', 'setback', 'fillet', 'close', 'return', 'hairpin'] as const),
       }),
-    ).toBe(217);
+    ).toBe(225);
 
     // The relax branch's own report still needs covering, since geometry alone can't show it ran.
     const relaxPoints: number[] = [];
@@ -266,6 +266,18 @@ describe('the inner pass', () => {
     // Entry setback trims by distance and reports what it took; the exit side removes nothing from
     // the accumulator, it advances a cursor, so its `removed` is empty by construction.
     expect(sites.filter((s) => s.id === 'setback').some((s) => s.removed > 0)).toBe(true);
+  });
+
+  it('reports resume on both sides of every corner', () => {
+    const sides: (string | undefined)[] = [];
+    cutIntoRuns([{ points: square(), surface: 'front' as const, closed: true }], {
+      ...OPTS,
+      onRepair: (id, site) => {
+        if (id === 'resume' && site) sides.push(site.side);
+      },
+    });
+    expect(sides.filter((s) => s === 'entry')).toHaveLength(4);
+    expect(sides.filter((s) => s === 'exit')).toHaveLength(4);
   });
 
   it('reports the removal a switched-off repair would have made', () => {

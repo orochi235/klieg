@@ -858,7 +858,13 @@ function mergeArc(
   // Gates only the walk's trim below: bridge and relax apply their own geometry regardless, so a
   // `ran: false` report under either still describes points that are actually in the target.
   const ranResume = on('resume');
-  if (bridgedIn) report('resume', { at: target.length - 1, points: bridgedIn, removed: [] }, ranResume);
+  if (bridgedIn) {
+    report(
+      'resume',
+      { at: target.length - 1, points: bridgedIn, removed: [], side: 'entry' },
+      ranResume,
+    );
+  }
   if (!bridgedIn) {
     let relaxed: THREE.Vector3[] | null = null;
     if (rejoin === 'relax') {
@@ -869,10 +875,18 @@ function mergeArc(
       }
     }
     if (relaxed) {
-      report('resume', { at: target.length - 1, points: relaxed, removed: [] }, ranResume);
+      report(
+        'resume',
+        { at: target.length - 1, points: relaxed, removed: [], side: 'entry' },
+        ranResume,
+      );
     } else {
       const keep = resumeAt(target, target.length - 1, -1, entry, second, into, rhoMin, spacing);
-      report('resume', { at: keep, points: [], removed: [] }, ranResume);
+      report(
+        'resume',
+        { at: keep, points: [], removed: target.slice(keep + 1), side: 'entry' },
+        ranResume,
+      );
       if (ranResume) target.length = keep + 1;
     }
   }
@@ -891,9 +905,15 @@ function mergeArc(
   const ranExitSetback = on('setback');
   report('setback', { at: pastSetback, points: [], removed: [] }, ranExitSetback);
   const start = ranExitSetback ? pastSetback : decision.groupAfter + 1;
+  const ranExitResume = on('resume');
   if (rejoin === 'bridge') {
     const blend = bridgeAfter(next, start, exit, outOf, rhoMin, spacing);
     if (blend) {
+      report(
+        'resume',
+        { at: start, points: blend.points, removed: [], side: 'exit' },
+        ranExitResume,
+      );
       for (let i = 1; i < blend.points.length; i++) target.push(blend.points[i] as THREE.Vector3);
       for (let i = blend.at + 1; i < next.length; i++) target.push(next[i] as THREE.Vector3);
       return;
@@ -902,6 +922,7 @@ function mergeArc(
   if (rejoin === 'relax' && start < next.length) {
     const relaxed = relaxOnto([penult, exit], next, start, 1, rhoMin, inherit);
     if (relaxed) {
+      report('resume', { at: start, points: relaxed, removed: [], side: 'exit' }, ranExitResume);
       for (const p of relaxed) target.push(p);
       for (let i = start + relaxed.length; i < next.length; i++) {
         target.push(next[i] as THREE.Vector3);
@@ -910,7 +931,13 @@ function mergeArc(
     }
   }
   const from = resumeAt(next, start, 1, exit, penult, outOf, rhoMin, spacing);
-  for (let i = from; i < next.length; i++) target.push(next[i] as THREE.Vector3);
+  report(
+    'resume',
+    { at: from, points: [], removed: next.slice(start, from), side: 'exit' },
+    ranExitResume,
+  );
+  const walkFrom = ranExitResume ? from : start;
+  for (let i = walkFrom; i < next.length; i++) target.push(next[i] as THREE.Vector3);
 }
 
 const EPS = 1e-9;

@@ -1,4 +1,5 @@
 import type { PathSource } from '@core/render/tube/generators.js';
+import { CUT_REPAIR_IDS } from '@core/render/tube/repairs.js';
 import { DEFAULT_REJOIN, REJOINS, type Rejoin } from '@core/render/tube/runs.js';
 import { TUBE_STAGES, type TubeStageId } from '@core/render/tube/stages.js';
 import type { LoadedFont } from '@core/text/font.js';
@@ -7,7 +8,7 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import type * as THREE from 'three';
 import { Legend } from './LegendPanel.js';
 import { INK } from './legend.js';
-import { NODE_KEY, STAGE_NODES } from './pipeline.js';
+import { NODE_KEY, STAGE_NODES, TOGGLE_GROUPS } from './pipeline.js';
 import { buildScene, type CornerMark, type CornerScene, type GlyphBounds } from './scene.js';
 import { isTubeLook, type TubeLook } from './spec.js';
 
@@ -33,7 +34,29 @@ function requestOf(config: Config) {
     drawAt: (TUBE_STAGES.some((t) => t.id === config.drawAt)
       ? config.drawAt
       : 'sweep') as TubeStageId,
+    repairs: new Set(CUT_REPAIR_IDS.filter((id) => config[`repair:${id}`] !== false)),
   };
+}
+
+/**
+ * One switch per repair id, in registry order. `stretch` is in two groups under two labels but is
+ * one `CutRepairId`, and `repairs` is a set of ids — two switches would be wired to one wire.
+ */
+function repairSwitches() {
+  const seen = new Set<string>();
+  return TOGGLE_GROUPS.flatMap((group) =>
+    group.ids
+      .filter((id) => !seen.has(id))
+      .map((id) => {
+        seen.add(id);
+        return {
+          key: `repair:${id}`,
+          label: `${group.label} · ${id}`,
+          type: 'checkbox' as const,
+          default: true,
+        };
+      }),
+  );
 }
 
 /** Set by `main` once the font has loaded; the instrument model is synchronous. */
@@ -76,6 +99,21 @@ function stroke(
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   ctx.stroke();
+}
+
+/**
+ * A ghost's geometry, however short: a run of vertices strokes, a single one draws as a dot. The
+ * radius is the stroke's own width — both are already in the glyph's units, which `centred` scales.
+ */
+function mark(
+  ctx: CanvasRenderingContext2D,
+  points: THREE.Vector3[],
+  centre: THREE.Vector3,
+  colour: string,
+  width: number,
+): void {
+  if (points.length === 1) dot(ctx, points[0] as THREE.Vector3, centre, colour, width);
+  else stroke(ctx, points, centre, colour, width);
 }
 
 function dot(
@@ -292,6 +330,7 @@ export const junction = defineInstrument<CornerScene, Config>({
     rejoin: DEFAULT_REJOIN,
     drawAt: 'sweep',
     ...Object.fromEntries(TUBE_STAGES.map((stage) => [`stage:${stage.id}`, true])),
+    ...Object.fromEntries(CUT_REPAIR_IDS.map((id) => [`repair:${id}`, true])),
   }),
 
   configSchema: () => [
@@ -338,6 +377,7 @@ export const junction = defineInstrument<CornerScene, Config>({
       default: 'sweep',
       options: TUBE_STAGES.map((s) => ({ value: s.id, label: s.label })),
     },
+    ...repairSwitches(),
   ],
 
   initialState: (config) => buildScene(font, requestOf(config)),
@@ -390,6 +430,22 @@ export const junction = defineInstrument<CornerScene, Config>({
           }),
       },
       {
+        id: 'ghost',
+        draw: (ctx, { state, zoom }) =>
+          centred(ctx, zoom, () => {
+            for (const ghost of state.ghosts) {
+              if (ghost.ran) continue;
+              // A one-vertex site is most of them — `stretch` drops a single vertex per corner —
+              // and a one-point polyline strokes nothing, so the readout would name a ghost the
+              // canvas never drew.
+              mark(ctx, ghost.removed, state.centre, INK.removed, 7 / zoom);
+              ctx.setLineDash([4 / zoom, 4 / zoom]);
+              mark(ctx, ghost.added, state.centre, INK.added, 2.4 / zoom);
+              ctx.setLineDash([]);
+            }
+          }),
+      },
+      {
         id: 'repair',
         draw: (ctx, { state, zoom }) =>
           centred(ctx, zoom, () => {
@@ -399,7 +455,7 @@ export const junction = defineInstrument<CornerScene, Config>({
     ],
   },
 
-  layers: { ids: ['floor', 'contour', 'staged', 'built', 'repair'] },
+  layers: { ids: ['floor', 'contour', 'staged', 'built', 'ghost', 'repair'] },
 
   render: ({ state, config, setConfig, setState }) => (
     <>
@@ -426,6 +482,14 @@ export const junction = defineInstrument<CornerScene, Config>({
               <dd>{m.value}</dd>
             </div>
           ))}
+          {state.ghosts
+            .filter((g) => !g.ran)
+            .map((g, i) => (
+              <div className="measure" key={`${g.id}:${g.side ?? '-'}:${i}`}>
+                <dt>{g.side ? `${g.id} · ${g.side}` : g.id}</dt>
+                <dd>{`off — ${g.added.length} added, ${g.removed.length} removed`}</dd>
+              </div>
+            ))}
         </dl>
         <ul className="junction__profile">
           {state.profile.map((p) => (

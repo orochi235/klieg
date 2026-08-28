@@ -13,6 +13,7 @@ import {
   type PathSource,
 } from '@core/render/tube/generators.js';
 import { buildTubeBlueprint, type Run } from '@core/render/tube/index.js';
+import type { CutRepairId, RepairSide } from '@core/render/tube/repairs.js';
 import type { Rejoin } from '@core/render/tube/runs.js';
 import type { TubeStageId } from '@core/render/tube/stages.js';
 import { surfacesOf } from '@core/render/tube/surfaces.js';
@@ -30,6 +31,7 @@ export interface SceneRequest {
   rejoin: Rejoin;
   stages: ReadonlySet<TubeStageId>;
   drawAt: TubeStageId;
+  repairs: ReadonlySet<CutRepairId>;
 }
 
 export interface Measure {
@@ -63,6 +65,17 @@ export interface OutlinePath {
   closed: boolean;
 }
 
+/** What one repair report would put on the canvas, whether or not the repair ran. */
+export interface Ghost {
+  id: CutRepairId;
+  side?: RepairSide;
+  /** Geometry the repair would add. */
+  added: THREE.Vector3[];
+  /** Geometry it would remove. */
+  removed: THREE.Vector3[];
+  ran: boolean;
+}
+
 /** The glyph's extent in its own 1 em space. */
 export interface GlyphBounds {
   minX: number;
@@ -94,6 +107,8 @@ export interface CornerScene {
   staged: THREE.Vector3[][];
   /** Stages that were switched off, so the panel can say a step was bypassed rather than empty. */
   skipped: TubeStageId[];
+  /** One per report from the selected corner's neighbourhood; switched-off repairs included. */
+  ghosts: Ghost[];
 }
 
 const PAD = 0.3;
@@ -219,6 +234,7 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
       profile: [],
       staged: [],
       skipped: [],
+      ghosts: [],
     };
   }
 
@@ -239,6 +255,7 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
 
   const staged: THREE.Vector3[][] = [];
   const skipped: TubeStageId[] = [];
+  const allGhosts: Ghost[] = [];
   const blueprint = buildTubeBlueprint(
     glyphToShapes(font.font, req.letter, 1),
     { ...spec, pathSource: req.source, rejoin: req.rejoin },
@@ -254,8 +271,23 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
         const source = state.runs.length > 0 ? state.runs : state.paths;
         for (const item of source) staged.push(item.points.map((p) => p.clone()));
       },
+      repairs: req.repairs,
+      onRepair: (id, site, ran) => {
+        if (!site) return;
+        allGhosts.push({
+          id,
+          side: site.side,
+          added: site.points.map((p) => p.clone()),
+          removed: site.removed.map((p) => p.clone()),
+          ran,
+        });
+      },
     },
   );
+  // A site with empty `added` and empty `removed` cannot be placed — the exit-side setback reports
+  // only a cursor index — so it drops out of this filter rather than drawing a dot at the origin.
+  const near = (p: THREE.Vector3) => p.distanceTo(centre) < spacing * 40;
+  const ghosts = allGhosts.filter((g) => g.added.some(near) || g.removed.some(near));
   const corners: CornerMark[] = found.map((f, i) => ({
     at: at(f.path.points, f.corner.index).clone(),
     ordinal: i + 1,
@@ -348,5 +380,6 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
     profile,
     staged,
     skipped,
+    ghosts,
   };
 }

@@ -17,6 +17,7 @@ import {
   type HairpinShape,
   hairpinAt,
 } from './hairpin.js';
+import type { CutRepairId, RepairSite } from './repairs.js';
 import { minCurvatureRadius3 } from './resample.js';
 import type { SurfaceKind } from './surfaces.js';
 
@@ -130,6 +131,14 @@ export interface CutOptions {
    * everywhere else.
    */
   blockout?: number;
+  /**
+   * Which repairs run. Absent is every repair on, which is what every shipped caller passes. Typed
+   * as its own union rather than sharing one set with `TubeStageId`: a caller passing only repair
+   * ids into a shared set would switch off all five stages and get an empty blueprint.
+   */
+  repairs?: ReadonlySet<CutRepairId>;
+  /** Fires for every repair considered, switched off ones included, so a lab can ghost them. */
+  onRepair?(id: CutRepairId, site: RepairSite | null, ran: boolean): void;
 }
 
 /** A weight factor never fully zeroes an option biasing can't rule out entirely. */
@@ -781,6 +790,8 @@ function mergeArc(
   spacing: number,
   rejoin: Rejoin,
   inherit: Inherit,
+  on: (id: CutRepairId) => boolean,
+  report: (id: CutRepairId, site: RepairSite | null, ran: boolean) => void,
 ): void {
   if (decision.hairpin && decision.strategy === 'hairpin') {
     spliceHairpin(target, next, decision, decision.hairpin);
@@ -801,7 +812,11 @@ function mergeArc(
   // Drop the corner's whole stretch before trimming by distance: a shallow turn's setback can be
   // shorter than one sample step, and would leave the stretch's own vertices in the path.
   for (let i = 0; i <= decision.groupBefore && target.length > 0; i++) target.pop();
-  trimTail(target, fillet.setback, fillet.corner);
+  // Indexes the accumulator before the trim; a consumer must not map it onto the post-trim span.
+  const setbackSite: RepairSite = { at: target.length - 1, points: [] };
+  const ran = on('setback');
+  if (ran) trimTail(target, fillet.setback, fillet.corner);
+  report('setback', setbackSite, ran);
 
   let bridgedIn: THREE.Vector3[] | null = null;
   if (rejoin === 'bridge') {
@@ -893,6 +908,8 @@ function stitchPath(
   shape: HairpinShape,
   drawAt: (corner: number, draw: Draw) => number,
   inherit: Inherit,
+  on: (id: CutRepairId) => boolean,
+  report: (id: CutRepairId, site: RepairSite | null, ran: boolean) => void,
 ): { spans: Span[]; decisions: CornerDecision[] } {
   const { arcs, corners } = raw;
   if (corners.length === 0) return { spans: arcs.map((points) => ({ points })), decisions: [] };
@@ -992,6 +1009,8 @@ function stitchPath(
           spacing,
           rejoin,
           inherit,
+          on,
+          report,
         );
         if (decision.strategy === 'return' && decision.fillet) {
           const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
@@ -1017,7 +1036,18 @@ function stitchPath(
     const mid = Math.max(1, Math.min(first.length - 2, first.length >> 1));
     let current = first.slice(mid);
     const walk = (decision: CornerDecision, arc: THREE.Vector3[]) => {
-      mergeArc(current, arc, decision, decision.fillet ?? null, rhoMin, spacing, rejoin, inherit);
+      mergeArc(
+        current,
+        arc,
+        decision,
+        decision.fillet ?? null,
+        rhoMin,
+        spacing,
+        rejoin,
+        inherit,
+        on,
+        report,
+      );
       if (decision.strategy === 'return' && decision.fillet) {
         const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
         closedSpans.push(head, dark);
@@ -1054,6 +1084,8 @@ function stitchPath(
         spacing,
         rejoin,
         inherit,
+        on,
+        report,
       );
       if (decision.strategy === 'return' && decision.fillet) {
         const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
@@ -1109,6 +1141,10 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
   const rejoin = opts.rejoin ?? DEFAULT_REJOIN;
   const shape = opts.hairpin ?? DEFAULT_HAIRPIN;
   const seed = opts.seed ?? 0;
+  const enabled = opts.repairs;
+  const on = (id: CutRepairId) => !enabled || enabled.has(id);
+  const report = (id: CutRepairId, site: RepairSite | null, ran: boolean) =>
+    opts.onRepair?.(id, site, ran);
   // Corner indices run across the whole glyph, so the order paths are concatenated in is what
   // keeps a word building identically twice.
   let cornerBase = 0;
@@ -1143,6 +1179,8 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
       shape,
       drawAt,
       inherit,
+      on,
+      report,
     );
     cornerBase += decisions.length;
     for (const d of decisions) {

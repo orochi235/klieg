@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { assign } from '../../../src/render/tube/assign.js';
 import { minBendRadius } from '../../../src/render/tube/bend.js';
 import { HAIRPIN_SHAPES } from '../../../src/render/tube/hairpin.js';
-import { ALL_BREAK, ALL_CONNECT, cutIntoRuns, REJOINS } from '../../../src/render/tube/runs.js';
+import { CUT_REPAIR_IDS } from '../../../src/render/tube/repairs.js';
 import type { CornerWeights, Rejoin } from '../../../src/render/tube/runs.js';
+import { ALL_BREAK, ALL_CONNECT, cutIntoRuns, REJOINS } from '../../../src/render/tube/runs.js';
 import { tightestBend } from '../../../src/render/tube/sweep.js';
 
 /**
@@ -1098,5 +1099,39 @@ describe('the corner stage, pinned before the repair registry', () => {
         120,
       ]
     `);
+  });
+
+  it('reports every repair it considered, switched on or off', () => {
+    const seen: { id: string; ran: boolean }[] = [];
+    cutIntoRuns([PATH(squarePath())], {
+      ...GEOM,
+      corners: ALL_CONNECT,
+      onRepair: (id, _site, ran) => seen.push({ id, ran }),
+    });
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((s) => s.ran)).toBe(true);
+    expect(new Set(seen.map((s) => s.id))).toContain('setback');
+  });
+
+  it('treats an absent repair set as every repair on', () => {
+    const all = cutIntoRuns([PATH(squarePath())], {
+      ...GEOM,
+      corners: ALL_CONNECT,
+      repairs: new Set(CUT_REPAIR_IDS),
+    });
+    const absent = cutIntoRuns([PATH(squarePath())], { ...GEOM, corners: ALL_CONNECT });
+    expect(all.runs.map((r) => r.points.length)).toEqual(absent.runs.map((r) => r.points.length));
+  });
+
+  it('reports a repair it was told not to run', () => {
+    const seen: { id: string; ran: boolean }[] = [];
+    cutIntoRuns([PATH(squarePath())], {
+      ...GEOM,
+      corners: ALL_CONNECT,
+      repairs: new Set(CUT_REPAIR_IDS.filter((id) => id !== 'setback')),
+      onRepair: (id, _site, ran) => seen.push({ id, ran }),
+    });
+
+    expect(seen.some((s) => s.id === 'setback' && s.ran === false)).toBe(true);
   });
 });

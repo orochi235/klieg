@@ -1,18 +1,12 @@
 import type { PathSource } from '@core/render/tube/generators.js';
+import { DEFAULT_REJOIN, REJOINS, type Rejoin } from '@core/render/tube/runs.js';
 import type { LoadedFont } from '@core/text/font.js';
 import { CanvasStackContext, defineInstrument, type ViewTransform } from '@weasel-js/labkit';
 import { useContext, useEffect, useRef, useState } from 'react';
 import type * as THREE from 'three';
 import { Legend } from './LegendPanel.js';
 import { INK } from './legend.js';
-import {
-  buildScene,
-  type CornerMark,
-  type CornerScene,
-  type GlyphBounds,
-  REPAIRS,
-  type Repair,
-} from './scene.js';
+import { buildScene, type CornerMark, type CornerScene, type GlyphBounds } from './scene.js';
 import { isTubeLook, type TubeLook } from './spec.js';
 
 interface Config {
@@ -20,7 +14,7 @@ interface Config {
   look: TubeLook;
   source: string;
   corner: number;
-  repair: string;
+  rejoin: string;
 }
 
 function requestOf(config: Config) {
@@ -29,7 +23,7 @@ function requestOf(config: Config) {
     look: isTubeLook(config.look) ? config.look : 'piping',
     source: config.source as PathSource,
     corner: Math.max(0, Math.round(config.corner) - 1),
-    repair: (REPAIRS.includes(config.repair as Repair) ? config.repair : 'built') as Repair,
+    rejoin: (REJOINS.includes(config.rejoin as Rejoin) ? config.rejoin : DEFAULT_REJOIN) as Rejoin,
   };
 }
 
@@ -286,7 +280,7 @@ export const junction = defineInstrument<CornerScene, Config>({
     look: 'piping',
     source: 'direct',
     corner: 1,
-    repair: 'built',
+    rejoin: DEFAULT_REJOIN,
   }),
 
   configSchema: () => [
@@ -314,11 +308,11 @@ export const junction = defineInstrument<CornerScene, Config>({
     },
     { key: 'corner', label: 'corner', type: 'slider', default: 1, min: 1, max: 24, step: 1 },
     {
-      key: 'repair',
-      label: 'repair',
+      key: 'rejoin',
+      label: 'rejoin',
       type: 'select',
-      default: 'built',
-      options: REPAIRS.map((r) => ({ value: r, label: r })),
+      default: DEFAULT_REJOIN,
+      options: REJOINS.map((r) => ({ value: r, label: r })),
     },
   ],
 

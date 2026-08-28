@@ -1,5 +1,4 @@
 import {
-  biarcBlend,
   type Corner,
   cornersByBend,
   junctionRadius,
@@ -14,7 +13,7 @@ import {
   type PathSource,
 } from '@core/render/tube/generators.js';
 import { buildTubeBlueprint, type Run } from '@core/render/tube/index.js';
-import { minCurvatureRadius3 } from '@core/render/tube/resample.js';
+import type { Rejoin } from '@core/render/tube/runs.js';
 import { surfacesOf } from '@core/render/tube/surfaces.js';
 import { tightestBend } from '@core/render/tube/sweep.js';
 import type { LoadedFont } from '@core/text/font.js';
@@ -22,15 +21,12 @@ import { glyphToShapes } from '@core/text/glyphs.js';
 import * as THREE from 'three';
 import { type TubeLook, tubeSpecOf } from './spec.js';
 
-export const REPAIRS = ['built', 'merge', 'relax', 'biarc', 'cut'] as const;
-export type Repair = (typeof REPAIRS)[number];
-
 export interface SceneRequest {
   letter: string;
   look: TubeLook;
   source: PathSource;
   corner: number;
-  repair: Repair;
+  rejoin: Rejoin;
 }
 
 export interface Measure {
@@ -152,68 +148,6 @@ function boundsOf(outline: OutlinePath[]): GlyphBounds {
 const at = (pts: THREE.Vector3[], i: number) =>
   pts[((i % pts.length) + pts.length) % pts.length] as THREE.Vector3;
 
-/** A blend across the corner, reaching outward for room until one clears the floor. */
-function blendAcross(
-  points: THREE.Vector3[],
-  lo: number,
-  hi: number,
-  rhoMin: number,
-  spacing: number,
-) {
-  for (let out = 0; out <= 8; out++) {
-    const i = lo - 1 - out;
-    const j = hi + 1 + out;
-    const p0 = at(points, i);
-    const p1 = at(points, j);
-    const t0 = p0.clone().sub(at(points, i - 1));
-    const t1 = at(points, j + 1)
-      .clone()
-      .sub(p1);
-    const drawn = biarcBlend(p0, t0, p1, t1, rhoMin, spacing);
-    if (drawn) return { drawn, i, j, out };
-  }
-  return null;
-}
-
-/**
- * Pushes each vertex under the floor away from its own centre of curvature until it clears, which
- * keeps the glyph's path where a replacement leaves it. Only useful where the corner is barely
- * under: a spike at a quarter of the floor would have to move most of a tube radius.
- */
-function relaxAcross(points: THREE.Vector3[], lo: number, hi: number, rhoMin: number) {
-  const span: THREE.Vector3[] = [];
-  for (let k = lo - 6; k <= hi + 6; k++) span.push(at(points, k).clone());
-  const step = rhoMin * 0.004;
-  let moved = 0;
-  for (let pass = 0; pass < 400; pass++) {
-    let worstAt = -1;
-    let worst = Number.POSITIVE_INFINITY;
-    for (let i = 1; i + 1 < span.length; i++) {
-      const rho = minCurvatureRadius3(
-        [span[i - 1], span[i], span[i + 1]].map((p) => ({
-          x: (p as THREE.Vector3).x,
-          y: (p as THREE.Vector3).y,
-          z: (p as THREE.Vector3).z,
-        })),
-      );
-      if (rho < worst) {
-        worst = rho;
-        worstAt = i;
-      }
-    }
-    if (worst >= rhoMin || worstAt < 0) break;
-    const prev = span[worstAt - 1] as THREE.Vector3;
-    const cur = span[worstAt] as THREE.Vector3;
-    const next = span[worstAt + 1] as THREE.Vector3;
-    // Away from the arc through the triple: the bisector of the two legs, pointing outward.
-    const away = cur.clone().sub(prev.clone().add(next).multiplyScalar(0.5)).setZ(0);
-    if (away.lengthSq() < 1e-18) break;
-    cur.addScaledVector(away.normalize(), step);
-    moved += step;
-  }
-  return { span, moved };
-}
-
 /** Samples to search either side of a corner. Measured worst case is 13; a step is one `spacing`. */
 const SEARCH_SPAN = 16;
 
@@ -296,7 +230,7 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
 
   const blueprint = buildTubeBlueprint(
     glyphToShapes(font.font, req.letter, 1),
-    { ...spec, amplitude: 0, pathSource: req.source },
+    { ...spec, pathSource: req.source, rejoin: req.rejoin },
     PAD,
     0,
   );
@@ -374,62 +308,7 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
     });
   }
 
-  let drawn: THREE.Vector3[] | null = null;
-  if (req.repair === 'biarc') {
-    const blend = blendAcross(points, lo, hi, rhoMin, spacing);
-    if (blend) {
-      drawn = blend.drawn;
-      const rho = minCurvatureRadius3(blend.drawn.map((p) => ({ x: p.x, y: p.y, z: p.z })));
-      measures.push({
-        label: 'blend bends at',
-        value: `${(rho / radius).toFixed(2)}r`,
-        bad: rho < rhoMin,
-      });
-      measures.push({ label: 'blend replaces', value: `${blend.j - blend.i} vertices` });
-    } else {
-      measures.push({ label: 'blend', value: 'none clears the floor', bad: true });
-    }
-  }
-  if (req.repair === 'relax') {
-    const { span, moved } = relaxAcross(points, lo, hi, rhoMin);
-    drawn = span;
-    const rho = minCurvatureRadius3(span.map((p) => ({ x: p.x, y: p.y, z: p.z })));
-    measures.push({
-      label: 'relaxed to',
-      value: `${(rho / radius).toFixed(2)}r`,
-      bad: rho < rhoMin,
-    });
-    measures.push({ label: 'moved', value: `${(moved / radius).toFixed(2)}r of tube radius` });
-  }
-  if (req.repair === 'merge') {
-    // Draw nothing over the corner: the two spans stay one path. Where the ends are near collinear
-    // there is no corner to replace, and what the tube would carry is the glyph's own bend.
-    const span: THREE.Vector3[] = [];
-    for (let k = lo - 6; k <= hi + 6; k++) span.push(at(points, k));
-    drawn = span;
-    const rho = minCurvatureRadius3(span.map((p) => ({ x: p.x, y: p.y, z: p.z })));
-    const ends = at(points, lo - 1)
-      .clone()
-      .sub(at(points, lo - 2))
-      .normalize();
-    const out = at(points, hi + 2)
-      .clone()
-      .sub(at(points, hi + 1))
-      .normalize();
-    measures.push({
-      label: 'merged bends at',
-      value: `${(rho / radius).toFixed(2)}r`,
-      bad: rho < rhoMin,
-    });
-    measures.push({
-      label: 'ends differ by',
-      value: `${((ends.angleTo(out) * 180) / Math.PI).toFixed(0)} deg`,
-    });
-  }
-  if (req.repair === 'cut') {
-    drawn = replaced;
-    measures.push({ label: 'cut removes', value: `${replaced.length} vertices` });
-  }
+  const drawn: THREE.Vector3[] | null = null;
 
   return {
     contour: points,

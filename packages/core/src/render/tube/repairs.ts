@@ -2,8 +2,8 @@ import type * as THREE from 'three';
 
 /**
  * What the corner stage does to make a fillet meet its legs. `stretch` appears in both registries:
- * the name covers two unrelated implementations with different floors, and splitting them is what
- * makes each one switchable on its own.
+ * the name covers two unrelated implementations with different floors; splitting them keeps each
+ * one separable and lets the lab show them apart.
  * @internal
  */
 export type CutRepairId =
@@ -82,3 +82,26 @@ export const SPAN_REPAIRS: readonly SpanRepair[] = [
   { id: 'close', label: 'close the loop' },
   { id: 'return', label: 'return' },
 ];
+
+/**
+ * The corner side's stretch: drops the corner's whole group before the setback trims by distance.
+ * No floor — it can empty the span.
+ * @internal
+ */
+export function popStretch(span: THREE.Vector3[], count: number): void {
+  for (let i = 0; i < count && span.length > 0; i++) span.pop();
+}
+
+/**
+ * The break side's stretch. Floors at two vertices, because a break's product is a span that still
+ * has to sweep — unlike the corner side, where an emptied `target` is refilled by the arc.
+ * @internal
+ */
+export function trimStretch(
+  span: THREE.Vector3[],
+  count: number,
+  end: 'head' | 'tail',
+): THREE.Vector3[] {
+  const keep = Math.max(2, span.length - count);
+  return end === 'tail' ? span.slice(0, keep) : span.slice(span.length - keep);
+}

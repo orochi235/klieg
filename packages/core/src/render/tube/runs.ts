@@ -18,6 +18,7 @@ import {
   hairpinAt,
 } from './hairpin.js';
 import type { CutRepairId, RepairSite } from './repairs.js';
+import { popStretch, trimStretch } from './repairs.js';
 import { minCurvatureRadius3 } from './resample.js';
 import type { SurfaceKind } from './surfaces.js';
 
@@ -488,11 +489,11 @@ function joinsAtOnce(
  * tighter than rhoMin, with no corner stage left to fix them.
  */
 function dropHead(span: THREE.Vector3[], count: number): THREE.Vector3[] {
-  return span.slice(Math.min(count, Math.max(0, span.length - 2)));
+  return trimStretch(span, count, 'head');
 }
 
 function dropTail(span: THREE.Vector3[], count: number): THREE.Vector3[] {
-  return span.slice(0, Math.max(2, span.length - count));
+  return trimStretch(span, count, 'tail');
 }
 
 /**
@@ -811,12 +812,15 @@ function mergeArc(
 
   // Drop the corner's whole stretch before trimming by distance: a shallow turn's setback can be
   // shorter than one sample step, and would leave the stretch's own vertices in the path.
-  for (let i = 0; i <= decision.groupBefore && target.length > 0; i++) target.pop();
+  const stretchSite: RepairSite = { at: target.length - 1, points: [] };
+  const ranStretch = on('stretch');
+  if (ranStretch) popStretch(target, decision.groupBefore + 1);
+  report('stretch', stretchSite, ranStretch);
   // Indexes the accumulator before the trim; a consumer must not map it onto the post-trim span.
   const setbackSite: RepairSite = { at: target.length - 1, points: [] };
-  const ran = on('setback');
-  if (ran) trimTail(target, fillet.setback, fillet.corner);
-  report('setback', setbackSite, ran);
+  const ranSetback = on('setback');
+  if (ranSetback) trimTail(target, fillet.setback, fillet.corner);
+  report('setback', setbackSite, ranSetback);
 
   let bridgedIn: THREE.Vector3[] | null = null;
   if (rejoin === 'bridge') {

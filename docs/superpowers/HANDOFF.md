@@ -637,6 +637,24 @@ Roughly in order of value; the items are independent of each other.
   level, and `fillet` and `hairpin` gated where the decision is made. `cutIntoRuns` takes
   `repairs` and `onRepair`; `buildTubeBlueprint` forwards both. Slice 3 is the lab.
 
+  What slice 2's reviews found that the slice 3 lab must design around. **`resume`'s `ran: false`
+  lies under `bridge`/`relax`** — the blend is applied regardless; the toggle gates only the walk's
+  trim (comment sits on `ranResume` in `runs.ts`), so a resume ghost under those rejoins would draw
+  points already in the path. **Some toggles are geometry-invisible on typical paths**: `setback`
+  and the corner-side `stretch` are subsumed by downstream walks under most rejoins (the repair
+  tests document which rejoin makes each one bite — `relax` for exit-setback, triple-off for
+  stretch). **Setback-off under `rejoin: 'bridge'` cascades pathologically** (1505 points vs 241 on
+  the test square) — the leg-room math appears to assume the trim happened; investigate before the
+  lab exposes that combination. **Not everything reports**: `hairpin` is gate-only, exit-side
+  `resume` is unreported (so `CORNER_REPAIRS`' "twice per corner" holds only for `setback`), the
+  break-side `stretch` in `SPAN_REPAIRS` is enumerable but has no gate or report, a fillet-off
+  corner silences its `return` report entirely, and the blockout fillet candidate never reports
+  (documented on `CutOptions.onRepair`). `RepairSide` is declared but not wired through `onRepair`;
+  removal-type sites carry an anchor index and empty `points`, not the removed extent — widening
+  `RepairSite` is slice 3's call. And two plan fixtures were corrected in flight: a square never
+  hairpins (use `sharpV` in `repairs.test.ts`) and `openLPath`'s 0.1 sampling registers no corner
+  (use `fineOpenL` in `runs.test.ts`).
+
   Two things slice 1 learned that its plan did not start with. **`wanderPaths` seeds its rng from
   the path's array index**, so the order paths are concatenated in — contours, then connectors — is
   what keeps every wandered look byte-identical; reordering it re-renders them all with nothing

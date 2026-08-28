@@ -5,6 +5,25 @@ learned that its design doc does not carry, and what is worth doing next.
 
 ## Branch state
 
+**Host-driven effects are designed, not built.** Branch `host-driven-effects`, worktree
+`~/src/klieg-worktrees/host-driven-effects`, one commit, unpushed. The design is
+[the spec](specs/2026-08-27-host-driven-effects-design.md); it carries the surface, the phase
+instants, and the two traps that make a naive implementation pass its tests and still be wrong.
+Next step is a plan, not code.
+
+Four things the spec cannot carry. Its account of sherpa's model is pinned to `v1-runtime` /
+`9addc1e` with sherpa's tree dirty and its IPC surface being revised, so re-read sherpa before
+trusting the alignment claims. `spikes/double-dispatch.mjs` reproduces the problem `dismiss: 'host'`
+removes but has never been run against the lab. The decision to name it `advance()` rather than
+sherpa's `goto()` came with an undertaking to add `advance` to sherpa too. And **0.9.0 is already
+on npm** — `clickAnywhere` is public API now, so the spec's treatment of it is a change to shipped
+surface, not a greenfield choice.
+
+**Watch the worktree.** The main checkout at `~/src/klieg` was switched to another branch by a
+concurrent session mid-task during this work. Check `git branch --show-current` before committing
+there; untracked files survive a switch, staged work is a different matter.
+
+
 **Most recent work, 2026-08-27 overnight.** `main` is green at **1179 tests**. Two things landed:
 `roving` got a permutation walk and a 96-epoch pass (it was visiting 7 parts of 24 and looping),
 and the **composition lab** is built — see its entry under "What is worth doing next", which is now

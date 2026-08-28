@@ -630,8 +630,12 @@ Roughly in order of value; the items are independent of each other.
   vertices being smoothed; each copy now inherits its leg vertex's provenance through an `inherit`
   callback threaded from `cutIntoRuns`. Both were latent because `DEFAULT_REJOIN` is `drop` and no
   look overrides it — which stops being true the moment the lab exposes the knob. Both landed on
-  `main`, along with the slice 2 plan; `cut-repairs` and `main` are the same commit. **Slice 2 is
-  unblocked and planned.** Slice 3 is the lab.
+  `main`, along with the slice 2 plan; `cut-repairs` and `main` are the same commit.
+
+  **Slice 2 is done.** `CUT_REPAIRS` landed as three registries in `render/tube/repairs.ts` —
+  `CORNER_REPAIRS` run twice per corner inside `mergeArc`, `SPAN_REPAIRS` at the `stitchPath`
+  level, and `fillet` and `hairpin` gated where the decision is made. `cutIntoRuns` takes
+  `repairs` and `onRepair`; `buildTubeBlueprint` forwards both. Slice 3 is the lab.
 
   Two things slice 1 learned that its plan did not start with. **`wanderPaths` seeds its rng from
   the path's array index**, so the order paths are concatenated in — contours, then connectors — is

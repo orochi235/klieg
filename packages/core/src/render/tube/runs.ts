@@ -830,6 +830,10 @@ function mergeArc(
       bridgedIn = blend.points;
     }
   }
+  // Gates only the walk's trim below: bridge and relax apply their own geometry regardless, so a
+  // `ran: false` report under either still describes points that are actually in the target.
+  const ranResume = on('resume');
+  if (bridgedIn) report('resume', { at: target.length - 1, points: bridgedIn }, ranResume);
   if (!bridgedIn) {
     let relaxed: THREE.Vector3[] | null = null;
     if (rejoin === 'relax') {
@@ -839,9 +843,12 @@ function mergeArc(
         for (let i = relaxed.length - 1; i >= 0; i--) target.push(relaxed[i] as THREE.Vector3);
       }
     }
-    if (!relaxed) {
+    if (relaxed) {
+      report('resume', { at: target.length - 1, points: relaxed }, ranResume);
+    } else {
       const keep = resumeAt(target, target.length - 1, -1, entry, second, into, rhoMin, spacing);
-      target.length = keep + 1;
+      report('resume', { at: keep, points: [] }, ranResume);
+      if (ranResume) target.length = keep + 1;
     }
   }
 

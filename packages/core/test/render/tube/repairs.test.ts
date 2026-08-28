@@ -143,4 +143,51 @@ describe('the inner pass', () => {
       }),
     ).toBe(241);
   });
+
+  it('reports the resume provider that actually answered', () => {
+    const points: number[] = [];
+    let reports = 0;
+    cutIntoRuns([{ points: square(), surface: 'front' as const, closed: true }], {
+      ...OPTS,
+      rejoin: 'bridge',
+      onRepair: (id, site) => {
+        if (id === 'resume') {
+          reports++;
+          if (site) points.push(site.points.length);
+        }
+      },
+    });
+    // A bridge answers with a blend; the plain walk answers with an index and no geometry.
+    expect(points.some((n) => n > 0)).toBe(true);
+    // One entry-side resume report per corner.
+    expect(reports).toBe(4);
+  });
+
+  // Under `relax`, a successful blend is applied whether or not `resume` is on, so on/off geometry
+  // is bit-identical there — the walk-off gate only has bite under the default rejoin, where
+  // switching it off leaves the fillet's own vertices in place instead of trimming to the walk.
+  // Pinned by exact count, not inequality, so a mutation that trims unconditionally still fails.
+  it('pins the entry-side resume geometry the walk-off gate controls', () => {
+    const path = [{ points: square(), surface: 'front' as const, closed: true }];
+    const countOf = (opts: Parameters<typeof cutIntoRuns>[1]) =>
+      cutIntoRuns(path, opts).runs.reduce((n, r) => n + r.points.length, 0);
+    expect(countOf({ ...OPTS })).toBe(209);
+    expect(
+      countOf({
+        ...OPTS,
+        repairs: new Set(['stretch', 'setback', 'fillet', 'close', 'return', 'hairpin'] as const),
+      }),
+    ).toBe(217);
+
+    // The relax branch's own report still needs covering, since geometry alone can't show it ran.
+    const relaxPoints: number[] = [];
+    cutIntoRuns(path, {
+      ...OPTS,
+      rejoin: 'relax',
+      onRepair: (id, site) => {
+        if (id === 'resume' && site) relaxPoints.push(site.points.length);
+      },
+    });
+    expect(relaxPoints.some((n) => n > 0)).toBe(true);
+  });
 });

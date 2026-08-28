@@ -51,6 +51,11 @@ export interface SequenceOptions {
   hold: number | 'click';
   blendMs: number;
   target: StageTarget;
+  /**
+   * Called as each stage's boundary lands, with that stage's index. Never called for the opening
+   * word, which is phase -1 and has no boundary behind it.
+   */
+  onStage?: (index: number) => void;
 }
 
 const DEFAULT_MOVE_MS = 700;
@@ -131,6 +136,10 @@ export class Sequence {
     this.pending = null;
     this.opts.target.setFitProgress(1);
     this.retire(boundary);
+    // Last, so a listener cannot observe a half-landed boundary. `phase` is this stage's index at
+    // both call sites: `tick` settles the current phase, and `enterNextPhase` settles the outgoing
+    // one before it increments.
+    this.opts.onStage?.(this.phase);
   }
 
   private retire(boundary: Boundary): void {
@@ -206,6 +215,15 @@ export class Sequence {
     return (
       this.phase >= this.opts.stages.length - 1 && this.timeline.isFinished(this.local(elapsed))
     );
+  }
+
+  /**
+   * Global elapsed at which the closing exit begins. `Infinity` while an earlier phase is running
+   * or the last phase's hold is still open, since neither has an instant to give yet.
+   */
+  get exitAt(): number {
+    if (this.phase < this.opts.stages.length - 1) return Number.POSITIVE_INFINITY;
+    return this.phaseStart + this.timeline.activeEnd;
   }
 
   poseAt(elapsed: number, letter: LetterInfo, out: Pose = blankPose()): Pose {

@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import type { CornerStrategy } from '../../../../src/render/tube/index.js';
-import { buildTubeBlueprint, type TubeSpec } from '../../../../src/render/tube/index.js';
-import { surfacesOf } from '../../../../src/render/tube/surfaces.js';
-import { smoothedPoints } from '../../../../src/render/tube/sweep.js';
+import type { CornerStrategy } from '@core/render/tube/index.js';
+import { buildTubeBlueprint, type TubeSpec } from '@core/render/tube/index.js';
+import { surfacesOf } from '@core/render/tube/surfaces.js';
+import { smoothedPoints } from '@core/render/tube/sweep.js';
 import { type Report, reportOf } from '../report.js';
 
 const CONTOUR = 0x39415a;

@@ -6,7 +6,7 @@ import type {
   PathSource,
   SurfaceKind,
   TubeSpec,
-} from '../../../src/render/tube/index.js';
+} from '@core/render/tube/index.js';
 import { lettersOf, MODES, type PanelMode } from './panels.js';
 import { TUBE_LOOKS, type TubeLook } from './spec.js';
 

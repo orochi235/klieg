@@ -1,5 +1,5 @@
-import { specOf } from '../../../src/render/looks.js';
-import type { TubeSpec } from '../../../src/render/tube/index.js';
+import { specOf } from '@core/render/looks.js';
+import type { TubeSpec } from '@core/render/tube/index.js';
 
 /** The shipped looks that carry a tube decoration — the only ones this lab can tune. */
 export const TUBE_LOOKS = ['tubing', 'piping'] as const;

@@ -913,7 +913,7 @@ function mergeArc(
   // from the entry-side site above.
   const pastSetback = indexPast(next, decision.groupAfter + 1, fillet.setback, fillet.corner);
   const ranExitSetback = on('setback');
-  report('setback', { at: pastSetback, points: [], removed: [] }, ranExitSetback);
+  report('setback', { at: pastSetback, points: [], removed: [], side: 'exit' }, ranExitSetback);
   const start = ranExitSetback ? pastSetback : decision.groupAfter + 1;
   const ranExitResume = on('resume');
   if (rejoin === 'bridge') {

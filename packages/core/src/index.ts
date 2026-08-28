@@ -270,6 +270,13 @@ export interface FireOptions {
   /** Let the overlay swallow the dismissing click instead of passing it through to the page. */
   modal?: boolean;
   /**
+   * Who dismisses a `'click'` hold. `'host'` attaches no window listeners at all — neither
+   * `pointerdown` nor `Escape` — so one press does one thing, and `advance()` on the handle is the
+   * only way out. Per effect rather than per instance, so window-dismissed flourishes and
+   * host-driven held slides can share one `Klieg`.
+   */
+  dismiss?: 'window' | 'host';
+  /**
    * How the word appears in the DOM, so it can be copied, found and read aloud. `'hidden'` is one
    * visually-hidden node; `'layer'` adds a transparent per-letter layer a drag can select, and
    * takes a click on a letter instead of passing it through; `'none'` adds nothing, for a page
@@ -558,23 +565,32 @@ export function createKlieg(options: KliegOptions): Klieg {
             detachDismiss();
           }
         };
-        // Capture on window catches the press in both modes; `modal` only decides whether the
-        // canvas absorbs it on the way down or the page underneath sees it too.
-        const onPointer = () => dismiss();
-        const onKey = (e: KeyboardEvent) => {
-          if (e.key === 'Escape') dismiss();
-        };
-        globalThis.addEventListener('pointerdown', onPointer, { capture: true, passive: true });
-        globalThis.addEventListener('keydown', onKey);
         // A modal hold is a keyboard trap without Escape: it swallows input and never times out.
+        // Under host dismissal that trade is the host's to make, since it holds the input.
         if (opts.modal) stage.setInteractive(true);
 
-        detachDismiss = () => {
-          globalThis.removeEventListener('pointerdown', onPointer, { capture: true });
-          globalThis.removeEventListener('keydown', onKey);
-          stage.setInteractive(false);
-          detachDismiss = () => {};
-        };
+        if (opts.dismiss === 'host') {
+          detachDismiss = () => {
+            stage.setInteractive(false);
+            detachDismiss = () => {};
+          };
+        } else {
+          // Capture on window catches the press in both modes; `modal` only decides whether the
+          // canvas absorbs it on the way down or the page underneath sees it too.
+          const onPointer = () => dismiss();
+          const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') dismiss();
+          };
+          globalThis.addEventListener('pointerdown', onPointer, { capture: true, passive: true });
+          globalThis.addEventListener('keydown', onKey);
+
+          detachDismiss = () => {
+            globalThis.removeEventListener('pointerdown', onPointer, { capture: true });
+            globalThis.removeEventListener('keydown', onKey);
+            stage.setInteractive(false);
+            detachDismiss = () => {};
+          };
+        }
 
         control.dismiss = dismiss;
         if (control.latched) {
@@ -720,10 +736,11 @@ export function createKlieg(options: KliegOptions): Klieg {
       // The dismissal is a press anywhere in the window, which on a strip sharing a page ends the
       // effect on clicks that have nothing to do with it. An anchor filling the viewport has no
       // such clicks, so it may opt in; one that has not stays out rather than stall on a listener
-      // it never wanted.
+      // it never wanted. `dismiss: 'host'` attaches no listener, so there is nothing to gate.
       if (
         anchored &&
         !clickAnywhere &&
+        opts.dismiss !== 'host' &&
         (opts.hold === 'click' || opts.stages?.some((s) => s.hold === 'click'))
       ) {
         throw new Error(

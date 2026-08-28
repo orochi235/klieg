@@ -1018,6 +1018,44 @@ describe('driving an effect from the host', () => {
     expect(seen).toEqual([]);
   });
 
+  it("attaches no window listeners under dismiss: 'host'", async () => {
+    const bk = create();
+    const done = bk.fire('HI', { ...HELD, dismiss: 'host' });
+    await flush();
+    clock.advance(1000);
+
+    expect(listeners.get('pointerdown') ?? []).toHaveLength(0);
+    expect(listeners.get('keydown') ?? []).toHaveLength(0);
+
+    // The presses klieg would have caught reach nothing at all.
+    dispatch('pointerdown');
+    dispatch('keydown', { key: 'Escape' });
+    clock.advance(16);
+    await flush();
+    expect(words()).toHaveLength(1);
+
+    done.advance();
+    clock.advance(16);
+    await done;
+    expect(words()).toHaveLength(0);
+  });
+
+  it('still lets a modal hold swallow presses when the host owns the dismissal', async () => {
+    const interactive = vi.spyOn(Stage.prototype, 'setInteractive').mockImplementation(() => {});
+
+    const bk = create();
+    const done = bk.fire('HI', { ...HELD, dismiss: 'host', modal: true });
+    await flush();
+    clock.advance(16);
+
+    expect(interactive).toHaveBeenCalledWith(true);
+
+    done.advance();
+    clock.advance(16);
+    await done;
+    expect(interactive).toHaveBeenLastCalledWith(false);
+  });
+
   it('aborts one running effect on its own signal and leaves the instance alive', async () => {
     const ctrl = new AbortController();
     const bk = create();
@@ -1829,6 +1867,15 @@ describe('element placement', () => {
     expect(() => klieg.fire('hi', { stages: [{ hold: 'click' }] })).toThrow(
       /only with `clickAnywhere`/,
     );
+  });
+
+  it("takes hold: 'click' from an anchor with no opt-in once the host owns the dismissal", () => {
+    const klieg = create({ placement: { kind: 'element', el }, target: undefined });
+
+    // `clickAnywhere` gates a window listener, and `dismiss: 'host'` attaches none.
+    expect(() => klieg.fire('hi', { hold: 'click', dismiss: 'host' })).not.toThrow();
+    expect(() => klieg.fire('hi', { stages: [{ hold: 'click' }], dismiss: 'host' })).not.toThrow();
+    klieg.destroy();
   });
 
   it("takes hold: 'click' once the anchor says a press anywhere dismisses it", () => {

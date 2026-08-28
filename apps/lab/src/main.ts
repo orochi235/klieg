@@ -65,6 +65,7 @@ const holdClickInput = el<HTMLInputElement>('holdClick');
 const modalInput = el<HTMLInputElement>('modal');
 const lineAlignInput = el<HTMLSelectElement>('lineAlign');
 const shareChromeInput = el<HTMLInputElement>('shareChrome');
+const shareReadableInput = el<HTMLInputElement>('shareReadable');
 const acronymInput = el<HTMLInputElement>('acronym');
 const capsTintInput = el<HTMLInputElement>('capsTint');
 const grainInput = el<HTMLInputElement>('grain');
@@ -540,7 +541,10 @@ function shareConfig(): Partial<ShowConfig> {
 const copyLinkButton = el<HTMLButtonElement>('copyLink');
 copyLinkButton.addEventListener('click', () => {
   const url = new URL('show/', location.href);
-  url.hash = encodeConfig(shareConfig());
+  // Opaque and in the query by default. A readable hash gives the joke away before the page opens,
+  // and iMessage ends the link at the '#' and sends the rest as a message of its own.
+  if (shareReadableInput.checked) url.hash = encodeConfig(shareConfig());
+  else url.searchParams.set('c', encodeConfig(shareConfig(), true));
   const link = url.toString();
   const done = (word: string) => {
     copyLinkButton.textContent = word;

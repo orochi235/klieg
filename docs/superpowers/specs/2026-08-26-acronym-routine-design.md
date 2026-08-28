@@ -48,7 +48,7 @@ precedent for a builder that hands back a value.
 | `caps` | `{ tint: … }` | how the capitals are styled, before and after they gather |
 | `body` | none | how everything else is styled while it is still up |
 | `read` | `'click'` | the pause after the block renders, before the body leaves |
-| `settle` | `600` | the pause after the body has gone, before the capitals gather |
+| `settle` | `0` | an extra pause after the body has gone, before the capitals gather |
 | `hold` | `'click'` | how long the gathered acronym stays |
 | `exit` | `'fade'` | how the lower-case letters leave |
 | `active` | `'none'` | what the gathered acronym does while it holds |
@@ -69,7 +69,7 @@ digits and punctuation, which is what an acronym wants.
   hold: read,
   tint: (l) => (isCap(l) ? caps.tint : body.tint),
   stages: [
-    { keep: isCap, exit, as: 'place', hold: settle },
+    { keep: isCap, exit, as: 'place', hold: settle, tween: { duration: 0 } },
     { as: 'line', active, hold, tween },
   ],
 }

@@ -381,7 +381,8 @@ travels, so there is nothing to regroup.
 
 `acronym` is that effect pre-baked: type a block whose acronym is capitalised, and it renders with
 the capitals picked out, holds to be read, drops the lower case where it stands, and gathers the
-capitals into a line that stays until dismissed.
+capitals into a line that stays until dismissed. The gather starts as the lower case finishes
+leaving; `settle` puts a pause between the two.
 
 ```ts
 import { acronym } from 'klieg';
@@ -400,7 +401,7 @@ yours — spread the options and override whatever you like.
 | `caps` | cyan | how the capitals are styled, in the block and after they gather |
 | `body` | the look's own colour | how everything else is styled while it is still up |
 | `read` | `'click'` | the pause after the block renders, before the lower case leaves |
-| `settle` | `600` | the pause after the lower case has gone, before the capitals gather |
+| `settle` | `0` | an extra pause after the lower case has gone, before the capitals gather |
 | `hold` | `'click'` | how long the gathered acronym stays |
 | `exit` | `'fade'` | how the lower-case letters leave |
 | `active` | `'none'` | what the gathered acronym does while it holds |

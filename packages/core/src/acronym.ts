@@ -18,7 +18,7 @@ export interface AcronymOptions {
   body?: LetterStyle;
   /** The pause after the block renders, before the lower case leaves. */
   read?: number | 'click';
-  /** The pause after the lower case has gone, before the capitals gather. */
+  /** An extra pause after the lower case has gone, before the capitals gather. None by default. */
   settle?: number | 'click';
   /** How long the gathered acronym stays. */
   hold?: number | 'click';
@@ -36,7 +36,7 @@ export interface AcronymOptions {
 }
 
 const CAPS_TINT = 0x2df0ff;
-const SETTLE_MS = 600;
+const SETTLE_MS = 0;
 
 /**
  * Whether a character is a capital: its lower case differs from itself. Locale-independent, and it
@@ -64,8 +64,16 @@ export function acronym(text: string, options: AcronymOptions = {}): [string, Fi
 
   const stages: Stage[] = [
     // `place` leaves the capitals exactly where they were, so the lower case going is its own beat
-    // rather than something that happens while the acronym is already travelling.
-    { keep, exit: options.exit ?? 'fade', as: 'place', hold: options.settle ?? SETTLE_MS },
+    // rather than something that happens while the acronym is already travelling. Nothing moves in
+    // it, so the move is zero: a stage lasts the longer of its move and its exit, and the default
+    // 700ms would leave the block sitting dead for 200ms past a 500ms fade.
+    {
+      keep,
+      exit: options.exit ?? 'fade',
+      as: 'place',
+      hold: options.settle ?? SETTLE_MS,
+      tween: { duration: 0 },
+    },
     {
       as: 'line',
       active: options.active ?? 'none',

@@ -34,7 +34,9 @@ describe('acronym', () => {
     // `place` is the whole reason the lower case leaving is its own beat: on 'line' the capitals
     // would already be travelling while the rest was still fading.
     expect(drop?.as).toBe('place');
-    expect(drop?.hold).toBe(600);
+    // No pause and no move: the capitals start gathering as the lower case finishes leaving.
+    expect(drop?.hold).toBe(0);
+    expect(drop?.tween?.duration).toBe(0);
     expect(gather?.as).toBe('line');
     expect(gather?.hold).toBe('click');
   });

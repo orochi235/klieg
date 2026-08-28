@@ -280,6 +280,53 @@ either knowing about the other — but two pieces both writing colour fight, and
 A hue piece writes colour every frame, which overrides `tint`: `tubing` tints its decoration, so a
 hue sweep and a tint on that look are the same fight, and the sweep wins.
 
+## Keeping an anchored sign alive
+
+A sign anchored to a page element and held for hours is a different problem from a one-shot
+flourish: its motion runs thousands of times while someone reads past it, so it has to be slow
+enough to ignore. Name the [lighting](#lighting) either way — the default `sweep` turns the
+environment every 3.4 seconds, a strobe on a masthead, and `'pointer'` never moves at all on a page
+nobody has moused over. A sign meant to hold still asks for `'static'`, it does not omit the slot.
+Four ways to keep one moving at a pace it can hold:
+
+| | |
+|---|---|
+| `lighting: [sweep({ periodMs: 14000 }), track({ yawRange: 0 })]` | the highlight rakes on its own clock, and a pointer still tips the pitch |
+| a `lamp` on an `orbit` source | a pool of light circling the word |
+| `EFFECTS.hue({ span: 0.08, spread: 0.3 })` | a narrow color breath that stays near the sign's own tint |
+| `active: 'shimmer'` | a yaw ripple letter to letter — the only one of the four that moves geometry |
+
+```ts
+import { lamp, orbit } from 'klieg';
+
+await bk.fire('klieg', {
+  look: 'tubing',
+  hold: 40000,
+  effects: [
+    {
+      piece: lamp({ source: orbit({ radius: 0.4 }), radius: 0.5, strength: 1.4, duration: 9000 }),
+      target: { kind: 'run', by: 'index', amount: 1 },
+    },
+  ],
+});
+```
+
+`look: 'tubing'` is load-bearing for that example: the target is a run, and only `tubing` and
+`piping` have run parts — on `gold` it selects an empty pool and does nothing, silently. A lamp
+lights body parts too, so the same one aimed at bodies works anywhere; `hue` is run-only. Build the
+pieces in the call, too: `track` carries its yaw across frames, and a shared one resumes from the
+last fire's angle rather than from rest.
+
+**A `roving` pass that cannot reach the whole pool never will.** Its walk is identical every pass,
+so a part it misses is never afflicted at all, however long the sign runs. Raising `epochs` past
+the run count is necessary but not sufficient — handovers are deferred, so even the default 96
+reaches 51 of a pool of 55, and the strays are an arbitrary slice of a seeded permutation.
+
+**Geometry is the only thing the anchor's box crops**, and the margin is whatever `framing` left
+unspent. `shimmer`'s few degrees of yaw survive most framings; a bob like `float`'s 0.12 em wants
+real room. If it clips, *lower* the `framing` share — raising it fits a bigger word into the same
+box and leaves less.
+
 ## Stages
 
 An effect can exit part of its word and lay the survivors out again as a word of their own — a
@@ -334,7 +381,8 @@ travels, so there is nothing to regroup.
 
 `acronym` is that effect pre-baked: type a block whose acronym is capitalised, and it renders with
 the capitals picked out, holds to be read, drops the lower case where it stands, and gathers the
-capitals into a line that stays until dismissed.
+capitals into a line that stays until dismissed. The gather starts as the lower case finishes
+leaving; `settle` puts a pause between the two.
 
 ```ts
 import { acronym } from 'klieg';
@@ -353,7 +401,7 @@ yours — spread the options and override whatever you like.
 | `caps` | cyan | how the capitals are styled, in the block and after they gather |
 | `body` | the look's own colour | how everything else is styled while it is still up |
 | `read` | `'click'` | the pause after the block renders, before the lower case leaves |
-| `settle` | `600` | the pause after the lower case has gone, before the capitals gather |
+| `settle` | `0` | an extra pause after the lower case has gone, before the capitals gather |
 | `hold` | `'click'` | how long the gathered acronym stays |
 | `exit` | `'fade'` | how the lower-case letters leave |
 | `active` | `'none'` | what the gathered acronym does while it holds |

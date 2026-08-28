@@ -168,6 +168,19 @@ function firstMesh(): THREE.Mesh {
   return firstCell().children[0] as THREE.Mesh;
 }
 
+/** Every material hanging off the fired word, a decoration's own included. */
+function wordMaterials(): THREE.MeshStandardMaterial[] {
+  const out: THREE.MeshStandardMaterial[] = [];
+  words()[0]?.traverse((object) => {
+    const material = (object as THREE.Mesh).material;
+    if (!material) return;
+    out.push(
+      ...((Array.isArray(material) ? material : [material]) as THREE.MeshStandardMaterial[]),
+    );
+  });
+  return out;
+}
+
 beforeEach(() => {
   clock = new ManualClock();
   calls = [];
@@ -1151,6 +1164,24 @@ describe('the lighting slot', () => {
 
     expect(envY()).toBeCloseTo(0.4, 6);
     expect(stage().scene.environmentRotation.x).toBeCloseTo(0.2, 6);
+    bk.destroy();
+  });
+
+  it('turns the studio on the materials, which each carry their own copy of it', async () => {
+    const tip: EnvPiece = { duration: 0, env: () => ({ yaw: 0.4, pitch: 0.2 }) };
+
+    const bk = create();
+    void bk.fire('HI', { ...LIT, look: 'tubing', lighting: tip });
+    await flush();
+    clock.advance(16);
+
+    const materials = wordMaterials();
+    expect(materials.length).toBeGreaterThan(0);
+    for (const material of materials) {
+      // `scene.environmentRotation` reaches only a material that falls back to `scene.environment`.
+      expect(material.envMapRotation.y).toBeCloseTo(0.4, 6);
+      expect(material.envMapRotation.x).toBeCloseTo(0.2, 6);
+    }
     bk.destroy();
   });
 

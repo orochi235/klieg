@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.9.1
+
+### The lighting slot turns the studio across the letters again
+
+`sweep`, `track` and the `'sweep'` and `'pointer'` names all turn the environment to rake the
+highlight over the type, and none of them has moved a pixel since 0.8.0. The turn was written to
+`scene.environmentRotation`, which three applies only to a material falling back on
+`scene.environment` — and 0.8.0 gave every klieg material the studio as its own `envMap`, turned by
+`material.envMapRotation` instead. A `gold` fire under `'static'`, under the default `'sweep'`, and
+under `sweep({ periodMs: 14000 })` layered with `track()` all rendered identical frames. A word now
+holds the materials it built and turns each one per frame, alongside the scene write, which stays
+for anything carrying no `envMap` of its own.
+
+No baseline moves: every shot is taken under `lighting: 'static'`, where both angles rest at zero.
+The visual suite gains the check that would have caught this — one word at two phases of a sweep,
+whose frames must differ, with the same two pins under `'static'` as the control. Asserting the
+angle reaches the scene, which the unit suite already did, is not the same as asserting it reaches
+the pixels.
+
 ## 0.9.0
 
 ### `roving` visits the whole sign instead of the same seven parts forever

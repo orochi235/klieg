@@ -147,6 +147,8 @@ export class Word {
 
   /** The studio, carried onto every material so each look's own `envMapIntensity` is honoured. */
   private readonly envMap: THREE.Texture | null;
+  /** Every material this word made carrying the studio, so a lighting turn can reach them all. */
+  private readonly envMaterials: THREE.MeshPhysicalMaterial[] = [];
   /** Font units to em, so a regroup can re-place the survivors on the same scale. */
   private readonly scaleToEm: number;
   private readonly budget: Budget;
@@ -590,6 +592,13 @@ export class Word {
     this.group.position.set(fit.offsetX, -fit.midY * fit.scale, 0);
   }
 
+  /** A material carrying the studio, listed so `setEnvRotation` can turn every one of them. */
+  private studioMaterial(): THREE.MeshPhysicalMaterial {
+    const material = createMaterial(this.envMap);
+    this.envMaterials.push(material);
+    return material;
+  }
+
   private buildCell(
     i: number,
     font: LoadedFont,
@@ -614,7 +623,7 @@ export class Word {
     const hue = typeof tint === 'function' ? tint(this.letterInfo(i)) : tint;
     const bodyTint = tintMaterialOf(spec) === 'body' ? hue : undefined;
 
-    const material = createMaterial(this.envMap);
+    const material = this.studioMaterial();
     applyLook(material, look, bodyTint);
     // Enters and exits animate opacity, and flipping this mid-run would recompile the shader.
     material.transparent = true;
@@ -636,7 +645,7 @@ export class Word {
 
     if (decoration && decoration.kind === 'tube') {
       const litOverride = debug?.tubeMaterial?.('lit');
-      const decorMaterial = litOverride ?? createMaterial(this.envMap);
+      const decorMaterial = litOverride ?? this.studioMaterial();
       if (!litOverride) {
         applyLook(
           decorMaterial as THREE.MeshPhysicalMaterial,
@@ -670,7 +679,7 @@ export class Word {
       this.decorMaterials.push(decorMaterial);
 
       const darkOverride = debug?.tubeMaterial?.('dark');
-      const darkMaterial = darkOverride ?? createMaterial(this.envMap);
+      const darkMaterial = darkOverride ?? this.studioMaterial();
       if (!darkOverride) applyLook(darkMaterial as THREE.MeshPhysicalMaterial, decoration.dark);
       darkMaterial.transparent = true;
       darkMaterial.side = THREE.DoubleSide;
@@ -703,7 +712,7 @@ export class Word {
       this.litMeshes[i] = litMeshes;
       for (const geo of blueprint.dark) cell.add(new THREE.Mesh(geo, darkMaterial));
     } else if (decoration && decoration.kind === 'chunks') {
-      const decorMaterial = createMaterial(this.envMap);
+      const decorMaterial = this.studioMaterial();
       applyLook(
         decorMaterial,
         decoration.look,
@@ -900,6 +909,14 @@ export class Word {
   }
 
   /**
+   * Turns the studio each material carries. `scene.environmentRotation` turns only what falls back
+   * to `scene.environment`, which none of these do.
+   */
+  setEnvRotation(pitch: number, yaw: number): void {
+    for (const material of this.envMaterials) material.envMapRotation.set(pitch, yaw, 0);
+  }
+
+  /**
    * Moves the viewport fit from the pre-regroup one to the new group's, `u` in 0..1. Kept off the
    * per-letter pose deliberately: pose scale grows each letter in place, where the fit has to
    * scale the whole group so the letters spread with it.
@@ -968,6 +985,7 @@ export class Word {
     this.decorMaterials.length = 0;
     for (const material of this.darkMaterials) material?.dispose();
     this.darkMaterials.length = 0;
+    this.envMaterials.length = 0;
     for (const blueprint of this.tubeBlueprints) blueprint?.dispose();
     this.tubeBlueprints.length = 0;
     this.tubeBounds.length = 0;

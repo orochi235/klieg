@@ -49,6 +49,7 @@
       <section class="group">
         <h2>scene</h2>
         <textarea id="text" rows="3" autocomplete="off" spellcheck="false">JACKPOT!</textarea>
+        <label>acronym <input id="acronym" type="checkbox" /></label>
         <label>enter <select id="enter"></select></label>
         <label>active <select id="active"></select></label>
         <label>exit <select id="exit"></select></label>
@@ -90,6 +91,7 @@
           <button type="button" id="destroy">DESTROY</button>
           <button type="button" id="copyLink">copy link</button>
           <label class="inline">chrome <input id="shareChrome" type="checkbox" checked /></label>
+          <label class="inline">readable <input id="shareReadable" type="checkbox" /></label>
         </div>
         <div class="row" id="sequences"></div>
         <p id="restored"></p>
@@ -156,10 +158,9 @@
 
       <section class="group">
         <h2>acrostic</h2>
-        <label>acronym <input id="acronym" type="checkbox" /></label>
         <label>caps <input id="capsTint" type="color" value="#2df0ff" /></label>
         <label>read <input id="read" type="range" min="0" max="4000" step="100" value="1200" /></label>
-        <label>settle <input id="settle" type="range" min="0" max="2000" step="100" value="600" /></label>
+        <label>settle <input id="settle" type="range" min="0" max="2000" step="100" value="0" /></label>
         <label>gather <input id="acroHold" type="range" min="0" max="6000" step="100" value="2000" /></label>
       </section>
 

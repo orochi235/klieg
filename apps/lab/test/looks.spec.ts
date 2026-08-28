@@ -104,6 +104,29 @@ test.describe('lighting', () => {
     await page.selectOption('#look', 'chrome');
     await shoot(page, 'lighting-static');
   });
+
+  /**
+   * Pixels rather than a property: the turn is written to a scene-wide rotation that reaches only
+   * a material with no `envMap` of its own, so an assertion on that number passes with nothing on
+   * screen having moved. `static` at the same two pins is the control.
+   */
+  test('sweep lights two phases of one turn differently', async ({ page }) => {
+    const shot = async (name: 'static' | 'sweep', pin: number): Promise<string> => {
+      await still(page, `?pin=${pin}`);
+      await page.selectOption('#look', 'chrome');
+      await page.selectOption('#lighting', name);
+      await page.click('#fire');
+      await page.waitForTimeout(600);
+      await hideChrome(page);
+      return (await page.screenshot()).toString('base64');
+    };
+
+    expect(await shot('static', 0), 'two pins under static must render identically').toBe(
+      await shot('static', 850),
+    );
+    // A quarter turn on: the studio's bars have to land somewhere else on the letters.
+    expect(await shot('sweep', 0)).not.toBe(await shot('sweep', 850));
+  });
 });
 
 test.describe('flake seeding', () => {

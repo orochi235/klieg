@@ -49,6 +49,9 @@ describe('show config: the performance fields', () => {
   });
 });
 
+/** The base64 JSON `show` links used before the query string, built the way that codec built it. */
+const legacy = (config: unknown) => btoa(encodeURIComponent(JSON.stringify(config)));
+
 describe('show config', () => {
   it('round-trips a config through the URL codec', () => {
     const config = { text: 'JACKPOT!', looks: ['neon' as const], cycleMs: 2000, pivot: false };
@@ -70,10 +73,70 @@ describe('show config', () => {
     expect(decodeConfig(encodeConfig({ text: 'ÜBER — 祝' })).text).toBe('ÜBER — 祝');
   });
 
-  it('repairs the plus signs a query string turns into spaces', () => {
-    const encoded = encodeConfig({ text: 'k~' });
+  it('carries a space, which a query string writes as a plus', () => {
+    const encoded = encodeConfig({ text: 'BIG TOP' });
+    expect(encoded).toBe('t=BIG+TOP');
+    expect(decodeConfig(encoded).text).toBe('BIG TOP');
+  });
+
+  it('still reads a link made before the query-string format', () => {
+    const c = decodeConfig(legacy({ text: 'JACKPOT!', look: 'gold', lineAlign: 'start' }));
+    expect([c.text, c.look, c.lineAlign]).toEqual(['JACKPOT!', 'gold', 'start']);
+  });
+
+  it('repairs the plus signs a `?c=` legacy link turns into spaces', () => {
+    const encoded = legacy({ text: 'k~' });
     expect(encoded).toContain('+');
     expect(decodeConfig(encoded.replaceAll('+', ' ')).text).toBe('k~');
+  });
+
+  it('writes a link a person can read and edit in the address bar', () => {
+    const hash = encodeConfig({
+      text: 'Keep\nLighting\nInteresting, Every\nGlowing letter',
+      look: 'tubing',
+      lineAlign: 'start',
+      hold: 'click',
+      cycleMs: 0,
+      acronym: { caps: 0x2df0ff, read: 1200, settle: 0, hold: 'click' },
+    });
+    expect(hash).toBe(
+      't=Keep%0ALighting%0AInteresting%2C+Every%0AGlowing+letter&lk=tubing&ln=start' +
+        '&cy=0&hd=click&an=on&cp=2df0ff&rd=1200&st=0&gt=click',
+    );
+    // Assigning it to `URL.hash` is what `main.ts` does, and it must not re-encode a thing.
+    const url = new URL('https://klieg.dev/show/');
+    url.hash = hash;
+    expect(url.hash.slice(1)).toBe(hash);
+  });
+
+  it('hides the text behind base64url, and round-trips it back', () => {
+    const config = { text: 'THE PUNCHLINE', look: 'gold' as const, lineAlign: 'end' as const };
+    const opaque = encodeConfig(config, true);
+    expect(opaque).not.toContain('PUNCHLINE');
+    // Nothing outside the unreserved set, so no '#', '%', '+' or '&' for a link detector in a
+    // chat client to end the URL on — which is what clipped the old fragment into its own message.
+    expect(opaque).toMatch(/^[A-Za-z0-9_-]+$/);
+    const c = decodeConfig(opaque);
+    expect([c.text, c.look, c.lineAlign]).toEqual(['THE PUNCHLINE', 'gold', 'end']);
+  });
+
+  it('survives the URL builder that puts it in `?c=`', () => {
+    const opaque = encodeConfig({ text: 'JACKPOT!', tint: 0xff2d6f }, true);
+    const url = new URL('https://klieg.dev/show/');
+    url.searchParams.set('c', opaque);
+    expect(url.searchParams.get('c')).toBe(opaque);
+    expect(url.toString()).toContain(`?c=${opaque}`);
+  });
+
+  it('reads the long spelling of a key as well as the short one it writes', () => {
+    const long = decodeConfig('text=HI&lighting=sweep&lines=start&acronym=on&caps=2df0ff');
+    const short = decodeConfig('t=HI&lt=sweep&ln=start&an=on&cp=2df0ff');
+    expect(long).toEqual(short);
+  });
+
+  it('writes only what differs from the defaults', () => {
+    expect(encodeConfig({})).toBe('');
+    expect(encodeConfig({ lineAlign: 'center', chrome: true, cycleMs: 3000 })).toBe('');
   });
 
   for (const [label, raw] of [
@@ -81,7 +144,7 @@ describe('show config', () => {
     ['null', null],
     ['not base64', 'not-base64'],
     ['base64 of nothing useful', btoa('hello there')],
-    ['truncated', encodeConfig({ text: 'hi' }).slice(0, 9)],
+    ['truncated legacy', legacy({ text: 'hi' }).slice(0, 9)],
     ['a bare number', encodeConfig(7 as never)],
   ] as const) {
     it(`falls back to defaults for a ${label} hash`, () => {

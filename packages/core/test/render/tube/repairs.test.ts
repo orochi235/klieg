@@ -460,4 +460,45 @@ describe('the whole-corner decisions', () => {
     // The site still carries what the hairpin would have drawn — that is the whole point of it.
     expect(sites[0]?.points).toBeGreaterThan(0);
   });
+
+  it('reports the return it would have drawn when fillet is switched off', () => {
+    const path = [{ points: square(), surface: 'front' as const, closed: true }];
+    const withFillet = { ...OPTS, corners: ALL_BREAK, blockout: 1 };
+    const on: boolean[] = [];
+    cutIntoRuns(path, {
+      ...withFillet,
+      onRepair: (id, _site, ran) => {
+        if (id === 'return') on.push(ran);
+      },
+    });
+    expect(on.length).toBeGreaterThan(0);
+    expect(on.every(Boolean)).toBe(true);
+
+    const off: boolean[] = [];
+    cutIntoRuns(path, {
+      ...withFillet,
+      repairs: new Set(['stretch', 'setback', 'resume', 'close', 'return', 'hairpin'] as const),
+      onRepair: (id, _site, ran) => {
+        if (id === 'return') off.push(ran);
+      },
+    });
+    // The same corners still report — as skipped, because the fillet they need is gone.
+    expect(off.length).toBe(on.length);
+    expect(off.some(Boolean)).toBe(false);
+  });
+
+  it('reports the blockout fillet candidate, which a connect never sees', () => {
+    const seen: number[] = [];
+    cutIntoRuns([{ points: square(), surface: 'front' as const, closed: true }], {
+      ...OPTS,
+      corners: ALL_BREAK,
+      blockout: 1,
+      onRepair: (id, site) => {
+        if (id === 'fillet' && site) seen.push(site.points.length);
+      },
+    });
+    // Every corner breaks, so every fillet report here is the blockout candidate.
+    expect(seen.length).toBe(4);
+    expect(seen.every((n) => n > 0)).toBe(true);
+  });
 });

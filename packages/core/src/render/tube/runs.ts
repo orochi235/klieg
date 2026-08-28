@@ -1031,6 +1031,14 @@ function stitchPath(
     // through and only the light stops — which is the same fillet a connect draws.
     if (strategy === 'break' && drawAt(k, BLOCKOUT_DRAW) < blockout) {
       const blockoutFillet = filletFor(before, after, c, rhoMin, spacing, rejoin);
+      if (blockoutFillet) {
+        report('fillet', { at: c.index, points: blockoutFillet.points, removed: [] }, ranFillet);
+        // The return this fillet would carry, named whether or not the fillet is there to carry it:
+        // with `fillet` off the strategy stays `break` and the span-level report below never runs.
+        if (!ranFillet) {
+          report('return', { at: c.index, points: blockoutFillet.points, removed: [] }, false);
+        }
+      }
       fillet = ranFillet ? blockoutFillet : null;
       if (fillet) strategy = 'return';
     }

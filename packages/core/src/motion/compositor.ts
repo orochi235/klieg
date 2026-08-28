@@ -82,6 +82,10 @@ interface Segment {
 
 export class Timeline {
   duration: number;
+  /** Where the enter piece's duration ends. Fixed: `release()` only moves what comes after it. */
+  readonly enterEnd: number;
+  /** Where the hold ends and the exit begins. `Infinity` on a held timeline until `release()`. */
+  activeEnd: number;
   private segments: Segment[];
   private readonly blend: number;
   private readonly opts: TimelineOptions;
@@ -92,13 +96,16 @@ export class Timeline {
     this.blend = opts.blendMs;
     this.held = opts.hold === 'until-release';
     this.duration = 0;
+    this.enterEnd = slotDuration(opts.enter);
+    this.activeEnd = 0;
     this.segments = [];
     this.build(this.held ? Number.POSITIVE_INFINITY : (opts.hold as number));
   }
 
   private build(hold: number): void {
-    const enterEnd = slotDuration(this.opts.enter);
+    const enterEnd = this.enterEnd;
     const activeEnd = enterEnd + hold;
+    this.activeEnd = activeEnd;
     const activeFor = slotDuration(this.opts.active);
     this.duration = activeEnd + slotDuration(this.opts.exit);
     this.segments = [
@@ -127,7 +134,7 @@ export class Timeline {
   release(elapsed: number): void {
     if (!this.held) return;
     this.held = false;
-    this.build(Math.max(0, elapsed - slotDuration(this.opts.enter)));
+    this.build(Math.max(0, elapsed - this.enterEnd));
   }
 
   isFinished(elapsed: number): boolean {

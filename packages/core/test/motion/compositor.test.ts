@@ -146,6 +146,28 @@ describe('Timeline', () => {
     expect(tl.poseAt(210, L).position[0]).toBe(0.2);
     expect(tl.poseAt(185, L).position[0]).toBe(0.7);
   });
+
+  it('publishes the enter end and the active end, and moves only the latter on release', () => {
+    const numeric = build(100);
+    expect(numeric.enterEnd).toBe(100);
+    expect(numeric.activeEnd).toBe(200);
+
+    const held = new Timeline({
+      enter: piece(100, 1),
+      active: piece(50, 10),
+      exit: piece(100, 100),
+      hold: 'until-release',
+      blendMs: 20,
+    });
+    expect(held.enterEnd).toBe(100);
+    expect(held.activeEnd).toBe(Number.POSITIVE_INFINITY);
+
+    held.release(500);
+    // The enter is fixed; the hold it was released at is what sets where the exit begins.
+    expect(held.enterEnd).toBe(100);
+    expect(held.activeEnd).toBe(500);
+    expect(held.duration).toBe(600);
+  });
 });
 
 describe('Timeline with degenerate durations', () => {

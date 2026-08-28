@@ -300,6 +300,25 @@ describe('the stages gate', () => {
   });
 });
 
+describe('onRepair', () => {
+  it('forwards repair toggles from the blueprint down to the cut', () => {
+    // SPEC's corners default to ALL_BREAK, which never fillets and so never repairs anything;
+    // CONNECT forces every corner through the fillet path the repairs actually gate.
+    const seen: string[] = [];
+    const ran: boolean[] = [];
+    const bp = buildTubeBlueprint([square()], CONNECT, 0.3, 2, {
+      repairs: new Set(),
+      onRepair: (id, _site, didRun) => {
+        seen.push(id);
+        ran.push(didRun);
+      },
+    });
+    expect(seen.length).toBeGreaterThan(0);
+    expect(ran.every((r) => r === false)).toBe(true);
+    bp.dispose();
+  });
+});
+
 describe('the registry is internal', () => {
   it('is not reachable from the published entry', async () => {
     const published = await import('../../../src/index.js');

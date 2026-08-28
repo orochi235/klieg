@@ -11,6 +11,7 @@ export interface LegendEntry {
 }
 
 export const INK = {
+  glyph: 'rgba(125, 127, 134, 0.35)',
   contour: '#7d7f86',
   built: '#4d8fe0',
   builtAfter: '#a855f7',
@@ -29,6 +30,7 @@ export const INK = {
 export const MEASURE_ONLY = ['bad'];
 
 export const LEGEND: LegendEntry[] = [
+  { key: 'glyph', label: 'glyph outline', color: INK.glyph },
   { key: 'contour', label: 'contour', color: INK.contour },
   { key: 'built', label: 'run · before', color: INK.built },
   { key: 'builtAfter', label: 'run · after', color: INK.builtAfter },

@@ -400,6 +400,17 @@ export const junction = defineInstrument<CornerScene, Config>({
     initialView: { zoom: 1600, pan: { x: 0, y: 0 } },
     layers: [
       {
+        id: 'glyph',
+        draw: (ctx, { state, zoom }) =>
+          centred(ctx, zoom, () => {
+            // Every front path, counters included — `contour` draws only the path the selected
+            // corner sits on, so without this the rest of the letter is invisible while tuning.
+            for (const path of state.outline) {
+              stroke(ctx, path.points, state.centre, INK.glyph, 1 / zoom);
+            }
+          }),
+      },
+      {
         id: 'floor',
         draw: (ctx, { state, zoom }) =>
           centred(ctx, zoom, () => {
@@ -468,7 +479,7 @@ export const junction = defineInstrument<CornerScene, Config>({
     ],
   },
 
-  layers: { ids: ['floor', 'contour', 'staged', 'built', 'ghost', 'repair'] },
+  layers: { ids: ['glyph', 'floor', 'contour', 'staged', 'built', 'ghost', 'repair'] },
 
   render: ({ state, config, setConfig, setState }) => (
     <>

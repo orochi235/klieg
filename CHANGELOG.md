@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+### A host can watch, cancel and advance one effect
+
+Three additions to `fire()`, for an application that plays klieg as a flourish over its own page
+swap and needs to know where inside the effect it is.
+
+**`onPhase`** reports each boundary as the effect crosses it: `{ phase: 'active' }` when the enter
+has run its length, `{ phase: 'exit' }` when the hold is over, and `{ phase: 'stage', index }` as
+each stage settles. `active` is the one a page swap wants — mid-blend, where the word has landed
+and is at full presence. The instants are detected per frame rather than scheduled when you fire,
+because releasing a `'click'` hold rebuilds the timeline and moves the exit; a schedule fixed at
+fire time would be right for every numeric hold and silently never fire for a click hold. A frame
+long enough to span several stages reports every one of them. A listener that throws reaches you as
+an unhandled rejection instead of stopping the render loop.
+
+**`signal`** aborts one effect without taking the instance and its GL context down with it. An
+effect aborted while it is still queued never renders at all. An abort plays no exit and resolves
+the promise rather than rejecting it, which is what the promise already meant for an effect the
+queue dropped.
+
+**`dismiss: 'host'`** withholds klieg's window listeners — `pointerdown` and Escape both — so a host
+that routes its own input gets one action per press instead of two. `fire()` now returns a handle:
+the same promise, plus `advance()`, which acts as the dismissing press. An `advance()` that arrives
+before the effect starts releases the first hold it reaches rather than being lost to the race.
+
+Because `clickAnywhere` exists to gate a window listener, and `dismiss: 'host'` attaches none, an
+anchored placement may hold on a click under host dismissal without the opt-in.
+
+`fire()`'s return type widens from `Promise<void>` to a `FireHandle` that extends it, so existing
+callers — `await`, `.then`, `.catch` — are untouched.
+
 ## 0.9.2
 
 ### An acronym gathers as the lower case finishes leaving

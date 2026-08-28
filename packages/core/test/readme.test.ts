@@ -37,6 +37,17 @@ describe('documented surface', () => {
     }
   });
 
+  it('hands back a handle that is still the promise callers already use', async () => {
+    // Keeps `FireHandle` from being narrowed back to a bare thenable, which would break the
+    // composition lab's `.catch()` on a fire.
+    const handle: bk.FireHandle = Object.assign(Promise.resolve(), { advance: () => {} });
+
+    expect(typeof handle.then).toBe('function');
+    expect(typeof handle.catch).toBe('function');
+    expect(typeof handle.advance).toBe('function');
+    await handle;
+  });
+
   it('builds the README motion example', () => {
     const swoop = bk.transition(800, {
       from: { position: [0, -6, 0], opacity: 0 },

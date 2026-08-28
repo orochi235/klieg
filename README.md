@@ -40,6 +40,20 @@ It rejects if the font cannot be fetched or parsed — the next `fire()` retries
 than failing forever. `destroy()` cancels everything in flight and releases the GL context once
 the running effect has settled.
 
+`onPhase` reports the boundaries inside an effect. `{ phase: 'active' }` is the instant the word has
+landed and is at full presence — the moment to swap a page behind an established flourish rather
+than during its arrival. The instants are not fixed when you fire: a `'click'` hold has no exit
+until the press lands.
+
+```ts
+await bk.fire('RESULTS', {
+  hold: 'click',
+  onPhase: (e) => {
+    if (e.phase === 'active') swapThePage();
+  },
+});
+```
+
 ## Motion
 
 An effect plays `enter`, then loops `active` for `hold` milliseconds, then plays `exit`,
@@ -488,12 +502,15 @@ const bounce = transition(700, { from: { scale: 0 }, ease: easeElasticOut });
 | `look` | `'gold'` | the material — a name, or a spec of your own |
 | `lighting` | `'sweep'` | how the environment lights it — a name, an env piece, or an array of them; a `lamp` effect lights the letters instead of the scene |
 | `tint` | none | recolors the look, as `0xff2d6f`, or a rule consulted per letter |
-| `hold` | `1200` | milliseconds in the active phase, or `'click'` to hold until dismissed; `'click'` is refused under an element `placement` |
+| `hold` | `1200` | milliseconds in the active phase, or `'click'` to hold until dismissed; under an element `placement`, `'click'` needs either `clickAnywhere` on the placement or `dismiss: 'host'` |
 | `stages` | none | stages played after the enter, each regrouping what survives it |
 | `blendMs` | `120` | crossfade window straddling each phase boundary |
 | `bloom` | look's choice | adds a glow pass, at the cost of three render targets while the effect runs |
 | `wrap` | `false` | break long text into the arrangement that renders largest |
 | `modal` | `false` | while a `'click'` hold waits, let the overlay swallow the dismissing press |
+| `onPhase` | none | called as the effect crosses each boundary — `{ phase: 'active' }` when the word has landed, `{ phase: 'exit' }` when the hold is over, `{ phase: 'stage', index }` as each stage settles |
+| `dismiss` | `'window'` | who dismisses a `'click'` hold; `'host'` attaches no window listeners and leaves `advance()` as the only way out |
+| `signal` | none | aborts this one effect: no exit plays, and the promise resolves rather than rejecting |
 | `selectable` | `'hidden'` | how the fired word appears in the DOM — copyable, findable and readable, or selectable (below) |
 
 ## Multiple lines
@@ -522,6 +539,20 @@ The dismissing click passes through to your page by default, so it both dismisse
 presses whatever was underneath. `modal: true` makes the overlay swallow it instead, which is why
 Escape is always bound. That and `selectable: 'layer'`, which takes a click that lands on a letter,
 are the only two things that stop a click reaching your page.
+
+`fire()` returns a handle — the same promise, plus `advance()`, which acts as the dismissing press.
+With `dismiss: 'host'` klieg attaches no window listeners at all, neither `pointerdown` nor Escape,
+so a host that routes its own input gets one action per press instead of two:
+
+```ts
+const held = bk.fire('OPEN', { hold: 'click', dismiss: 'host' });
+// …later, from your own key handler:
+held.advance();
+```
+
+An `advance()` that arrives before the effect starts is not lost: it releases the first hold that
+effect reaches. Because `clickAnywhere` exists to gate a window listener, `dismiss: 'host'` does not
+need it — an anchored placement may hold on a click without the opt-in.
 
 ## Queue policies
 

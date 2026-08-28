@@ -13,6 +13,7 @@ import {
   type KliegOptions,
   LIGHTING_NAMES,
   LOOK_NAMES,
+  type PhaseEvent,
   POLICY_NAMES,
   wantsBloom,
 } from '../src/index.js';
@@ -913,6 +914,133 @@ describe('driving an effect from the host', () => {
     const done = bk.fire('HI', HELD);
     expect(() => done.advance()).not.toThrow();
     await expect(done).resolves.toBeUndefined();
+  });
+
+  it('reports active when the enter has run its length, and exit when the hold is over', async () => {
+    const seen: PhaseEvent[] = [];
+    const bk = create();
+    const done = bk.fire('HI', {
+      enter: { duration: 100, offset: () => ({}) },
+      active: 'none',
+      exit: 'none',
+      hold: 50,
+      blendMs: 0,
+      onPhase: (e) => seen.push(e),
+    });
+    await flush();
+
+    clock.advance(50);
+    expect(seen).toEqual([]);
+
+    clock.advance(60);
+    expect(seen).toEqual([{ phase: 'active' }]);
+
+    clock.advance(100);
+    await done;
+    expect(seen).toEqual([{ phase: 'active' }, { phase: 'exit' }]);
+  });
+
+  it('reports exit only once a click hold is released, which no fire-time schedule can know', async () => {
+    const seen: PhaseEvent[] = [];
+    const bk = create();
+    const done = bk.fire('HI', { ...HELD, onPhase: (e) => seen.push(e) });
+    await flush();
+
+    clock.advance(60_000);
+    expect(seen).toEqual([{ phase: 'active' }]);
+
+    dispatch('pointerdown');
+    clock.advance(16);
+    await done;
+
+    expect(seen).toEqual([{ phase: 'active' }, { phase: 'exit' }]);
+  });
+
+  it('reports every stage a long frame crosses, not just the last', async () => {
+    const seen: PhaseEvent[] = [];
+    const bk = create();
+    const done = bk.fire('ABCD', {
+      enter: 'none',
+      active: 'none',
+      exit: 'none',
+      hold: 0,
+      blendMs: 0,
+      stages: [
+        { keep: (l) => l.index < 3, exit: 'none', hold: 0, tween: { duration: 10 } },
+        { keep: (l) => l.index < 2, exit: 'none', hold: 0, tween: { duration: 10 } },
+        { keep: (l) => l.index < 1, exit: 'none', hold: 0, tween: { duration: 10 } },
+      ],
+      onPhase: (e) => seen.push(e),
+    });
+    await flush();
+
+    // One frame, long enough to cross all three boundaries at once.
+    clock.advance(10_000);
+    await done;
+
+    // Filtered because a single frame this long collapses the timed boundaries against the stage
+    // ones; their relative order is not what this test is about.
+    expect(seen.filter((e) => e.phase === 'stage')).toEqual([
+      { phase: 'stage', index: 0 },
+      { phase: 'stage', index: 1 },
+      { phase: 'stage', index: 2 },
+    ]);
+  });
+
+  it('reports both phases under reduced motion, which holds the pose without travelling', async () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    const seen: PhaseEvent[] = [];
+    const bk = create();
+    const done = bk.fire('HI', {
+      enter: { duration: 400, offset: () => ({}) },
+      active: 'none',
+      exit: { duration: 300, offset: () => ({}) },
+      hold: 100,
+      onPhase: (e) => seen.push(e),
+    });
+    await flush();
+
+    clock.advance(16);
+    expect(seen).toEqual([{ phase: 'active' }]);
+
+    clock.advance(100);
+    await done;
+    expect(seen).toEqual([{ phase: 'active' }, { phase: 'exit' }]);
+  });
+
+  it('fires no phase event on an unsupported instance, which renders nothing', async () => {
+    stubWebgl(false);
+    const seen: PhaseEvent[] = [];
+    const bk = create();
+
+    await bk.fire('HI', { onPhase: (e) => seen.push(e) });
+
+    expect(seen).toEqual([]);
+  });
+
+  it('keeps rendering when onPhase throws, and hands the error to the microtask queue', async () => {
+    const queued: (() => void)[] = [];
+    vi.stubGlobal('queueMicrotask', (fn: () => void) => queued.push(fn));
+
+    const bk = create();
+    const done = bk.fire('HI', {
+      enter: 'none',
+      active: 'none',
+      exit: 'none',
+      hold: 50,
+      onPhase: () => {
+        throw new Error('host');
+      },
+    });
+    await flush();
+
+    clock.advance(16);
+    clock.advance(100);
+    await expect(done).resolves.toBeUndefined();
+
+    expect(queued).toHaveLength(2);
+    expect(queued[0]).toThrow('host');
+    expect(words()).toHaveLength(0);
   });
 });
 

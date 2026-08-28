@@ -6,6 +6,7 @@ import { ACTIVE } from './motion/active.js';
 import { type Slot, slotDuration, slotMovesLetters, Timeline } from './motion/compositor.js';
 import { ENTER } from './motion/enter.js';
 import { EXIT } from './motion/exit.js';
+import { isolate, type PhaseEvent, PhaseReporter } from './motion/phases.js';
 import { Sequence } from './motion/sequence.js';
 import type { ActiveName, EnterName, ExitName, LetterInfo, MotionPiece } from './motion/types.js';
 import { type PointerFrame, pointerFrame } from './pointer.js';
@@ -82,6 +83,7 @@ export {
   type TransitionSpec,
   transition,
 } from './motion/build.js';
+export type { PhaseEvent, PhaseListener } from './motion/phases.js';
 export type { LetterInfo, MotionPiece, StaggerFrom, StaggerSpec } from './motion/types.js';
 export { stagger } from './motion/types.js';
 export type { Pose, PoseOffset, Vec3 } from './pose.js';
@@ -282,6 +284,12 @@ export interface FireOptions {
    * a stage holds on `'click'`. Ignored under reduced motion, which never travels.
    */
   stages?: Stage[];
+  /**
+   * Called as the effect crosses each phase boundary. `active` is the instant the word has landed
+   * and is at full presence — mid-blend, which is what a host swapping a page behind the flourish
+   * wants. A listener that throws does not stop the render loop.
+   */
+  onPhase?: (event: PhaseEvent) => void;
 }
 
 /** Timing for the move into a new layout. `scale` addresses the viewport fit, not letter size. */
@@ -469,6 +477,7 @@ export function createKlieg(options: KliegOptions): Klieg {
     const hold = opts.hold ?? 1200;
     const untilClick = hold === 'click';
     const exit = resolveSlot(opts.exit ?? 'fade', EXIT);
+    const enterEnd = slotDuration(enter);
     const blendMs = opts.blendMs ?? 120;
     const timeline = new Timeline({
       enter,
@@ -487,6 +496,7 @@ export function createKlieg(options: KliegOptions): Klieg {
     // A stage that holds on 'click' waits for the same press the top-level hold does, and gets no
     // listener of its own — so the whole effect stalls unless this covers both.
     const awaitsClick = untilClick || stages.some((s) => s.hold === 'click');
+    const reporter = opts.onPhase ? new PhaseReporter(isolate(opts.onPhase)) : null;
     const sequence = stages.length
       ? new Sequence({
           enter,
@@ -503,6 +513,7 @@ export function createKlieg(options: KliegOptions): Klieg {
           hold: untilClick ? 'click' : (hold as number),
           blendMs,
           target: word,
+          onStage: reporter ? (index) => reporter.stage(index) : undefined,
         })
       : null;
     const driver: Sequence | Timeline = sequence ?? timeline;
@@ -576,11 +587,26 @@ export function createKlieg(options: KliegOptions): Klieg {
           lastTick = now;
           // rAF reports the frame's start time, which can precede a now() sampled moments earlier.
           const since = now - startedAt;
-          const settled = slotDuration(enter);
-          const raw = Math.max(still ? settled : since, 0);
+          const raw = Math.max(still ? enterEnd : since, 0);
           const elapsed = sequence ? raw : Math.min(raw, timeline.duration);
           // Ahead of the pose, or the fit and the phase advance both lag it by a frame.
           sequence?.tick(elapsed);
+
+          // Detected against this frame rather than scheduled at fire time: `release()` moves
+          // `activeEnd`, so a click hold has no exit instant until the press lands. Reduced motion
+          // pins `elapsed` to the settled pose, so it reads both boundaries off `since` instead.
+          if (reporter) {
+            if (still) {
+              const over = untilClick
+                ? released
+                  ? 0
+                  : Number.POSITIVE_INFINITY
+                : (hold as number);
+              reporter.observe(since, 0, over);
+            } else {
+              reporter.observe(elapsed, enterEnd, sequence ? sequence.exitAt : timeline.activeEnd);
+            }
+          }
 
           // Resolved on demand, once per frame: placing the cursor reads the canvas' box, which
           // flushes layout, and most signs run no piece that asks for it.

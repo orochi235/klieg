@@ -2,6 +2,7 @@ import type * as THREE from 'three';
 import { assign } from './assign.js';
 import { type GeneratedPath, generateConnectors, generatePaths } from './generators.js';
 import type { TubeSpec } from './index.js';
+import type { CutRepairId, RepairSite } from './repairs.js';
 import { type CornerRecord, cutIntoRuns, polyLength, type Run } from './runs.js';
 import { surfacesOf } from './surfaces.js';
 import { sweepRun } from './sweep.js';
@@ -20,6 +21,8 @@ export interface TubeStageContext {
   readonly spec: TubeSpec;
   readonly depth: number;
   readonly seed: number;
+  readonly repairs?: ReadonlySet<CutRepairId>;
+  readonly onRepair?: (id: CutRepairId, site: RepairSite | null, ran: boolean) => void;
 }
 
 /**
@@ -85,7 +88,7 @@ export const TUBE_STAGES: readonly TubeStage[] = [
   {
     id: 'cut',
     label: 'runs',
-    run(state, { spec, seed }) {
+    run(state, { spec, seed, repairs, onRepair }) {
       const cut = cutIntoRuns(state.paths, {
         runs: spec.runs,
         minRun: spec.minRun,
@@ -97,6 +100,8 @@ export const TUBE_STAGES: readonly TubeStage[] = [
         shortRun: spec.shortRun,
         rejoin: spec.rejoin,
         hairpin: spec.hairpin,
+        repairs,
+        onRepair,
         seed,
       });
       state.runs.push(...cut.runs);

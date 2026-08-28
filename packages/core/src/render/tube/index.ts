@@ -4,6 +4,7 @@ import type { SelectSpec } from './assign.js';
 import type { GeneratedPath, PathSource } from './generators.js';
 import type { GradientSpec } from './gradient.js';
 import type { HairpinShape } from './hairpin.js';
+import type { CutRepairId, RepairSite } from './repairs.js';
 import type { CornerRecord, CornerWeights, Rejoin, Run, ShortRun } from './runs.js';
 import type { TubeStageId, TubeStageState } from './stages.js';
 import { TUBE_STAGES } from './stages.js';
@@ -109,6 +110,10 @@ export interface TubeBuildOptions {
    * stage was switched off, whether or not a `bypass` stood in for it.
    */
   onStage?(id: TubeStageId, state: TubeStageState, ran: boolean): void;
+  /** Which corner repairs the cut stage runs. Absent is every repair on. */
+  repairs?: ReadonlySet<CutRepairId>;
+  /** Called by the cut stage for every repair it considers, on or off. */
+  onRepair?(id: CutRepairId, site: RepairSite | null, ran: boolean): void;
 }
 
 export function buildTubeBlueprint(
@@ -118,7 +123,14 @@ export function buildTubeBlueprint(
   seed: number,
   opts?: TubeBuildOptions,
 ): TubeBlueprint {
-  const ctx = { shapes, spec, depth, seed };
+  const ctx = {
+    shapes,
+    spec,
+    depth,
+    seed,
+    repairs: opts?.repairs,
+    onRepair: opts?.onRepair,
+  };
   const state: TubeStageState = { paths: [], runs: [], corners: [], lit: [], dark: [] };
 
   for (const stage of TUBE_STAGES) {

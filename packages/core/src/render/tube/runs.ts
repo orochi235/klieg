@@ -997,9 +997,18 @@ function stitchPath(
     // A hard corner drawn `connect` must fillet, and a fillet that will not fit breaks instead.
     // `CONNECT_LIMIT` used to guess this from the angle; now it is measured.
     let hairpin: Hairpin | null = null;
-    if (strategy === 'hairpin' && !on('hairpin')) strategy = 'break';
     if (strategy === 'hairpin') {
+      const ranHairpin = on('hairpin');
       hairpin = hairpinFor(before, after, c, shape, rhoMin, spacing);
+      if (hairpin) {
+        report('hairpin', { at: c.index, points: hairpin.points, removed: [] }, ranHairpin);
+      }
+      if (!ranHairpin) {
+        strategy = 'break';
+        hairpin = null;
+      }
+    }
+    if (strategy === 'hairpin') {
       // Nothing worth turning around for: a hairpin leaves the contour on both approaches to buy
       // the apex back, so it only pays where a fillet would cut more than a bend radius away.
       // One that cannot be built has to cut like any other corner.

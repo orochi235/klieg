@@ -430,4 +430,34 @@ describe('the whole-corner decisions', () => {
     expect(reports).toHaveLength(4);
     expect(reports.every((r) => r.ran === true)).toBe(true);
   });
+
+  it('reports the hairpin it drew at the sharp V', () => {
+    const sites: { ran: boolean; points: number }[] = [];
+    cutIntoRuns([{ points: sharpV(), surface: 'front' as const, closed: false }], {
+      ...OPTS,
+      corners: { break: 0, connect: 0, hairpin: 1 },
+      onRepair: (id, site, ran) => {
+        if (id === 'hairpin' && site) sites.push({ ran, points: site.points.length });
+      },
+    });
+    expect(sites).toHaveLength(1);
+    expect(sites[0]?.ran).toBe(true);
+    expect(sites[0]?.points).toBeGreaterThan(0);
+  });
+
+  it('reports the hairpin it declined when the toggle is off', () => {
+    const sites: { ran: boolean; points: number }[] = [];
+    cutIntoRuns([{ points: sharpV(), surface: 'front' as const, closed: false }], {
+      ...OPTS,
+      corners: { break: 0, connect: 0, hairpin: 1 },
+      repairs: new Set(['stretch', 'setback', 'resume', 'fillet', 'close', 'return'] as const),
+      onRepair: (id, site, ran) => {
+        if (id === 'hairpin' && site) sites.push({ ran, points: site.points.length });
+      },
+    });
+    expect(sites).toHaveLength(1);
+    expect(sites[0]?.ran).toBe(false);
+    // The site still carries what the hairpin would have drawn — that is the whole point of it.
+    expect(sites[0]?.points).toBeGreaterThan(0);
+  });
 });

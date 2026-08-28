@@ -350,6 +350,35 @@ describe('the span registry', () => {
     expect(on.runs.filter((r) => r.dark).length).toBeGreaterThan(0);
     expect(off.runs.filter((r) => r.dark)).toHaveLength(0);
   });
+
+  it('reports the break-side stretch on every break', () => {
+    const sites: { removed: number; ran: boolean }[] = [];
+    cutIntoRuns([{ points: square(), surface: 'front' as const, closed: true }], {
+      ...OPTS,
+      corners: ALL_BREAK,
+      onRepair: (id, site, ran) => {
+        if (id === 'stretch' && site) sites.push({ removed: site.removed.length, ran });
+      },
+    });
+    expect(sites.length).toBeGreaterThan(0);
+    expect(sites.every((s) => s.ran)).toBe(true);
+    expect(sites.some((s) => s.removed > 0)).toBe(true);
+  });
+
+  it('leaves the break ends untrimmed when the break-side stretch is switched off', () => {
+    const path = [{ points: square(), surface: 'front' as const, closed: true }];
+    const countOf = (repairs?: Set<string>) =>
+      cutIntoRuns(path, {
+        ...OPTS,
+        corners: ALL_BREAK,
+        ...(repairs ? { repairs: repairs as never } : {}),
+      }).runs.reduce((n, r) => n + r.points.length, 0);
+    const on = countOf();
+    const off = countOf(new Set(['setback', 'resume', 'fillet', 'close', 'return', 'hairpin']));
+    // Switching it off keeps the corner's own vertices on each span end.
+    expect(off).toBeGreaterThan(on);
+  });
+
 });
 
 describe('the whole-corner decisions', () => {

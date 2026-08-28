@@ -500,13 +500,23 @@ function joinsAtOnce(
  * A break cuts the whole corner stretch out, not just the vertex detection collapsed it to. The
  * neighbouring vertices are the same corner; left on a run's end they are tube still bending
  * tighter than rhoMin, with no corner stage left to fix them.
+ *
+ * Returns the site alongside the trimmed span so the caller can gate one and report the other; the
+ * floor is two vertices, unlike the corner-side `popStretch`, because a break's product still has
+ * to sweep.
  */
-function dropHead(span: THREE.Vector3[], count: number): THREE.Vector3[] {
-  return trimStretch(span, count, 'head');
-}
-
-function dropTail(span: THREE.Vector3[], count: number): THREE.Vector3[] {
-  return trimStretch(span, count, 'tail');
+function dropEnd(
+  span: THREE.Vector3[],
+  count: number,
+  end: 'head' | 'tail',
+): { points: THREE.Vector3[]; site: RepairSite } {
+  const kept = trimStretch(span, count, end);
+  const removed =
+    end === 'tail' ? span.slice(kept.length) : span.slice(0, span.length - kept.length);
+  return {
+    points: kept,
+    site: { at: end === 'tail' ? kept.length - 1 : 0, points: [], removed },
+  };
 }
 
 /**
@@ -1091,8 +1101,13 @@ function stitchPath(
       const decision = decisions[k] as CornerDecision;
       const next = arcs[k + 1] as THREE.Vector3[];
       if (decision.strategy === 'break') {
-        spans.push({ points: dropTail(current, decision.groupBefore + 1) });
-        current = dropHead(next.slice(), decision.groupAfter + 1);
+        const ranStretch = on('stretch');
+        const tail = dropEnd(current, decision.groupBefore + 1, 'tail');
+        report('stretch', tail.site, ranStretch);
+        spans.push({ points: ranStretch ? tail.points : current });
+        const head = dropEnd(next.slice(), decision.groupAfter + 1, 'head');
+        report('stretch', head.site, ranStretch);
+        current = ranStretch ? head.points : next.slice();
       } else {
         mergeArc(
           current,
@@ -1188,13 +1203,28 @@ function stitchPath(
   // Rotate so the walk starts right after a break, reducing this to the open-path case.
   const spans: Span[] = [];
   const opening = decisions[breakIdx] as CornerDecision;
-  let current = dropHead((arcs[breakIdx] as THREE.Vector3[]).slice(), opening.groupAfter + 1);
+  const opened = dropEnd(
+    (arcs[breakIdx] as THREE.Vector3[]).slice(),
+    opening.groupAfter + 1,
+    'head',
+  );
+  report('stretch', opened.site, on('stretch'));
+  let current = on('stretch') ? opened.points : (arcs[breakIdx] as THREE.Vector3[]).slice();
   for (let i = 1; i < n; i++) {
     const arcIdx = (breakIdx + i) % n;
     const decision = decisions[arcIdx] as CornerDecision;
     if (decision.strategy === 'break') {
-      spans.push({ points: dropTail(current, decision.groupBefore + 1) });
-      current = dropHead((arcs[arcIdx] as THREE.Vector3[]).slice(), decision.groupAfter + 1);
+      const ranStretch = on('stretch');
+      const tail = dropEnd(current, decision.groupBefore + 1, 'tail');
+      report('stretch', tail.site, ranStretch);
+      spans.push({ points: ranStretch ? tail.points : current });
+      const head = dropEnd(
+        (arcs[arcIdx] as THREE.Vector3[]).slice(),
+        decision.groupAfter + 1,
+        'head',
+      );
+      report('stretch', head.site, ranStretch);
+      current = ranStretch ? head.points : (arcs[arcIdx] as THREE.Vector3[]).slice();
     } else {
       mergeArc(
         current,
@@ -1227,7 +1257,9 @@ function stitchPath(
       }
     }
   }
-  spans.push({ points: dropTail(current, opening.groupBefore + 1) });
+  const closing = dropEnd(current, opening.groupBefore + 1, 'tail');
+  report('stretch', closing.site, on('stretch'));
+  spans.push({ points: on('stretch') ? closing.points : current });
   return { spans, decisions };
 }
 

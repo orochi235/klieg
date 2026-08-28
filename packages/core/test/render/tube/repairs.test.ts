@@ -378,7 +378,6 @@ describe('the span registry', () => {
     // Switching it off keeps the corner's own vertices on each span end.
     expect(off).toBeGreaterThan(on);
   });
-
 });
 
 describe('the whole-corner decisions', () => {

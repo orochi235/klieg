@@ -19,6 +19,7 @@ interface Config {
   corner: number;
   rejoin: string;
   drawAt: string;
+  subject: string;
   /** One key per stage and, from Task 13, per repair — `stage:<id>` and `repair:<id>`. */
   [stageOrRepair: string]: unknown;
 }
@@ -35,6 +36,7 @@ function requestOf(config: Config) {
       ? config.drawAt
       : 'sweep') as TubeStageId,
     repairs: new Set(CUT_REPAIR_IDS.filter((id) => config[`repair:${id}`] !== false)),
+    subject: (config.subject === 'letter' ? 'letter' : 'corner') as 'corner' | 'letter',
   };
 }
 
@@ -331,6 +333,7 @@ export const junction = defineInstrument<CornerScene, Config>({
     drawAt: 'sweep',
     ...Object.fromEntries(TUBE_STAGES.map((stage) => [`stage:${stage.id}`, true])),
     ...Object.fromEntries(CUT_REPAIR_IDS.map((id) => [`repair:${id}`, true])),
+    subject: 'corner',
   }),
 
   configSchema: () => [
@@ -378,6 +381,16 @@ export const junction = defineInstrument<CornerScene, Config>({
       options: TUBE_STAGES.map((s) => ({ value: s.id, label: s.label })),
     },
     ...repairSwitches(),
+    {
+      key: 'subject',
+      label: 'subject',
+      type: 'select',
+      default: 'corner',
+      options: [
+        { value: 'corner', label: 'one corner' },
+        { value: 'letter', label: 'whole letter' },
+      ],
+    },
   ],
 
   initialState: (config) => buildScene(font, requestOf(config)),
@@ -476,8 +489,12 @@ export const junction = defineInstrument<CornerScene, Config>({
           })}
         </ol>
         <dl className="junction__measures">
-          {state.measures.map((m) => (
-            <div className={m.bad ? 'measure measure--bad' : 'measure'} key={m.label}>
+          {/* Keyed by position: `subject: 'letter'` carries one `run ships at` per run at the same
+              value, so neither the label nor the pair is unique. The list is rebuilt whole on every
+              config change and holds no state, so there is nothing for a stable key to preserve. */}
+          {state.measures.map((m, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: position is the only identity a measure has
+            <div className={m.bad ? 'measure measure--bad' : 'measure'} key={`${m.label}:${i}`}>
               <dt>{m.label}</dt>
               <dd>{m.value}</dd>
             </div>
@@ -485,6 +502,7 @@ export const junction = defineInstrument<CornerScene, Config>({
           {state.ghosts
             .filter((g) => !g.ran)
             .map((g, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: many sites share an id and a side
               <div className="measure" key={`${g.id}:${g.side ?? '-'}:${i}`}>
                 <dt>{g.side ? `${g.id} · ${g.side}` : g.id}</dt>
                 <dd>{`off — ${g.added.length} added, ${g.removed.length} removed`}</dd>

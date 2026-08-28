@@ -1,3 +1,7 @@
+import { specOf } from '@core/render/looks.js';
+import type { TubeSpec } from '@core/render/tube/index.js';
+import type { LoadedFont } from '@core/text/font.js';
+import { DEFAULT_GLYPH_OPTIONS, glyphToShapes } from '@core/text/glyphs.js';
 import { Workspace } from '@weasel-js/labkit';
 import {
   type PointerEvent as ReactPointerEvent,
@@ -7,10 +11,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import { specOf } from '@core/render/looks.js';
-import type { TubeSpec } from '@core/render/tube/index.js';
-import type { LoadedFont } from '@core/text/font.js';
-import { DEFAULT_GLYPH_OPTIONS, glyphToShapes } from '@core/text/glyphs.js';
 import { labFont } from './font.js';
 import {
   type PanelMode,

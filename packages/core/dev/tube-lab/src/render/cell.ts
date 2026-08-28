@@ -1,10 +1,10 @@
-import * as THREE from 'three';
 import type { FrameCtx } from '@core/effects/types.js';
 import { Timeline } from '@core/motion/compositor.js';
 import { NONE } from '@core/motion/types.js';
 import type { LookSpec } from '@core/render/looks.js';
 import { Word } from '@core/render/word.js';
 import type { LoadedFont } from '@core/text/font.js';
+import * as THREE from 'three';
 import type { PanelMeta } from '../panels.js';
 
 const FOV = 38;

@@ -1,5 +1,3 @@
-import { Slider } from '@weasel-js/ui/components/Slider';
-import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 import type {
   CornerWeights,
   GradientSpec,
@@ -7,6 +5,8 @@ import type {
   SurfaceKind,
   TubeSpec,
 } from '@core/render/tube/index.js';
+import { Slider } from '@weasel-js/ui/components/Slider';
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 import { lettersOf, MODES, type PanelMode } from './panels.js';
 import { TUBE_LOOKS, type TubeLook } from './spec.js';
 
@@ -288,7 +288,7 @@ function Range({ label, min, max, step, value, disabled, stops, hint, onCommit }
                 // track; everything about how a stop looks stays in the stylesheet.
                 style={
                   {
-                    ['--rail-stop']: `${(valueToFraction(stop) * 100).toFixed(3)}%`,
+                    '--rail-stop': `${(valueToFraction(stop) * 100).toFixed(3)}%`,
                   } as CSSProperties
                 }
               />

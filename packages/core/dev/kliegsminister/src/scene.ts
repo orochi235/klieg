@@ -32,6 +32,8 @@ export interface SceneRequest {
   stages: ReadonlySet<TubeStageId>;
   drawAt: TubeStageId;
   repairs: ReadonlySet<CutRepairId>;
+  /** Whether the tile is about one corner or the whole glyph. */
+  subject: 'corner' | 'letter';
 }
 
 export interface Measure {
@@ -242,7 +244,10 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
   const points = path.points;
   const lo = corner.index - corner.groupBefore;
   const hi = corner.index + corner.groupAfter;
-  const centre = at(points, corner.index).clone();
+  const centre =
+    req.subject === 'letter'
+      ? new THREE.Vector3((bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2, 0)
+      : at(points, corner.index).clone();
 
   const profile: { at: number; rho: number }[] = [];
   for (let k = -8; k <= 8; k++) {
@@ -287,7 +292,10 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
   // A site with empty `added` and empty `removed` cannot be placed — the exit-side setback reports
   // only a cursor index — so it drops out of this filter rather than drawing a dot at the origin.
   const near = (p: THREE.Vector3) => p.distanceTo(centre) < spacing * 40;
-  const ghosts = allGhosts.filter((g) => g.added.some(near) || g.removed.some(near));
+  const ghosts =
+    req.subject === 'letter'
+      ? allGhosts
+      : allGhosts.filter((g) => g.added.some(near) || g.removed.some(near));
   const corners: CornerMark[] = found.map((f, i) => ({
     at: at(f.path.points, f.corner.index).clone(),
     ordinal: i + 1,
@@ -296,8 +304,12 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
 
   const { before, after } = carriersAt(blueprint.runs, pathIndex, corner.index, points.length);
   const carried: CarriedRun[] = [];
-  if (before && before === after) carried.push(carriedRun(before, 'both', radius));
-  else {
+  if (req.subject === 'letter') {
+    // No corner to be on a side of, so every run reads as `both`.
+    for (const run of blueprint.runs) carried.push(carriedRun(run, 'both', radius));
+  } else if (before && before === after) {
+    carried.push(carriedRun(before, 'both', radius));
+  } else {
     if (before) carried.push(carriedRun(before, 'before', radius));
     if (after) carried.push(carriedRun(after, 'after', radius));
   }

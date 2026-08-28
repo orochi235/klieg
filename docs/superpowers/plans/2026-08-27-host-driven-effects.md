@@ -100,7 +100,8 @@ npm install
 npm test 2>&1 | tail -5
 ```
 
-Expected: all tests pass. Write the count down — every later task compares against it.
+Expected: `Test Files 62 passed (62)`, `Tests 1203 passed (1203)`. Measured on this branch before
+the rebase; `main` adds one commit, so the count may be a little higher after Step 2.
 
 ---
 
@@ -1720,73 +1721,7 @@ git commit -m "document the host-driven effect surface"
 
 ---
 
-## Task 11: Run the spike the design was written against
-
-`spikes/double-dispatch.mjs` reproduces the one-press-two-actions problem `dismiss: 'host'` removes.
-It has never been run — it was written during an investigation aimed at a different app's dev
-server. A spike that has never run is a claim, not evidence.
-
-**Files:**
-- Modify: `spikes/double-dispatch.mjs` (only if it is aimed at the wrong target)
-
-- [ ] **Step 1: Read it and find what it points at**
-
-```bash
-cat spikes/double-dispatch.mjs
-```
-
-- [ ] **Step 2: Run it**
-
-```bash
-node spikes/double-dispatch.mjs
-```
-
-- [ ] **Step 3: Decide, and say which**
-
-If it runs and shows the double dispatch: note the output in the commit message; the design's
-premise is confirmed. If it is aimed at another app's dev server: either repoint it at
-`apps/lab` (`npm run dev -w apps/lab`) or delete it and say so — an unrunnable spike in the tree
-is worse than none, because it reads as evidence.
-
-- [ ] **Step 4: Commit whichever you did**
-
-```bash
-git add spikes/double-dispatch.mjs
-git commit -m "run the double-dispatch spike against the lab"
-```
-
----
-
-## Task 12: Re-check the design's claims about sherpa
-
-The spec's account of sherpa is pinned to `v1-runtime` / `9addc1e`, read while sherpa's working
-tree was dirty and its IPC surface was under revision. Two claims rest on that snapshot.
-
-- [ ] **Step 1: Check whether `PageInstance.goto(index)` still takes an absolute step index**
-
-If sherpa has moved to a relative step, `advance()` is the same shape as `goto` and the naming
-argument in the spec's "Where this departs" section is stale. That changes nothing in this plan's
-code — `Sequence` only moves forward either way — but it changes what the README should say.
-
-- [ ] **Step 2: Check whether sherpa's documented v1 limit still reads "nothing klieg shows is
-      dismissible"**
-
-That sentence is what `dismiss: 'host'` unblocks. If it is gone, so is the justification, and the
-CHANGELOG entry should not claim it.
-
-- [ ] **Step 3: Follow through on the undertaking**
-
-Naming this `advance()` rather than `goto()` came with an undertaking to add `advance` to sherpa
-too. Open that as an issue on sherpa, or do it, but do not let it lapse silently.
-
-- [ ] **Step 4: Fix whatever drifted, or record that nothing did**
-
-Amend the spec's "Where this departs from the obvious models" section with the commit you checked
-against, and commit.
-
----
-
-## Task 13: Finish the branch
+## Task 11: Finish the branch
 
 - [ ] **Step 1: Full check from clean**
 
@@ -1794,7 +1729,7 @@ against, and commit.
 npm run check
 ```
 
-Expected: green, at the Task 0 baseline plus roughly 20 new tests.
+Expected: green, at 1203 plus roughly 20 new tests.
 
 - [ ] **Step 2: Confirm no public surface leaked**
 
@@ -1811,11 +1746,28 @@ Expected: only the `import` line. `PhaseReporter` and `isolate` are implementati
 git diff main...host-driven-effects -- packages/core/src
 ```
 
-- [ ] **Step 4: Hand off**
+- [ ] **Step 4: Re-run the spike that motivated `dismiss: 'host'`**
+
+```bash
+npm run dev -w apps/lab                     # note the port it picks; 5180 may be taken
+URL=http://localhost:5180/ node spikes/double-dispatch.mjs
+```
+
+Expected, unchanged by this branch: `DOUBLE DISPATCH REPRODUCED`. The spike drives the lab, and the
+lab has no control for the new option, so it still exercises the `'window'` path. Turning it into an
+after-check means giving the lab a `dismiss` control beside its `hold click` checkbox and asserting
+`NOT REPRODUCED` — worth doing, but it is lab work this plan does not otherwise touch.
+
+- [ ] **Step 5: Hand off**
 
 Use `superpowers:finishing-a-development-branch`. The branch is unpushed; there is no remote branch
 yet. `0.9.0` is already on npm, so this is a minor version, not a patch — releases are tag-triggered,
 so do not `npm publish` by hand.
+
+Two things downstream, neither of them klieg's to do here. sherpa's klieg provider throws on
+`hold: 'click'` and declares `caps: { steppable: false, abortable: false }`; all three are now
+false, and lifting them is what the branch is for. And naming this `advance()` rather than matching
+sherpa's `seek(offset)` came with an undertaking to give sherpa an `advance` too.
 
 ---
 
@@ -1823,7 +1775,7 @@ so do not `npm publish` by hand.
 
 **Spec coverage.** Every section of the design maps to a task: the surface (6, 7, 8, 9), the phase
 instants and both traps (2, 3, 4, 7), the queue-state table (5, 6, 8), `dismiss: 'host'` and
-`clickAnywhere` (9), the WAAPI departures and the sherpa alignment (10, 12), the three named tests
+`clickAnywhere` (9), the WAAPI departures (10), the three named tests
 (3 Step 5, 4 Step 5, 7 Step 8, 9 Step 7 — each with its mutation check). "Not in scope" stays out:
 no backward seeking, no `playState`, no pausing, no enter event.
 

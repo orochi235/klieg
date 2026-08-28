@@ -17,18 +17,28 @@ that widens `fire()`'s return type harmlessly. It narrows it — `PromiseLike` h
 `Promise<void>` instead. The other three are in the plan; do not implement the spec where they
 disagree.
 
-Three things neither document can settle for itself. The spec's account of sherpa is pinned to
-`v1-runtime` / `9addc1e` with sherpa's tree dirty and its IPC surface being revised, so re-read
-sherpa before trusting the alignment claims (plan Task 12). `spikes/double-dispatch.mjs` reproduces
-the problem `dismiss: 'host'` removes but has never been run against the lab (Task 11). And naming
-it `advance()` rather than sherpa's `goto()` came with an undertaking to add `advance` to sherpa
-too, which nothing in klieg will remind anyone about.
+**The premise is now evidence, not assertion.** `spikes/double-dispatch.mjs` was aimed at a control
+the lab does not have (`acrostic` is an `<h2>`, not a button); repointed at `#holdClick` + `#fire`
+it runs and prints `DOUBLE DISPATCH REPRODUCED` — one press on FIRE both dismisses the held effect
+and fires a new one. sherpa reached the same conclusion independently and hard-blocked it: its klieg
+provider *throws* on `hold: 'click'` or `stages`.
+
+**sherpa has moved on from the snapshot the spec was written against, and it moved toward this
+design.** Re-checked at `main` / `923df22`; the spec's "How sherpa consumes this" section carries
+the detail. The short version: sherpa already declares klieg's `PhaseEvent` verbatim and routes it
+through `PageContext.phase`, so the shape is not up for negotiation. `goto(offset)` is gone,
+replaced by `PageHandle.seek(offset)` — "absolute, idempotent, press-space; never a delta" — so
+`advance()` is a different verb and the provider does the translation. The undertaking to give
+sherpa an `advance` is still open, and nothing in klieg will remind anyone about it.
 
 **0.9.0 is already on npm**, so `clickAnywhere` is shipped API and this revises public surface
 rather than choosing it freely. Releases are tag-triggered; never `npm publish` by hand.
 
 `FEATURE-REQUESTS.md` — which the spec cites as where the three asks are recorded — is untracked in
-`~/src/klieg` and in no commit on any branch. Plan Task 1 commits it.
+`~/src/klieg` and in no commit on any branch. Plan Task 1 commits it. sherpa's
+`docs/upstream-asks.md` is the mirror of it and lists the same three.
+
+The branch is green as it stands: **1203 tests, 62 files**, lint and typecheck clean.
 
 **Watch the worktree.** The main checkout at `~/src/klieg` was switched to another branch by a
 concurrent session mid-task during this work. Check `git branch --show-current` before committing

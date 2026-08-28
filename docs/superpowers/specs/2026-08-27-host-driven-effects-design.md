@@ -117,14 +117,27 @@ departures:
 - WAAPI exposes events through `EventTarget`. klieg takes one callback at fire time, because a
   subscriber attaching after a phase has passed receives nothing, which reads as a bug.
 
-sherpa's model here was read at `v1-runtime` / `9addc1e`, with its own working tree dirty and
-its IPC surface under revision. Treat the two claims below as pinned to that snapshot: check
-them against sherpa before relying on either.
+## How sherpa consumes this
 
-sherpa's `PageInstance.goto(index)` takes an absolute step index. klieg's `Sequence` only moves
-forward — `enterNextPhase` increments and rebases `phaseStart` with no rewind — so klieg exposes
-`advance()` and says what it does. A provider that implements part of `goto` is already normal in
-sherpa; its iframe provider ignores `goto` outright.
+Checked against sherpa `main` / `923df22`, 2026-08-28.
+
+sherpa already declares this event type verbatim — `PhaseEvent` in `packages/core/src/registry.ts`,
+delivered to a page through `PageContext.phase(event)`. The shape above is not a proposal to
+sherpa; it is what sherpa is already written against. Its klieg provider types the instance
+structurally as `fire(text, options?): Promise<void>`, so `FireHandle` has to stay assignable to
+that.
+
+The v1 limit this lifts is enforced in code rather than merely documented:
+`packages/core/src/providers/klieg.ts` throws on `hold: 'click'` or `stages`, and declares
+`caps: { steppable: false, abortable: false }`. Its comment names the same one-press-two-actions
+problem `dismiss: 'host'` removes.
+
+sherpa's step verb is `PageHandle.seek(offset)`, documented as absolute, idempotent and
+press-space — never a delta. klieg's `Sequence` only moves forward (`enterNextPhase` increments and
+rebases `phaseStart` with no rewind), so klieg exposes `advance()`, which *is* a delta, and the
+provider does the translation: `seek(n)` becomes `n - current` advances, and a backward seek
+remounts. A provider implementing part of a verb is already normal there — the iframe provider is
+`steppable: false` outright.
 
 ## Testing
 

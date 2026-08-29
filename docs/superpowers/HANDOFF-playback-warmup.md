@@ -8,9 +8,9 @@ here is spent, because the one it constrained is built.
 
 ## C — playback warmup and cross-fire caching: **built**
 
-Branch `playback-warmup`, [design](specs/2026-08-28-playback-warmup-design.md),
-[plan](plans/2026-08-28-playback-warmup.md). Green: lint, typecheck, 1309 tests / 66 files.
-`node spikes/fire-build-cost.mjs` and `apps/lab/mount-cost/` re-derive its numbers.
+On `main` (PR #4), [design](specs/2026-08-28-playback-warmup-design.md),
+[plan](plans/2026-08-28-playback-warmup.md). `node spikes/fire-build-cost.mjs` re-derives the
+CPU-side numbers against the shipped caches; `apps/lab/mount-cost/` measures the GL side.
 
 `WordCaches` keys glyph geometry on the `LoadedFont` object through a `WeakMap` interner, so it
 already discriminates fonts correctly — A needs nothing from it.

@@ -22,6 +22,7 @@ import {
   specOf,
 } from 'klieg';
 
+import { CATALOG } from './fonts/catalog.js';
 import { encodeConfig, type ShowConfig } from './show-config.js';
 
 const DEG = Math.PI / 180;
@@ -335,9 +336,35 @@ const PIN = Number.isFinite(requestedPin) && location.search.includes('pin=') ? 
 
 const FONT_URL = `${import.meta.env.BASE_URL}font.ttf`;
 
+/**
+ * What `scripts/fonts.mjs` last downloaded, rather than the catalogue: an entry whose binary is
+ * not here would offer a face that 404s. `node scripts/fonts.mjs <id>` is what adds one.
+ */
+const onDisk: string[] = await fetch(`${import.meta.env.BASE_URL}fonts/manifest.json`)
+  .then((res) => (res.ok ? (res.json() as Promise<string[]>) : []))
+  .catch(() => []);
+
+const FACES = CATALOG.filter((face) => onDisk.includes(face.id));
+const FONTS: Record<string, string> = {
+  default: FONT_URL,
+  ...Object.fromEntries(
+    FACES.map((face) => [face.id, `${import.meta.env.BASE_URL}fonts/${face.id}.ttf`]),
+  ),
+};
+
+const font = choice('font', ['default', ...FACES.map((face) => face.id)]);
+for (const face of FACES) {
+  const option = [...font.select.options].find((o) => o.value === face.id);
+  if (!option) continue;
+  // Value first: an Option built from text alone mirrors it, and relabelling would then
+  // rename the font the picker asks for.
+  option.value = face.id;
+  option.text = `${face.name} (${face.class})`;
+}
+
 function create(): Klieg {
   const instance = createKlieg({
-    fontUrl: FONT_URL,
+    fonts: FONTS,
     policy: policy.get(),
     clock: PIN === null ? undefined : new PinnedClock(PIN),
   });
@@ -359,6 +386,7 @@ function fire(text: string): void {
   // leaves and what the gathered acronym does, which are stages rather than the fire's own slots.
   const options: FireOptions = {
     enter: enter.get(),
+    font: font.get(),
     ...(acrostic ? {} : { active: active.get(), exit: exit.get() }),
     look: chosenLook(),
     effects: chosenEffects(),

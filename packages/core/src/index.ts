@@ -12,6 +12,7 @@ import type { ActiveName, EnterName, ExitName, LetterInfo, MotionPiece } from '.
 import { type PointerFrame, pointerFrame } from './pointer.js';
 import { EffectQueue, type QueuePolicy } from './queue.js';
 import { BloomPath } from './render/bloom.js';
+import { WordCaches } from './render/caches.js';
 import {
   ENV_PIECES,
   type LightingName,
@@ -26,6 +27,7 @@ import {
   Stage as SceneStage,
   webglSupported,
 } from './render/stage.js';
+import { scheduleWarm } from './render/warm.js';
 import { Word } from './render/word.js';
 import { type SelectableMode, TextLayer } from './text/dom-layer.js';
 import { type LoadedFont, loadFont } from './text/font.js';
@@ -182,6 +184,12 @@ export interface KliegOptions {
    */
   policy?: QueuePolicy;
   idleTimeoutMs?: number;
+  /**
+   * The look whose shader programs the warm links, on an idle callback after `createKlieg`. The
+   * link is the driver's and lands per look, so warming `gold` buys a page that only fires `neon`
+   * nothing. Defaults to `'gold'`.
+   */
+  warmLook?: Look;
   /** How much of the viewport the type may fill. The default leaves room for the page underneath. */
   framing?: Framing;
 }
@@ -380,6 +388,19 @@ export function createKlieg(options: KliegOptions): Klieg {
     placement,
   });
 
+  const caches = new WordCaches();
+  let destroyed = false;
+  let fired = false;
+  const cancelWarm = supported
+    ? scheduleWarm({
+        stage,
+        font: () => font(),
+        look: options.warmLook ?? 'gold',
+        caches,
+        stale: () => destroyed || fired,
+      })
+    : () => {};
+
   let pointerClient: { x: number; y: number } | null = null;
   let pointerAttached = false;
   const onMove = (event: PointerEvent) => {
@@ -441,6 +462,7 @@ export function createKlieg(options: KliegOptions): Klieg {
         opts.tint,
         undefined,
         stage.environment?.texture ?? null,
+        caches,
       );
     } catch (err) {
       // This rejects before the settle() that would otherwise free the bloom's render targets.
@@ -722,11 +744,11 @@ export function createKlieg(options: KliegOptions): Klieg {
   }
 
   let counter = 0;
-  let destroyed = false;
 
   return {
     supported,
     fire(text, opts = {}) {
+      fired = true;
       const control: FireControl = { dismiss: null, latched: false };
       const handle = (promise: Promise<void>): FireHandle =>
         Object.assign(promise, {
@@ -766,10 +788,14 @@ export function createKlieg(options: KliegOptions): Klieg {
     },
     destroy() {
       destroyed = true;
+      cancelWarm();
       releasePointer();
       // A running effect only notices the abort on its next tick, and tearing down first would
       // leave it re-arming idle teardown against a stage that is already gone.
-      void queue.cancelAll().then(() => stage.unmount());
+      void queue.cancelAll().then(() => {
+        stage.unmount();
+        caches.dispose();
+      });
     },
   };
 }

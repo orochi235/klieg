@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.9.4
+
+### A fire re-uses what the last one built, and the mount happens before you fire
+
+Glyph geometry and tube blueprints now belong to the instance rather than to one `Word`, so a
+repeated fire re-uses them instead of extruding and sweeping the same letters again. They survive
+the idle unmount too: a `BufferGeometry` is CPU-side and re-uploads itself to the next context.
+
+Most of the wait was never the geometry, though — it is the driver linking a look's shader programs,
+which lands on the first draw and which `renderer.compile()` does not cover. That cannot be cached,
+so it is paid earlier: on a `requestIdleCallback` after `createKlieg`, klieg mounts the stage,
+builds the environment and draws one throwaway glyph to a one-pixel target. **`warmLook`** names the
+look it links, defaulting to `'gold'` — the link is per look, so a page that only fires `neon`
+should say so. The warm arms the same idle teardown a settled effect does, so an instance that warms
+and never fires gives its context back.
+
 ## 0.9.3
 
 ### A sign wrapper, and a hold that does not end

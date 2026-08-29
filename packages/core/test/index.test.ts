@@ -57,6 +57,21 @@ const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 type Listener = (e: unknown) => void;
 let listeners: Map<string, Listener[]>;
 
+let idleCallbacks: (() => void)[];
+
+/** The warm rides a real requestIdleCallback in a browser; here it only runs when driven. */
+function stubIdle(): void {
+  idleCallbacks = [];
+  vi.stubGlobal('requestIdleCallback', (fn: () => void) => idleCallbacks.push(fn));
+  vi.stubGlobal('cancelIdleCallback', () => {});
+}
+
+async function runIdle(): Promise<void> {
+  for (const fn of idleCallbacks.splice(0)) fn();
+  await flush();
+  await flush();
+}
+
 /** node has no window event target, and every effect attaches a pointermove listener. */
 function stubListeners(): void {
   listeners = new Map();
@@ -208,6 +223,7 @@ beforeEach(() => {
   stubWebgl(true);
   stubStage();
   stubListeners();
+  stubIdle();
 });
 
 afterEach(() => {
@@ -233,6 +249,35 @@ describe('createKlieg', () => {
     expect(calls).toEqual(['mount', 'idle']);
     expect(renders).toBe(1);
     expect(words()).toHaveLength(0);
+  });
+
+  it('gives two fires of the same text one geometry rather than two', async () => {
+    const bk = create();
+    const first = bk.fire('AA', INSTANT);
+    await flush();
+    const geo = firstMesh().geometry;
+    clock.advance(16);
+    await first;
+
+    bk.fire('AA', INSTANT);
+    await flush();
+
+    expect(firstMesh().geometry).toBe(geo);
+  });
+
+  it('holds that geometry until the instance is destroyed', async () => {
+    const bk = create();
+    const done = bk.fire('AA', INSTANT);
+    await flush();
+    const spy = vi.spyOn(firstMesh().geometry, 'dispose');
+    clock.advance(16);
+    await done;
+    expect(spy).not.toHaveBeenCalled();
+
+    bk.destroy();
+    await flush();
+
+    expect(spy).toHaveBeenCalled();
   });
 
   it('reports unsupported and touches neither the stage nor the font', async () => {
@@ -2041,5 +2086,58 @@ describe('selectable', () => {
 
     expect(warn).not.toHaveBeenCalled();
     bk.destroy();
+  });
+});
+
+describe('the warm', () => {
+  it('mounts, renders once and arms the idle teardown', async () => {
+    create();
+    await runIdle();
+
+    expect(calls).toEqual(['mount', 'idle']);
+    expect(renders).toBe(1);
+  });
+
+  it('leaves nothing of its own on the stage', async () => {
+    create();
+    await runIdle();
+
+    expect(words()).toHaveLength(0);
+  });
+
+  it('does not warm an unsupported instance', async () => {
+    stubWebgl(false);
+    create();
+    await runIdle();
+
+    expect(calls).toEqual([]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('does not warm once a fire has already started', async () => {
+    const bk = create();
+    const done = bk.fire('HI', INSTANT);
+    await flush();
+    clock.advance(16);
+    await done;
+    await runIdle();
+
+    expect(calls).toEqual(['mount', 'idle']);
+    expect(renders).toBe(1);
+  });
+
+  it('does not arm a teardown against a fire that is still running', async () => {
+    const bk = create();
+    bk.fire('HI', { ...INSTANT, hold: 5000 });
+    await flush();
+    await runIdle();
+
+    expect(calls).toEqual(['mount']);
+  });
+
+  it('destroys cleanly when the warm never ran', () => {
+    const bk = create();
+
+    expect(() => bk.destroy()).not.toThrow();
   });
 });

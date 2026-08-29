@@ -1,6 +1,9 @@
 import type { Font } from 'opentype.js';
 import * as THREE from 'three';
 
+/** Glyphs are built at 1 em; the group scale does the fitting. */
+export const EM = 1;
+
 export interface GlyphOptions {
   depth: number;
   bevelThickness: number;

@@ -39,3 +39,7 @@ jobs:
       # The published artifact is built by prepack, which nothing else here exercises.
       - name: Build the package
         run: npm run build -w klieg
+
+      # Out of `npm test` on purpose: it reads `dist/`, which only exists after the step above.
+      - name: Test the built standalone bundle
+        run: npm run test:dist

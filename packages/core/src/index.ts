@@ -257,11 +257,14 @@ export interface FireOptions {
    */
   transform?: Transform;
   /**
-   * Milliseconds in the active phase, or `'click'` to hold until the viewer dismisses it.
-   * A held effect blocks the queue under the default `queue` policy, and its promise stays
-   * pending until it leaves the screen.
+   * Milliseconds in the active phase, `'click'` to hold until the viewer dismisses it, or
+   * `'forever'` to stay until `destroy()`. A held effect blocks the queue under the default
+   * `queue` policy, and its promise stays pending until it leaves the screen.
+   *
+   * `'click'` has no meaning for an element placement and is refused there; `'forever'` is legal
+   * everywhere.
    */
-  hold?: number | 'click';
+  hold?: number | 'click' | 'forever';
   bloom?: boolean;
   blendMs?: number;
   /** @deprecated Unread. Placement is fixed per instance — pass it to `createKlieg` instead. */
@@ -518,7 +521,7 @@ export function createKlieg(options: KliegOptions): Klieg {
       enter,
       active,
       exit,
-      hold: untilClick ? 'until-release' : (hold as number),
+      hold: typeof hold === 'number' ? hold : 'until-release',
       blendMs,
     });
 
@@ -545,7 +548,7 @@ export function createKlieg(options: KliegOptions): Klieg {
             tween: s.tween ?? {},
           })),
           exit,
-          hold: untilClick ? 'click' : (hold as number),
+          hold: typeof hold === 'number' ? hold : 'click',
           blendMs,
           target: word,
           onStage: reporter ? (index) => reporter.stage(index) : undefined,
@@ -724,7 +727,7 @@ export function createKlieg(options: KliegOptions): Klieg {
             renderer.render(stage.scene, stage.camera);
           }
 
-          const stillDone = untilClick ? released : since >= (hold as number);
+          const stillDone = typeof hold === 'number' ? since >= hold : released;
           if (still ? stillDone : driver.isFinished(since)) finish();
         } catch (err) {
           // RafClock keeps a throwing subscriber subscribed, so a lost context would otherwise
@@ -767,6 +770,11 @@ export function createKlieg(options: KliegOptions): Klieg {
       ) {
         throw new Error(
           "klieg: an element placement takes `hold: 'click'` only with `clickAnywhere` set on it",
+        );
+      }
+      if (opts.hold === 'forever' && opts.stages?.length) {
+        throw new Error(
+          "klieg: `hold: 'forever'` never advances a stage, so `stages` cannot apply",
         );
       }
       if (!supported || destroyed) return handle(Promise.resolve());

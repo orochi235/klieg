@@ -9,6 +9,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:dist": "vitest run --config vitest.dist.config.ts",
     "test:visual": "playwright test",
     "typecheck": "tsc -b",
     "lint": "biome check .",
@@ -18,6 +19,7 @@
     "@biomejs/biome": "^2.5.8",
     "@playwright/test": "^1.62.1",
     "@types/node": "^26.2.0",
+    "jsdom": "^28.1.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   }

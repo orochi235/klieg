@@ -735,6 +735,55 @@ describe('createKlieg', () => {
       await expect(done).resolves.toBeUndefined();
     });
   });
+
+  it('never settles a forever hold, and settles it on destroy', async () => {
+    const bk = create();
+    let done = false;
+    const fired = bk.fire('HI', { ...INSTANT, exit: 'fade', hold: 'forever' }).then(() => {
+      done = true;
+    });
+    await flush();
+
+    clock.advance(60 * 60 * 1000);
+    await flush();
+    expect(done).toBe(false);
+    expect(words()).toHaveLength(1);
+    // A `forever` hold that reached `Timeline` as a string poses every letter at NaN, which
+    // reads as "never finished" for entirely the wrong reason.
+    const cell = firstCell();
+    expect(Number.isFinite(cell.position.y)).toBe(true);
+    expect(Number.isFinite(cell.scale.x)).toBe(true);
+
+    bk.destroy();
+    await fired;
+    expect(done).toBe(true);
+    expect(words()).toHaveLength(0);
+  });
+
+  it('holds forever under reduced motion too', async () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    const bk = create();
+    let done = false;
+    // Under `still`, `elapsed` is pinned to the enter's own duration — INSTANT's zero-length
+    // enter would never let a corrupt `hold` reach the pose math at all.
+    const fired = bk.fire('HI', { ...INSTANT, enter: 'slam', hold: 'forever' }).then(() => {
+      done = true;
+    });
+    await flush();
+
+    clock.advance(60 * 60 * 1000);
+    await flush();
+    expect(done).toBe(false);
+    expect(words()).toHaveLength(1);
+    const cell = firstCell();
+    expect(Number.isFinite(cell.position.y)).toBe(true);
+    expect(Number.isFinite(cell.scale.x)).toBe(true);
+
+    bk.destroy();
+    await fired;
+    expect(done).toBe(true);
+    expect(words()).toHaveLength(0);
+  });
 });
 
 describe('holding until dismissed', () => {
@@ -913,6 +962,32 @@ describe('holding until dismissed', () => {
     await done;
 
     expect(words()).toHaveLength(0);
+  });
+
+  it('attaches no dismiss listener for a forever hold, and ignores a press regardless', async () => {
+    const bk = create();
+    const fired = bk.fire('HI', { ...INSTANT, hold: 'forever' });
+    await flush();
+
+    expect(attached()).toBe(0);
+
+    dispatch('pointerdown');
+    dispatch('keydown', { key: 'Escape' });
+    clock.advance(16);
+    await flush();
+
+    expect(words()).toHaveLength(1);
+
+    bk.destroy();
+    await fired;
+  });
+
+  it('refuses stages under a forever hold, which would never advance past the opening phase', () => {
+    const bk = create();
+
+    expect(() => bk.fire('HI', { hold: 'forever', stages: [{ hold: 'click' }] })).toThrow(
+      /never advances a stage/,
+    );
   });
 });
 
@@ -1912,6 +1987,18 @@ describe('element placement', () => {
     expect(() => klieg.fire('hi', { stages: [{ hold: 'click' }] })).toThrow(
       /only with `clickAnywhere`/,
     );
+  });
+
+  it("accepts hold: 'forever', where 'click' is refused", async () => {
+    const klieg = create({ placement: { kind: 'element', el }, target: undefined });
+    const done = klieg.fire('hi', { hold: 'forever' });
+    await flush();
+    clock.advance(60 * 60 * 1000);
+
+    expect(words()).toHaveLength(1);
+
+    klieg.destroy();
+    await done;
   });
 
   it("takes hold: 'click' from an anchor with no opt-in once the host owns the dismissal", () => {

@@ -113,22 +113,64 @@ nesting by containment depth rather than winding, which is what lets it take art
 One `<path>` is treated as one letter — that is what keeps `runs` and `seed` meaning what they mean
 for text, and it is the shape a real feature would take.
 
-**`sign-wrapper` is the one branch still open, and it is 0.9.0 now.** One commit off `26fde30` in
-its own worktree at `576afb2`, carrying [a design](specs/2026-08-26-sign-wrapper-design.md) and no
-code: `sign()` and a `<klieg-sign>` element over a framework-free core, plus a `hold: 'forever'`
-that core does not have yet.
+**`sign-wrapper` is merged.** Two entry points over `createKlieg` for a **sign** — type standing
+in for a page heading, lit once and held until removed. `klieg/sign` exports `sign(anchor, options)`
+framework-free; `klieg/element` registers `<klieg-sign>`, which takes the page's own heading as its
+content so the word stays readable and in the accessibility tree whether or not anything renders.
+`FireOptions.hold` gains `'forever'`, refused alongside `stages`, which it would never advance past.
+See [the design](specs/2026-08-26-sign-wrapper-design.md) and [the plan](plans/2026-08-26-sign-wrapper.md).
 
-**The decision to hold `v0.8.0` for it was overtaken, not reversed on its merits.** 0.8.0 was tagged
-and published on 2026-08-27 without it, by a session that had read this doc only as far as the
-release note about telling the portfolio session first. Nothing was cut from the release — the
-branch has no code — so the only loss is that the two no longer ship together. **Read the whole of
-this section before tagging anything**, which is the failure that produced this paragraph.
+**This section was wrong for two days, in both directions.** One version said `v0.8.0` was being
+held for the branch; 0.8.0 had already been tagged without it on 2026-08-27, by a session that read
+this section only as far as the release note. The correction then claimed the branch carried no
+code, which stayed here while the branch grew to 4,183 lines across `element.ts`, `sign/`, five
+test files and a lab page. **Read a whole section before acting on it, and re-read the branch before
+trusting what a section says about it** — that is the failure that produced this paragraph twice.
 
-Two things whoever picks it up needs. Its base predates the lighting and flicker merges, so merge
-`main` into it first. And it was cut *after* `framing.align` landed and already accounts for it —
-the design's complaint that the portfolio masthead "compensates for centring in CSS" is answered by
-`align` defaulting to `'start'` under an element placement, which the design passes through rather
-than re-solving.
+The [design](specs/2026-08-26-sign-wrapper-design.md) and [plan](plans/2026-08-26-sign-wrapper.md)
+are current and carry every decision. Read them rather than this. What follows is only what they
+cannot say.
+
+**Done:** `hold: 'forever'` in core; jsdom per-file; `resolveTint`; `sign()`; `<klieg-sign>` with its
+attribute layer; the subpath exports and `sideEffects` (Task 8); the standalone bundle (Task 9).
+**Left:** a lab page at `/sign/` (Task 10), the playwright spec (Task 11), README and CHANGELOG
+(Task 12).
+
+**`SignOptions.lighting` is `LightingSlot`**, widened when `main` merged in. Reduced motion still
+replaces the whole slot with `'static'`, which is `still()` on the composable surface — the sign is
+shown and only what moves is stilled.
+
+**`hold: 'forever'` routes to `Timeline`'s `'until-release'` and attaches none of the dismiss
+listeners `'click'` attaches.** That difference is the whole feature, and the three sites that read
+`hold` use `typeof hold === 'number' ? … : …` rather than a cast so a fourth string cannot fail open.
+`fire()` refuses `'forever'` with `stages`: `Sequence.tick` advances on `timeline.isFinished()`,
+never true at `Infinity`, so a stage would silently never come.
+
+**It was cut *after* `framing.align` landed and already accounts for it** — the design's complaint
+that the portfolio masthead "compensates for centring in CSS" is answered by `align` defaulting to
+`'start'` under an element placement, which the design passes through rather than re-solving.
+
+**Three element behaviors are deliberate and undocumented until Task 12.** Removing an attribute
+actively *unsets* its setting: the element keeps a ledger of the keys it last sent and patches a
+dropped one back to `undefined`, so `toggleAttribute('bloom')` really does turn bloom off rather than
+leaving the old value lit. The `look` *property* beats the `look` attribute, so a page driving both
+sees the attribute change re-fire with the property's value. And `bloom="false"` means off while any
+other value means on — an invented convention, kept because `bloom="${on}"` stringifies to `"false"`
+and nothing else could express off.
+
+**`align` is validated in the element; `lighting` deliberately is not.** An unknown align is silently
+*wrong* — `edgeFor` resolves it to the right edge in an ltr document rather than the `start` default.
+An unknown lighting throws and surfaces as a `console.warn`. Validate where garbage is silently
+wrong, pass through where it fails loudly.
+
+**A vitest defect shapes the element tests.** The second of two *concurrent* `import()` calls of a
+`vi.mock`'d module never settles, and worse, falls through the mock into the real module graph — which
+produced an intermittent `EnvironmentTeardownError` blamed on `element.test.ts`. Mount elements
+sequentially, or in the same task only when no dynamic import can start (the `readyState: 'loading'`
+trick in the stylesheet test). Do not "simplify" those tests back into one `innerHTML`.
+
+**`document.head` is not reset between tests.** `beforeEach` clears it explicitly; without that the
+stylesheet idempotence guard short-circuits and both stylesheet tests silently assert nothing.
 
 **`flicker-spell` — three tasks, merged.** `flicker` gained `spell` and `calm`, and its step count
 is derived from the pass rather than fixed at 24. See

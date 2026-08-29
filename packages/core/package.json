@@ -1,6 +1,6 @@
 {
   "name": "klieg",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Shiny extruded 3D type, slammed over the web app you already have, on a transparent WebGL overlay",
   "keywords": [
     "webgl",
@@ -21,12 +21,25 @@
   "license": "MIT",
   "author": "orochi235",
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/element.js",
+    "./dist/standalone/klieg-sign.js",
+    "./src/element.ts"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./sign": {
+      "types": "./dist/sign/index.d.ts",
+      "default": "./dist/sign/index.js"
+    },
+    "./element": {
+      "types": "./dist/element.d.ts",
+      "default": "./dist/element.js"
+    },
+    "./element/standalone": "./dist/standalone/klieg-sign.js",
     "./package.json": "./package.json"
   },
   "main": "./dist/index.js",
@@ -40,7 +53,8 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -b tsconfig.json --force",
+    "build": "rm -rf dist && tsc -b tsconfig.json --force && npm run build:standalone",
+    "build:standalone": "vite build --config standalone.vite.config.ts",
     "dev:tube-lab": "vite dev/tube-lab",
     "prepack": "npm run build && cp ../../README.md README.md",
     "prepublishOnly": "npm --prefix ../.. run check",

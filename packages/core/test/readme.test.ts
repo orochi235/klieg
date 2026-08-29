@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import * as bk from '../src/index.js';
 
@@ -37,6 +38,11 @@ describe('documented surface', () => {
     }
   });
 
+  it('exports the sign the README teaches', async () => {
+    const mod = await import('../src/sign/index.js');
+    expect(mod).toHaveProperty('sign');
+  });
+
   it('hands back a handle that is still the promise callers already use', async () => {
     // Keeps `FireHandle` from being narrowed back to a bare thenable, which would break the
     // composition lab's `.catch()` on a fire.
@@ -58,5 +64,33 @@ describe('documented surface', () => {
     expect(swoop.duration).toBe(800);
     expect(swoop.offset(0, { index: 0, count: 4 }).opacity).toBeCloseTo(0, 6);
     expect(swoop.offset(1, { index: 0, count: 4 }).opacity).toBeCloseTo(1, 6);
+  });
+});
+
+describe('the published surface', () => {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+    exports: Record<string, unknown>;
+    sideEffects: string[];
+  };
+
+  it('publishes the sign and the element as their own subpaths', () => {
+    expect(pkg.exports['./sign']).toEqual({
+      types: './dist/sign/index.d.ts',
+      default: './dist/sign/index.js',
+    });
+    expect(pkg.exports['./element']).toEqual({
+      types: './dist/element.d.ts',
+      default: './dist/element.js',
+    });
+    expect(pkg.exports['./element/standalone']).toBe('./dist/standalone/klieg-sign.js');
+  });
+
+  it('declares the element as having side effects, because registering one is', () => {
+    // `sideEffects: false` lets a bundler drop a module nothing imports a binding from, which is
+    // exactly how the element is used: imported for the registration and nothing else.
+    expect(pkg.sideEffects).toContain('./dist/element.js');
+    // Named too, for a consumer aliasing `klieg/element` to this workspace's `src` — without it
+    // rollup read the element as pure and deleted the import, shipping a page that lit nothing.
+    expect(pkg.sideEffects).toContain('./src/element.ts');
   });
 });

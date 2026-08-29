@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="/klieg-mark.svg" type="image/svg+xml" />
+    <title>klieg — the sign element</title>
+
+    <style>
+      html { height: 100%; }
+      body { margin: 0; min-height: 100%; color: #e6e9f0; background: #07080c;
+             font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+             --accent: #22d3ee; }
+
+      .page { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+      .page p { color: #7d8494; max-width: 62ch; }
+
+      /* The frame is the page's, not the element's: its edge is what `align: start` meets. */
+      .frame { height: 120px; background: #0d1017; border: 1px solid #1d2230;
+               overflow: hidden; margin: 24px 0 8px; }
+      .frame--hued { color: #d8b25f; }
+
+      klieg-sign { height: 100%; }
+      /* No `color` here: the element's own `@layer klieg` rule turns a lit heading transparent,
+         and any unlayered color would outrank it. */
+      .frame h1 { margin: 0; padding: 0 12px; line-height: 120px; font-size: 28px;
+                  letter-spacing: 0.22em; text-transform: uppercase; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <p>This page has no script of its own: the only module it loads is the klieg element itself.
+        With JavaScript off, every heading below is simply readable.</p>
+
+      <div class="frame">
+        <klieg-sign id="plain" font="/font.ttf" look="gold"
+                    framing-width="0.94" framing-height="0.66">
+          <h1>klieg</h1>
+        </klieg-sign>
+      </div>
+      <p>A plain sign, taking its word from the heading it wraps.</p>
+
+      <div class="frame">
+        <klieg-sign id="varTint" font="/font.ttf" look="tubing" tint="var(--accent)"
+                    framing-width="0.94" framing-height="0.66">
+          <h1>varsign</h1>
+        </klieg-sign>
+      </div>
+      <p>Tinted through a custom property, resolved against the anchor by the cascade.</p>
+
+      <div class="frame frame--hued">
+        <klieg-sign id="currentTint" font="/font.ttf" look="tubing" tint="currentColor"
+                    framing-width="0.94" framing-height="0.66">
+          <h1>huesign</h1>
+        </klieg-sign>
+      </div>
+      <p>Tinted with <code>currentColor</code>, which inherits the frame's own color.</p>
+    </div>
+    <script type="module">
+      import 'klieg/element';
+    </script>
+  </body>
+</html>

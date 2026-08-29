@@ -47,7 +47,15 @@ async function hideChrome(page: Page): Promise<void> {
   await page.addStyleTag({ content: 'main, .dock { display: none; }' });
 }
 
-async function shoot(page: Page, name: string): Promise<void> {
+/** The whole-frame gate. A look fills the frame, so a change worth catching is far over this. */
+const LOOK_RATIO = 0.001;
+/**
+ * One run going dark is 187 to 258 pixels of an 800x600 shot — under `LOOK_RATIO`'s 480, so at the
+ * whole-frame gate an effect test passes with its effect deleted.
+ */
+const EFFECT_RATIO = 0.0002;
+
+async function shoot(page: Page, name: string, ratio = LOOK_RATIO): Promise<void> {
   await page.click('#fire');
   // The first frame draws on the next rAF after the font resolves; a beat covers both.
   await page.waitForTimeout(600);
@@ -56,7 +64,7 @@ async function shoot(page: Page, name: string): Promise<void> {
     // Bloom is a wide, low-amplitude halo: at Playwright's default threshold of 0.2 not one pixel
     // moves far enough to be counted, so a green run proved nothing however tight the ratio was.
     threshold: 0.02,
-    maxDiffPixelRatio: 0.001,
+    maxDiffPixelRatio: ratio,
     // A bloomed look at DPR 2 renders slowly enough that the default 5s budget can expire before
     // the stability loop gets two consecutive frames.
     timeout: 20000,
@@ -96,6 +104,29 @@ test.describe('lighting', () => {
     await page.selectOption('#look', 'chrome');
     await shoot(page, 'lighting-static');
   });
+
+  /**
+   * Pixels rather than a property: the turn is written to a scene-wide rotation that reaches only
+   * a material with no `envMap` of its own, so an assertion on that number passes with nothing on
+   * screen having moved. `static` at the same two pins is the control.
+   */
+  test('sweep lights two phases of one turn differently', async ({ page }) => {
+    const shot = async (name: 'static' | 'sweep', pin: number): Promise<string> => {
+      await still(page, `?pin=${pin}`);
+      await page.selectOption('#look', 'chrome');
+      await page.selectOption('#lighting', name);
+      await page.click('#fire');
+      await page.waitForTimeout(600);
+      await hideChrome(page);
+      return (await page.screenshot()).toString('base64');
+    };
+
+    expect(await shot('static', 0), 'two pins under static must render identically').toBe(
+      await shot('static', 850),
+    );
+    // A quarter turn on: the studio's bars have to land somewhere else on the letters.
+    expect(await shot('sweep', 0)).not.toBe(await shot('sweep', 850));
+  });
 });
 
 test.describe('flake seeding', () => {
@@ -117,27 +148,34 @@ test.describe('effects', () => {
     await still(page, '?pin=960');
     await page.selectOption('#look', 'tubing');
     await page.check('#flicker');
-    await shoot(page, 'effect-flicker');
+    await shoot(page, 'effect-flicker', EFFECT_RATIO);
   });
 
   test('hue recolours the whole sign at once', async ({ page }) => {
     await still(page, '?pin=1500');
     await page.selectOption('#look', 'tubing');
     await page.check('#hue');
-    await shoot(page, 'effect-hue');
+    await shoot(page, 'effect-hue', EFFECT_RATIO);
   });
 
   /**
-   * The pin is load-bearing twice over. It sits in the second epoch, so the shot is of a fault
-   * that has already moved once rather than of where it started; and it is a moment the holder is
-   * actually dark, which most pins are not — `flicker` rests about 82% of the time, so a carelessly
-   * pinned roving shot is byte-identical to plain `tubing` and would pass with the effect deleted.
-   * The run down here is a different one from what `effect-flicker` takes down.
+   * The pin is load-bearing twice over. It sits in the second epoch (now 3193.75ms, so 4725 is
+   * 1.48 epochs in), so the shot is of a fault that has already moved once rather than of where it
+   * started; and it is a moment the holder is actually dark, which most pins are not — `flicker`
+   * rests about 82% of the time, so a carelessly pinned roving shot is byte-identical to plain
+   * `tubing` and would pass with the effect deleted.
+   *
+   * Both properties are measured, not assumed: this shot differs from `look-tubing` by 258 pixels
+   * and from `effect-flicker` by 445. Re-measure them after any change to the holder walk or to run
+   * geometry — keying the corner draws per corner index moved these from 658 and 1558.
+   *
+   * 258 is under the whole-frame gate's 480, which is what `EFFECT_RATIO` exists for: walking the
+   * second epoch a flicker step at a time found no pin in it that a look-sized gate would catch.
    */
   test('roving takes down a different run than flicker, one epoch on', async ({ page }) => {
     await still(page, '?pin=4725');
     await page.selectOption('#look', 'tubing');
     await page.check('#roving');
-    await shoot(page, 'effect-roving');
+    await shoot(page, 'effect-roving', EFFECT_RATIO);
   });
 });

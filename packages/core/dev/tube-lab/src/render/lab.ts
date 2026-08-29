@@ -1,6 +1,6 @@
+import { BloomPath } from '@core/render/bloom.js';
+import { buildEnvironment } from '@core/render/environment.js';
 import * as THREE from 'three';
-import { BloomPath } from '../../../../src/render/bloom.js';
-import { buildEnvironment } from '../../../../src/render/environment.js';
 
 export interface PanelRect {
   x: number;

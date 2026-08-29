@@ -10,6 +10,15 @@ import {
   STYLE_FACTOR,
 } from './bend.js';
 import type { GeneratedPath } from './generators.js';
+import {
+  apexLoss,
+  DEFAULT_HAIRPIN,
+  type Hairpin,
+  type HairpinShape,
+  hairpinAt,
+} from './hairpin.js';
+import type { CutRepairId, RepairSite } from './repairs.js';
+import { popStretch, trimStretch } from './repairs.js';
 import { minCurvatureRadius3 } from './resample.js';
 import type { SurfaceKind } from './surfaces.js';
 
@@ -42,7 +51,7 @@ export interface Run {
   color: number;
 }
 
-export type CornerStrategy = 'break' | 'connect' | 'return';
+export type CornerStrategy = 'break' | 'connect' | 'return' | 'hairpin';
 
 /**
  * What the corner stage does when a fillet's arc cannot join its leg without bending under the
@@ -76,6 +85,11 @@ export interface CutResult {
 export interface CornerWeights {
   break: number;
   connect: number;
+  /**
+   * How often a corner too sharp for a fillet to follow turns the tube around outside the apex
+   * instead of cutting it off. Absent or zero is today's behavior — no corner draws one.
+   */
+  hairpin?: number;
 }
 
 /** Every corner cuts — today's only behavior, and the default when a spec sets nothing. */
@@ -102,6 +116,8 @@ export interface CutOptions {
   corners?: CornerWeights;
   /** How a fillet rejoins a leg it cannot meet cleanly. `bridge` by default. */
   rejoin?: Rejoin;
+  /** Which hairpin a `hairpin` corner draws. `uturn` by default. */
+  hairpin?: HairpinShape;
   /** Requested tube radius in em. */
   radius?: number;
   /** Minimum bend radius as a multiple of `radius`. Floored at 1.25. */
@@ -116,6 +132,18 @@ export interface CutOptions {
    * everywhere else.
    */
   blockout?: number;
+  /**
+   * Which repairs run. Absent is every repair on, which is what every shipped caller passes. Typed
+   * as its own union rather than sharing one set with `TubeStageId`: a caller passing only repair
+   * ids into a shared set would switch off all five stages and get an empty blueprint.
+   */
+  repairs?: ReadonlySet<CutRepairId>;
+  /**
+   * Fires for every repair considered, switched off ones included, so a lab can ghost them —
+   * except the blockout branch's fillet candidate, which surfaces as the span-level `return`
+   * report instead.
+   */
+  onRepair?(id: CutRepairId, site: RepairSite | null, ran: boolean): void;
 }
 
 /** A weight factor never fully zeroes an option biasing can't rule out entirely. */
@@ -131,11 +159,22 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }
 
-function cornerSeed(seed: number, counter: number): number {
-  return (Math.round(seed * 2654435761) ^ 0x2f2f6a3d ^ counter) >>> 0;
+/** Which of a corner's two draws is being taken. */
+type Draw = 0 | 1;
+const STRATEGY_DRAW: Draw = 0;
+const BLOCKOUT_DRAW: Draw = 1;
+
+/**
+ * Keyed on the corner's own index rather than on a running counter: a corner that skips a draw
+ * would otherwise shift the stream for every corner after it, so switching a repair off would
+ * change corners it has nothing to do with.
+ */
+function cornerSeed(seed: number, corner: number, draw: Draw): number {
+  return (Math.round(seed * 2654435761) ^ 0x2f2f6a3d ^ (corner * 2 + draw)) >>> 0;
 }
 
-function polyLength(points: THREE.Vector3[]): number {
+/** @internal */
+export function polyLength(points: THREE.Vector3[]): number {
   let total = 0;
   for (let i = 1; i < points.length; i++) {
     total += (points[i] as THREE.Vector3).distanceTo(points[i - 1] as THREE.Vector3);
@@ -154,6 +193,8 @@ interface CornerDecision extends Corner {
   at?: THREE.Vector3;
   /** The fillet decided for this corner, measured off the untouched legs. */
   fillet?: Fillet | null;
+  /** The hairpin decided for this corner, when it draws one instead. */
+  hairpin?: Hairpin | null;
 }
 
 /**
@@ -215,12 +256,15 @@ function rawSpansOf(path: GeneratedPath, rhoMin: number, rhoStyle: number): RawS
  * always picks that one — the bias multiplies a weight, and multiplying zero by anything stays zero.
  */
 function pickStrategy(turn: number, weights: CornerWeights, draw: () => number): CornerStrategy {
+  const wHairpin = (weights.hairpin ?? 0) * clamp(turn / Math.PI, FLOOR, 1);
   const wBreak = weights.break * clamp(turn / Math.PI, FLOOR, 1);
   const wConnect = weights.connect * clamp(1 - turn / CONNECT_LIMIT, FLOOR, 1);
 
-  const total = wBreak + wConnect;
+  const total = wBreak + wConnect + wHairpin;
   if (total <= 0) return 'break';
-  return draw() * total < wBreak ? 'break' : 'connect';
+  const roll = draw() * total;
+  if (roll < wHairpin) return 'hairpin';
+  return roll < wHairpin + wBreak ? 'break' : 'connect';
 }
 
 /**
@@ -230,9 +274,18 @@ function pickStrategy(turn: number, weights: CornerWeights, draw: () => number):
  * corner it replaced.
  */
 function trimTail(span: THREE.Vector3[], back: number, corner: THREE.Vector3): void {
-  while (span.length > 0 && (span[span.length - 1] as THREE.Vector3).distanceTo(corner) < back) {
-    span.pop();
-  }
+  span.length = keptByTail(span, back, corner);
+}
+
+/**
+ * How many vertices `trimTail` would leave. Split out so a site can name the stretch about to go
+ * without running the trim — the repair may be switched off, and the report has to be the same
+ * either way.
+ */
+function keptByTail(span: THREE.Vector3[], back: number, corner: THREE.Vector3): number {
+  let keep = span.length;
+  while (keep > 0 && (span[keep - 1] as THREE.Vector3).distanceTo(corner) < back) keep--;
+  return keep;
 }
 
 /**
@@ -366,6 +419,34 @@ function filletFor(
   return base;
 }
 
+/**
+ * The hairpin for the join between `target` and `next`, built off the same averaged leg directions
+ * a fillet is. The apex is the corner's own vertex rather than the legs' intersection: a hairpin
+ * turns around the point the reader sees, and the virtual corner a fillet is fitted to can sit a
+ * bend radius away from it.
+ */
+function hairpinFor(
+  target: THREE.Vector3[],
+  next: THREE.Vector3[],
+  corner: Corner,
+  shape: HairpinShape,
+  rhoMin: number,
+  spacing: number,
+): Hairpin | null {
+  const iA = target.length - 2 - corner.groupBefore;
+  const iB = corner.groupAfter + 1;
+  if (iA < 1 || target.length < 2 || !next[iB]) return null;
+  const u = legDirection(target, iA, -1);
+  const v = legDirection(next, iB, 1);
+  if (!u || !v) return null;
+
+  const pin = hairpinAt(target, next, u, v, shape, rhoMin, spacing);
+  // A hairpin that reaches back further than the leg it reaches along has nothing to attach to.
+  if (!pin) return null;
+  if (pin.reach > polyLength(target) || pin.reach > polyLength(next)) return null;
+  return pin;
+}
+
 /** Radii a `widen` rejoin tries, as multiples of the minimum. */
 const WIDEN_LADDER = [1, 1.3, 1.7, 2.2, 3];
 
@@ -419,13 +500,23 @@ function joinsAtOnce(
  * A break cuts the whole corner stretch out, not just the vertex detection collapsed it to. The
  * neighbouring vertices are the same corner; left on a run's end they are tube still bending
  * tighter than rhoMin, with no corner stage left to fix them.
+ *
+ * Returns the site alongside the trimmed span so the caller can gate one and report the other; the
+ * floor is two vertices, unlike the corner-side `popStretch`, because a break's product still has
+ * to sweep.
  */
-function dropHead(span: THREE.Vector3[], count: number): THREE.Vector3[] {
-  return span.slice(Math.min(count, Math.max(0, span.length - 2)));
-}
-
-function dropTail(span: THREE.Vector3[], count: number): THREE.Vector3[] {
-  return span.slice(0, Math.max(2, span.length - count));
+function dropEnd(
+  span: THREE.Vector3[],
+  count: number,
+  end: 'head' | 'tail',
+): { points: THREE.Vector3[]; site: RepairSite } {
+  const kept = trimStretch(span, count, end);
+  const removed =
+    end === 'tail' ? span.slice(kept.length) : span.slice(0, span.length - kept.length);
+  return {
+    points: kept,
+    site: { at: end === 'tail' ? kept.length - 1 : 0, points: [], removed },
+  };
 }
 
 /**
@@ -604,6 +695,12 @@ function bridgeAfter(
 }
 
 /**
+ * Records that `copy` stands in for `source`, so a vertex copied out of a leg keeps the leg's
+ * provenance instead of resolving to null and reading as geometry the corner stage built.
+ */
+type Inherit = (copy: THREE.Vector3, source: THREE.Vector3) => void;
+
+/**
  * Pushes the leg vertices next to the arc away from their own centre of curvature until the chain
  * through them clears `rhoMin`. Copies rather than moving the path's own vectors: a leg is shared
  * with the span on its other side, and with the provenance map that `from` is resolved through.
@@ -617,12 +714,15 @@ function relaxOnto(
   from: number,
   step: 1 | -1,
   rhoMin: number,
+  inherit: Inherit,
 ): THREE.Vector3[] | null {
   const moved: THREE.Vector3[] = [];
   for (let k = 0; k < RELAX_WINDOW; k++) {
     const p = leg[from + k * step] as THREE.Vector3 | undefined;
     if (!p) break;
-    moved.push(p.clone());
+    const copy = p.clone();
+    inherit(copy, p);
+    moved.push(copy);
   }
   if (moved.length < 2) return null;
 
@@ -665,6 +765,41 @@ function relaxOnto(
 }
 
 /**
+ * Swaps a hairpin in for the corner. `bisector` is tangent to the legs past the apex and takes over
+ * none of them, so the apex vertex itself stays; `uturn` blends from `reach` back along each leg and
+ * the stretch between is dropped.
+ */
+function spliceHairpin(
+  target: THREE.Vector3[],
+  next: THREE.Vector3[],
+  decision: CornerDecision,
+  pin: Hairpin,
+): void {
+  const apex = target[target.length - 1] as THREE.Vector3;
+  const head = pin.points[0] as THREE.Vector3;
+  const tail = pin.points[pin.points.length - 1] as THREE.Vector3;
+  // Cut exactly where the hairpin picked up, not by distance from the apex: a `uturn` blends from a
+  // named leg vertex, and a trim that stops one vertex short of it doubles back over the blend.
+  const from = target.lastIndexOf(head);
+  if (from >= 0) target.length = from;
+  else {
+    for (let i = 0; i < decision.groupBefore && target.length > 1; i++) target.pop();
+    if (pin.reach > 0) trimTail(target, pin.reach, apex);
+  }
+  decision.at = pin.points[pin.points.length >> 1];
+  for (const p of pin.points) target.push(p);
+
+  const to = next.indexOf(tail);
+  const start =
+    to >= 0
+      ? to + 1
+      : pin.reach > 0
+        ? indexPast(next, decision.groupAfter + 1, pin.reach, apex)
+        : 1;
+  for (let i = start; i < next.length; i++) target.push(next[i] as THREE.Vector3);
+}
+
+/**
  * Appends `next` onto `target`, which already ends at the shared corner.
  *
  * `rejoin` chooses what happens on each side when the leg cannot meet the arc without bending under
@@ -678,7 +813,14 @@ function mergeArc(
   rhoMin: number,
   spacing: number,
   rejoin: Rejoin,
+  inherit: Inherit,
+  on: (id: CutRepairId) => boolean,
+  report: (id: CutRepairId, site: RepairSite | null, ran: boolean) => void,
 ): void {
+  if (decision.hairpin && decision.strategy === 'hairpin') {
+    spliceHairpin(target, next, decision, decision.hairpin);
+    return;
+  }
   if (!fillet) {
     for (let i = 1; i < next.length; i++) target.push(next[i] as THREE.Vector3);
     return;
@@ -693,8 +835,27 @@ function mergeArc(
 
   // Drop the corner's whole stretch before trimming by distance: a shallow turn's setback can be
   // shorter than one sample step, and would leave the stretch's own vertices in the path.
-  for (let i = 0; i <= decision.groupBefore && target.length > 0; i++) target.pop();
-  trimTail(target, fillet.setback, fillet.corner);
+  const stretchCount = Math.min(decision.groupBefore + 1, target.length);
+  const stretchSite: RepairSite = {
+    at: target.length - 1,
+    points: [],
+    removed: target.slice(target.length - stretchCount),
+    side: 'entry',
+  };
+  const ranStretch = on('stretch');
+  if (ranStretch) popStretch(target, decision.groupBefore + 1);
+  report('stretch', stretchSite, ranStretch);
+  // Indexes the accumulator before the trim; a consumer must not map it onto the post-trim span.
+  const setbackKeep = keptByTail(target, fillet.setback, fillet.corner);
+  const setbackSite: RepairSite = {
+    at: target.length - 1,
+    points: [],
+    removed: target.slice(setbackKeep),
+    side: 'entry',
+  };
+  const ranSetback = on('setback');
+  if (ranSetback) trimTail(target, fillet.setback, fillet.corner);
+  report('setback', setbackSite, ranSetback);
 
   let bridgedIn: THREE.Vector3[] | null = null;
   if (rejoin === 'bridge') {
@@ -704,18 +865,39 @@ function mergeArc(
       bridgedIn = blend.points;
     }
   }
+  // Gates only the walk's trim below: bridge and relax apply their own geometry regardless, so a
+  // `ran: false` report under either still describes points that are actually in the target.
+  const ranResume = on('resume');
+  if (bridgedIn) {
+    report(
+      'resume',
+      { at: target.length - 1, points: bridgedIn, removed: [], side: 'entry' },
+      ranResume,
+    );
+  }
   if (!bridgedIn) {
     let relaxed: THREE.Vector3[] | null = null;
     if (rejoin === 'relax') {
-      relaxed = relaxOnto([second, entry], target, target.length - 1, -1, rhoMin);
+      relaxed = relaxOnto([second, entry], target, target.length - 1, -1, rhoMin, inherit);
       if (relaxed) {
         target.length = Math.max(0, target.length - relaxed.length);
         for (let i = relaxed.length - 1; i >= 0; i--) target.push(relaxed[i] as THREE.Vector3);
       }
     }
-    if (!relaxed) {
+    if (relaxed) {
+      report(
+        'resume',
+        { at: target.length - 1, points: relaxed, removed: [], side: 'entry' },
+        ranResume,
+      );
+    } else {
       const keep = resumeAt(target, target.length - 1, -1, entry, second, into, rhoMin, spacing);
-      target.length = keep + 1;
+      report(
+        'resume',
+        { at: keep, points: [], removed: target.slice(keep + 1), side: 'entry' },
+        ranResume,
+      );
+      if (ranResume) target.length = keep + 1;
     }
   }
 
@@ -727,18 +909,30 @@ function mergeArc(
   }
   for (const p of fillet.points) target.push(p);
 
-  const start = indexPast(next, decision.groupAfter + 1, fillet.setback, fillet.corner);
+  // `at` is the first vertex of `next` kept past the setback — the far-side boundary, opposite end
+  // from the entry-side site above.
+  const pastSetback = indexPast(next, decision.groupAfter + 1, fillet.setback, fillet.corner);
+  const ranExitSetback = on('setback');
+  report('setback', { at: pastSetback, points: [], removed: [], side: 'exit' }, ranExitSetback);
+  const start = ranExitSetback ? pastSetback : decision.groupAfter + 1;
+  const ranExitResume = on('resume');
   if (rejoin === 'bridge') {
     const blend = bridgeAfter(next, start, exit, outOf, rhoMin, spacing);
     if (blend) {
+      report(
+        'resume',
+        { at: start, points: blend.points, removed: [], side: 'exit' },
+        ranExitResume,
+      );
       for (let i = 1; i < blend.points.length; i++) target.push(blend.points[i] as THREE.Vector3);
       for (let i = blend.at + 1; i < next.length; i++) target.push(next[i] as THREE.Vector3);
       return;
     }
   }
   if (rejoin === 'relax' && start < next.length) {
-    const relaxed = relaxOnto([penult, exit], next, start, 1, rhoMin);
+    const relaxed = relaxOnto([penult, exit], next, start, 1, rhoMin, inherit);
     if (relaxed) {
+      report('resume', { at: start, points: relaxed, removed: [], side: 'exit' }, ranExitResume);
       for (const p of relaxed) target.push(p);
       for (let i = start + relaxed.length; i < next.length; i++) {
         target.push(next[i] as THREE.Vector3);
@@ -747,7 +941,13 @@ function mergeArc(
     }
   }
   const from = resumeAt(next, start, 1, exit, penult, outOf, rhoMin, spacing);
-  for (let i = from; i < next.length; i++) target.push(next[i] as THREE.Vector3);
+  report(
+    'resume',
+    { at: from, points: [], removed: next.slice(start, from), side: 'exit' },
+    ranExitResume,
+  );
+  const walkFrom = ranExitResume ? from : start;
+  for (let i = walkFrom; i < next.length; i++) target.push(next[i] as THREE.Vector3);
 }
 
 const EPS = 1e-9;
@@ -783,7 +983,11 @@ function stitchPath(
   spacing: number,
   blockout: number,
   rejoin: Rejoin,
-  draw: () => number,
+  shape: HairpinShape,
+  drawAt: (corner: number, draw: Draw) => number,
+  inherit: Inherit,
+  on: (id: CutRepairId) => boolean,
+  report: (id: CutRepairId, site: RepairSite | null, ran: boolean) => void,
 ): { spans: Span[]; decisions: CornerDecision[] } {
   const { arcs, corners } = raw;
   if (corners.length === 0) return { spans: arcs.map((points) => ({ points })), decisions: [] };
@@ -799,20 +1003,57 @@ function stitchPath(
 
   const decisions: CornerDecision[] = corners.map((c, k) => {
     const { before, after } = legsOf(k);
-    let strategy: CornerStrategy = pickStrategy(c.turn, weights, draw);
+    let strategy: CornerStrategy = pickStrategy(c.turn, weights, () => drawAt(k, STRATEGY_DRAW));
     // A hard corner drawn `connect` must fillet, and a fillet that will not fit breaks instead.
     // `CONNECT_LIMIT` used to guess this from the angle; now it is measured.
-    let fillet =
-      strategy === 'connect' && c.hard
-        ? filletFor(before, after, c, rhoMin, spacing, rejoin)
-        : null;
-    if (strategy === 'connect' && c.hard && !fillet) strategy = 'break';
+    let hairpin: Hairpin | null = null;
+    if (strategy === 'hairpin') {
+      const ranHairpin = on('hairpin');
+      hairpin = hairpinFor(before, after, c, shape, rhoMin, spacing);
+      if (hairpin) {
+        report('hairpin', { at: c.index, points: hairpin.points, removed: [] }, ranHairpin);
+      }
+      if (!ranHairpin) {
+        strategy = 'break';
+        hairpin = null;
+      }
+    }
+    if (strategy === 'hairpin') {
+      // Nothing worth turning around for: a hairpin leaves the contour on both approaches to buy
+      // the apex back, so it only pays where a fillet would cut more than a bend radius away.
+      // One that cannot be built has to cut like any other corner.
+      if (!hairpin || apexLoss(c, rhoMin) <= rhoMin) strategy = 'break';
+    }
+    const wantsFillet = strategy === 'connect' && c.hard;
+    const filletSite = wantsFillet ? filletFor(before, after, c, rhoMin, spacing, rejoin) : null;
+    const ranFillet = on('fillet');
+    if (wantsFillet) {
+      report(
+        'fillet',
+        filletSite ? { at: c.index, points: filletSite.points, removed: [] } : null,
+        ranFillet,
+      );
+    }
+    let fillet = ranFillet ? filletSite : null;
+    if (wantsFillet && !fillet) strategy = 'break';
     // A cut end is an electrode, and a letter has two of those rather than thirty. Everywhere else
     // the bender bends the tube out of the plane and paints the return, so the glass carries
     // through and only the light stops — which is the same fillet a connect draws.
-    if (strategy === 'break' && draw() < blockout) {
-      fillet = filletFor(before, after, c, rhoMin, spacing, rejoin);
+    if (strategy === 'break' && drawAt(k, BLOCKOUT_DRAW) < blockout) {
+      const blockoutFillet = filletFor(before, after, c, rhoMin, spacing, rejoin);
+      if (blockoutFillet) {
+        report('fillet', { at: c.index, points: blockoutFillet.points, removed: [] }, ranFillet);
+        // The return this fillet would carry, named whether or not the fillet is there to carry it:
+        // with `fillet` off the strategy stays `break` and the span-level report below never runs.
+        if (!ranFillet) {
+          report('return', { at: c.index, points: blockoutFillet.points, removed: [] }, false);
+        }
+      }
+      fillet = ranFillet ? blockoutFillet : null;
       if (fillet) strategy = 'return';
+    }
+    if (strategy === 'hairpin' && hairpin) {
+      return { ...c, strategy, setback: Math.max(0, hairpin.reach), fillet: null, hairpin };
     }
     if (strategy === 'break') return { ...c, strategy, setback: 0, fillet: null };
     return { ...c, strategy, setback: fillet?.setback ?? 0, fillet };
@@ -823,7 +1064,12 @@ function stitchPath(
   // not on the path, so two fillets can overlap while their setbacks still appear to fit.
   const eatsAt = (k: number) => {
     const { before, after } = legsOf(k);
-    return eatenBy(corners[k] as Corner, decisions[k]?.fillet ?? null, before, after);
+    const decision = decisions[k];
+    if (decision?.hairpin) {
+      const reach = Math.max(0, decision.hairpin.reach);
+      return { before: reach, after: reach };
+    }
+    return eatenBy(corners[k] as Corner, decision?.fillet ?? null, before, after);
   };
   // To a fixed point: breaking a corner cuts its own stretch out of the same leg, so the survivor
   // has less room than the pass that spared it measured, not more.
@@ -855,14 +1101,42 @@ function stitchPath(
       const decision = decisions[k] as CornerDecision;
       const next = arcs[k + 1] as THREE.Vector3[];
       if (decision.strategy === 'break') {
-        spans.push({ points: dropTail(current, decision.groupBefore + 1) });
-        current = dropHead(next.slice(), decision.groupAfter + 1);
+        const ranStretch = on('stretch');
+        const tail = dropEnd(current, decision.groupBefore + 1, 'tail');
+        report('stretch', tail.site, ranStretch);
+        spans.push({ points: ranStretch ? tail.points : current });
+        const head = dropEnd(next.slice(), decision.groupAfter + 1, 'head');
+        report('stretch', head.site, ranStretch);
+        current = ranStretch ? head.points : next.slice();
       } else {
-        mergeArc(current, next, decision, decision.fillet ?? null, rhoMin, spacing, rejoin);
+        mergeArc(
+          current,
+          next,
+          decision,
+          decision.fillet ?? null,
+          rhoMin,
+          spacing,
+          rejoin,
+          inherit,
+          on,
+          report,
+        );
         if (decision.strategy === 'return' && decision.fillet) {
-          const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
-          spans.push(head, dark);
-          current = tail.points;
+          const ranReturn = on('return');
+          report(
+            'return',
+            {
+              at: current.indexOf(decision.fillet.points[0] as THREE.Vector3),
+              points: decision.fillet.points,
+              removed: [],
+            },
+            ranReturn,
+          );
+          if (ranReturn) {
+            const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
+            spans.push(head, dark);
+            current = tail.points;
+          }
         }
       }
     }
@@ -883,11 +1157,34 @@ function stitchPath(
     const mid = Math.max(1, Math.min(first.length - 2, first.length >> 1));
     let current = first.slice(mid);
     const walk = (decision: CornerDecision, arc: THREE.Vector3[]) => {
-      mergeArc(current, arc, decision, decision.fillet ?? null, rhoMin, spacing, rejoin);
+      mergeArc(
+        current,
+        arc,
+        decision,
+        decision.fillet ?? null,
+        rhoMin,
+        spacing,
+        rejoin,
+        inherit,
+        on,
+        report,
+      );
       if (decision.strategy === 'return' && decision.fillet) {
-        const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
-        closedSpans.push(head, dark);
-        current = tail.points;
+        const ranReturn = on('return');
+        report(
+          'return',
+          {
+            at: current.indexOf(decision.fillet.points[0] as THREE.Vector3),
+            points: decision.fillet.points,
+            removed: [],
+          },
+          ranReturn,
+        );
+        if (ranReturn) {
+          const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
+          closedSpans.push(head, dark);
+          current = tail.points;
+        }
       }
     };
     for (let k = 1; k < n; k++) walk(decisions[k] as CornerDecision, arcs[k] as THREE.Vector3[]);
@@ -895,7 +1192,10 @@ function stitchPath(
     // A return has already split the span the walk started on off from `current`; the loop closes
     // onto whichever span still begins at the seam.
     const head = closedSpans[0]?.points ?? current;
-    closeLoop(current, head, spacing);
+    const ranClose = on('close');
+    // The seam vertex the loop closes onto — closeLoop may shift it or skip the join entirely.
+    report('close', { at: current.length - 1, points: head.slice(0, 1), removed: [] }, ranClose);
+    if (ranClose) closeLoop(current, head, spacing);
     closedSpans.push({ points: current });
     return { spans: closedSpans, decisions };
   }
@@ -903,13 +1203,28 @@ function stitchPath(
   // Rotate so the walk starts right after a break, reducing this to the open-path case.
   const spans: Span[] = [];
   const opening = decisions[breakIdx] as CornerDecision;
-  let current = dropHead((arcs[breakIdx] as THREE.Vector3[]).slice(), opening.groupAfter + 1);
+  const opened = dropEnd(
+    (arcs[breakIdx] as THREE.Vector3[]).slice(),
+    opening.groupAfter + 1,
+    'head',
+  );
+  report('stretch', opened.site, on('stretch'));
+  let current = on('stretch') ? opened.points : (arcs[breakIdx] as THREE.Vector3[]).slice();
   for (let i = 1; i < n; i++) {
     const arcIdx = (breakIdx + i) % n;
     const decision = decisions[arcIdx] as CornerDecision;
     if (decision.strategy === 'break') {
-      spans.push({ points: dropTail(current, decision.groupBefore + 1) });
-      current = dropHead((arcs[arcIdx] as THREE.Vector3[]).slice(), decision.groupAfter + 1);
+      const ranStretch = on('stretch');
+      const tail = dropEnd(current, decision.groupBefore + 1, 'tail');
+      report('stretch', tail.site, ranStretch);
+      spans.push({ points: ranStretch ? tail.points : current });
+      const head = dropEnd(
+        (arcs[arcIdx] as THREE.Vector3[]).slice(),
+        decision.groupAfter + 1,
+        'head',
+      );
+      report('stretch', head.site, ranStretch);
+      current = ranStretch ? head.points : (arcs[arcIdx] as THREE.Vector3[]).slice();
     } else {
       mergeArc(
         current,
@@ -919,15 +1234,32 @@ function stitchPath(
         rhoMin,
         spacing,
         rejoin,
+        inherit,
+        on,
+        report,
       );
       if (decision.strategy === 'return' && decision.fillet) {
-        const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
-        spans.push(head, dark);
-        current = tail.points;
+        const ranReturn = on('return');
+        report(
+          'return',
+          {
+            at: current.indexOf(decision.fillet.points[0] as THREE.Vector3),
+            points: decision.fillet.points,
+            removed: [],
+          },
+          ranReturn,
+        );
+        if (ranReturn) {
+          const [head, dark, tail] = splitReturn(current, decision.fillet, spacing);
+          spans.push(head, dark);
+          current = tail.points;
+        }
       }
     }
   }
-  spans.push({ points: dropTail(current, opening.groupBefore + 1) });
+  const closing = dropEnd(current, opening.groupBefore + 1, 'tail');
+  report('stretch', closing.site, on('stretch'));
+  spans.push({ points: on('stretch') ? closing.points : current });
   return { spans, decisions };
 }
 
@@ -972,18 +1304,31 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
   const rhoStyle = radius * STYLE_FACTOR;
   const spacing = opts.spacing ?? FALLBACK_SPACING;
   const rejoin = opts.rejoin ?? DEFAULT_REJOIN;
+  const shape = opts.hairpin ?? DEFAULT_HAIRPIN;
   const seed = opts.seed ?? 0;
-  let cornerCounter = 0;
-  const draw = () => rng(cornerSeed(seed, cornerCounter++))();
+  const enabled = opts.repairs;
+  const on = (id: CutRepairId) => !enabled || enabled.has(id);
+  const report = (id: CutRepairId, site: RepairSite | null, ran: boolean) =>
+    opts.onRepair?.(id, site, ran);
+  // Corner indices run across the whole glyph, so the order paths are concatenated in is what
+  // keeps a word building identically twice.
+  let cornerBase = 0;
+  const drawAt = (corner: number, draw: Draw) => rng(cornerSeed(seed, cornerBase + corner, draw))();
 
-  // Resolvable in one pass because no stitch primitive clones: a span slices the input's own
-  // objects or pushes geometry the corner stage built, so identity survives the whole cut.
+  // Resolvable in one pass because the only stitch primitive that copies, `relaxOnto`, registers
+  // each copy here: everything else slices the input's own objects or pushes geometry the corner
+  // stage built, so identity survives the whole cut.
   const origin = new Map<THREE.Vector3, VertexSource>();
   paths.forEach((path, p) => {
     path.points.forEach((point, index) => {
       if (!origin.has(point)) origin.set(point, { path: p, index });
     });
   });
+
+  const inherit: Inherit = (copy, source) => {
+    const from = origin.get(source);
+    if (from) origin.set(copy, from);
+  };
 
   const cornerRecords: CornerRecord[] = [];
   const spans: { points: THREE.Vector3[]; surface: SurfaceKind; dark?: boolean }[] = [];
@@ -996,8 +1341,13 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
       spacing,
       opts.blockout ?? DEFAULT_BLOCKOUT,
       rejoin,
-      draw,
+      shape,
+      drawAt,
+      inherit,
+      on,
+      report,
     );
+    cornerBase += decisions.length;
     for (const d of decisions) {
       cornerRecords.push({
         point: d.at ?? (path.points[d.index] as THREE.Vector3),

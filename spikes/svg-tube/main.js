@@ -19,9 +19,14 @@ import { Stage } from '../../packages/core/dist/render/stage.js';
 import { buildTubeBlueprint } from '../../packages/core/dist/render/tube/index.js';
 import { tintByRunColor, tintChannelOf } from '../../packages/core/dist/render/tube/tint.js';
 import { svgToShapeGroups } from './svg-shapes.mjs';
+import { BACKGROUNDS, SIZES, createWallpaper } from './wallpaper.mjs';
 
-/** Drop an SVG in beside this file as `art.svg`, or point at another with `?svg=name.svg`. */
-const SVG_URL = new URLSearchParams(location.search).get('svg') ?? './art.svg';
+/**
+ * Drop an SVG in beside this file as `art.svg`, or point at another with `?svg=name.svg`.
+ * `bundle.mjs` sets `__KLIEG_ART__` to a data URI so the standalone file carries its own art.
+ */
+const SVG_URL =
+  new URLSearchParams(location.search).get('svg') ?? globalThis.__KLIEG_ART__ ?? './art.svg';
 const host = document.getElementById('stage');
 const fail = (e) => {
   document.getElementById('err').textContent = String(e?.stack ?? e);
@@ -148,6 +153,8 @@ const { groups, width, height } = svgToShapeGroups(svgText, 1);
  * of. Defaults are `tubing`'s own, so the page opens on the shipped look.
  */
 const D = decoration;
+/** The lab opens on aqua rather than `tubing`'s pink; every other default is the shipped one. */
+const LAB_COLOR = 0x22e5e0;
 const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
 const unhex = (s) => Number.parseInt(s.slice(1), 16);
 const CONTROLS = [
@@ -184,8 +191,15 @@ const CONTROLS = [
   { id: 'rim', min: 0, max: 1, step: 0.05, value: D.look.rim ?? 0, hint: 'limb brightening' },
   // The palette the runs are dealt from, which is where a tube look's colour actually lives:
   // `tintByRunColor` forces the material's own channel white so the per-vertex colour survives.
-  { id: 'color', type: 'color', value: hex(D.colors[0] ?? 0xffffff), hint: 'run palette' },
+  { id: 'color', type: 'color', value: hex(LAB_COLOR), hint: 'run palette' },
   { id: 'dark', type: 'color', value: hex(D.dark.color ?? 0x222228), hint: 'unlit tube' },
+
+  { group: 'wallpaper' },
+  { id: 'size', type: 'select', value: SIZES[0].label, options: SIZES.map((s) => s.label) },
+  { id: 'background', type: 'select', value: BACKGROUNDS[0], options: BACKGROUNDS,
+    hint: 'transparent is the raw canvas; page dark is what you see' },
+  { id: 'save', type: 'button', label: 'save PNG' },
+  { id: 'copyConfig', type: 'button', label: 'copy config' },
 ];
 
 const ui = {};
@@ -205,7 +219,7 @@ for (const c of CONTROLS) {
   const label = document.createElement('label');
   if (c.hint) label.title = c.hint;
   const name = document.createElement('span');
-  name.textContent = c.id;
+  name.textContent = c.type === 'button' ? '' : c.id;
   label.appendChild(name);
 
   let input;
@@ -223,6 +237,11 @@ for (const c of CONTROLS) {
     input = document.createElement('input');
     input.type = 'checkbox';
     input.checked = c.value;
+  } else if (c.type === 'button') {
+    label.className = 'check';
+    input = document.createElement('button');
+    input.type = 'button';
+    input.textContent = c.label;
   } else if (c.type === 'color') {
     input = document.createElement('input');
     input.type = 'color';
@@ -300,9 +319,50 @@ function rebuild() {
     (notes.length ? ` · ${notes.join(' · ')}` : '');
 }
 
-for (const input of Object.values(ui)) {
+for (const [id, input] of Object.entries(ui)) {
+  if (id === 'save' || id === 'copyConfig') continue;
   input.addEventListener(input.tagName === 'SELECT' ? 'change' : 'input', rebuild);
 }
+
+/**
+ * A blob rather than a link: this page is opened from `file://` with no origin to build a URL
+ * against, and its `art.svg` is not ours to put in one.
+ */
+ui.copyConfig.addEventListener('click', () => {
+  const text = JSON.stringify(tuneFromUi(), null, 2);
+  const was = ui.copyConfig.textContent;
+  const done = (word) => {
+    ui.copyConfig.textContent = word;
+    setTimeout(() => { ui.copyConfig.textContent = was; }, 2000);
+  };
+  navigator.clipboard?.writeText(text).then(
+    () => done('copied'),
+    () => { console.log(text); done('logged'); },
+  );
+});
+
+const saveWallpaper = createWallpaper({
+  stage,
+  bloom,
+  refit: () => fit(width, height),
+  pageColor: getComputedStyle(document.body).backgroundColor,
+});
+ui.save.addEventListener('click', async () => {
+  const { width: w, height: h } = SIZES.find((s) => s.label === ui.size.value);
+  const was = ui.save.textContent;
+  ui.save.disabled = true;
+  ui.save.textContent = 'rendering…';
+  try {
+    const bytes = await saveWallpaper(w, h, ui.background.value);
+    ui.save.textContent = `${(bytes / 1e6).toFixed(1)} MB`;
+    setTimeout(() => { ui.save.textContent = was; }, 2500);
+  } catch (e) {
+    ui.save.textContent = was;
+    fail(e);
+  } finally {
+    ui.save.disabled = false;
+  }
+});
 
 document.getElementById('title').addEventListener('click', () => {
   const hud = document.getElementById('hud');

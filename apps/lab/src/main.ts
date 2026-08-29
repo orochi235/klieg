@@ -1,5 +1,7 @@
 import {
   ACTIVE_NAMES,
+  type Align,
+  acronym,
   type Clock,
   createKlieg,
   EFFECTS,
@@ -19,6 +21,8 @@ import {
   type SurfaceKind,
   specOf,
 } from 'klieg';
+
+import { encodeConfig, type ShowConfig } from './show-config.js';
 
 const DEG = Math.PI / 180;
 
@@ -59,6 +63,11 @@ const tintInput = el<HTMLInputElement>('tint');
 const tintOnInput = el<HTMLInputElement>('tintOn');
 const holdClickInput = el<HTMLInputElement>('holdClick');
 const modalInput = el<HTMLInputElement>('modal');
+const lineAlignInput = el<HTMLSelectElement>('lineAlign');
+const shareChromeInput = el<HTMLInputElement>('shareChrome');
+const shareReadableInput = el<HTMLInputElement>('shareReadable');
+const acronymInput = el<HTMLInputElement>('acronym');
+const capsTintInput = el<HTMLInputElement>('capsTint');
 const grainInput = el<HTMLInputElement>('grain');
 const densityInput = el<HTMLInputElement>('density');
 const surfacesInput = el<HTMLSelectElement>('surfaces');
@@ -130,6 +139,12 @@ const CONTROL_IDS = [
   'selectable',
   'holdClick',
   'modal',
+  'lineAlign',
+  'acronym',
+  'capsTint',
+  'read',
+  'settle',
+  'acroHold',
 ];
 
 type ControlState = Record<string, string | boolean>;
@@ -339,10 +354,12 @@ const message = (err: unknown) => (err instanceof Error ? err.message : String(e
 
 function fire(text: string): void {
   log(`fire ${JSON.stringify(text)}`);
-  bk.fire(text, {
+  const acrostic = acronymInput.checked;
+  // `active` and `exit` move inside the routine when it is on: they describe how the lower case
+  // leaves and what the gathered acronym does, which are stages rather than the fire's own slots.
+  const options: FireOptions = {
     enter: enter.get(),
-    active: active.get(),
-    exit: exit.get(),
+    ...(acrostic ? {} : { active: active.get(), exit: exit.get() }),
     look: chosenLook(),
     effects: chosenEffects(),
     lighting: lighting.get(),
@@ -354,11 +371,28 @@ function fire(text: string): void {
     // Three-way rather than a checkbox: FireOptions.bloom wins over a look's own request, so an
     // unchecked box could only mean "unset" — leaving no way to switch neon's own bloom off.
     bloom: bloomInput.value === 'auto' ? undefined : bloomInput.value === 'on',
+    lineAlign: lineAlignInput.value as Align,
     wrap: wrapInput.checked,
     selectable: selectableInput.value as SelectableMode,
     modal: modalInput.checked,
     placement: { kind: 'fullscreen' },
-  }).then(
+  };
+  if (acrostic) {
+    const click = holdClickInput.checked;
+    const [, routine] = acronym(text, {
+      caps: { tint: Number.parseInt(capsTintInput.value.slice(1), 16) },
+      read: click ? 'click' : number('read'),
+      settle: number('settle'),
+      hold: click ? 'click' : number('acroHold'),
+      exit: exit.get(),
+      active: active.get(),
+    });
+    // The routine owns `hold`, `tint` and `stages`; everything else above is still the lab's.
+    Object.assign(options, routine);
+    const caps = [...text].filter((c) => c !== c.toLowerCase() && c === c.toUpperCase()).length;
+    if (caps < 2) log(`  acronym: only ${caps} capital(s) — nothing to gather`);
+  }
+  bk.fire(text, options).then(
     () => log(`done  ${JSON.stringify(text)}`),
     (err: unknown) => {
       log(`FAILED ${JSON.stringify(text)}: ${message(err)}`);
@@ -466,6 +500,66 @@ const sequenceButtons = SEQUENCES.map((sequence) => {
   return button;
 });
 
+/**
+ * The performance, not the look authoring: `/show/` validates every field on the way back in, and
+ * the tube and chunk sliders would each need their own clamp for a link nobody could paste.
+ * See `docs/superpowers/specs/2026-08-26-share-links-design.md`.
+ */
+function shareConfig(): Partial<ShowConfig> {
+  const click = holdClickInput.checked;
+  const yaw = number('yaw');
+  const pitch = number('pitch');
+  const roll = number('roll');
+  return {
+    text: textInput.value,
+    look: look.get(),
+    lighting: lighting.get(),
+    enter: enter.get(),
+    active: active.get(),
+    exit: exit.get(),
+    lineAlign: lineAlignInput.value as Align,
+    transform: yaw || pitch || roll ? { yaw, pitch, roll } : undefined,
+    tint: tintOnInput.checked ? Number.parseInt(tintInput.value.slice(1), 16) : undefined,
+    bloom: bloomInput.value === 'auto' ? undefined : bloomInput.value === 'on',
+    hold: click ? 'click' : number('hold'),
+    blendMs: number('blend'),
+    wrap: wrapInput.checked,
+    chrome: shareChromeInput.checked,
+    // `cycleMs: 0` never advances: a link presents what was composed rather than a slideshow.
+    cycleMs: 0,
+    acronym: acronymInput.checked
+      ? {
+          caps: Number.parseInt(capsTintInput.value.slice(1), 16),
+          read: click ? 'click' : number('read'),
+          settle: number('settle'),
+          hold: click ? 'click' : number('acroHold'),
+        }
+      : undefined,
+  };
+}
+
+const copyLinkButton = el<HTMLButtonElement>('copyLink');
+copyLinkButton.addEventListener('click', () => {
+  const url = new URL('show/', location.href);
+  // Opaque and in the query by default. A readable hash gives the joke away before the page opens,
+  // and iMessage ends the link at the '#' and sends the rest as a message of its own.
+  if (shareReadableInput.checked) url.hash = encodeConfig(shareConfig());
+  else url.searchParams.set('c', encodeConfig(shareConfig(), true));
+  const link = url.toString();
+  const done = (word: string) => {
+    copyLinkButton.textContent = word;
+    log(`${word}: ${link}`);
+    setTimeout(() => {
+      copyLinkButton.textContent = 'copy link';
+    }, 2000);
+  };
+  // The log carries the link either way, so a denied clipboard still leaves it reachable.
+  navigator.clipboard?.writeText(link).then(
+    () => done('copied'),
+    () => done('logged'),
+  );
+});
+
 const fireCurrent = () => fire(textInput.value);
 
 el('fire').addEventListener('click', fireCurrent);
@@ -480,14 +574,6 @@ el('destroy').addEventListener('click', () => {
 policy.select.addEventListener('change', () => {
   bk.destroy();
   bk = create();
-});
-
-// Enter fires, Shift+Enter breaks the line — the convention every chat box uses.
-textInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    fireCurrent();
-  }
 });
 
 // Greyed rather than ignored: a look reads a grain, a tube or a chunk field only if its spec

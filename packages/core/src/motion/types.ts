@@ -1,6 +1,8 @@
 import type { PoseOffset } from '../pose.js';
 
 export interface LetterInfo {
+  /** The character this letter draws. Absent where a piece is sampled without a block behind it. */
+  char?: string;
   /** 0-based position in the word, whitespace included. */
   index: number;
   /** Total letters in the word. */

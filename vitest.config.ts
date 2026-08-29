@@ -17,6 +17,12 @@ export default defineConfig({
         find: /^klieg$/,
         replacement: fileURLToPath(new URL('./packages/core/src/index.ts', import.meta.url)),
       },
+      // The dev labs resolve core through `@core/*`, so a test importing a lab module has to
+      // resolve it the same way vite does.
+      {
+        find: /^@core\//,
+        replacement: fileURLToPath(new URL('./packages/core/src/', import.meta.url)),
+      },
     ],
   },
   test: {

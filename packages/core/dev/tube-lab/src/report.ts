@@ -1,6 +1,6 @@
-import { minBendRadius } from '../../../src/render/tube/bend.js';
-import type { SurfaceKind, TubeBlueprint } from '../../../src/render/tube/index.js';
-import { tightestBend } from '../../../src/render/tube/sweep.js';
+import { minBendRadius } from '@core/render/tube/bend.js';
+import type { SurfaceKind, TubeBlueprint } from '@core/render/tube/index.js';
+import { tightestBend } from '@core/render/tube/sweep.js';
 
 export interface RunReport {
   index: number;

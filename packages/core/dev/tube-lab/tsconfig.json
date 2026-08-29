@@ -2,6 +2,9 @@
   "extends": "../../../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "../.tsbuild/tube-lab",
+    "paths": {
+      "@core/*": ["../../src/*"]
+    },
     "rootDir": ".",
     "jsx": "react-jsx",
     "types": ["vite/client"],

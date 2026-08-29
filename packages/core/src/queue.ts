@@ -7,6 +7,10 @@ interface Entry {
   run: EffectRunner;
   resolve: () => void;
   reject: (e: unknown) => void;
+  /** The caller's own signal, composed with this queue's rather than replacing it. */
+  signal?: AbortSignal;
+  /** Drops the pending-abort listener once the entry leaves the queue, however it leaves. */
+  unwatch: () => void;
 }
 
 interface Slot {
@@ -36,9 +40,16 @@ export class EffectQueue {
     return latest;
   }
 
-  push(id: string, run: EffectRunner): Promise<void> {
+  push(id: string, run: EffectRunner, signal?: AbortSignal): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-      const entry: Entry = { id, run, resolve, reject };
+      const entry: Entry = { id, run, resolve, reject, signal, unwatch: () => {} };
+
+      // Already aborted: resolve here rather than queue an effect whose only job is to no-op
+      // when its turn finally comes round.
+      if (signal?.aborted) {
+        resolve();
+        return;
+      }
 
       if (this.policy === 'concurrent') {
         void this.start(entry);
@@ -49,11 +60,26 @@ export class EffectQueue {
         this.dropPending();
       }
 
+      if (signal) {
+        const onAbort = () => this.dropOne(entry);
+        signal.addEventListener('abort', onAbort);
+        entry.unwatch = () => signal.removeEventListener('abort', onAbort);
+      }
+
       this.pending.push(entry);
       // Guarding on `live` instead would start a second drain when an effect settles
       // and its own completion handler pushes, running two effects at once.
       if (!this.draining) void this.drain();
     });
+  }
+
+  /** Takes one effect out of the queue before it ever runs. A no-op once it has started. */
+  private dropOne(entry: Entry): void {
+    const at = this.pending.indexOf(entry);
+    if (at < 0) return;
+    this.pending.splice(at, 1);
+    entry.unwatch();
+    entry.resolve();
   }
 
   /** Resolves once every aborted effect has finished tearing down, so callers can free what they share. */
@@ -70,7 +96,10 @@ export class EffectQueue {
   private dropPending(): void {
     const dropped = this.pending;
     this.pending = [];
-    for (const entry of dropped) entry.resolve();
+    for (const entry of dropped) {
+      entry.unwatch();
+      entry.resolve();
+    }
   }
 
   private async drain(): Promise<void> {
@@ -85,25 +114,41 @@ export class EffectQueue {
   }
 
   private start(entry: Entry): Promise<void> {
+    // It is no longer pending, so the drop listener has nothing left to drop.
+    entry.unwatch();
     const slot: Slot = {
       id: entry.id,
       controller: new AbortController(),
       settled: Promise.resolve(),
     };
+
+    let unwatch = () => {};
+    const caller = entry.signal;
+    if (caller) {
+      if (caller.aborted) slot.controller.abort();
+      else {
+        const onAbort = () => slot.controller.abort();
+        caller.addEventListener('abort', onAbort);
+        unwatch = () => caller.removeEventListener('abort', onAbort);
+      }
+    }
+
     this.live.add(slot);
     // A runner that calls cancelAll from its own synchronous prologue observes the placeholder
     // and is not waited for. Unreachable while every runner awaits something first.
-    slot.settled = this.execute(entry, slot);
+    slot.settled = this.execute(entry, slot, unwatch);
     return slot.settled;
   }
 
-  private async execute(entry: Entry, slot: Slot): Promise<void> {
+  private async execute(entry: Entry, slot: Slot, unwatch: () => void): Promise<void> {
     try {
       await entry.run(slot.controller.signal);
       entry.resolve();
     } catch (e) {
       entry.reject(e);
     } finally {
+      // A host that keeps one signal across many fires would otherwise collect a listener per fire.
+      unwatch();
       this.live.delete(slot);
     }
   }

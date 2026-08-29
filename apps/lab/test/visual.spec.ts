@@ -56,6 +56,11 @@ function readOverlay(page: Page, frames: number): Promise<Reading> {
   );
 }
 
+// The first fire in a fresh page pays vite's cold transform, the font fetch and parse, and the
+// first shader compile before a canvas exists: measured 2.5-5.8s here, against the 5s an expect
+// gets by default. Every canvas wait below carries this, so a busy machine decides nothing.
+const CANVAS_TIMEOUT_MS = 15000;
+
 /** Fires one long-held effect and returns once its canvas is on the page. */
 async function fire(page: Page, options: { bloom: boolean }): Promise<void> {
   await page.goto('/');
@@ -63,7 +68,7 @@ async function fire(page: Page, options: { bloom: boolean }): Promise<void> {
   await page.locator('#hold').fill('4000');
   if (options.bloom) await page.locator('#bloom').selectOption('on');
   await page.getByRole('button', { name: 'FIRE', exact: true }).click();
-  await expect(page.locator('canvas')).toBeAttached();
+  await expect(page.locator('canvas')).toBeAttached({ timeout: CANVAS_TIMEOUT_MS });
 }
 
 function expectTransparentOverlay(reading: Reading): void {
@@ -139,7 +144,7 @@ async function fireStill(page: Page, text: string): Promise<void> {
   await page.locator('#hold').fill('4000');
   await page.locator('#text').fill(text);
   await page.getByRole('button', { name: 'FIRE', exact: true }).click();
-  await expect(page.locator('canvas')).toBeAttached();
+  await expect(page.locator('canvas')).toBeAttached({ timeout: CANVAS_TIMEOUT_MS });
   await page.waitForTimeout(200);
 }
 
@@ -162,7 +167,7 @@ test('wrap breaks a long line into rows, and leaves it alone unchecked', async (
   await page.locator('#wrap').check();
   await page.locator('#text').fill('BIG MONEY PRIZE');
   await page.getByRole('button', { name: 'FIRE', exact: true }).click();
-  await expect(page.locator('canvas')).toBeAttached();
+  await expect(page.locator('canvas')).toBeAttached({ timeout: CANVAS_TIMEOUT_MS });
   await page.waitForTimeout(200);
 
   expect(await litBands(page)).toBeGreaterThan(1);
@@ -172,7 +177,7 @@ test('an effect held until click stays up, and the click dismisses it', async ({
   await page.goto('/');
   await page.locator('#holdClick').check();
   await page.getByRole('button', { name: 'FIRE', exact: true }).click();
-  await expect(page.locator('canvas')).toBeAttached();
+  await expect(page.locator('canvas')).toBeAttached({ timeout: CANVAS_TIMEOUT_MS });
 
   // Far past the 1200ms default hold: a held effect has no timeout to reach.
   await page.waitForTimeout(3000);
@@ -187,7 +192,7 @@ test('the dismissing click still reaches the page when the hold is not modal', a
   await page.goto('/');
   await page.locator('#holdClick').check();
   await page.getByRole('button', { name: 'FIRE', exact: true }).click();
-  await expect(page.locator('canvas')).toBeAttached();
+  await expect(page.locator('canvas')).toBeAttached({ timeout: CANVAS_TIMEOUT_MS });
   await page.waitForTimeout(500);
 
   // One click on FIRE: it dismisses the held effect and presses the button underneath.
@@ -234,7 +239,7 @@ async function fireSelectable(page: Page, mode: string, text = 'BIG'): Promise<v
   await page.locator('#text').fill(text);
   await page.locator('#selectable').selectOption(mode);
   await page.getByRole('button', { name: 'FIRE', exact: true }).click();
-  await expect(page.locator('canvas')).toBeAttached();
+  await expect(page.locator('canvas')).toBeAttached({ timeout: CANVAS_TIMEOUT_MS });
 }
 
 /**

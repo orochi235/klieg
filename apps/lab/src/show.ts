@@ -1,10 +1,12 @@
 import {
   type ActiveSlot,
+  acronym,
   type Clock,
   createKlieg,
   type EnterSlot,
   type ExitSlot,
   type FireOptions,
+  fromEuler,
   type LookName,
   type MotionPiece,
   type PoseOffset,
@@ -138,12 +140,15 @@ const pivot: MotionPiece = {
 
 // Layered into all three slots rather than just `active`: the slot weights are complementary, so
 // this way the pivot holds steady through the enter and the exit instead of unwinding to head-on.
-const enter: EnterSlot = config.pivot ? ['rise', pivot] : 'rise';
-const active: ActiveSlot = config.pivot ? ['float', pivot] : 'float';
-const exit: ExitSlot = config.pivot ? ['recede', pivot] : 'recede';
+const layer = <T>(name: T, on: boolean): T | [T, typeof pivot] => (on ? [name, pivot] : name);
+const enter = layer(config.enter ?? 'rise', config.pivot) as EnterSlot;
+const active = layer(config.active ?? 'float', config.pivot) as ActiveSlot;
+const exit = layer(config.exit ?? 'recede', config.pivot) as ExitSlot;
+
+const DEG = Math.PI / 180;
 
 function options(look: LookName): FireOptions {
-  return {
+  const base: FireOptions = {
     look,
     lighting: config.lighting,
     bloom: config.bloom,
@@ -151,10 +156,31 @@ function options(look: LookName): FireOptions {
     enter,
     active,
     exit,
-    hold: cycling ? config.cycleMs : STILL_HOLD_MS,
+    lineAlign: config.lineAlign,
+    hold: cycling ? config.cycleMs : (config.hold ?? STILL_HOLD_MS),
+    blendMs: config.blendMs,
+    transform: config.transform
+      ? fromEuler(
+          config.transform.pitch * DEG,
+          config.transform.yaw * DEG,
+          config.transform.roll * DEG,
+        )
+      : undefined,
     // A long word in portrait is unreadable on one line; wrapping picks whatever fits largest.
-    wrap: true,
+    wrap: config.wrap,
   };
+  if (!config.acronym) return base;
+  const [, routine] = acronym(config.text, {
+    caps: { tint: config.acronym.caps },
+    read: config.acronym.read,
+    settle: config.acronym.settle,
+    hold: config.acronym.hold,
+    exit: config.exit ?? 'fade',
+    active: config.active ?? 'none',
+  });
+  // The routine owns `hold`, `tint`, `stages` and `lineAlign`; applying the config's own `hold`
+  // after it would silently replace the read beat with the cycle's.
+  return { ...base, ...routine };
 }
 
 const clock = new ShowClock(() => veil.classList.add('veil--gone'));
@@ -165,10 +191,16 @@ const klieg = createKlieg({
   // Anchored to the stage, which is `inset: 0` — the same box a fullscreen overlay would take, but
   // an anchored placement lifts `FIT_CAP`. Without that the framing below never binds: a short word
   // stops at 2.2x its natural size, which is the cap protecting a page the overlay is guest on.
-  placement: { kind: 'element', el: stage },
+  // `clickAnywhere` because the stage is `inset: 0`: there is no click on this page that is not a
+  // click on the type, so a shared link may hold until the viewer presses.
+  placement: { kind: 'element', el: stage, clickAnywhere: true },
   // Nothing shares this page with the type, so it takes far more of the frame than the library
-  // leaves an overlay. Tuned on a 390x844 phone, where width is what binds a single line.
-  framing: { width: 0.84, height: 0.46 },
+  // leaves an overlay. Width was tuned on a 390x844 phone, where it is what binds a single line;
+  // height only binds in a box far flatter than a phone — an embed in a wide tile — where 0.46 left
+  // the word at a quarter of the width. Raising it cannot affect portrait, where width still binds.
+  // `align` is explicit because an element placement defaults to `start`: the stage is the whole
+  // page rather than a column of prose, so there is no text edge here for the word to meet.
+  framing: { width: 0.84, height: 0.72, align: 'center' },
 });
 
 let index = 0;
@@ -195,7 +227,7 @@ const chips = config.looks.map((name, at) => {
   return chip;
 });
 
-if (chips.length < 2) looks.classList.add('looks--hidden');
+if (chips.length < 2 || !config.chrome) looks.classList.add('looks--hidden');
 
 function markActive(at: number): void {
   for (const [k, chip] of chips.entries()) {

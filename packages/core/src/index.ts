@@ -6,6 +6,7 @@ import { ACTIVE } from './motion/active.js';
 import { type Slot, slotDuration, slotMovesLetters, Timeline } from './motion/compositor.js';
 import { ENTER } from './motion/enter.js';
 import { EXIT } from './motion/exit.js';
+import { isolate, type PhaseEvent, PhaseReporter } from './motion/phases.js';
 import { Sequence } from './motion/sequence.js';
 import type { ActiveName, EnterName, ExitName, LetterInfo, MotionPiece } from './motion/types.js';
 import { type PointerFrame, pointerFrame } from './pointer.js';
@@ -35,6 +36,12 @@ import type { Arrangement } from './text/placement.js';
 import { projectLetters } from './text/projection.js';
 import { isIdentity, type Transform } from './transform.js';
 
+export {
+  type AcronymOptions,
+  acronym,
+  isCapital,
+  type LetterStyle,
+} from './acronym.js';
 export { ManualClock } from './clock.js';
 export {
   backOut,
@@ -76,6 +83,7 @@ export {
   type TransitionSpec,
   transition,
 } from './motion/build.js';
+export type { PhaseEvent, PhaseListener } from './motion/phases.js';
 export type { LetterInfo, MotionPiece, StaggerFrom, StaggerSpec } from './motion/types.js';
 export { stagger } from './motion/types.js';
 export type { Pose, PoseOffset, Vec3 } from './pose.js';
@@ -253,10 +261,24 @@ export interface FireOptions {
   blendMs?: number;
   /** @deprecated Unread. Placement is fixed per instance — pass it to `createKlieg` instead. */
   placement?: Placement;
+  /**
+   * How the lines of a multi-line block range against each other, in reading order. Defaults to
+   * `'center'`. `'start'` is what an acrostic wants: centred lines scatter its initials across as
+   * many x positions as there are lines. Distinct from `framing.align`, which places the whole
+   * block in the frame.
+   */
+  lineAlign?: Align;
   /** Break long lines to whatever arrangement renders largest. Explicit newlines always break. */
   wrap?: boolean;
   /** Let the overlay swallow the dismissing click instead of passing it through to the page. */
   modal?: boolean;
+  /**
+   * Who dismisses a `'click'` hold. `'host'` attaches no window listeners at all — neither
+   * `pointerdown` nor `Escape` — so one press does one thing, and `advance()` on the handle is the
+   * only way out. Per effect rather than per instance, so window-dismissed flourishes and
+   * host-driven held slides can share one `Klieg`.
+   */
+  dismiss?: 'window' | 'host';
   /**
    * How the word appears in the DOM, so it can be copied, found and read aloud. `'hidden'` is one
    * visually-hidden node; `'layer'` adds a transparent per-letter layer a drag can select, and
@@ -272,6 +294,18 @@ export interface FireOptions {
    * a stage holds on `'click'`. Ignored under reduced motion, which never travels.
    */
   stages?: Stage[];
+  /**
+   * Called as the effect crosses each phase boundary. `active` is the instant the word has landed
+   * and is at full presence — mid-blend, which is what a host swapping a page behind the flourish
+   * wants. A listener that throws does not stop the render loop.
+   */
+  onPhase?: (event: PhaseEvent) => void;
+  /**
+   * Aborts this one effect without touching the instance. Composed with the queue's own signal
+   * rather than replacing it: an abort plays no exit, and the promise resolves rather than
+   * rejecting, which is what it already promises for an effect the queue drops.
+   */
+  signal?: AbortSignal;
 }
 
 /** Timing for the move into a new layout. `scale` addresses the viewport fit, not letter size. */
@@ -301,17 +335,38 @@ export interface Stage {
   tween?: TweenSpec;
 }
 
+/**
+ * What `fire()` hands back: the promise it has always been, plus control over this one effect.
+ * A `Promise` rather than a bare thenable — callers already use `.catch()` on a fire.
+ */
+export interface FireHandle extends Promise<void> {
+  /**
+   * Treats this as the dismissing press. A no-op unless a hold is waiting for one; called before
+   * the effect starts, it releases the first hold that effect reaches rather than being lost.
+   */
+  advance(): void;
+}
+
 export interface Klieg {
   readonly supported: boolean;
   /** Resolves when the effect leaves the screen, whether it played out or was cancelled. */
-  fire(text: string, options?: FireOptions): Promise<void>;
+  fire(text: string, options?: FireOptions): FireHandle;
   /** Cancels everything in flight; the stage comes down once the running effect has settled. */
   destroy(): void;
+}
+
+/** The live link between a `FireHandle` and its effect, which may not have started yet. */
+interface FireControl {
+  /** Set while the effect is waiting on a dismissal; null before it starts and after it settles. */
+  dismiss: (() => void) | null;
+  /** An `advance()` that arrived before the effect did, to spend on its first hold. */
+  latched: boolean;
 }
 
 export function createKlieg(options: KliegOptions): Klieg {
   const placement = options.placement ?? { kind: 'fullscreen' };
   const anchored = placement.kind === 'element';
+  const clickAnywhere = placement.kind === 'element' && placement.clickAnywhere === true;
   if (anchored && options.target) {
     throw new Error('klieg: an element placement is its own parent, so `target` cannot apply');
   }
@@ -356,7 +411,12 @@ export function createKlieg(options: KliegOptions): Klieg {
     return fontPromise;
   }
 
-  async function run(text: string, opts: FireOptions, signal: AbortSignal): Promise<void> {
+  async function run(
+    text: string,
+    opts: FireOptions,
+    signal: AbortSignal,
+    control: FireControl,
+  ): Promise<void> {
     const loaded = await font();
     if (signal.aborted) return;
 
@@ -375,9 +435,12 @@ export function createKlieg(options: KliegOptions): Klieg {
           options.framing?.width,
           options.framing?.height,
           options.framing?.align,
+          opts.lineAlign,
         ),
         opts.wrap,
         opts.tint,
+        undefined,
+        stage.environment?.texture ?? null,
       );
     } catch (err) {
       // This rejects before the settle() that would otherwise free the bloom's render targets.
@@ -430,6 +493,7 @@ export function createKlieg(options: KliegOptions): Klieg {
     const hold = opts.hold ?? 1200;
     const untilClick = hold === 'click';
     const exit = resolveSlot(opts.exit ?? 'fade', EXIT);
+    const enterEnd = slotDuration(enter);
     const blendMs = opts.blendMs ?? 120;
     const timeline = new Timeline({
       enter,
@@ -448,6 +512,7 @@ export function createKlieg(options: KliegOptions): Klieg {
     // A stage that holds on 'click' waits for the same press the top-level hold does, and gets no
     // listener of its own — so the whole effect stalls unless this covers both.
     const awaitsClick = untilClick || stages.some((s) => s.hold === 'click');
+    const reporter = opts.onPhase ? new PhaseReporter(isolate(opts.onPhase)) : null;
     const sequence = stages.length
       ? new Sequence({
           enter,
@@ -464,6 +529,7 @@ export function createKlieg(options: KliegOptions): Klieg {
           hold: typeof hold === 'number' ? hold : 'click',
           blendMs,
           target: word,
+          onStage: reporter ? (index) => reporter.stage(index) : undefined,
         })
       : null;
     const driver: Sequence | Timeline = sequence ?? timeline;
@@ -479,6 +545,7 @@ export function createKlieg(options: KliegOptions): Klieg {
       const settle = (done: () => void) => {
         if (settled) return;
         settled = true;
+        control.dismiss = null;
         off();
         detachDismiss();
         stage.scene.remove(word.group);
@@ -501,23 +568,38 @@ export function createKlieg(options: KliegOptions): Klieg {
             detachDismiss();
           }
         };
-        // Capture on window catches the press in both modes; `modal` only decides whether the
-        // canvas absorbs it on the way down or the page underneath sees it too.
-        const onPointer = () => dismiss();
-        const onKey = (e: KeyboardEvent) => {
-          if (e.key === 'Escape') dismiss();
-        };
-        globalThis.addEventListener('pointerdown', onPointer, { capture: true, passive: true });
-        globalThis.addEventListener('keydown', onKey);
         // A modal hold is a keyboard trap without Escape: it swallows input and never times out.
+        // Under host dismissal that trade is the host's to make, since it holds the input.
         if (opts.modal) stage.setInteractive(true);
 
-        detachDismiss = () => {
-          globalThis.removeEventListener('pointerdown', onPointer, { capture: true });
-          globalThis.removeEventListener('keydown', onKey);
-          stage.setInteractive(false);
-          detachDismiss = () => {};
-        };
+        if (opts.dismiss === 'host') {
+          detachDismiss = () => {
+            stage.setInteractive(false);
+            detachDismiss = () => {};
+          };
+        } else {
+          // Capture on window catches the press in both modes; `modal` only decides whether the
+          // canvas absorbs it on the way down or the page underneath sees it too.
+          const onPointer = () => dismiss();
+          const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') dismiss();
+          };
+          globalThis.addEventListener('pointerdown', onPointer, { capture: true, passive: true });
+          globalThis.addEventListener('keydown', onKey);
+
+          detachDismiss = () => {
+            globalThis.removeEventListener('pointerdown', onPointer, { capture: true });
+            globalThis.removeEventListener('keydown', onKey);
+            stage.setInteractive(false);
+            detachDismiss = () => {};
+          };
+        }
+
+        control.dismiss = dismiss;
+        if (control.latched) {
+          control.latched = false;
+          dismiss();
+        }
       }
 
       let lastTick = clock.now();
@@ -530,11 +612,26 @@ export function createKlieg(options: KliegOptions): Klieg {
           lastTick = now;
           // rAF reports the frame's start time, which can precede a now() sampled moments earlier.
           const since = now - startedAt;
-          const settled = slotDuration(enter);
-          const raw = Math.max(still ? settled : since, 0);
+          const raw = Math.max(still ? enterEnd : since, 0);
           const elapsed = sequence ? raw : Math.min(raw, timeline.duration);
           // Ahead of the pose, or the fit and the phase advance both lag it by a frame.
           sequence?.tick(elapsed);
+
+          // Detected against this frame rather than scheduled at fire time: `release()` moves
+          // `activeEnd`, so a click hold has no exit instant until the press lands. Reduced motion
+          // pins `elapsed` to the settled pose, so it reads both boundaries off `since` instead.
+          if (reporter) {
+            if (still) {
+              const over = untilClick
+                ? released
+                  ? 0
+                  : Number.POSITIVE_INFINITY
+                : (hold as number);
+              reporter.observe(since, 0, over);
+            } else {
+              reporter.observe(elapsed, enterEnd, sequence ? sequence.exitAt : timeline.activeEnd);
+            }
+          }
 
           // Resolved on demand, once per frame: placing the cursor reads the canvas' box, which
           // flushes layout, and most signs run no piece that asks for it.
@@ -574,11 +671,12 @@ export function createKlieg(options: KliegOptions): Klieg {
                   cameraZ: stage.camera.position.z,
                   aspect: stage.camera.aspect,
                   depth: DEFAULT_GLYPH_OPTIONS.depth,
+                  bevel: DEFAULT_GLYPH_OPTIONS.bevelThickness,
                   width: key.width,
                   height: key.height,
                   baselineRatio,
                 });
-                layer.setLayer(projected.boxes, projected.fontSize, family, key);
+                layer.setLayer(projected.boxes, projected.fontSize, family, key, projected.scaleX);
               } else {
                 layer.setVisible(true);
               }
@@ -595,6 +693,9 @@ export function createKlieg(options: KliegOptions): Klieg {
           );
           stage.scene.environmentRotation.x = env.pitch;
           stage.scene.environmentRotation.y = env.yaw;
+          // The scene write above reaches only a material with no `envMap` of its own; every
+          // material the word draws with carries one.
+          word.setEnvRotation(env.pitch, env.yaw);
 
           if (bloom) {
             bloom.render(stage.scene, stage.camera);
@@ -626,19 +727,42 @@ export function createKlieg(options: KliegOptions): Klieg {
   return {
     supported,
     fire(text, opts = {}) {
-      // Every honest meaning for it hangs: a window listener dismisses on clicks that have nothing
-      // to do with the strip, and one scoped to the anchor never fires once the anchor scrolls off,
-      // stalling the effect and blocking the queue for good.
-      if (anchored && (opts.hold === 'click' || opts.stages?.some((s) => s.hold === 'click'))) {
-        throw new Error("klieg: `hold: 'click'` has no meaning for an element placement");
+      const control: FireControl = { dismiss: null, latched: false };
+      const handle = (promise: Promise<void>): FireHandle =>
+        Object.assign(promise, {
+          advance(): void {
+            if (control.dismiss) control.dismiss();
+            else control.latched = true;
+          },
+        });
+
+      // The dismissal is a press anywhere in the window, which on a strip sharing a page ends the
+      // effect on clicks that have nothing to do with it. An anchor filling the viewport has no
+      // such clicks, so it may opt in; one that has not stays out rather than stall on a listener
+      // it never wanted. `dismiss: 'host'` attaches no listener, so there is nothing to gate.
+      if (
+        anchored &&
+        !clickAnywhere &&
+        opts.dismiss !== 'host' &&
+        (opts.hold === 'click' || opts.stages?.some((s) => s.hold === 'click'))
+      ) {
+        throw new Error(
+          "klieg: an element placement takes `hold: 'click'` only with `clickAnywhere` set on it",
+        );
       }
       if (opts.hold === 'forever' && opts.stages?.length) {
         throw new Error(
           "klieg: `hold: 'forever'` never advances a stage, so `stages` cannot apply",
         );
       }
-      if (!supported || destroyed) return Promise.resolve();
-      return queue.push(`${counter++}:${text}`, (signal) => run(text, opts, signal));
+      if (!supported || destroyed) return handle(Promise.resolve());
+      return handle(
+        queue.push(
+          `${counter++}:${text}`,
+          (signal) => run(text, opts, signal, control),
+          opts.signal,
+        ),
+      );
     },
     destroy() {
       destroyed = true;

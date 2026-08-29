@@ -42,6 +42,7 @@ const KEY_SET: Record<keyof LookParams, true> = {
   emissiveIntensity: true,
   specularIntensity: true,
   specularColor: true,
+  envMapIntensity: true,
 };
 const KEYS = Object.keys(KEY_SET) as (keyof LookParams)[];
 const NAMES: LookName[] = [
@@ -75,10 +76,23 @@ function withLook(name: LookName): THREE.MeshPhysicalMaterial {
 }
 
 describe('createMaterial', () => {
-  it('is a physical material with the envMap intensity the looks are tuned against', () => {
-    const material = createMaterial();
-    expect(material).toBeInstanceOf(THREE.MeshPhysicalMaterial);
+  it('is a physical material', () => {
+    expect(createMaterial()).toBeInstanceOf(THREE.MeshPhysicalMaterial);
+  });
+
+  // Without an `envMap` of its own three overwrites the uniform with `scene.environmentIntensity`
+  // every frame, which is how the authored 2.2 rendered at 1 for as long as it existed.
+  it('carries the studio it is given, which is what lets a look set its own exposure', () => {
+    const studio = new THREE.Texture();
+    expect(createMaterial(studio).envMap).toBe(studio);
+  });
+
+  it('takes its exposure from the look rather than from construction', () => {
+    const material = createMaterial(new THREE.Texture());
+    applyLook(material, {});
     expect(material.envMapIntensity).toBe(2.2);
+    applyLook(material, { envMapIntensity: 6 });
+    expect(material.envMapIntensity).toBe(6);
   });
 });
 
@@ -190,14 +204,17 @@ describe('applyLook', () => {
   });
 
   it('gives each material its own thickness range instead of sharing the module constant', () => {
+    // Read off the spec rather than written out: this is about aliasing, and hardcoding the
+    // numbers made re-tuning `oil` fail a test that has no opinion about how oil should look.
+    const range = LOOKS.oil.iridescenceThicknessRange as [number, number];
     const a = withLook('oil');
     const b = withLook('oil');
-    expect(a.iridescenceThicknessRange).toEqual([100, 640]);
+    expect(a.iridescenceThicknessRange).toEqual(range);
     expect(a.iridescenceThicknessRange).not.toBe(b.iridescenceThicknessRange);
 
     a.iridescenceThicknessRange[1] = 999;
-    expect(b.iridescenceThicknessRange[1]).toBe(640);
-    expect(withLook('oil').iridescenceThicknessRange[1]).toBe(640);
+    expect(b.iridescenceThicknessRange[1]).toBe(range[1]);
+    expect(withLook('oil').iridescenceThicknessRange[1]).toBe(range[1]);
   });
 
   it('marks the material for recompile, since transmission and iridescence change the program', () => {

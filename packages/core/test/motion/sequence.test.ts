@@ -442,4 +442,88 @@ describe('Sequence', () => {
     seq.tick(400);
     expect(seq.isFinished(401)).toBe(true);
   });
+
+  it('eases the outgoing loop away instead of dropping it at the boundary', () => {
+    // `float`'s own amplitude, and a hold that ends on the loop's crest — where a frame of the
+    // loop moves nothing, so any step across the switch is the loop being discarded outright.
+    const AMPLITUDE = 0.12;
+    const swing: MotionPiece = {
+      duration: 4000,
+      offset: (t) => ({ position: [0, AMPLITUDE * Math.sin(t * Math.PI * 2), 0] }),
+    };
+    // Zero deltas so the only thing that can move at the switch is the loop coming off.
+    const t = target({
+      kept: [0],
+      dropped: [1],
+      delta: [
+        [0, 0],
+        [0, 0],
+      ],
+    });
+    const seq = new Sequence({
+      enter: NONE,
+      active: swing,
+      stages: [stage({ tween: { duration: 400 } })],
+      exit: NONE,
+      hold: 1000,
+      blendMs: 0,
+      target: t,
+    });
+
+    let previous = seq.poseAt(0, letter).position[1] as number;
+    let biggest = 0;
+    for (let ms = 16; ms <= 1400; ms += 16) {
+      seq.tick(ms);
+      const y = seq.poseAt(ms, letter).position[1] as number;
+      biggest = Math.max(biggest, Math.abs(y - previous));
+      previous = y;
+    }
+    // Discarding the crest steps the whole amplitude in one frame; easing it away over the stage
+    // is an order of magnitude less.
+    expect(biggest).toBeLessThan(AMPLITUDE / 4);
+  });
+
+  it('reports each stage as its boundary lands, catching up across a long frame', () => {
+    const seen: number[] = [];
+    const t = target();
+    const seq = new Sequence({
+      enter: NONE,
+      active: NONE,
+      stages: [stage(), stage(), stage()],
+      exit: NONE,
+      hold: 0,
+      blendMs: 0,
+      target: t,
+      onStage: (index) => seen.push(index),
+    });
+
+    seq.tick(0);
+    // The opening word is phase -1 and has no boundary, so nothing has settled yet.
+    expect(seen).toEqual([]);
+
+    seq.tick(10_000);
+    expect(seen).toEqual([0, 1, 2]);
+  });
+
+  it('withholds the closing exit instant until the last phase carries it', () => {
+    const t = target();
+    const seq = new Sequence({
+      enter: NONE,
+      active: NONE,
+      stages: [stage(), stage()],
+      exit: NONE,
+      hold: 0,
+      blendMs: 0,
+      target: t,
+    });
+
+    seq.tick(0);
+    expect(seq.exitAt).toBe(Number.POSITIVE_INFINITY);
+
+    // A stage's span is max(move 200, no exit) = 200, and `partition` takes the longer half, so
+    // each stage timeline runs 200 + 100. The opening timeline is all zeroes, so phase 1 starts
+    // at 300 and its own exit begins 300 into it.
+    seq.tick(10_000);
+    expect(seq.exitAt).toBe(600);
+  });
 });

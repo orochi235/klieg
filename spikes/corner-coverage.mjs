@@ -29,7 +29,11 @@ const spec = { ...specOf(look).decoration, pathSource: SOURCE };
 if (process.env.RADIUS) spec.radius = Number(process.env.RADIUS);
 if (process.env.BEND) spec.bend = Number(process.env.BEND);
 const rhoMin = minBendRadius(spec.radius, spec.bend);
-const WEIGHTS = { connect: { break: 0, connect: 1 }, break: { break: 1, connect: 0 } };
+const WEIGHTS = {
+  connect: { break: 0, connect: 1 },
+  break: { break: 1, connect: 0 },
+  hairpin: { break: 0, connect: 1, hairpin: 4 },
+};
 const mode = process.env.CORNERS ?? 'connect';
 const corners = WEIGHTS[mode] ?? spec.corners;
 const minRun = Number(process.env.MIN_RUN ?? spec.minRun);
@@ -64,7 +68,7 @@ function coverGrid(points, cell) {
 }
 
 console.log(
-  `look ${look}  rejoin ${process.env.REJOIN ?? 'drop'}  source ${SOURCE}  corners ${mode}  blockout ${process.env.BLOCKOUT ?? 0}  minRun ${minRun}  ` +
+  `look ${look}  hairpin ${process.env.HAIRPIN ?? 'uturn'}  rejoin ${process.env.REJOIN ?? 'drop'}  source ${SOURCE}  corners ${mode}  blockout ${process.env.BLOCKOUT ?? 0}  minRun ${minRun}  ` +
     `radius ${spec.radius}  rhoMin ${rhoMin.toFixed(4)} em`,
 );
 console.log(
@@ -92,6 +96,7 @@ for (const ch of letters) {
     spacing: spec.spacing,
     blockout: Number(process.env.BLOCKOUT ?? 0),
     rejoin: process.env.REJOIN ?? 'drop',
+    hairpin: process.env.HAIRPIN ?? 'uturn',
     seed: 0,
   });
   const drawn = cut.runs.flatMap((r) => r.points);
@@ -136,7 +141,7 @@ for (const ch of letters) {
     }
     if (OUT) misses.push([pts, hit]);
   }
-  const census = { connect: 0, return: 0, break: 0 };
+  const census = { connect: 0, return: 0, break: 0, hairpin: 0 };
   for (const c of cut.corners) census[c.strategy]++;
   if (OUT) panels.push({ ch, misses, runs: cut.runs, holes, pathLen });
   totalPath += pathLen;
@@ -147,7 +152,8 @@ for (const ch of letters) {
       `${nicks.toFixed(3)} ${((nicks / pathLen) * 100).toFixed(0).padStart(3)}%  ` +
       `${holes.toFixed(3)} ${((holes / pathLen) * 100).toFixed(0).padStart(3)}%  ` +
       `${String(cut.corners.length).padStart(5)}  ${String(census.connect).padStart(2)}  ` +
-      `${String(census.return).padStart(2)}  ${String(census.break).padStart(2)}`,
+      `${String(census.return).padStart(2)}  ${String(census.break).padStart(2)}  ` +
+      `hp ${String(census.hairpin).padStart(2)}`,
   );
 }
 if (OUT) {

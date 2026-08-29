@@ -54,24 +54,114 @@ Do this on its own, with the look snapshots as the guard, before any registry wo
 `generate`, `wander`, `cut`, `assign`, `sweep`, and `buildTubeBlueprint` becomes a fold over it.
 Behavior is unchanged; the sequence is merely named.
 
-**Repairs.** `CUT_REPAIRS` is the same shape one level down, over `fillet`, `stretch`, `setback`,
-`resume`, `close`, `return`, and `mergeArc` folds over it instead of doing the work inline.
+**Repairs.** `CUT_REPAIRS` is the same idea one level down, over `fillet`, `stretch`, `setback`,
+`resume`, `close`, `return`. What every repair owes the lab is a *site* — where it would have fired
+and what it would have drawn there — reported whether or not it is switched on. Showing a worse path
+without showing what was skipped leaves the reader to infer the difference. An earlier draft made
+that a per-repair `applies(ctx)` / `apply(span, ctx)` split; the reasons below are why it could not
+be, and slice 2 shipped the gate and the site at each call site instead, with the registries
+carrying only identity, label and order.
 
-Each repair splits into `applies(ctx)` and `apply(span, ctx) → span`. The split is the point: with a
-repair switched off the lab still runs `applies`, so it can draw where the repair would have fired
-and what it would have drawn, instead of showing a worse path and leaving the reader to infer why.
+**It is not a fold, and it does not live in `mergeArc`.** This paragraph replaces an earlier draft
+that said both; the draft was written from the function names rather than from the call graph, and
+measuring it found five independent reasons a linear
+`repairs.reduce((span, r) => r.apply(span, ctx), span)` cannot express the corner stage:
 
-Four of the six are already shaped this way — `resumeAt` returns an index, `eatenBy` and `legGap`
-return numbers, `dropHead`, `dropTail` and `splitReturn` return new arrays. Only `trimTail` (returns
-`void`) and `closeLoop` (mutates both arguments) need real surgery.
+- **The accumulator is not one span.** `mergeArc`'s state is the pair (`target`, `next` plus a
+  cursor into it). `trimTail` acts on `target`; `indexPast` yields a `start` into `next` that three
+  later branches read. `next` is never mutated, deliberately — the same array is the leg for the
+  neighbouring corner's decision.
+- **Each id fires twice, on opposite sides, with incompatible bodies.** `setback` is
+  `trimTail(target, …): void` entering and `indexPast(next, …): number` leaving. `resume` is
+  `target.length = keep + 1` entering and `push(next[from..])` leaving.
+- **`fillet` is spliced into the middle of `resume`.** The real order is side-major, not id-major:
+  entry `stretch` → entry `setback` → entry `resume` → `fillet` → exit `stretch`+`setback` → exit
+  `resume`. A fold runs each id once, in id order.
+- **Two branches return out of the middle** (the exit-side `bridge` and `relax`). A reducer step
+  cannot terminate the fold.
+- **`apply` produces output that is not the span.** `decision.at` is written into the
+  `CornerDecision` that `stitchPath` returns and `cutIntoRuns` turns into `CornerRecord`s.
 
-`cutIntoRuns` and `buildTubeBlueprint` each gain two optional parameters: `enabled?:
-ReadonlySet<string>` and `onStage?(id, snapshot)`. Both absent is exactly today's behavior, which is
-what every shipped caller passes.
+**Three of the six never enter `mergeArc` at all.** `close` (`closeLoop`) and `return`
+(`splitReturn`) are called only from `stitchPath`, and they are span-*list* operations —
+`splitReturn` turns one span into three, `closeLoop` acts on two spans at once — so neither fits a
+fold whose accumulator is a single span. `stretch` is two unrelated implementations under one name:
+a bare `target.pop()` loop in `mergeArc` and `dropHead`/`dropTail` in `stitchPath`, **with different
+floors** (the pop can empty the span; `dropTail` floors at 2). `fillet` straddles both scopes,
+decided in `stitchPath` and applied in `mergeArc`. Only `setback` and `resume` are wholly inside
+`mergeArc`, and both fire twice.
+
+**A site, not a boolean** — a leg index plus the geometry that would have been drawn, which is what
+the lab needs to ghost. `bridgeBefore`/`bridgeAfter` already return `{ points, at }` and `resumeAt`
+already returns an index, so `resume` reports for free — but as *three* candidate providers behind
+one id (`bridge` → `relax` → walk), chosen by `rejoin` with fallback.
+
+**The shape that fits** is three registries, not one: a per-side inner pass inside `mergeArc` over
+`[stretch, setback, resume]` run twice with `side: 'entry' | 'exit'` in a shared context, the
+`fillet` splice fixed between the two passes; an outer registry at the `stitchPath` level for
+`close`, `return` and the break-path half of `stretch`; and `hairpin` — a seventh repair the six ids
+never named — as a whole-corner alternative that bypasses both.
+
+`cutIntoRuns` and `buildTubeBlueprint` each gain two optional parameters. Slice 1 shipped
+`buildTubeBlueprint`'s as `stages?: ReadonlySet<TubeStageId>` and
+`onStage?(id, state, ran: boolean)`, typed per level rather than as one `ReadonlySet<string>`
+shared by both registries: a caller passing only repair ids into a shared set would switch off all
+five stages and get an empty blueprint with nothing thrown. `onStage` fires for switched-off stages
+too, so a lab draws a bypassed step rather than a blank panel. Both absent is exactly today's
+behavior, which is what every shipped caller passes.
+
+**Two things had to be fixed before a repair toggle meant anything**, both found while measuring the
+above and neither caused by the refactor. Both are done:
+
+- **The seed stream keys per corner rather than per draw** — shipped. `stitchPath` used to take one
+  draw in `pickStrategy` and a second only when the strategy was `break`, so switching the `fillet`
+  repair off shifted the stream for *every later corner in the glyph* and the lab would have shown
+  a toggle changing corners it has nothing to do with. Each corner's two draws now key on its own
+  index. Forcing the second draw unconditionally is not a separate, output-preserving option: it is
+  the same change, and produces byte-identical geometry, because the old key was already `corner +
+  breaks before it`. Only `tubing` re-renders — `piping`'s corners never break and every other
+  look's always do.
+- **A relaxed vertex inherits the leg's provenance** — shipped. `relaxOnto` builds its window with
+  `p.clone()`, and those copies resolved to `null` in `Run.from`, which reads as fillet-built and
+  stops `smoothedPoints` smoothing them; when the chain already cleared `rhoMin` on the first pass
+  it returned them unmoved, so the copies were bit-identical to the leg vertices they stood for. It
+  now takes an `inherit` callback and registers each copy against its source in `cutIntoRuns`'s
+  provenance map. Threaded explicitly through `stitchPath` and `mergeArc` rather than kept in a
+  module-level map, which is the ambient state `markAuthored` was removed for.
 
 `wanderPaths` stays where it is in the order and stays in place. It runs before the cut so the corner
 stage sees the bends it introduces, and corner records alias the vectors it moves. It is a stage in
 the registry, not a pure one; switching it off is setting amplitude to zero.
+
+## Every repair has to report before the lab can draw it
+
+Slice 2 wired `repairs` and `onRepair` through `cutIntoRuns`, but six reports are absent or wrong,
+and a toggle whose report is wrong is worse than one that is missing — it draws a confident ghost in
+the wrong place. Fix all six before the lab reads any of them. Every one must leave the built
+geometry byte-identical with all repairs on; only the *off* states may move.
+
+- **`RepairSite` carries an anchor index and nothing else for removal repairs.** `stretch`,
+  `setback` and the walk's `resume` report `{ at, points: [] }`, so a ghost can draw a dot and no
+  more. Add `removed: readonly THREE.Vector3[]`, captured before the trim: `points` is what the
+  repair adds, `removed` is what it takes out, and both empty is a genuine no-op.
+- **`RepairSide` is declared and never passed.** A consumer sees two `setback` reports per corner
+  and cannot tell the ends apart. It goes on `RepairSite` rather than into the callback signature,
+  because `close` and `return` have no side and would have to pass null.
+- **Exit-side `resume` neither gates nor reports.** The tail of `mergeArc` runs
+  `bridgeAfter` / `relaxOnto` / `resumeAt` unconditionally. This is the one fix that changes an
+  off-state's geometry, and it is why "twice per corner" currently holds only for `setback`.
+- **`hairpin` is gate-only.** `strategy = 'break'` in the decision loop, and `spliceHairpin` returns
+  out of `mergeArc` ahead of any report, so nothing distinguishes a hairpin corner from a filleted
+  one without re-deriving the decision.
+- **Two silences.** The blockout fillet candidate never reports; and a fillet-off corner falls to
+  `break`, so `strategy === 'return'` never holds and `return` goes quiet at a corner that visibly
+  did something.
+- **The break-side `stretch` has no gate and no report.** `dropHead` and `dropTail` call
+  `trimStretch` directly, which makes `SPAN_REPAIRS`' `stretch (break)` entry enumerable and inert.
+
+**Left exposed, not fixed.** Switching `setback` off under `rejoin: 'bridge'` cascades — 1505 points
+against 241 on the test square — because the leg-room math assumes the trim happened. The lab can
+reach that combination and flags it as a bad measure; the geometry is a separate chase.
 
 ## What the lab becomes
 
@@ -84,11 +174,20 @@ renders one trial per record in a grid with clone, reset, snapshot and reorder, 
 needs no design: clone a trial and change the letter. What varies across tiles is whatever is being
 chased that session.
 
-The config gains:
+The config gains four knobs. The first two are the stage story, and they are orthogonal rather
+than alternatives — one chooses what runs, the other what you look at:
 
-- **stage** — which step's output the canvas draws.
-- **six repair toggles** — with ghost geometry for the ones switched off.
-- **subject** — one hard corner, or the whole letter.
+- **stages** — which of the five actually run, as the `TubeStageId` set slice 1 shipped.
+- **draw at** — which stage's output the canvas shows, collected through `onStage`. The snapshot
+  has to *copy*: `TubeStageState`'s arrays are pushed into by later stages, so holding a reference
+  shows the end state under every setting.
+- **seven repair toggles** — each drawing its reported site: `points` in one ink for what the
+  repair would add, `removed` in another for what it would delete.
+- **rejoin** and **subject** — `bridge | widen | relax | drop`, and one hard corner or the whole
+  letter.
+
+`buildScene` currently passes `amplitude: 0`, hiding the wander from the lab. That comes out: with
+`wander` selectable the lab should show the bends the cut actually sees.
 
 `scene.ts` finds its run by searching outward from the corner, not at it. A hard corner's own vertex
 is never carried by any run — being acted on by the cut is what makes a corner hard, so break
@@ -106,9 +205,38 @@ proximity picked a 9-point run over the 25-point run that actually carries it.
 An earlier pass measured 52 splits rather than 83. Both claimed to match on `path` and `index`, so
 the discrepancy is unexplained and the 83 is the one the shipped code produces.
 
-`scene.ts` should come out thinner, not fatter. It currently both finds corners and hand-rolls
-repairs; `blendAcross` and `relaxAcross` move into core as registry entries, and the lab stops
-owning geometry.
+`scene.ts` comes out thinner, not fatter. Its `built | merge | relax | biarc | cut` dropdown
+predates `TubeSpec.rejoin` — it previewed geometry core could not yet produce, using `blendAcross`
+and `relaxAcross`, lab-local copies of `bridgeBefore` and `relaxOnto`. All of it is deleted rather
+than moved into core: core already draws every one of those paths, and a second implementation is
+one that can disagree with the renderer without anything failing. The knob becomes `rejoin`, driven
+through `tubeSpecOf` into the real build.
+
+`dev/tube-lab/src/render/skeleton.ts` still reaches core through `../../../../src/render/tube/...`
+where the corner lab uses the `@core/*` alias. Fix that before slice 3 adds `repairs.js` imports to
+the same deep path.
+
+## Built to become a flowchart
+
+`@weasel-js/diagram` is designed but not built (`weasel@6827cd04`), and names pipelines as a
+target: participants are ordinary scene nodes carrying a `DiagramNode` trait, a stage's body
+builder is `outline: 'rect', body: [title, ...portRows]`, and `layered` is its DAG layout. When it
+ships, the honest shape for this lab is the pipeline drawn as a graph — click a stage to draw at
+it, toggle it to switch it off, and hang the repairs off `cut`.
+
+Slice 3 does not build that and does not wait for it. What it does is make the lab's model a graph
+already, so the plugin later renders the structure that is there rather than one invented for it:
+
+- **The registries carry their attachment.** Each repair entry gains `stage: TubeStageId` and
+  `level: 'corner' | 'span' | 'decision'` — all seven attach to `cut`, but at three different
+  points, and today that fact lives only in prose. Nodes come from `TUBE_STAGES`; edges come from
+  the stage order plus these two fields.
+- **The lab derives its controls from the registries** rather than listing seven ids. Grouping the
+  toggles by attachment is worth doing on its own, and it means the panel and a future diagram read
+  the same source.
+
+This stays `@internal` along with the registries themselves. A published klieg must not gain a
+dependency on a lab plugin, and the topology is not public API.
 
 ## Traps
 
@@ -126,6 +254,14 @@ sourceless run vertex must sit where no contour vertex already sits. Counting nu
 fillets contributed needs plumbing that does not exist, and a null-block-length threshold does not
 work — a clone inside a loop nulls every point that loop touches, giving a long block rather than an
 isolated one.
+
+**`closeLoop` can be handed the same array twice.** Its call site passes
+`closedSpans[0]?.points ?? current` as `head`, so when no return fired on that contour, `head` and
+`current` are the same object: it shifts the span's own front and then pushes that shifted first
+element onto the span's own end. That vertex now appears twice in one span, so the provenance map
+resolves two run positions to one `VertexSource` — the same one-to-many the `slice` trap describes,
+arriving by a different route. A pure version has to return both arrays, and must return the *same*
+array for both when it was given the same array for both, or the no-return branch loses its shift.
 
 **`slice` shares boundary points.** `cur = [span[i]]` reuses the object, so one source vertex maps
 to the end of one run and the start of the next. Vertex to source is unambiguous; source to vertex
@@ -150,5 +286,17 @@ lab already reaches `@core/render/tube/*`.
 - `scene.ts` finds its built run through provenance, and picks the same run the nearest-point search
   picked, for every hard corner of the alphabet.
 - Switching a repair off and back on returns the tile to the built path exactly.
-- A repair switched off draws its ghost at the site `applies` reported.
+- A repair switched off draws its ghost at the site it reported.
+
+Slice 3's own lines:
+
+- All seven repairs report on both the sides they act on, switched off included — asserted by
+  collecting `onRepair` over the alphabet at both tube looks and requiring every id to appear.
+- Every removal-type site carries the vertices it removed, not just an index, and every site from
+  inside `mergeArc` names its side.
+- Turning every repair on reproduces today's geometry exactly, including the exit-side `resume`
+  that previously ran ungated — run count, per-run point counts and tightest bend.
+- `dev/kliegsminister` builds and its `junction` tiles survive drawing self-intersecting geometry
+  from a switched-off repair rather than throwing.
+- `scene.ts` imports nothing from `bend.js` that draws geometry, and defines no repair of its own.
 - `npm run check` and `npx playwright test` stay green.

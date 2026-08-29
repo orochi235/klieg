@@ -56,7 +56,10 @@ type LookKey =
   // tool for `gem` and `velvet`, inert on `gold` and `chrome`. `reflectivity` is deliberately
   // absent: three implements it as a second accessor over `ior`, which is already authorable.
   | 'specularIntensity'
-  | 'specularColor';
+  | 'specularColor'
+  // Only reaches the shader because `createMaterial` gives every material the studio as its own
+  // `envMap`: three overwrites this uniform with `scene.environmentIntensity` when one is absent.
+  | 'envMapIntensity';
 
 // Every LookKey must still name a real material property. This runs where `@types/three` is
 // installed — here — rather than in a consumer's build, which is the only place it ever worked.
@@ -108,6 +111,7 @@ export const DEFAULTS: LookParams = {
   // three's own defaults, so adding these left every shipped look rendering exactly as it did.
   specularIntensity: 1,
   specularColor: 0xffffff,
+  envMapIntensity: 2.2,
 };
 
 // Every look is applied over DEFAULTS, never over the previous look, so switching cannot
@@ -123,8 +127,10 @@ export const LOOKS: Record<LookName, LookSpec> = {
     // clearcoat sits ABOVE the thin film and flattens it; iridescence needs it off.
     clearcoat: 0,
     iridescence: 1,
-    iridescenceIOR: 1.8,
-    iridescenceThicknessRange: [100, 640],
+    // The film, not the room, is where oil's colour comes from now: a near-black metal shows
+    // reflected light tinted by the film, so a two-toned studio used to be doing this work.
+    iridescenceIOR: 1.4,
+    iridescenceThicknessRange: [100, 520],
   },
   gem: {
     color: 0xffffff,
@@ -358,6 +364,7 @@ const RANGES: Partial<Record<LookKey, [number, number]>> = {
   thickness: [0, Number.POSITIVE_INFINITY],
   attenuationDistance: [0, Number.POSITIVE_INFINITY],
   emissiveIntensity: [0, Number.POSITIVE_INFINITY],
+  envMapIntensity: [0, Number.POSITIVE_INFINITY],
   ior: [1, 2.333],
   iridescenceIOR: [1, 5],
   dispersion: [0, 10],
@@ -388,8 +395,8 @@ function resolveParams(spec: LookSpec): LookParams {
  * The flake chunk is always injected and gated on `uFlakeDensity > 0`, so switching looks never
  * needs a recompile and one program serves every look.
  */
-export function createMaterial(): THREE.MeshPhysicalMaterial {
-  const material = new THREE.MeshPhysicalMaterial({ envMapIntensity: 2.2 });
+export function createMaterial(envMap: THREE.Texture | null = null): THREE.MeshPhysicalMaterial {
+  const material = new THREE.MeshPhysicalMaterial({ envMap });
   const uniforms = createFlakeUniforms();
   material.userData.flake = uniforms;
   material.onBeforeCompile = (shader) => patchForFlakes(shader, uniforms);

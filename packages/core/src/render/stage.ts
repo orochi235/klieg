@@ -1,9 +1,22 @@
 import * as THREE from 'three';
 import type { Align, Budget } from '../text/layout.js';
 import { buildEnvironment } from './environment.js';
+import { DEFAULTS } from './looks.js';
 
 /** Where the canvas lives: over the whole viewport, or inside one element of the page. */
-export type Placement = { kind: 'fullscreen' } | { kind: 'element'; el: HTMLElement };
+export type Placement =
+  | { kind: 'fullscreen' }
+  | {
+      kind: 'element';
+      el: HTMLElement;
+      /**
+       * Lets this anchor take `hold: 'click'`. The dismissal is a press anywhere in the window,
+       * so set it only where that reads as dismissing the type — an anchor filling the viewport,
+       * as a `/show/` page's does. On a strip sharing a page, every unrelated click ends the
+       * effect, which is why an anchor does not take a click hold unless it says so.
+       */
+      clickAnywhere?: boolean;
+    };
 
 export interface StageOptions {
   /** Resolved at mount, not at construction, so a document-less environment can still get here. */
@@ -151,6 +164,9 @@ export class Stage {
     this.renderer = renderer;
     this.environment = buildEnvironment(renderer);
     this.scene.environment = this.environment.texture;
+    // Only reached by a material with no `envMap` of its own; klieg's all carry one, so this is
+    // here so that such a material renders at the looks' exposure rather than silently at 1.
+    this.scene.environmentIntensity = DEFAULTS.envMapIntensity;
 
     const onResize = () => this.resize();
     // Kept for the anchored case too: moving the window to a display of another devicePixelRatio
@@ -220,7 +236,7 @@ export class Stage {
    * `resize` measured — the viewport, or the anchor's box — because `aspect` comes from it and
    * the frustum height at this depth is fixed.
    */
-  viewportBudget(widthFrac = 0.62, heightFrac = 0.3, align?: Align): Budget {
+  viewportBudget(widthFrac = 0.62, heightFrac = 0.3, align?: Align, lineAlign?: Align): Budget {
     const vh = 2 * Math.tan((this.camera.fov * Math.PI) / 360) * this.camera.position.z;
     return {
       width: vh * this.camera.aspect * widthFrac,
@@ -228,6 +244,7 @@ export class Stage {
       extent: vh * this.camera.aspect,
       cameraZ: this.camera.position.z,
       edge: edgeFor(align ?? this.defaultAlign(), this.direction()),
+      lineEdge: lineAlign ? edgeFor(lineAlign, this.direction()) : undefined,
       // The anchor's box is the bound already, and filling it is the whole point of anchoring.
       cap: this.placement.kind === 'element' ? Number.POSITIVE_INFINITY : undefined,
     };

@@ -1,22 +1,11 @@
 import * as THREE from 'three';
-import { mergeOffsets } from '../effects/compositor.js';
-import { EFFECTS } from '../effects/pieces.js';
-import type {
-  EffectPiece,
-  EffectSpec,
-  FrameCtx,
-  PartInfo,
-  PartKind,
-  PartOffset,
-  ResolvedOffset,
-} from '../effects/types.js';
+import { EffectFrame, planEffects } from '../effects/frame.js';
+import type { EffectSpec, FrameCtx, PartInfo, PartKind, ResolvedOffset } from '../effects/types.js';
 import { blankPose } from '../motion/compositor.js';
 import type { RegroupResult } from '../motion/sequence.js';
-import type { LetterInfo, StaggerSpec } from '../motion/types.js';
-import { stagger } from '../motion/types.js';
+import type { LetterInfo } from '../motion/types.js';
 import type { WordExtent } from '../pointer.js';
 import type { Pose, Vec3 } from '../pose.js';
-import { selectIndices } from '../select.js';
 import type { LoadedFont } from '../text/font.js';
 import {
   buildGlyphGeometry,
@@ -155,6 +144,11 @@ export class Word {
   private readonly geoMinX: (number | null)[] = [];
   private readonly geoMaxX: (number | null)[] = [];
   private readonly metrics: GlyphMetrics;
+
+  /** The studio, carried onto every material so each look's own `envMapIntensity` is honoured. */
+  private readonly envMap: THREE.Texture | null;
+  /** Every material this word made carrying the studio, so a lighting turn can reach them all. */
+  private readonly envMaterials: THREE.MeshPhysicalMaterial[] = [];
   /** Font units to em, so a regroup can re-place the survivors on the same scale. */
   private readonly scaleToEm: number;
   private readonly budget: Budget;
@@ -201,17 +195,8 @@ export class Word {
   private readonly partReadsRunColor: boolean[] = [];
   /** Per part, the letter slot it hangs off, so a retired letter's parts can be left alone. */
   private readonly partSlot: number[] = [];
-  /** Per effect: the resolved piece and the part indices it drives. Selection is not per frame. */
-  private readonly effects: {
-    piece: EffectPiece;
-    parts: number[];
-    stagger?: number | StaggerSpec;
-  }[] = [];
-  /**
-   * Layer buffers for the targeted parts only, keyed by part index. Held rather than rebuilt: the
-   * selection is seeded, so what a frame writes never changes, and an untargeted part costs nothing.
-   */
-  private readonly effectLayers = new Map<number, PartOffset[]>();
+  /** Planned once from the specs; holds the per-frame layer buffers. Null until built. */
+  private effectFrame: EffectFrame | null = null;
   /** One scratch colour for the whole word; `writePart` runs per targeted part per frame. */
   private readonly partColor = new THREE.Color();
   private readonly cache: GlyphCache;
@@ -245,7 +230,9 @@ export class Word {
     wrap = false,
     tint?: number | ((letter: LetterInfo) => number | undefined),
     debug?: WordDebugHooks,
+    envMap: THREE.Texture | null = null,
   ) {
+    this.envMap = envMap;
     this.group.add(this.inner);
 
     const spec = specOf(look);
@@ -285,7 +272,13 @@ export class Word {
     this.metrics = font.metrics;
     this.budget = budget;
 
-    const placed = placeBlock(block, this.scaleToEm, font.metrics, (char) => this.drawsInk(char));
+    const placed = placeBlock(
+      block,
+      this.scaleToEm,
+      font.metrics,
+      (char) => this.drawsInk(char),
+      budget.lineEdge,
+    );
     this.lineCount = placed.lineCount;
     this.columnCount = placed.columnCount;
 
@@ -455,27 +448,7 @@ export class Word {
    * frame would pick the same parts at the cost of re-selecting and re-allocating every frame.
    */
   private buildEffects(specs: readonly EffectSpec[]): void {
-    for (const spec of specs) {
-      // Pool positions carry their index into `this.parts`: a part's `index` numbers its own kind,
-      // and the two differ for every run part.
-      const pool = this.parts
-        .map((part, index) => ({ part, index }))
-        .filter(({ part }) => part.kind === spec.target.kind);
-      const chosen = selectIndices(
-        pool.map(({ part }) => ({ index: part.index, length: part.span })),
-        spec.target,
-        spec.seed ?? 0,
-      );
-      const parts = pool.filter(({ part }) => chosen.has(part.index)).map(({ index }) => index);
-      this.effects.push({
-        piece: typeof spec.piece === 'string' ? EFFECTS[spec.piece]() : spec.piece,
-        stagger: spec.stagger,
-        parts,
-      });
-      for (const index of parts) {
-        if (!this.effectLayers.has(index)) this.effectLayers.set(index, []);
-      }
-    }
+    this.effectFrame = specs.length > 0 ? new EffectFrame(planEffects(specs, this.parts)) : null;
   }
 
   /**
@@ -484,23 +457,11 @@ export class Word {
    * longer describes it, and the mesh it would write is on its way off screen.
    */
   private applyEffects(elapsed: number, ctx: FrameCtx): void {
-    for (const layers of this.effectLayers.values()) layers.length = 0;
-
-    for (const effect of this.effects) {
-      const duration = effect.piece.duration;
-      const pass = duration > 0 ? (elapsed % duration) / duration : 0;
-      for (const index of effect.parts) {
-        if (this.retiredPart(index)) continue;
-        const part = this.parts[index] as PartInfo;
-        const t = effect.stagger === undefined ? pass : stagger(pass, part, effect.stagger);
-        (this.effectLayers.get(index) as PartOffset[]).push(effect.piece.at(t, part, ctx));
-      }
-    }
-
-    for (const [index, layers] of this.effectLayers) {
-      if (this.retiredPart(index)) continue;
-      this.writePart(index, mergeOffsets(layers));
-    }
+    const resolved = this.effectFrame?.resolve(this.parts, elapsed, ctx, (index) =>
+      this.retiredPart(index),
+    );
+    if (!resolved) return;
+    for (const [index, out] of resolved) this.writePart(index, out);
   }
 
   private retiredPart(index: number): boolean {
@@ -631,6 +592,13 @@ export class Word {
     this.group.position.set(fit.offsetX, -fit.midY * fit.scale, 0);
   }
 
+  /** A material carrying the studio, listed so `setEnvRotation` can turn every one of them. */
+  private studioMaterial(): THREE.MeshPhysicalMaterial {
+    const material = createMaterial(this.envMap);
+    this.envMaterials.push(material);
+    return material;
+  }
+
   private buildCell(
     i: number,
     font: LoadedFont,
@@ -655,7 +623,7 @@ export class Word {
     const hue = typeof tint === 'function' ? tint(this.letterInfo(i)) : tint;
     const bodyTint = tintMaterialOf(spec) === 'body' ? hue : undefined;
 
-    const material = createMaterial();
+    const material = this.studioMaterial();
     applyLook(material, look, bodyTint);
     // Enters and exits animate opacity, and flipping this mid-run would recompile the shader.
     material.transparent = true;
@@ -677,7 +645,7 @@ export class Word {
 
     if (decoration && decoration.kind === 'tube') {
       const litOverride = debug?.tubeMaterial?.('lit');
-      const decorMaterial = litOverride ?? createMaterial();
+      const decorMaterial = litOverride ?? this.studioMaterial();
       if (!litOverride) {
         applyLook(
           decorMaterial as THREE.MeshPhysicalMaterial,
@@ -711,7 +679,7 @@ export class Word {
       this.decorMaterials.push(decorMaterial);
 
       const darkOverride = debug?.tubeMaterial?.('dark');
-      const darkMaterial = darkOverride ?? createMaterial();
+      const darkMaterial = darkOverride ?? this.studioMaterial();
       if (!darkOverride) applyLook(darkMaterial as THREE.MeshPhysicalMaterial, decoration.dark);
       darkMaterial.transparent = true;
       darkMaterial.side = THREE.DoubleSide;
@@ -744,7 +712,7 @@ export class Word {
       this.litMeshes[i] = litMeshes;
       for (const geo of blueprint.dark) cell.add(new THREE.Mesh(geo, darkMaterial));
     } else if (decoration && decoration.kind === 'chunks') {
-      const decorMaterial = createMaterial();
+      const decorMaterial = this.studioMaterial();
       applyLook(
         decorMaterial,
         decoration.look,
@@ -852,6 +820,7 @@ export class Word {
     const frozen = this.frozenInfo[i];
     if (frozen) return { ...frozen, leaving: true };
     return {
+      char: this.charOf[i] as string,
       index: this.idxOf[i] as number,
       count: this.liveCount,
       line: this.lineOf[i] as number,
@@ -887,9 +856,25 @@ export class Word {
     // Frozen before the renumbering below, so each keeps the count its exit was staggered against.
     for (const i of dropped) this.frozenInfo[i] = this.letterInfo(i);
 
+    // `place` renumbers the survivors as their own group but leaves every position, line and
+    // column describing where they still physically are — which is what each of those fields
+    // means. The viewport does not refit either: a stage that only removes letters must not zoom.
+    if (as === 'place') {
+      this.liveCount = kept.length;
+      for (let n = 0; n < kept.length; n++) this.idxOf[kept[n] as number] = n;
+      this.layoutVersion++;
+      return { kept, dropped, delta };
+    }
+
     const chars = kept.map((i) => this.charOf[i] as string);
     const block = layoutBlock(arrange(chars, as), this.metrics);
-    const placed = placeBlock(block, this.scaleToEm, this.metrics, (char) => this.drawsInk(char));
+    const placed = placeBlock(
+      block,
+      this.scaleToEm,
+      this.metrics,
+      (char) => this.drawsInk(char),
+      this.budget.lineEdge,
+    );
 
     this.lineCount = placed.lineCount;
     this.columnCount = placed.columnCount;
@@ -921,6 +906,14 @@ export class Word {
       const cell = this.letters[i];
       if (cell) cell.visible = false;
     }
+  }
+
+  /**
+   * Turns the studio each material carries. `scene.environmentRotation` turns only what falls back
+   * to `scene.environment`, which none of these do.
+   */
+  setEnvRotation(pitch: number, yaw: number): void {
+    for (const material of this.envMaterials) material.envMapRotation.set(pitch, yaw, 0);
   }
 
   /**
@@ -979,7 +972,7 @@ export class Word {
       }
     }
 
-    if (this.effects.length > 0) this.applyEffects(elapsed, ctx);
+    if (this.effectFrame) this.applyEffects(elapsed, ctx);
   }
 
   dispose(): void {
@@ -992,6 +985,7 @@ export class Word {
     this.decorMaterials.length = 0;
     for (const material of this.darkMaterials) material?.dispose();
     this.darkMaterials.length = 0;
+    this.envMaterials.length = 0;
     for (const blueprint of this.tubeBlueprints) blueprint?.dispose();
     this.tubeBlueprints.length = 0;
     this.tubeBounds.length = 0;
@@ -1000,8 +994,7 @@ export class Word {
     this.partBaseColor.length = 0;
     this.partReadsRunColor.length = 0;
     this.partSlot.length = 0;
-    this.effects.length = 0;
-    this.effectLayers.clear();
+    this.effectFrame = null;
     this.bodyMeshes.length = 0;
     this.litMeshes.length = 0;
     this.gradientRamp?.dispose();

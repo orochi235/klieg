@@ -12,6 +12,7 @@ function input(over: Partial<ProjectionInput> = {}): ProjectionInput {
     fov: 90,
     cameraZ: 1,
     depth: 0,
+    bevel: 0,
     aspect: 2,
     width: 800,
     height: 400,
@@ -80,6 +81,25 @@ describe('projectLetters', () => {
     const near = projectLetters(input({ depth: 0.3 }));
     expect(near.fontSize).toBeCloseTo(400 / 1.4, 6);
     expect(near.fontSize).toBeGreaterThan(projectLetters(input()).fontSize);
+  });
+
+  it('counts the bevel, which three lays outside the extrusion rather than inside it', () => {
+    // The cap sits at depth + bevel = 0.355, so vh = 2 * 0.645, not the 2 * 0.7 depth alone gives.
+    const capped = projectLetters(input({ depth: 0.3, bevel: 0.055 }));
+    expect(capped.fontSize).toBeCloseTo(400 / 1.29, 6);
+    expect(capped.fontSize).toBeGreaterThan(projectLetters(input({ depth: 0.3 })).fontSize);
+  });
+
+  it('leaves the spans unstretched while the camera and the canvas box agree', () => {
+    // The fixture's aspect 2 is exactly its 800x400 box, which is the case in every real overlay.
+    expect(projectLetters(input()).scaleX).toBeCloseTo(1, 12);
+  });
+
+  it('stretches the spans by however far the camera aspect has left the canvas box', () => {
+    // px-per-world-x = 800 / (vh * 4), px-per-world-y = 400 / vh, so the spans want half the width
+    // the font size alone would give them.
+    expect(projectLetters(input({ aspect: 4 })).scaleX).toBeCloseTo(0.5, 12);
+    expect(projectLetters(input({ aspect: 1 })).scaleX).toBeCloseTo(2, 12);
   });
 
   it('keeps the char and its line alongside each box', () => {

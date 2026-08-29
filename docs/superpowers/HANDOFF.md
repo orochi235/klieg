@@ -1,9 +1,78 @@
-# Handoff — klieg, 2026-08-25
+# Handoff — klieg, 2026-08-28
 
 **For:** the next session picking this up. **Answers:** what is on `main`, what each merged branch
 learned that its design doc does not carry, and what is worth doing next.
 
 ## Branch state
+
+**Host-driven effects are built.** Branch `host-driven-effects`, worktree
+`~/src/klieg-worktrees/host-driven-effects`, rebased on `main`, **unpushed and unreviewed**. Every
+task in the [plan](plans/2026-08-27-host-driven-effects.md) is done; the
+[spec](specs/2026-08-27-host-driven-effects-design.md) carries the reasoning. Green at **1274 tests
+/ 64 files**, lint, typecheck and `npm run build -w klieg` all clean. Next step is review, then a
+PR.
+
+`fire()` now returns a `FireHandle` and takes `onPhase`, `dismiss` and `signal`. The changelog entry
+sits under `## Unreleased`: `0.9.2` is on npm, so releasing needs a minor bump in
+`packages/core/package.json` before the tag — the release workflow refuses a tag that does not match
+it.
+
+The four places the build departs from the spec are listed at the top of the plan. Two were proven
+rather than argued, by reverting them and watching the build break: `FireHandle extends
+PromiseLike<void>` fails typecheck at `dev/composition-lab/src/Preview.tsx:30`, which calls
+`.catch()` on a fire; and dropping the reduced-motion branch in the tick leaves `active` firing and
+`exit` never arriving, because that path pins `elapsed` to the settled pose.
+
+**The premise is now evidence, not assertion.** `spikes/double-dispatch.mjs` was aimed at a control
+the lab does not have (`acrostic` is an `<h2>`, not a button); repointed at `#holdClick` + `#fire`
+it runs and prints `DOUBLE DISPATCH REPRODUCED` — one press on FIRE both dismisses the held effect
+and fires a new one. sherpa reached the same conclusion independently and hard-blocked it: its klieg
+provider *throws* on `hold: 'click'` or `stages`.
+
+It still prints that after this branch, which is expected rather than a regression: the spike drives
+the lab, and the lab has no control for `dismiss: 'host'`, so it exercises the `'window'` path.
+Turning it into an after-check means adding that control beside the lab's `hold click` checkbox.
+What proves the fix today is the unit test `attaches no window listeners under dismiss: 'host'`,
+verified by mutation.
+
+**sherpa has moved on from the snapshot the spec was written against, and it moved toward this
+design.** Re-checked at `main` / `923df22`; the spec's "How sherpa consumes this" section carries
+the detail. The short version: sherpa already declares klieg's `PhaseEvent` verbatim and routes it
+through `PageContext.phase`, so the shape is not up for negotiation. `goto(offset)` is gone,
+replaced by `PageHandle.seek(offset)` — "absolute, idempotent, press-space; never a delta" — so
+`advance()` is a different verb and the provider does the translation. The undertaking to give
+sherpa an `advance` is still open, and nothing in klieg will remind anyone about it.
+
+`FEATURE-REQUESTS.md` is now committed here; sherpa's `docs/upstream-asks.md` is its mirror and
+lists the same three asks. Both can be retired once this ships.
+
+**Watch the worktree.** The main checkout at `~/src/klieg` was switched to another branch by a
+concurrent session mid-task during this work. Check `git branch --show-current` before committing
+there; untracked files survive a switch, staged work is a different matter.
+
+
+**Most recent work, 2026-08-27 overnight.** `main` is green at **1179 tests**. Two things landed:
+`roving` got a permutation walk and a 96-epoch pass (it was visiting 7 parts of 24 and looping),
+and the **composition lab** is built — see its entry under "What is worth doing next", which is now
+a description rather than a proposal. Every "main is at `<sha>`, green at N tests" claim further
+down predates this and should be read as historical.
+
+**`acronym` shipped.** `acronym(text, opts)` returns the arguments to `fire()` for a block whose
+capitals are picked out, held, then gathered into a line once the lower case has left — the
+README's hand-assembled acrostic, pre-baked. It needed two additive things: `char` on `LetterInfo`
+(optional, because a piece can be sampled with no block behind it) and `Arrangement: 'place'`, which
+drops letters without moving or refitting the survivors, so the lower case leaving is its own beat.
+`caps` and `body` are `LetterStyle` objects rather than colours because per-letter styling is meant
+to grow — a per-letter `look` is the intended growth and does not fit yet, `look` being per-fire and
+reaching the material pipeline long before a letter is addressable. See
+[the design](specs/2026-08-26-acronym-routine-design.md).
+
+**The `spikes/svg-tube/` standalone bundle shipped** (`360334a`). `bundle.mjs` inlines `art.svg`
+as a data URI and refuses an `--out` path inside this repo, because that art is a client mark and
+this repo is public; `wallpaper.mjs` resizes the drawing buffer only, so a 4K shot comes off the
+lab's own renderer without touching the CSS box. A page-initiated download still only works from
+a locally-opened file.
+
 
 **`composable-lighting` and `flicker-spell` are both merged into `main` and pushed**, along with
 `framing-align` (PR #3), `show-fills-its-frame`, and the tube run-budget fix. `main` is `bab480a`,
@@ -24,12 +93,12 @@ Two earlier accounts of the loss were wrong, and re-deriving them costs a sessio
 not move, because what it gives up it replaces with a chord. `spikes/corner-coverage.mjs` is the
 measure, and `OUT=page.html` draws where the bare contour actually is.
 
-**The hairpin is prototyped and blocked on one aesthetic call.** `spikes/hairpin-view.mjs` builds it
-— the major arc of the circle inscribed in the wedge opposite the corner, which `biarcBlend` cannot
-produce — and where it lands it draws the right shape. What stops it is that the arc stands
-`rhoMin / cos(turn/2) + rhoMin` proud of the letter, up to 0.29 em on a 1 em `W`, and that grows as
-the corner sharpens. Either the construction gets a bounded footprint or someone decides a bulge at
-the sharpest corners is what neon looks like. Nothing else is in the way.
+**The hairpin ships too, in both constructions.** It is a fourth `CornerWeights` weight, and
+`TubeSpec.hairpin` picks the shape: `bisector` takes `W` from 17% bare to **0%** and holds the bend
+floor, but stands up to 0.29 em proud and worse as the corner sharpens; `uturn` holds a flat 0.13 em
+footprint but eats up to `6 rhoMin` of each leg and leaves 2 of 233 runs marginally under the floor.
+Opposite costs, so both are knobs rather than a decision. No shipped look sets a hairpin weight, so
+baselines are unmoved. `spikes/hairpin-view.mjs` draws them side by side.
 
 **The visual suite is failing three tests on `main` right now, and it is not this branch.** At load
 average 12, `visual.spec.ts` fails the bloom-path, two-line-block and wrap tests. Stashing the run
@@ -44,13 +113,19 @@ nesting by containment depth rather than winding, which is what lets it take art
 One `<path>` is treated as one letter — that is what keeps `runs` and `seed` meaning what they mean
 for text, and it is the shape a real feature would take.
 
-**`sign-wrapper` is complete and unpushed, and `v0.8.0` waits for it.** All twelve tasks are
-built and reviewed, `origin/main` is merged in, and `npm run check` / `npx playwright test` /
-`npm run test:dist` are green at 1182 / 39 / 3. The next step is a PR; nothing is half-done. Worktree
-`~/src/klieg-worktrees/sign-wrapper`, nine of twelve tasks done, unpushed, with `main` merged in.
-It builds two entry points over `createKlieg` for a **sign** — type standing in for a page heading,
-lit once, held until removed. **The decision is to land it before tagging**, so 0.8.0 ships the sign
-wrapper with the lighting surface rather than making it 0.9.0 a week later.
+**`sign-wrapper` is merged.** Two entry points over `createKlieg` for a **sign** — type standing
+in for a page heading, lit once and held until removed. `klieg/sign` exports `sign(anchor, options)`
+framework-free; `klieg/element` registers `<klieg-sign>`, which takes the page's own heading as its
+content so the word stays readable and in the accessibility tree whether or not anything renders.
+`FireOptions.hold` gains `'forever'`, refused alongside `stages`, which it would never advance past.
+See [the design](specs/2026-08-26-sign-wrapper-design.md) and [the plan](plans/2026-08-26-sign-wrapper.md).
+
+**This section was wrong for two days, in both directions.** One version said `v0.8.0` was being
+held for the branch; 0.8.0 had already been tagged without it on 2026-08-27, by a session that read
+this section only as far as the release note. The correction then claimed the branch carried no
+code, which stayed here while the branch grew to 4,183 lines across `element.ts`, `sign/`, five
+test files and a lab page. **Read a whole section before acting on it, and re-read the branch before
+trusting what a section says about it** — that is the failure that produced this paragraph twice.
 
 The [design](specs/2026-08-26-sign-wrapper-design.md) and [plan](plans/2026-08-26-sign-wrapper.md)
 are current and carry every decision. Read them rather than this. What follows is only what they
@@ -346,20 +421,16 @@ artifact is immutable and the script regenerates them exactly.
 
 ## State
 
-**0.7.0 is published and is `latest`**, carrying the `selectable` option, the `tubing` tint fix, the
-`LookKey` literal union, and `crawl` with the `chase` piece. Releases are automatic: push a `v*` tag
-and `release.yml` publishes through npm trusted publishing, checking first that the tag matches
+**0.8.0 is published and is `latest`**, carrying the `lamp`/`EnvPiece` lighting surface,
+`framing.align`, `flicker`'s `spell` and `calm`, `lineAlign`, the `acronym` routine, and per-look
+`envMapIntensity` over a warm-balanced studio. Releases are automatic: push a `v*` tag and
+`release.yml` publishes through npm trusted publishing, checking first that the tag matches
 `packages/core/package.json` and skipping a version already on the registry. `npm view` reports a
 stale version straight after a publish — read `https://registry.npmjs.org/klieg` to see what
 actually landed.
 
-**`main` is unpushed and carries an unreleased minor.** Everything under `## Unreleased` is post-0.7.0:
-the `lamp`/`EnvPiece` lighting surface, `framing.align`, `flicker`'s `spell` and `calm`. That is a
-minor rather than a patch — it adds public surface, changes what an element placement defaults to,
-and breaks `EffectPiece.at`'s signature — so the next tag is `v0.8.0`. **It is held for
-`sign-wrapper`**; see the branch state above. **The portfolio session asked to be told before a tag
-goes up**, and since releases are tag-triggered there is a window between telling them and pushing
-it.
+**`main` is pushed and clean at `9e0ecd8`**, green at 1144 unit tests and 33 visual. `## Unreleased`
+is empty — the next change opens it again.
 
 **`main` carries the tube lab, the tube geometry rewrite, the colour gradients, the junction
 reconciliation, direct paths by default, element-anchored placement and the effects pipeline, all
@@ -435,7 +506,7 @@ vite config: `fs.allow` and the react/react-dom aliases existed only because a l
 resolves React out of its own tree, which is an "invalid hook call" from inside labkit. `npm
 install` here no longer needs a weasel checkout.
 
-**A second lab, `npm run dev:corner-lab -w klieg`, is where corner work happens now.** It is a
+**A second lab, `npm run dev:kliegsminister -w klieg`, is where corner work happens now.** It is a
 labkit instrument: pick a letter, look and path source, step through that letter's hard corners, and
 switch what the corner draws — `built` (what ships), `merge` (leave the path alone), `relax` (push
 the vertices out until they clear), `biarc`, `cut`. It reports the glyph's own bend, how far under
@@ -498,6 +569,8 @@ working — it needs a caller-supplied `TubeSpec.gradient`.
 ## What is worth doing next
 
 Roughly in order of value; the items are independent of each other.
+
+- **A composition lab is the live task.** See the section at the top.
 
 - ~~**Selectable text**~~ — built and merged into `main`.
 
@@ -580,18 +653,122 @@ Roughly in order of value; the items are independent of each other.
   leaves visible: on an integer ratio the surviving windows land on the same phases every time, so
   every burst looks identical while the inner genuinely never resets.
 
-- **A composition lab, so effect pieces get built by hand rather than through a plan.** Asked for
-  directly. `roving` and `hue` were specified in prose, and the wrapper's epoch arithmetic came out
-  wrong in a way that read as *more* correct than the fix — a prototype found it in one run and
-  review had not. A piece is a pure function of `(t, part)` with no GL anywhere in it, so a lab can
-  plot one against time, layer several, scrub a pinned clock, and show the merged offset per part.
-  That is most of what a session currently burns tokens reconstructing, and it is also where the
-  numbers the design deferred get picked: `roving`'s `dwell` ships at a stated-provisional 3200ms
-  precisely because there was nothing to measure against. Nothing is designed yet.
+- **The composition lab is built and on `main`.** `npm run dev:composition-lab -w klieg`, port 5183.
+  You build a whole `fire()` in the rail — look, hold, effect layers with their params, targeting,
+  and a `roving` wrapper — and watch it render live on a clock the lab owns. Playing advances the
+  clock; scrubbing backward remounts the fire and jumps straight to the target, which
+  `spikes/seek-rebuild/` measures as byte-identical to playing there at 60fps. The **part × time
+  raster** is the panel worth knowing about: it strikes through every part no layer ever moved, and
+  drops the `epochs` slider to 8 to watch 18 of 24 parts go untouched. The rail warns when a
+  layer's target kind resolves to an empty pool, which is not hypothetical — only `tubing` and
+  `piping` build `run` parts, and a run-targeted layer on the other ten looks does nothing silently.
+  The emit panel prints a pasteable `fire()` call with its own import line.
+
+  **It is honest about time and dishonest about intensity.** No bloom threshold reaches the plots,
+  so a `gain` of 0.65 plots as 0.65 whether or not it reads as a dropout. Judge timing off the
+  raster and the plot; judge depth off the render above them. Where the two disagree is the
+  threshold, and that gap is information.
+
+  **Nothing in the lab reimplements targeting, `stagger` or merging** — `effects/frame.ts` holds
+  `planEffects` and `EffectFrame`, `Word` calls them, and so does the lab. That extraction is the
+  point: an instrument that re-derives what happens *around* a piece drifts and then reports
+  confident wrong answers, which is the failure the tube lab already documents as "the instrument
+  cannot know".
+
+  **One trap it already fell into, and the shape generalizes.** `EffectFrame` writes every
+  *targeted* part whether or not a layer moved it, so a coverage readout keyed on "did the frame
+  write this" marks the whole pool covered under `roving` — which addresses everything and afflicts
+  one part. The lab shipped that bug for about ten minutes and it was invisible in the UI until the
+  count refused to move with `epochs`. `samplePass` counts *moved*, and
+  `packages/core/test/composition-lab/sample.test.ts` pins it.
+
+  See [the design](specs/2026-08-27-composition-lab-design.md) and
+  [the plan](plans/2026-08-27-composition-lab.md). The plan's Tasks 1–11 are done; its self-review
+  section lists what was deliberately deferred — timeline lanes, the swatch grid, a tenure/jump
+  readout, a param sweep, and the draft editing pane. `draft.ts` compiles a hand-authored piece
+  already; only its editing UI is missing.
 
   It is a **different lab** from **kliegsminister**, the stage-and-repair lab in
   [the pipeline lab design](specs/2026-08-23-pipeline-lab-design.md) — that one is about tube
   geometry, this one about time.
+
+  **kliegsminister is under way, in three slices, on branch `kliegsminister`.** The design's
+  prerequisite shipped long ago: `markAuthored`'s `WeakSet` is gone, `Run.from` provenance replaced
+  it, and the lab's `scene.ts` already finds its run through it. **Slice 1 is done** —
+  `buildTubeBlueprint` folds over `TUBE_STAGES` (`render/tube/stages.ts`) over the ids `generate`,
+  `wander`, `cut`, `assign`, `sweep`, with `stages` naming which run and `onStage(id, state, ran)`
+  reporting each. 1162 tests, 33 visual, look snapshots byte-identical. See
+  [the plan](plans/2026-08-27-tube-stage-registry.md), whose "Left for slice 2" section names what
+  it inherits. **Slice 2 is `CUT_REPAIRS` and it is the hard one:** `mergeArc` interleaves the
+  bridge, relax and resume paths with the arc push. It has been measured, the design corrected, and
+  **[the slice 2 plan](plans/2026-08-27-cut-repairs-registry.md) is written and ready to execute —
+  ten tasks, start at Task 1.** Read the revised "The two registries" before writing any of it: it
+  is not a fold and it does not live in `mergeArc`. Three of the six repairs never enter that
+  function, `close` and `return` are span-*list* operations, `stretch` is two implementations with
+  different floors under one name, and `hairpin` is a seventh repair the six ids never named. The
+  plan carries those five reasons at its top for that reason — the function names read as a fold.
+
+  **The seed-stream desync is fixed on `cut-repairs`.** `stitchPath` used to take its second
+  `draw()` only when a corner broke, so switching the `fillet` repair off shifted the stream for
+  every later corner in the glyph; each corner's two draws now key on its own index. The design's
+  claim that forcing the draw unconditionally would preserve shipped output was wrong — the two are
+  the same change and produce byte-identical geometry — so `tubing` re-rendered and its five
+  baselines are re-taken. **The second defect is fixed too:** `relaxOnto`'s cloned window resolved
+  to `null` in `Run.from` and read as fillet-built, so `rejoin: 'relax'` quietly stopped those
+  vertices being smoothed; each copy now inherits its leg vertex's provenance through an `inherit`
+  callback threaded from `cutIntoRuns`. Both were latent because `DEFAULT_REJOIN` is `drop` and no
+  look overrides it — which stops being true the moment the lab exposes the knob. Both landed on
+  `main`, along with the slice 2 plan; `cut-repairs` and `main` are the same commit.
+
+  **Slice 2 is done.** `CUT_REPAIRS` landed as three registries in `render/tube/repairs.ts` —
+  `CORNER_REPAIRS` run twice per corner inside `mergeArc`, `SPAN_REPAIRS` at the `stitchPath`
+  level, and `fillet` and `hairpin` gated where the decision is made. `cutIntoRuns` takes
+  `repairs` and `onRepair`; `buildTubeBlueprint` forwards both. Slice 3 is the lab.
+
+  Two things that stay true and shape how the lab reads. **`resume`'s `ran: false` lies under
+  `bridge`/`relax`** — the blend is applied regardless; the toggle gates only the walk's trim
+  (comment sits on `ranResume` in `runs.ts`), so a resume ghost under those rejoins would draw
+  points already in the path. **Some toggles are geometry-invisible on typical paths**: `setback`
+  and the corner-side `stretch` are subsumed by downstream walks under most rejoins (the repair
+  tests document which rejoin makes each one bite — `relax` for exit-setback, triple-off for
+  stretch), so switching them off moves the ghost layer without moving the built run. Two test
+  fixtures are traps: a square never hairpins (use `sharpV` in `repairs.test.ts`) and `openLPath`'s
+  0.1 sampling registers no corner (use `fineOpenL` in `runs.test.ts`).
+
+  **Slice 3 is done and kliegsminister is built.** `dev/corner-lab` is now `dev/kliegsminister`
+  (`npm --prefix packages/core run dev:kliegsminister`, port 5182), and its `junction` instrument
+  drives `stages`, `draw at`, seven repair toggles, `rejoin` and `subject` off the registries
+  through `src/pipeline.ts` — the graph `@weasel-js/diagram` reads when it ships. The lab's own
+  `blendAcross`/`relaxAcross` are deleted rather than moved: core draws all of it. See
+  [the plan](plans/2026-08-28-kliegsminister-lab.md).
+
+  **Every reporting gap slice 2 listed is closed.** `RepairSite` carries `removed` and `side`, the
+  exit-side `resume` gates and reports, and `hairpin`, the blockout fillet, the `return` it would
+  have carried, and the break-side `stretch` all report now. `test/render/tube/reports.test.ts`
+  pins it across twelve letters at both tube looks, including that all-repairs-on stays
+  byte-identical to repairs-absent. Gating the exit-side resume moved three off-state counts on the
+  test square: resume-off at `drop` 217 → **225**, and the stretch-off pair 225/229 → **241/245**.
+
+  **Left for whoever picks this up.** The `setback`-off-under-`rejoin: 'bridge'` cascade is **2769
+  points against 241**, not the 1505 recorded before; the leg-room math assumes the trim happened.
+  The lab reaches that combination and draws it without throwing. An exit-side `setback` site
+  reports only a cursor index — empty `points` and empty `removed` — so it has no ghost; placing it
+  needs the index resolved against the leg it names. **`hairpin`'s toggle is inert in the UI**:
+  neither `piping` nor `tubing` weights it and the look control offers nothing else, so the report
+  is only reachable from a test with a spec override. And `subject: 'letter'` does not re-zoom —
+  labkit's `initialView` is static per instrument, so the whole letter needs zooming out by hand
+  from 1600x.
+
+  **`npm run check` is green, and was not before.** `main` already failed `biome` on a
+  `useLiteralKeys` hit in `dev/tube-lab/src/Rail.tsx`; that is fixed here, so a red `check` from now
+  on is a real regression rather than the standing state.
+
+  Two things slice 1 learned that its plan did not start with. **`wanderPaths` seeds its rng from
+  the path's array index**, so the order paths are concatenated in — contours, then connectors — is
+  what keeps every wandered look byte-identical; reordering it re-renders them all with nothing
+  thrown. And **`enabled` as one untyped set of strings across both registries is a trap**: a caller
+  passing only repair ids would switch off all five stages and get an empty blueprint. Slice 1 types
+  the stage set instead, and slice 2 should add `repairs` as its own typed set beside it.
 
 - ~~**An effects pipeline for the tube looks**~~ — shipped, along with `roving` and `hue` on top of
   it. See the `## In flight` section.
@@ -612,27 +789,8 @@ Roughly in order of value; the items are independent of each other.
   Each item names the spike that proves it and the flags to reproduce it. The env fix moves every
   visual baseline, so it is its own change rather than a footnote to lighting.
 
-- **`envMapIntensity` has never been applied, on any look.** `looks.ts` constructs every material
-  with `envMapIntensity: 2.2`, but klieg lights through `scene.environment` and the property only
-  scales a material's *own* `envMap`, which none of them have.
-  `node spikes/lamp-blend.mjs --blends envown --env 1` reproduces the shipped render byte for byte;
-  `--env 2.2` is visibly richer. Assigning the scene's environment texture to each material makes
-  the authored value live — and moves every visual baseline, which is why it is its own change and
-  not a footnote to lighting.
 
-- **The extrusion walls read as cement because the studio is two-toned.** Faces and walls share one
-  material — `buildGlyphGeometry` makes a single `ExtrudeGeometry` and klieg passes one material, so
-  nothing differs in shading. A metal reflects `baseColor x envRadiance`, and `render/environment.ts`
-  puts blue bars on the left (`x: -14` at `[2.4, 4.0, 7]`, `x: -6` at `[2.4, 2.6, 3.4]`) against a
-  warm one on the right (`x: 14` at `[6, 4.4, 2.2]`). Gold is `0xffc44d`, so its left-facing walls
-  reflect warm-times-blue and go gray-lavender while the caps stay golden. Raising env intensity
-  brightens the cement without warming it. The fix is in the environment, not the material or any
-  lamp.
 
-- **klieg cannot author specular at all.** `specularIntensity`, `specularColor` and `reflectivity`
-  are absent from `LookKey`. `specularIntensity` tints specular reflection at normal incidence for
-  non-metals, which is the knob that would let `gem` keep its red as it brightens — the wash is
-  specular sitting on the attenuation. Untested; the next thing to try on the gem problem.
 
 - **Another pass on light-up letters — medium priority.** The design picks a blend and a channel; it
   does not finish the look. **`gem` cannot be lit with one knob.** At `env=0` it reads red, its
@@ -644,7 +802,12 @@ Roughly in order of value; the items are independent of each other.
   unsampled** — radius, strength and falloff were judged at one lamp position on a five-letter word,
   enough to choose a blend and not enough to ship numbers.
 
-- **`visual.spec.ts` is flaky under parallel load, and it is three tests now, not two.** `bloom path`,
+- **`visual.spec.ts`'s remaining flakiness is the sampled frame, not the wait.** The canvas waits
+  were fixed in `e90e7c8` — see the section below. What is left is `bloom path`, `two-line block`
+  and `wrap breaks a long line into rows`, which read the whole drawing buffer inside rAF and
+  assert on one sampled frame.
+
+- ~~**`visual.spec.ts` is flaky under parallel load, and it is three tests now, not two.**~~ `bloom path`,
   `two-line block` and `wrap breaks a long line into rows` have each failed intermittently in the full
   suite and passed on isolated re-run. It predates the particle work — `two-line block` was seen
   failing before the `index.ts` changes existed. All three read the whole drawing buffer inside rAF
@@ -685,6 +848,33 @@ Roughly in order of value; the items are independent of each other.
   chunk look drew 55 chunks or 1. Rejecting back-facing samples would raise visible chunks per
   letter by 39% and leave only 8.8% of positions surviving the reseed — a look change dressed as an
   optimization. The back cap is also genuinely on screen during two shipped enters.
+## What the studio and exposure change learned
+
+**A green test can be green for the whole life of the bug it covers.** `createMaterial`'s test
+asserted `envMapIntensity === 2.2` on the material it had just constructed. three overwrites that
+uniform with `scene.environmentIntensity` on every material that has no `envMap` of its own, every
+frame, so the property was right and the pixels were never lit by it. Assert the thing that reaches
+the screen, or assert nothing.
+
+**Bisecting a timing test reads load, not code.** `an effect held until click stays up` failed on
+`main` and passed at `63db866`, which pointed cleanly at two lab commits. Timing the operation says
+the opposite — 2486/3972/4519ms on `main` against 5133/5779/5654ms at `0fedd7c`. The first canvas
+attach takes 2.5-5.8s against a 5s default expect budget, so the outcome tracked `uptime`. What
+settled it was `--repeat-each=3 --workers=1`: first run red, next two green, which is cold start and
+cannot be behaviour. **Turn a flaky pass/fail into a measurement before bisecting it.**
+
+**Mean saturation over a dark look measures the dark, not the look.** Judging `oil`'s iridescence by
+mean ink saturation ranked a candidate carrying hue over 9.1% of the letter equal to one carrying it
+over 19.2%, because ~90% of `oil` is near-black either way. The metric that separates them is the
+size of the coloured region and its own saturation — `area` and `satc` in
+`spikes/oil-iridescence.mjs`. A hue-bucket count has the mirror flaw: it scored the muddiest
+candidate highest, by spreading a small weak region across more buckets.
+
+**A per-look knob does not always mean a per-look answer.** `envMapIntensity` became a `LookKey`,
+and it still could not save `oil` — raising exposure collapses hue buckets rather than adding them,
+and the one studio bar causing `gold`'s cement was the same bar giving `oil` its colour. The fix had
+to move into `oil`'s own film.
+
 ## What was learned that is not in the plan
 
 - **`M` and `W` are the worst case, not `N`.** The standing `NSRE` string missed both extremes: `M`
@@ -719,6 +909,17 @@ Roughly in order of value; the items are independent of each other.
   to the other. `spikes/run-decomposition.mjs`.
 
 ## Traps
+
+**A whole-frame tolerance cannot guard a one-run effect.** One run going dark is 187 to 258 pixels
+of an 800x600 baseline, and `looks.spec.ts` gated everything at `maxDiffPixelRatio: 0.001` — 480
+pixels — so `effect-flicker` and `effect-roving` passed with their effect deleted. Re-keying the
+corner draws exposed it by leaving `effect-roving` byte-identical to `look-tubing` and still green.
+The three effect shots now gate on `EFFECT_RATIO`, 0.0002; deleting either effect reddens its test
+at 350 and 503 pixels, which is how the fix was checked. Re-pinning could not have fixed it: walking
+the whole second roving epoch a flicker step (~58ms) at a time found no pin a look-sized gate would
+catch. When measuring these by hand, note the baselines are `scale: 'css'` at 800x600 while
+`page.screenshot()` defaults to device scale at 1600x1200 — measure against the stored size or the
+count is 4x off and compares to the wrong gate.
 
 **Eliminate a cheap hypothesis about render state before an expensive one about geometry.** The tube
 vanishing when thinned was diagnosed twice as a geometry bug and was one line of render state: a

@@ -19,6 +19,171 @@ anchor — so a sign tracks the page's palette rather than repeating a number fr
 element placement and there was no other way to say "indefinitely", so an anchored sign had to name
 a number it did not mean. Unlike `'click'` it attaches no listener, and it is legal on every
 placement — but not alongside `stages`, which it would never advance past.
+### A host can watch, cancel and advance one effect
+
+Three additions to `fire()`, for an application that plays klieg as a flourish over its own page
+swap and needs to know where inside the effect it is.
+
+**`onPhase`** reports each boundary as the effect crosses it: `{ phase: 'active' }` when the enter
+has run its length, `{ phase: 'exit' }` when the hold is over, and `{ phase: 'stage', index }` as
+each stage settles. `active` is the one a page swap wants — mid-blend, where the word has landed
+and is at full presence. The instants are detected per frame rather than scheduled when you fire,
+because releasing a `'click'` hold rebuilds the timeline and moves the exit; a schedule fixed at
+fire time would be right for every numeric hold and silently never fire for a click hold. A frame
+long enough to span several stages reports every one of them. A listener that throws reaches you as
+an unhandled rejection instead of stopping the render loop.
+
+**`signal`** aborts one effect without taking the instance and its GL context down with it. An
+effect aborted while it is still queued never renders at all. An abort plays no exit and resolves
+the promise rather than rejecting it, which is what the promise already meant for an effect the
+queue dropped.
+
+**`dismiss: 'host'`** withholds klieg's window listeners — `pointerdown` and Escape both — so a host
+that routes its own input gets one action per press instead of two. `fire()` now returns a handle:
+the same promise, plus `advance()`, which acts as the dismissing press. An `advance()` that arrives
+before the effect starts releases the first hold it reaches rather than being lost to the race.
+
+Because `clickAnywhere` exists to gate a window listener, and `dismiss: 'host'` attaches none, an
+anchored placement may hold on a click under host dismissal without the opt-in.
+
+`fire()`'s return type widens from `Promise<void>` to a `FireHandle` that extends it, so existing
+callers — `await`, `.then`, `.catch` — are untouched.
+
+## 0.9.2
+
+### An acronym gathers as the lower case finishes leaving
+
+The routine held two pauses between the block and the gather, and both defaulted long. `settle` was
+600ms, and the drop stage inherited the 700ms default move even though `place` moves nothing — so
+the stage ran 700ms against a 500ms fade and then held another 600. Against `Sequence`, with the
+fade landing at 500ms, the gather started at 1300.
+
+`settle` now defaults to 0, and the drop stage declares a zero-length move so its span is the exit's
+own length. The gather starts at 560ms — the 60ms being the blend's half-window, not dead air — and
+the beat tracks whatever exit it is given: 860ms under `shatter`. `settle` remains for anyone who
+wants the pause back.
+
+### A stage boundary no longer throws the word
+
+`Sequence` swapped one `Timeline` for the next and dropped whatever the outgoing one was holding.
+A looping `active` is mid-cycle when its phase runs out, so the word lost the loop's whole amplitude
+between two frames: `float` alone fell 0.12em and un-yawed 0.1rad in one frame, which reads on
+screen as the type jumping down and to the left just as it stops floating.
+
+Each stage's enter slot now carries the pose the outgoing phase ended on, eased to nothing over the
+stage. The curve is in-out rather than the usual out — a loop caught mid-swing is already moving,
+and an out curve leaves at its own top speed, which is the same jolt in miniature. Sampled either
+side of the switch at 60fps, y goes 0.1162 -> 0.1165 where it went 0.1162 -> 0. It costs nothing
+when the outgoing `active` is `none`, and applies at every boundary rather than the acronym's alone.
+
+### The tube's cut repairs are named, gated and reported
+
+`buildTubeBlueprint` folds over a named stage registry, and the corner repairs that used to be
+inline decisions are now separately named stages, each gated where its decision is made and each
+reporting what it did. A blueprint forwards repair toggles into the cut and gets a repair report
+back, a relaxed vertex inherits its leg's provenance, and every corner keys its draws on its own
+index rather than a shared counter.
+
+## 0.9.1
+
+### The lighting slot turns the studio across the letters again
+
+`sweep`, `track` and the `'sweep'` and `'pointer'` names all turn the environment to rake the
+highlight over the type, and none of them has moved a pixel since 0.8.0. The turn was written to
+`scene.environmentRotation`, which three applies only to a material falling back on
+`scene.environment` — and 0.8.0 gave every klieg material the studio as its own `envMap`, turned by
+`material.envMapRotation` instead. A `gold` fire under `'static'`, under the default `'sweep'`, and
+under `sweep({ periodMs: 14000 })` layered with `track()` all rendered identical frames. A word now
+holds the materials it built and turns each one per frame, alongside the scene write, which stays
+for anything carrying no `envMap` of its own.
+
+No baseline moves: every shot is taken under `lighting: 'static'`, where both angles rest at zero.
+The visual suite gains the check that would have caught this — one word at two phases of a sweep,
+whose frames must differ, with the same two pins under `'static'` as the control. Asserting the
+angle reaches the scene, which the unit suite already did, is not the same as asserting it reaches
+the pixels.
+
+## 0.9.0
+
+### `roving` visits the whole sign instead of the same seven parts forever
+
+A pass held eight epochs, and each one drew its holder independently, so the fault landed on about
+seven distinct parts of a pool of 24 and then looped — the same seven flickering forever, the other
+seventeen never once. It got worse the longer the sign: 5 of 55 parts on a word the length of
+`CONGRATULATIONS`, which is exactly where a travelling fault most needs to travel.
+
+Two changes. The holder walk is a **seeded permutation** rather than an independent draw per epoch,
+so a lap gives every part exactly one turn and each lap reshuffles. And the epoch count is a knob,
+**`roving({ epochs })`**, defaulting to 96 rather than 8: a pass now visits every part of a pool up
+to 29 and 51 of 55, with deferred handovers costing the rest. The pass lengthens to match — 204s at
+the default `dwell`, against 25s.
+
+`dwell` itself was already honest and is unchanged: 3200ms asked delivers 3.15s measured, and every
+value from 800 to 9000 lands within 1.6% of what it asked for. What it never controlled is how much
+the sign flickers — dark share holds at ~20% across a 4x change in `dwell`, because `unrest` sets
+all of that. `dwell` picks who, `unrest` picks how much.
+
+No shipped look uses `roving`, so no look baseline moves. The one visual baseline that does is
+`effect-roving`, which pins a moment in the second epoch: a different run is afflicted now. Its
+pin still lands on a moment the holder is dark — measured 658 pixels from plain `tubing` and 1558
+from `effect-flicker`, which is what the test's two claims rest on.
+
+### The selectable layer sits on the glyphs instead of behind them
+
+`selectable: 'layer'` positions one transparent span per letter by projecting the word onto the
+plane of its front cap. It measured that plane at `cameraZ - depth * scale`, but glyphs are built
+with `bevelEnabled: true` and three lays the bevel *outside* the extrusion — the geometry spans
+`-bevelThickness` to `depth + bevelThickness`, so the cap clears the nominal depth by 0.055 em.
+That plane sets the frustum height, which sets both the span font size and the pixels-per-world
+the letter positions scale by, so the error skewed the whole layer rather than shifting it.
+
+Spans also take a `scaleX()` where the camera's aspect and the canvas box disagree. A font size
+can carry only one axis, so letters otherwise land at the right x with the wrong width. It is 1
+for every placement today; nothing enforces the agreement, since the renderer is sized with
+`updateStyle: false` and the camera's aspect comes from the measured box.
+
+### An anchored word can hold until a click
+
+`hold: 'click'` threw for every element placement, which crashed the `/show/` route whenever a
+share link carried one. The dismissal is a global pointerdown, which works the same anchored; what
+the refusal protected against is a strip sharing a page, where a press anywhere ends an effect for
+reasons unrelated to it. An anchor filling the viewport has no such press, so the element placement
+now takes **`clickAnywhere`** and an anchor that sets it may hold on a click at the top level or in
+any stage. One that has not still refuses, naming the flag. `/show/` sets it, which is what lets a
+click-held link and an acrostic's click-to-read beat play there.
+
+## 0.8.0
+
+### Every look renders at the exposure it was authored at, and can set its own
+
+`looks.ts` built every material with `envMapIntensity: 2.2` and no material ever rendered at it.
+three overwrites that uniform with `scene.environmentIntensity` whenever a material has no `envMap`
+of its own, and klieg lights through `scene.environment`, so the authored value was clobbered every
+frame and every look has rendered at an effective 1 since the value was written. Materials now carry
+the studio as their own `envMap`, which both makes the authored 2.2 live and turns
+**`envMapIntensity` into a `LookKey`** — so a look, or an inline spec, sets its own exposure. Every
+look is brighter: `gold` measures 0.203 to 0.291 mean luminance over its ink, `leather` 0.231 to
+0.343.
+
+### The extrusion walls are no longer gray
+
+A letter is one extruded mesh with one material, so its walls differ from its faces only in what
+they reflect — and the studio lit blue from the left against warm from the right. A metal reflects
+`baseColor x envRadiance`, and warm times blue is gray, so `gold`'s left-facing walls read as
+cement while its faces stayed golden. The fill bars and the shell are warm-balanced now and the two
+key lights are left white; `gold`'s mean ink saturation goes 0.497 to 0.664. `chrome` was reflecting
+a blue room and reads as neutral metal for the first time.
+
+### `oil` gets its colour from its own film rather than from the room
+
+`oil` is a near-black metal, so what you see is reflected light tinted by a thin film — which meant
+its oil-slick colour was really the studio being two-toned, and warming the fill flattened it to
+brown. Thickness sets how fast the film's hue cycles with view angle, so `iridescenceIOR` drops to
+1.4 and `iridescenceThicknessRange` to `[100, 520]`: a thinner film at a lower index cycles through
+more of the wheel across the angles an extruded letter presents. It now covers 10 of 12 hue buckets
+against the shipped 7, at higher saturation and slightly brighter.
+
+**Every visual baseline moves.** All 19 are regenerated.
 
 ### An anchored word now meets the page's text edge
 

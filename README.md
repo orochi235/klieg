@@ -40,6 +40,20 @@ It rejects if the font cannot be fetched or parsed — the next `fire()` retries
 than failing forever. `destroy()` cancels everything in flight and releases the GL context once
 the running effect has settled.
 
+`onPhase` reports the boundaries inside an effect. `{ phase: 'active' }` is the instant the word has
+landed and is at full presence — the moment to swap a page behind an established flourish rather
+than during its arrival. The instants are not fixed when you fire: a `'click'` hold has no exit
+until the press lands.
+
+```ts
+await bk.fire('RESULTS', {
+  hold: 'click',
+  onPhase: (e) => {
+    if (e.phase === 'active') swapThePage();
+  },
+});
+```
+
 ## Motion
 
 An effect plays `enter`, then loops `active` for `hold` milliseconds, then plays `exit`,
@@ -246,11 +260,16 @@ sign. The sweep holds Rec.709 luminance rather than saturation, so blues and vio
 and the sign glows evenly all the way round — at constant saturation it would brighten through yellow
 and fall out of the bloom threshold through blue.
 
-**`roving(inner, { dwell, seed })`** — takes another piece and moves its affliction from one part to
-another, so `roving(EFFECTS.flicker())` is one bad tube that jumps every few seconds. It is a factory
-rather than a name, because a name cannot carry the piece it wraps. Give it `{ amount: 1 }`: it picks
-its holder from the whole pool of that kind, so against a subset the fault can land on a part the
-effect does not drive and nothing happens at all.
+**`roving(inner, { dwell, seed, epochs })`** — takes another piece and moves its affliction from one
+part to another, so `roving(EFFECTS.flicker())` is one bad tube that jumps every few seconds. It is a
+factory rather than a name, because a name cannot carry the piece it wraps. Give it `{ amount: 1 }`:
+it picks its holder from the whole pool of that kind, so against a subset the fault can land on a
+part the effect does not drive and nothing happens at all.
+
+`dwell` is roughly how long one part keeps the fault, and it picks *who* flickers, not how much —
+that is the inner piece's `unrest`. `epochs` is how many handovers fill a pass, and so the ceiling
+on how many parts a pass can reach before it loops; the default of 96 covers a pool of 29 entirely
+and most of a pool of 55, which is about as wide as a real sign gets. Raise it for a wider one.
 
 **`lamp({ source, radius, strength, color, duration })`** — puts light on the parts near a position
 rather than changing what they are made of. `radius` is its reach in em of layout space, `strength`
@@ -275,6 +294,53 @@ either knowing about the other — but two pieces both writing colour fight, and
 A hue piece writes colour every frame, which overrides `tint`: `tubing` tints its decoration, so a
 hue sweep and a tint on that look are the same fight, and the sweep wins.
 
+## Keeping an anchored sign alive
+
+A sign anchored to a page element and held for hours is a different problem from a one-shot
+flourish: its motion runs thousands of times while someone reads past it, so it has to be slow
+enough to ignore. Name the [lighting](#lighting) either way — the default `sweep` turns the
+environment every 3.4 seconds, a strobe on a masthead, and `'pointer'` never moves at all on a page
+nobody has moused over. A sign meant to hold still asks for `'static'`, it does not omit the slot.
+Four ways to keep one moving at a pace it can hold:
+
+| | |
+|---|---|
+| `lighting: [sweep({ periodMs: 14000 }), track({ yawRange: 0 })]` | the highlight rakes on its own clock, and a pointer still tips the pitch |
+| a `lamp` on an `orbit` source | a pool of light circling the word |
+| `EFFECTS.hue({ span: 0.08, spread: 0.3 })` | a narrow color breath that stays near the sign's own tint |
+| `active: 'shimmer'` | a yaw ripple letter to letter — the only one of the four that moves geometry |
+
+```ts
+import { lamp, orbit } from 'klieg';
+
+await bk.fire('klieg', {
+  look: 'tubing',
+  hold: 40000,
+  effects: [
+    {
+      piece: lamp({ source: orbit({ radius: 0.4 }), radius: 0.5, strength: 1.4, duration: 9000 }),
+      target: { kind: 'run', by: 'index', amount: 1 },
+    },
+  ],
+});
+```
+
+`look: 'tubing'` is load-bearing for that example: the target is a run, and only `tubing` and
+`piping` have run parts — on `gold` it selects an empty pool and does nothing, silently. A lamp
+lights body parts too, so the same one aimed at bodies works anywhere; `hue` is run-only. Build the
+pieces in the call, too: `track` carries its yaw across frames, and a shared one resumes from the
+last fire's angle rather than from rest.
+
+**A `roving` pass that cannot reach the whole pool never will.** Its walk is identical every pass,
+so a part it misses is never afflicted at all, however long the sign runs. Raising `epochs` past
+the run count is necessary but not sufficient — handovers are deferred, so even the default 96
+reaches 51 of a pool of 55, and the strays are an arbitrary slice of a seeded permutation.
+
+**Geometry is the only thing the anchor's box crops**, and the margin is whatever `framing` left
+unspent. `shimmer`'s few degrees of yaw survive most framings; a bob like `float`'s 0.12 em wants
+real room. If it clips, *lower* the `framing` share — raising it fits a bigger word into the same
+box and leaves less.
+
 ## Stages
 
 An effect can exit part of its word and lay the survivors out again as a word of their own — a
@@ -298,7 +364,7 @@ Each stage:
 |---|---|---|
 | `keep` | keeps all | the letters that continue; the rest play this stage's `exit` |
 | `exit` | `'fade'` | how the letters that do not continue leave |
-| `as` | `'line'` | the survivors' new layout — one line, or `'stack'` for one letter per line |
+| `as` | `'line'` | the survivors' new layout — one line, `'stack'` for one letter per line, or `'place'` to leave them exactly where they already are |
 | `active` | `'none'` | what the new word does while it holds |
 | `hold` | `1200` | milliseconds, or `'click'` to wait for the viewer |
 | `tween` | none | timing for the move into the new layout |
@@ -324,6 +390,42 @@ outlasts the move. `delayBy: { scale: 0.45 }` lands the word before it grows to 
 
 Under `prefers-reduced-motion: reduce` the stages do not play — that path holds a pose and never
 travels, so there is nothing to regroup.
+
+### acronym
+
+`acronym` is that effect pre-baked: type a block whose acronym is capitalised, and it renders with
+the capitals picked out, holds to be read, drops the lower case where it stands, and gathers the
+capitals into a line that stays until dismissed. The gather starts as the lower case finishes
+leaving; `settle` puts a pause between the two.
+
+```ts
+import { acronym } from 'klieg';
+
+await bk.fire(...acronym(`Keep
+Lighting
+Interesting, Every
+Glowing letter`));
+```
+
+It returns the arguments to `fire()` rather than firing, so the look, lighting and queue policy stay
+yours — spread the options and override whatever you like.
+
+| field | default | |
+|---|---|---|
+| `caps` | cyan | how the capitals are styled, in the block and after they gather |
+| `body` | the look's own colour | how everything else is styled while it is still up |
+| `read` | `'click'` | the pause after the block renders, before the lower case leaves |
+| `settle` | `0` | an extra pause after the lower case has gone, before the capitals gather |
+| `hold` | `'click'` | how long the gathered acronym stays |
+| `exit` | `'fade'` | how the lower-case letters leave |
+| `active` | `'none'` | what the gathered acronym does while it holds |
+| `tween` | none | timing for the gather |
+
+`caps` and `body` are objects rather than colours — today each carries a `tint`, and taking an
+object means a richer per-letter style can be added without changing the signature.
+
+A capital is a character whose lower case differs from itself, so digits and punctuation are
+dropped along with the lower case. `isCapital` is exported if you want the same test elsewhere.
 
 ## Writing your own motion
 
@@ -400,12 +502,15 @@ const bounce = transition(700, { from: { scale: 0 }, ease: easeElasticOut });
 | `look` | `'gold'` | the material — a name, or a spec of your own |
 | `lighting` | `'sweep'` | how the environment lights it — a name, an env piece, or an array of them; a `lamp` effect lights the letters instead of the scene |
 | `tint` | none | recolors the look, as `0xff2d6f`, or a rule consulted per letter |
-| `hold` | `1200` | milliseconds in the active phase, `'click'` to hold until dismissed, or `'forever'` to hold until `destroy()`; `'click'` is refused under an element `placement`, and `'forever'` is refused alongside `stages`, which it would never advance past |
+| `hold` | `1200` | milliseconds in the active phase, `'click'` to hold until dismissed, or `'forever'` to hold until `destroy()`; under an element `placement`, `'click'` needs either `clickAnywhere` on the placement or `dismiss: 'host'`, and `'forever'` is refused alongside `stages`, which it would never advance past |
 | `stages` | none | stages played after the enter, each regrouping what survives it |
 | `blendMs` | `120` | crossfade window straddling each phase boundary |
 | `bloom` | look's choice | adds a glow pass, at the cost of three render targets while the effect runs |
 | `wrap` | `false` | break long text into the arrangement that renders largest |
 | `modal` | `false` | while a `'click'` hold waits, let the overlay swallow the dismissing press |
+| `onPhase` | none | called as the effect crosses each boundary — `{ phase: 'active' }` when the word has landed, `{ phase: 'exit' }` when the hold is over, `{ phase: 'stage', index }` as each stage settles |
+| `dismiss` | `'window'` | who dismisses a `'click'` hold; `'host'` attaches no window listeners and leaves `advance()` as the only way out |
+| `signal` | none | aborts this one effect: no exit plays, and the promise resolves rather than rejecting |
 | `selectable` | `'hidden'` | how the fired word appears in the DOM — copyable, findable and readable, or selectable (below) |
 
 ## A sign
@@ -498,6 +603,20 @@ The dismissing click passes through to your page by default, so it both dismisse
 presses whatever was underneath. `modal: true` makes the overlay swallow it instead, which is why
 Escape is always bound. That and `selectable: 'layer'`, which takes a click that lands on a letter,
 are the only two things that stop a click reaching your page.
+
+`fire()` returns a handle — the same promise, plus `advance()`, which acts as the dismissing press.
+With `dismiss: 'host'` klieg attaches no window listeners at all, neither `pointerdown` nor Escape,
+so a host that routes its own input gets one action per press instead of two:
+
+```ts
+const held = bk.fire('OPEN', { hold: 'click', dismiss: 'host' });
+// …later, from your own key handler:
+held.advance();
+```
+
+An `advance()` that arrives before the effect starts is not lost: it releases the first hold that
+effect reaches. Because `clickAnywhere` exists to gate a window listener, `dismiss: 'host'` does not
+need it — an anchored placement may hold on a click without the opt-in.
 
 ## Queue policies
 

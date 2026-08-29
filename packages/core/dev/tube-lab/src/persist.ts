@@ -1,6 +1,6 @@
+import type { TubeSpec } from '@core/render/tube/index.js';
 import type { Workspace } from '@weasel-js/labkit';
 import type { ComponentProps } from 'react';
-import type { TubeSpec } from '../../../src/render/tube/index.js';
 import type { PanelRecord } from './panels.js';
 import { isTubeLook, type TubeLook } from './spec.js';
 

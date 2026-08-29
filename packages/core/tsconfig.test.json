@@ -1,10 +1,13 @@
 {
   "extends": "../../tsconfig.base.json",
+  // `types` names node because reports.test.ts reads the lab font off disk; vitest resolves
+  // node: specifiers without it, tsc does not.
   "compilerOptions": { "noEmit": true, "types": ["node"] },
   "include": ["test"],
   "references": [
     { "path": "./tsconfig.json" },
     { "path": "./dev/tube-lab" },
-    { "path": "./dev/corner-lab" }
+    { "path": "./dev/kliegsminister" },
+    { "path": "./dev/composition-lab" }
   ]
 }

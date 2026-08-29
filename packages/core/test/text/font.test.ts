@@ -5,6 +5,10 @@ const { parse } = vi.hoisted(() => ({ parse: vi.fn() }));
 vi.mock('opentype.js', () => ({ parse }));
 
 import { loadFont } from '../../src/text/font.js';
+import { isFontCollection } from '../../src/text/sfnt.js';
+import { collectionOf, readFont } from './collection-fixture.js';
+
+const TTC = collectionOf(readFont('anton.ttf'), readFont('cinzel.ttf'));
 
 function stubFont(glyphs: Record<string, Partial<Glyph>>, kern = 0): Font {
   return {
@@ -99,5 +103,48 @@ describe('loadFont', () => {
     const { metrics } = await loadFont('/fonts/x.ttf');
     expect(metrics.kernOf('A', 'V')).toBe(-80);
     expect(font.getKerningValue).toHaveBeenCalledWith({ index: 1 }, { index: 2 });
+  });
+});
+
+describe('loadFont, on a collection', () => {
+  beforeEach(() => {
+    parse.mockReturnValue(stubFont({}));
+    stubFetch({ ok: true, arrayBuffer: async () => TTC });
+  });
+
+  it('keys a plain font by its url', async () => {
+    stubFetch({ ok: true, arrayBuffer: async () => readFont('anton.ttf') });
+    expect((await loadFont('/fonts/x.ttf')).key).toBe('/fonts/x.ttf');
+  });
+
+  it('keys a face by url and face, so two faces of one file do not collide', async () => {
+    expect((await loadFont('/f.ttc', 'Cinzel-Regular')).key).toBe('/f.ttc#Cinzel-Regular');
+  });
+
+  it('parses the extracted sfnt rather than the container', async () => {
+    await loadFont('/f.ttc', 'Cinzel-Regular');
+    expect(isFontCollection(parse.mock.calls[0][0] as ArrayBuffer)).toBe(false);
+  });
+
+  it('keeps the extracted sfnt as its bytes, which is what new FontFace is handed', async () => {
+    const { bytes } = await loadFont('/f.ttc', 'Cinzel-Regular');
+    expect(isFontCollection(bytes)).toBe(false);
+  });
+
+  it('names the members when the face is not one of them', async () => {
+    await expect(loadFont('/f.ttc', 'Nope')).rejects.toThrow(
+      "klieg: /f.ttc has no face 'Nope' — it holds Anton-Regular, Cinzel-Regular",
+    );
+  });
+
+  it('warns once per url and takes the first member when no face is named', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect((await loadFont('/unnamed.ttc')).key).toBe('/unnamed.ttc#Anton-Regular');
+    await loadFont('/unnamed.ttc');
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      'klieg: /unnamed.ttc is a collection and no face was named — using Anton-Regular of Anton-Regular, Cinzel-Regular',
+    );
+    warn.mockRestore();
   });
 });

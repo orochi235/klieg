@@ -1,6 +1,7 @@
 import type { Font } from 'opentype.js';
 import * as opentype from 'opentype.js';
 import type { GlyphMetrics } from './layout.js';
+import { collectionFaces, isFontCollection, sfntFromCollection } from './sfnt.js';
 
 // opentype.js 2.0 publishes ESM under `module` and a UMD bundle under `main`. Only bundlers read
 // `module`; Node takes the UMD one, whose named exports it cannot detect, so `import { parse }`
@@ -12,17 +13,44 @@ export interface LoadedFont {
   font: Font;
   unitsPerEm: number;
   metrics: GlyphMetrics;
-  /** The fetched file, kept so a CSS `FontFace` can reuse it instead of downloading again. */
+  /** Identity for the caches and the CSS family: the url, or `url#face` within a collection. */
+  key: string;
+  /**
+   * The *extracted* sfnt, kept so a CSS `FontFace` can reuse it instead of downloading again.
+   * Never the fetched file for a collection: a `ttcf` container is not a font resource, and
+   * `new FontFace` would decline it silently.
+   */
   bytes: ArrayBuffer;
 }
 
-export async function loadFont(url: string): Promise<LoadedFont> {
+const warnedCollections = new Set<string>();
+
+/** The member bytes to parse, and the key that tells two faces of one file apart. */
+function resolveFace(fetched: ArrayBuffer, url: string, face?: string): [ArrayBuffer, string] {
+  if (!isFontCollection(fetched)) return [sfntFromCollection(fetched).bytes, url];
+
+  const faces = collectionFaces(fetched);
+  if (face && !faces.includes(face)) {
+    throw new Error(`klieg: ${url} has no face '${face}' — it holds ${faces.join(', ')}`);
+  }
+  if (!face && !warnedCollections.has(url)) {
+    warnedCollections.add(url);
+    console.warn(
+      `klieg: ${url} is a collection and no face was named — using ${faces[0]} of ${faces.join(', ')}`,
+    );
+  }
+  const chosen = face ?? faces[0];
+  return [sfntFromCollection(fetched, chosen).bytes, `${url}#${chosen}`];
+}
+
+export async function loadFont(url: string, face?: string): Promise<LoadedFont> {
   const res = await fetch(url).catch((cause) => {
     throw new Error(`klieg: could not fetch font ${url}`, { cause });
   });
   if (!res.ok) throw new Error(`klieg: failed to load font ${url} (${res.status})`);
 
-  const bytes = await res.arrayBuffer();
+  const fetched = await res.arrayBuffer();
+  const [bytes, key] = resolveFace(fetched, url, face);
 
   let font: Font;
   try {
@@ -37,5 +65,5 @@ export async function loadFont(url: string): Promise<LoadedFont> {
     kernOf: (a, b) => font.getKerningValue(font.charToGlyph(a), font.charToGlyph(b)),
   };
 
-  return { font, unitsPerEm: font.unitsPerEm, metrics, bytes };
+  return { font, unitsPerEm: font.unitsPerEm, metrics, key, bytes };
 }

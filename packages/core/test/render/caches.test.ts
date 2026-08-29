@@ -1,6 +1,7 @@
 import type { Font } from 'opentype.js';
 import { describe, expect, it } from 'vitest';
 import { WordCaches } from '../../src/render/caches.js';
+import type { TubeBlueprint, TubeSpec } from '../../src/render/tube/index.js';
 import type { LoadedFont } from '../../src/text/font.js';
 
 const UPEM = 1000;
@@ -60,5 +61,89 @@ describe('WordCaches.glyph', () => {
     caches.dispose();
     expect(disposed).toBe(true);
     expect(() => caches.glyph(font, 'A', 0.3)).toThrow(/after dispose/);
+  });
+});
+
+function stubBlueprint(): TubeBlueprint & { disposed: boolean } {
+  const bp = {
+    kind: 'tube' as const,
+    runs: [],
+    corners: [],
+    paths: [],
+    lit: [],
+    dark: [],
+    disposed: false,
+    dispose() {
+      bp.disposed = true;
+    },
+  };
+  return bp;
+}
+
+const freed = (bp: TubeBlueprint) => (bp as ReturnType<typeof stubBlueprint>).disposed;
+
+describe('WordCaches.takeBlueprint', () => {
+  const SPEC = { kind: 'tube' } as unknown as TubeSpec;
+
+  it('rebuilds nothing for a key released and taken again', () => {
+    const caches = new WordCaches();
+    const font = stubFont();
+    let built = 0;
+    const take = () =>
+      caches.takeBlueprint(font, SPEC, 'A', 0.3, 0, undefined, () => {
+        built++;
+        return stubBlueprint();
+      });
+    const first = take();
+    caches.releaseBlueprint(first);
+
+    expect(take()).toBe(first);
+    expect(built).toBe(1);
+  });
+
+  it('discriminates the font, the spec, the char, the depth, the seed and the tint alone', () => {
+    const caches = new WordCaches();
+    const font = stubFont();
+    const other = stubFont();
+    const otherSpec = { kind: 'tube' } as unknown as TubeSpec;
+    const base = caches.takeBlueprint(font, SPEC, 'A', 0.3, 0, undefined, stubBlueprint);
+    caches.releaseBlueprint(base);
+
+    for (const take of [
+      () => caches.takeBlueprint(other, SPEC, 'A', 0.3, 0, undefined, stubBlueprint),
+      () => caches.takeBlueprint(font, otherSpec, 'A', 0.3, 0, undefined, stubBlueprint),
+      () => caches.takeBlueprint(font, SPEC, 'B', 0.3, 0, undefined, stubBlueprint),
+      () => caches.takeBlueprint(font, SPEC, 'A', 0.4, 0, undefined, stubBlueprint),
+      () => caches.takeBlueprint(font, SPEC, 'A', 0.3, 1, undefined, stubBlueprint),
+      () => caches.takeBlueprint(font, SPEC, 'A', 0.3, 0, 0xff0000, stubBlueprint),
+    ]) {
+      const got = take();
+      expect(got).not.toBe(base);
+      caches.releaseBlueprint(got);
+    }
+  });
+
+  it('builds a second blueprint rather than lending one already out, and frees it on release', () => {
+    const caches = new WordCaches();
+    const font = stubFont();
+    const held = caches.takeBlueprint(font, SPEC, 'A', 0.3, 0, undefined, stubBlueprint);
+    const borrowed = caches.takeBlueprint(font, SPEC, 'A', 0.3, 0, undefined, stubBlueprint);
+    expect(borrowed).not.toBe(held);
+
+    caches.releaseBlueprint(borrowed);
+    expect(freed(borrowed)).toBe(true);
+
+    caches.releaseBlueprint(held);
+    expect(freed(held)).toBe(false);
+  });
+
+  it('disposes every kept blueprint on dispose', () => {
+    const caches = new WordCaches();
+    const font = stubFont();
+    const kept = caches.takeBlueprint(font, SPEC, 'A', 0.3, 0, undefined, stubBlueprint);
+    caches.releaseBlueprint(kept);
+    caches.dispose();
+
+    expect(freed(kept)).toBe(true);
   });
 });

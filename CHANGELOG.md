@@ -11,9 +11,12 @@ Two names for one file share a fetch, a parse and a glyph cache, and a name klie
 throws where you called it rather than rendering something else.
 
 A font entry may be `{ url, face }`, which takes one member of a `.ttc` **collection** by
-PostScript name. This is what makes the fonts macOS ships loadable at all — Helvetica, Times,
-Courier and Menlo are collections, whose header opentype.js rejects outright. klieg unpacks the
-member into a standalone font before parsing, copying table bytes rather than re-encoding them.
+PostScript name — a format opentype.js rejects on its header, and one that most of the macOS
+system fonts use. klieg unpacks the member into a standalone font before parsing, copying table
+bytes rather than re-encoding them, which reaches 40 of the 49 collections in
+`/System/Library/Fonts`. Helvetica, Times, Courier and Menlo are not among them: they unpack and
+then hit a second opentype.js limit, their `cmap` being a format it does not read. The error says
+which of the two happened.
 
 ### A fire re-uses what the last one built, and the mount happens before you fire
 

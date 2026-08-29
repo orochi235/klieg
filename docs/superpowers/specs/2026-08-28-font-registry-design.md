@@ -11,11 +11,20 @@ which existing code has to change.
 `fontUrl` is one required string per instance, fetched once and memoized (`index.ts:400`). A page
 wanting two typefaces needs two `Klieg`s, and two WebGL contexts.
 
-A whole class of font also cannot be loaded today. Helvetica, Times, Courier and Menlo are `.ttc`
-collections on macOS — N table directories over one shared pool of tables, opening with `ttcf`
-rather than an sfnt version. opentype.js recognizes `\0\1\0\0`, `true`, `typ1`, `OTTO` and `wOFF`
-and throws on everything else, so `loadFont` fails on every one of them, with a message about the
-file not being a font.
+A whole class of font also cannot be loaded today. A large share of what macOS ships is a `.ttc`
+collection — N table directories over one shared pool of tables, opening with `ttcf` rather than an
+sfnt version. opentype.js recognizes `\0\1\0\0`, `true`, `typ1`, `OTTO` and `wOFF` and throws on
+everything else, so `loadFont` fails on every one of them, with a message about the file not being
+a font.
+
+**Unpacking is necessary but not sufficient, and the famous four are on the wrong side of that.**
+Measured against `/System/Library/Fonts`: 40 of its 49 collections load end to end once unpacked —
+Optima, Palatino, the Hiragino and Noto families. The nine that do not are Helvetica, Times,
+Courier, Menlo, Lucida Grande, Marker Felt, Noteworthy and the two STHeiti, which unpack cleanly
+and then hit a *second* opentype.js limit: their old Apple TrueType `cmap` subtables are format 6,
+which it does not read. Nothing in this design fixes that, so the error distinguishes the two —
+"holds X, which unpacked but is not a font opentype.js can parse" — or the container gets blamed
+for the parser's gap.
 
 ## API
 

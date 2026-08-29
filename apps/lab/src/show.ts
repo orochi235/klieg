@@ -185,7 +185,7 @@ function options(look: LookName): FireOptions {
 
 const clock = new ShowClock(() => veil.classList.add('veil--gone'));
 const klieg = createKlieg({
-  fontUrl: `${import.meta.env.BASE_URL}font.ttf`,
+  fonts: { display: `${import.meta.env.BASE_URL}font.ttf` },
   clock,
   policy: 'replace',
   // Anchored to the stage, which is `inset: 0` — the same box a fullscreen overlay would take, but

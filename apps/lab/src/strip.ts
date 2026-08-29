@@ -39,7 +39,7 @@ function instance(): Klieg {
   klieg?.destroy();
   built = wanted;
   klieg = createKlieg({
-    fontUrl: '/font.ttf',
+    fonts: { display: '/font.ttf' },
     placement: { kind: 'element', el: masthead },
     // Unset on purpose when the page asks for it: the default is what a consumer gets.
     framing: { width: 0.94, height: 0.66, ...(wanted ? { align: wanted } : {}) },

@@ -25,7 +25,11 @@ export function Preview({ composition, elapsed }: PreviewProps) {
     if (!target) return;
 
     const clock = new ManualClock();
-    const instance = createKlieg({ clock, fontUrl, placement: { kind: 'element', el: target } });
+    const instance = createKlieg({
+      clock,
+      fonts: { display: fontUrl },
+      placement: { kind: 'element', el: target },
+    });
     rig.current = { clock, at: 0 };
     void instance.fire(composition.text, toFireOptions(composition)).catch(() => {});
 

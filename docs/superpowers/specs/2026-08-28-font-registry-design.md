@@ -41,8 +41,9 @@ Key order decides the default because JS preserves string-key insertion order â€
 reordering the literal changes which font a bare `fire()` uses. `defaultFont` is how a host stops
 depending on that.
 
-`fontUrl` keeps working and warns once per process. It is the whole existing public surface, so
-removing it is a 1.0 change, not this one.
+`fontUrl` keeps working and warns once per instance â€” not once per process, which would make the
+warning depend on which instance happened to be built first. It is the whole existing public
+surface, so removing it is a 1.0 change, not this one.
 
 ## When the host is wrong
 

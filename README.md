@@ -28,7 +28,7 @@ own, and klieg's types reference it.
 ```ts
 import { createKlieg } from 'klieg';
 
-const bk = createKlieg({ fontUrl: '/fonts/display.ttf' });
+const bk = createKlieg({ fonts: { display: '/fonts/display.ttf' } });
 
 await bk.fire('JACKPOT!', { enter: 'slam', active: 'float', exit: 'shatter', look: 'gold' });
 
@@ -37,7 +37,8 @@ bk.destroy();
 
 `fire()` resolves once the effect has left the screen, whether it played out or was cancelled.
 It rejects if the font cannot be fetched or parsed — the next `fire()` retries the load rather
-than failing forever. `destroy()` cancels everything in flight and releases the GL context once
+than failing forever. A `font` naming nothing in `fonts` throws where you call it, listing what is
+registered: that is a typo in your own code, not a runtime condition to handle. `destroy()` cancels everything in flight and releases the GL context once
 the running effect has settled.
 
 `onPhase` reports the boundaries inside an effect. `{ phase: 'active' }` is the instant the word has
@@ -484,7 +485,9 @@ const bounce = transition(700, { from: { scale: 0 }, ease: easeElasticOut });
 
 | field | default | |
 |---|---|---|
-| `fontUrl` | required | a TTF or OTF opentype.js can parse, fetched once per instance on the first fire |
+| `fonts` | required | the fonts this instance can set type in, by name: `{ display: '/d.ttf', body: '/b.ttf' }`. Each is a TTF or OTF opentype.js can parse, fetched on the first fire that names it and shared by every later one. A value may instead be `{ url, face }`, which takes one member of a `.ttc` collection by PostScript name — the fonts macOS ships (Helvetica, Times, Courier, Menlo) are collections, and `face` is what makes them loadable at all |
+| `defaultFont` | first entry | which name a `fire()` with no `font` uses. Key order is what JS fixes for string keys, so reordering the object is what changes the default; name it here to stop depending on that |
+| `fontUrl` | — | **deprecated.** `fonts: { display: url }` instead |
 | `target` | `document.body` | element the overlay canvas is appended to; refused alongside an element `placement`, which is its own parent |
 | `clock` | `requestAnimationFrame` | time source; pass the exported `ManualClock` to drive effects by hand in tests |
 | `policy` | `'queue'` | what a fire does when one is already running (below) |

@@ -2,6 +2,19 @@
 
 ## 0.9.4
 
+### Several fonts per instance, and the ones already on the machine
+
+**`fonts`** replaces `fontUrl`, which still works and warns. An instance holds any number of
+faces by name and a fire picks one: `createKlieg({ fonts: { display: '/d.ttf', body: '/b.ttf' } })`,
+then `fire('SALE', { font: 'body' })`. The first entry is the default; `defaultFont` names another.
+Two names for one file share a fetch, a parse and a glyph cache, and a name klieg does not hold
+throws where you called it rather than rendering something else.
+
+A font entry may be `{ url, face }`, which takes one member of a `.ttc` **collection** by
+PostScript name. This is what makes the fonts macOS ships loadable at all — Helvetica, Times,
+Courier and Menlo are collections, whose header opentype.js rejects outright. klieg unpacks the
+member into a standalone font before parsing, copying table bytes rather than re-encoding them.
+
 ### A fire re-uses what the last one built, and the mount happens before you fire
 
 Glyph geometry and tube blueprints now belong to the instance rather than to one `Word`, so a

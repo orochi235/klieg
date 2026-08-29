@@ -803,12 +803,9 @@ export function createKlieg(options: KliegOptions): Klieg {
         );
       }
       // Before the supported check: a typo is a typo on a machine with no WebGL too, and
-      // swallowing it there would make the bug reproduce only on some laptops.
-      if (opts.font !== undefined && !fonts.names.includes(opts.font)) {
-        throw new Error(
-          `klieg: no font named '${opts.font}' — registered: ${fonts.names.join(', ')}`,
-        );
-      }
+      // swallowing it there would make the bug reproduce only on some laptops. The registry
+      // raises it, so the message has one author.
+      if (opts.font !== undefined) fonts.assertKnown(opts.font);
       if (!supported || destroyed) return handle(Promise.resolve());
       return handle(
         queue.push(

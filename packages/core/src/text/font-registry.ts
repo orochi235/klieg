@@ -23,6 +23,8 @@ export class FontRegistry {
   private readonly specs: Map<string, FontSpec>;
   private readonly defaultName: string;
   private readonly loads = new Map<string, Promise<LoadedFont>>();
+  /** One `LoadedFont` per *resolved* key, which is the identity `WordCaches` interns on. */
+  private readonly byKey = new Map<string, LoadedFont>();
 
   constructor(fonts: Record<string, FontSpec>, defaultFont?: string) {
     this.specs = new Map(Object.entries(fonts));
@@ -42,6 +44,12 @@ export class FontRegistry {
     return [...this.specs.keys()];
   }
 
+  /** Raises the same diagnostic `load` would, without starting one. */
+  assertKnown(name: string): void {
+    if (this.specs.has(name)) return;
+    throw new Error(`klieg: no font named '${name}' — registered: ${this.names.join(', ')}`);
+  }
+
   /**
    * Throws synchronously on a name it does not hold — a typo in the host's own code, which a
    * caller wants at the `fire()` call site rather than as a rejection. A load that fails rejects,
@@ -49,22 +57,30 @@ export class FontRegistry {
    */
   load(name?: string): Promise<LoadedFont> {
     const wanted = name ?? this.defaultName;
-    const spec = this.specs.get(wanted);
-    if (!spec) {
-      throw new Error(`klieg: no font named '${wanted}' — registered: ${this.names.join(', ')}`);
-    }
+    this.assertKnown(wanted);
+    const spec = this.specs.get(wanted) as FontSpec;
 
     const url = urlOf(spec);
     const face = faceOf(spec);
-    const key = `${url}#${face ?? ''}`;
-    const pending = this.loads.get(key);
+    const request = `${url}#${face ?? ''}`;
+    const pending = this.loads.get(request);
     if (pending) return pending;
 
-    const load = loadFont(url, face).catch((err) => {
-      this.loads.delete(key);
-      throw err;
-    });
-    this.loads.set(key, load);
+    const load = loadFont(url, face)
+      .then((font) => {
+        // Two entries can spell one face differently — an omitted face and the collection's
+        // first member by name reach the same bytes — and only the resolved key knows that.
+        // Handing back the first object keeps one glyph cache rather than two.
+        const first = this.byKey.get(font.key);
+        if (first) return first;
+        this.byKey.set(font.key, font);
+        return font;
+      })
+      .catch((err) => {
+        this.loads.delete(request);
+        throw err;
+      });
+    this.loads.set(request, load);
     return load;
   }
 }

@@ -150,14 +150,23 @@ describe('loadFont, on a collection', () => {
     );
   });
 
-  it('warns once per url and takes the first member when no face is named', async () => {
+  it('takes the first member when no face is named, and says which it took', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    expect((await loadFont('/unnamed.ttc')).key).toBe('/unnamed.ttc#Anton-Regular');
-    await loadFont('/unnamed.ttc');
-    expect(warn).toHaveBeenCalledTimes(1);
+
+    expect((await loadFont('/f.ttc')).key).toBe('/f.ttc#Anton-Regular');
     expect(warn).toHaveBeenCalledWith(
-      'klieg: /unnamed.ttc is a collection and no face was named — using Anton-Regular of Anton-Regular, Cinzel-Regular',
+      "klieg: /f.ttc is a collection and no face was named — using 'Anton-Regular' of Anton-Regular, Cinzel-Regular",
     );
     warn.mockRestore();
+  });
+
+  it('refuses a face on a single font rather than ignoring it', async () => {
+    // Silently ignoring it gives the file the bare url as its key, so two names asking for two
+    // faces of one plain font would load it twice and cache its glyphs twice.
+    stubFetch({ ok: true, arrayBuffer: async () => readFont('anton.ttf') });
+
+    await expect(loadFont('/d.ttf', 'Helvetica-Bold')).rejects.toThrow(
+      "klieg: /d.ttf is a single font, so face 'Helvetica-Bold' does not apply",
+    );
   });
 });

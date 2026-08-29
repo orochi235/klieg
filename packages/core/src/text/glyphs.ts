@@ -133,6 +133,11 @@ function nest(contours: THREE.Shape[]): THREE.Shape[] {
   const largest = drawn.reduce((a, b) => (Math.abs(b.area) > Math.abs(a.area) ? b : a));
   const outward = Math.sign(largest.area);
   const outlines = drawn.filter((c) => Math.sign(c.area) === outward);
+  // A hole no outline contains is a contour the glyph draws backwards on its own; keeping it as
+  // a shape shows something rather than dropping it silently. Collected rather than appended to
+  // `outlines`, which is the candidate list — one of these must not become another's container,
+  // because then two of them would nest by file order, the thing winding is here to replace.
+  const orphans: typeof drawn = [];
 
   for (const hole of drawn) {
     if (Math.sign(hole.area) === outward) continue;
@@ -142,12 +147,10 @@ function nest(contours: THREE.Shape[]): THREE.Shape[] {
         (best, o) => (best && Math.abs(best.area) <= Math.abs(o.area) ? best : o),
         undefined,
       );
-    // A hole no outline contains is a contour the glyph draws backwards on its own; keeping it
-    // as a shape shows something rather than dropping it silently.
     if (container) container.contour.holes.push(hole.contour);
-    else outlines.push(hole);
+    else orphans.push(hole);
   }
-  return outlines.map((o) => o.contour);
+  return [...outlines, ...orphans].map((o) => o.contour);
 }
 
 export function glyphToShapes(font: Font, char: string, size: number): THREE.Shape[] {

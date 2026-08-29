@@ -23,28 +23,38 @@ export interface LoadedFont {
   bytes: ArrayBuffer;
 }
 
-const warnedCollections = new Set<string>();
-
-/** The member bytes to parse, the key that tells two faces of one file apart, and its name. */
+/**
+ * The member bytes to parse, the key that tells two faces of one file apart, and its name.
+ *
+ * Warns rather than latching: a registry loads each file once per instance, so this already
+ * speaks once per instance — and a module-global latch would make the warning depend on which
+ * instance happened to be built first.
+ */
 function resolveFace(
   fetched: ArrayBuffer,
   url: string,
   face?: string,
 ): [ArrayBuffer, string, string | null] {
-  if (!isFontCollection(fetched)) return [sfntFromCollection(fetched).bytes, url, null];
+  if (!isFontCollection(fetched)) {
+    if (face !== undefined) {
+      throw new Error(`klieg: ${url} is a single font, so face '${face}' does not apply`);
+    }
+    return [sfntFromCollection(fetched).bytes, url, null];
+  }
 
   const faces = collectionFaces(fetched);
-  if (face && !faces.includes(face)) {
+  if (face !== undefined && !faces.includes(face)) {
     throw new Error(`klieg: ${url} has no face '${face}' — it holds ${faces.join(', ')}`);
   }
-  if (!face && !warnedCollections.has(url)) {
-    warnedCollections.add(url);
-    console.warn(
-      `klieg: ${url} is a collection and no face was named — using ${faces[0]} of ${faces.join(', ')}`,
-    );
+  if (face === undefined) {
+    // A collection whose members carry no name table cannot be addressed by one, so the key
+    // falls back to the member's index rather than interpolating `undefined` into it.
+    const first = faces.length > 0 ? `'${faces[0]}'` : 'its first member, which is unnamed';
+    const rest = faces.length > 0 ? ` of ${faces.join(', ')}` : '';
+    console.warn(`klieg: ${url} is a collection and no face was named — using ${first}${rest}`);
   }
-  const chosen = face ?? (faces[0] as string);
-  return [sfntFromCollection(fetched, chosen).bytes, `${url}#${chosen}`, chosen];
+  const chosen = face ?? faces[0];
+  return [sfntFromCollection(fetched, chosen).bytes, `${url}#${chosen ?? 0}`, chosen ?? null];
 }
 
 export async function loadFont(url: string, face?: string): Promise<LoadedFont> {

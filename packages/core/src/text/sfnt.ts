@@ -177,9 +177,9 @@ function extractFont(source: ArrayBuffer, view: DataView, dirOffset: number): Ar
 /**
  * Standalone font bytes for one member of a collection.
  *
- * `postScriptName` selects the member; absent or matching nothing, the first member comes back
- * with `matched: false` so the caller can say so. Passing a single font through is a no-op, so
- * this is safe to call on any bytes.
+ * `postScriptName` selects the member. Naming one that no member carries returns the first with
+ * `matched: false`, so a caller can say it substituted; naming none is not a failed match and
+ * returns `true`. Passing a single font through is a no-op, so this is safe to call on any bytes.
  */
 export function sfntFromCollection(
   bytes: ArrayBuffer,

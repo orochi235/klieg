@@ -44,6 +44,18 @@ describe('FontRegistry', () => {
     expect(loadFont).toHaveBeenCalledTimes(1);
   });
 
+  it('gives one object to two names that spell one face differently', async () => {
+    // `loadFont` resolves an omitted face to the collection's first member, so these two
+    // requests differ only until the load returns. Two objects would mean two glyph caches.
+    loadFont.mockImplementation(async () => ({ key: '/sys.ttc#First' }));
+    const registry = new FontRegistry({
+      implicit: '/sys.ttc',
+      explicit: { url: '/sys.ttc', face: 'First' },
+    });
+
+    expect(await registry.load('implicit')).toBe(await registry.load('explicit'));
+  });
+
   it('names the registered fonts when asked for one it has not got', () => {
     const registry = new FontRegistry({ display: '/d.ttf', body: '/b.ttf' });
     expect(() => registry.load('bdy')).toThrow(

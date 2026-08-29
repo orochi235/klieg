@@ -235,6 +235,35 @@ describe('createKlieg', () => {
     expect(words()).toHaveLength(0);
   });
 
+  it('gives two fires of the same text one geometry rather than two', async () => {
+    const bk = create();
+    const first = bk.fire('AA', INSTANT);
+    await flush();
+    const geo = firstMesh().geometry;
+    clock.advance(16);
+    await first;
+
+    bk.fire('AA', INSTANT);
+    await flush();
+
+    expect(firstMesh().geometry).toBe(geo);
+  });
+
+  it('holds that geometry until the instance is destroyed', async () => {
+    const bk = create();
+    const done = bk.fire('AA', INSTANT);
+    await flush();
+    const spy = vi.spyOn(firstMesh().geometry, 'dispose');
+    clock.advance(16);
+    await done;
+    expect(spy).not.toHaveBeenCalled();
+
+    bk.destroy();
+    await flush();
+
+    expect(spy).toHaveBeenCalled();
+  });
+
   it('reports unsupported and touches neither the stage nor the font', async () => {
     stubWebgl(false);
     const bk = create();

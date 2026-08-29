@@ -12,6 +12,7 @@ import type { ActiveName, EnterName, ExitName, LetterInfo, MotionPiece } from '.
 import { type PointerFrame, pointerFrame } from './pointer.js';
 import { EffectQueue, type QueuePolicy } from './queue.js';
 import { BloomPath } from './render/bloom.js';
+import { WordCaches } from './render/caches.js';
 import {
   ENV_PIECES,
   type LightingName,
@@ -377,6 +378,8 @@ export function createKlieg(options: KliegOptions): Klieg {
     placement,
   });
 
+  const caches = new WordCaches();
+
   let pointerClient: { x: number; y: number } | null = null;
   let pointerAttached = false;
   const onMove = (event: PointerEvent) => {
@@ -438,6 +441,7 @@ export function createKlieg(options: KliegOptions): Klieg {
         opts.tint,
         undefined,
         stage.environment?.texture ?? null,
+        caches,
       );
     } catch (err) {
       // This rejects before the settle() that would otherwise free the bloom's render targets.
@@ -761,7 +765,10 @@ export function createKlieg(options: KliegOptions): Klieg {
       releasePointer();
       // A running effect only notices the abort on its next tick, and tearing down first would
       // leave it re-arming idle teardown against a stage that is already gone.
-      void queue.cancelAll().then(() => stage.unmount());
+      void queue.cancelAll().then(() => {
+        stage.unmount();
+        caches.dispose();
+      });
     },
   };
 }

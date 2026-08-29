@@ -63,7 +63,7 @@ export function sign(anchor: HTMLElement, options: SignOptions): Sign {
     if (!text) return;
 
     const klieg = createKlieg({
-      fontUrl: opts.font,
+      fonts: { default: opts.font },
       placement: { kind: 'element', el: anchor },
       ...(opts.framing ? { framing: opts.framing } : {}),
     });

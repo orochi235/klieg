@@ -204,5 +204,8 @@ export function sfntFromCollection(
       }
     }
   }
-  return { bytes: extractFont(bytes, view, offsets[0]), matched: !postScriptName };
+  return {
+    bytes: extractFont(bytes, view, offsets[0] as number),
+    matched: !postScriptName,
+  };
 }

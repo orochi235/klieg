@@ -28,6 +28,7 @@ function stubFont(): LoadedFont {
   return {
     font,
     unitsPerEm: UPEM,
+    key: '/f.ttf',
     metrics: { advanceOf: () => ADVANCE, kernOf: () => 0 },
     bytes: new ArrayBuffer(8),
   };

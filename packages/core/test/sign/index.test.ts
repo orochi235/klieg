@@ -51,7 +51,8 @@ describe('sign', () => {
   it('anchors an element placement to the anchor and fires its text', () => {
     sign(anchor, { font: '/f.ttf' });
 
-    expect(built().fontUrl).toBe('/f.ttf');
+    // `fonts`, not `fontUrl`: a sign must not warn about a deprecation its caller cannot see.
+    expect(built().fonts).toEqual({ default: '/f.ttf' });
     expect(built().placement).toEqual({ kind: 'element', el: anchor });
     expect(fire).toHaveBeenCalledWith('A Name', expect.anything());
   });
@@ -158,7 +159,8 @@ describe('sign', () => {
     expect(destroy).toHaveBeenCalledOnce();
     expect(fire).toHaveBeenLastCalledWith('A New Name', expect.anything());
     // The patch carried `text` alone; everything it did not name survives the rebuild.
-    expect(built().fontUrl).toBe('/f.ttf');
+    // `fonts`, not `fontUrl`: a sign must not warn about a deprecation its caller cannot see.
+    expect(built().fonts).toEqual({ default: '/f.ttf' });
     // Down while the replacement blocks the main thread building its word, then up again.
     expect(onLit.mock.calls).toEqual([[true], [false], [true]]);
 

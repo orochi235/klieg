@@ -4,7 +4,9 @@ import { collectionFaces, isFontCollection, sfntFromCollection } from '../../src
 import { collectionOf, readFont as read } from './collection-fixture.js';
 
 /** opentype 2.0 files names under the platform that carried them; these fonts are Windows-only. */
-const psName = (bytes: ArrayBuffer) => opentype.parse(bytes).names.windows.postScriptName.en;
+const psName = (bytes: ArrayBuffer): string =>
+  (opentype.parse(bytes).names as unknown as Record<string, Record<string, Record<string, string>>>)
+    .windows?.postScriptName?.en as string;
 
 const anton = read('anton.ttf');
 const cinzel = read('cinzel.ttf');

@@ -34,7 +34,7 @@ export class FontRegistry {
     }
     // Object key order, which JS fixes for string keys — so an omitted defaultFont is
     // deterministic, and reordering the literal is what changes it.
-    this.defaultName = defaultFont ?? this.names[0];
+    this.defaultName = defaultFont ?? (this.names[0] as string);
   }
 
   /** The registered names, in declaration order. */

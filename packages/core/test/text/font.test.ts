@@ -123,7 +123,7 @@ describe('loadFont, on a collection', () => {
 
   it('parses the extracted sfnt rather than the container', async () => {
     await loadFont('/f.ttc', 'Cinzel-Regular');
-    expect(isFontCollection(parse.mock.calls[0][0] as ArrayBuffer)).toBe(false);
+    expect(isFontCollection(parse.mock.calls[0]?.[0] as ArrayBuffer)).toBe(false);
   });
 
   it('keeps the extracted sfnt as its bytes, which is what new FontFace is handed', async () => {

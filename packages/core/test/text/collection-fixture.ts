@@ -40,6 +40,8 @@ export function collectionOf(...fonts: ArrayBuffer[]): ArrayBuffer {
     dirOffsets.push(at);
     at += size;
   }
+  const dirAt = (i: number): number => dirOffsets[i] as number;
+  const placedAt = (i: number, j: number): number => (placements[i] as number[])[j] as number;
   const placements = members.map((m) =>
     m.records.map((r) => {
       const placed = cursor;
@@ -55,11 +57,11 @@ export function collectionOf(...fonts: ArrayBuffer[]): ArrayBuffer {
   dst.setUint32(4, 0x00010000);
   dst.setUint32(8, fonts.length);
   fonts.forEach((_, i) => {
-    dst.setUint32(12 + i * 4, dirOffsets[i]);
+    dst.setUint32(12 + i * 4, dirAt(i));
   });
 
   members.forEach((m, i) => {
-    const dir = dirOffsets[i];
+    const dir = dirAt(i);
     dst.setUint32(dir, m.view.getUint32(0));
     dst.setUint16(dir + 4, m.records.length);
     dst.setUint16(dir + 6, m.view.getUint16(6));
@@ -69,9 +71,9 @@ export function collectionOf(...fonts: ArrayBuffer[]): ArrayBuffer {
       const rec = dir + SFNT_HEADER + j * TABLE_RECORD;
       dstBytes.set(new Uint8Array(r.tag), rec);
       dst.setUint32(rec + 4, r.checksum);
-      dst.setUint32(rec + 8, placements[i][j]);
+      dst.setUint32(rec + 8, placedAt(i, j));
       dst.setUint32(rec + 12, r.length);
-      dstBytes.set(new Uint8Array(m.bytes, r.offset, r.length), placements[i][j]);
+      dstBytes.set(new Uint8Array(m.bytes, r.offset, r.length), placedAt(i, j));
     });
   });
   return out;

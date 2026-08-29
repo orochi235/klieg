@@ -775,6 +775,9 @@ export function createKlieg(options: KliegOptions): Klieg {
     supported,
     fire(text, opts = {}) {
       fired = true;
+      // Frees the warm's held throwaway: its programs have done their job the moment a real word
+      // is about to be built, and its blueprint lease would otherwise make this fire take a copy.
+      cancelWarm();
       const control: FireControl = { dismiss: null, latched: false };
       const handle = (promise: Promise<void>): FireHandle =>
         Object.assign(promise, {

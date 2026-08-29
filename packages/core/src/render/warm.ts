@@ -26,23 +26,32 @@ type IdleHost = { requestIdleCallback?: (cb: () => void) => unknown };
  * Pays the mount's GL cost before a fire needs it. `renderer.compile()` is not enough — the driver
  * links on the first draw — so this draws, to a one-pixel target rather than the canvas the mount
  * just appended, which would otherwise flash a stray glyph seconds before anything was fired.
+ *
+ * The returned function ends the warm and frees what it is holding. Call it when the first fire
+ * starts, and on destroy.
  */
 export function scheduleWarm(deps: WarmDeps): () => void {
   let cancelled = false;
+  const held: { dispose(): void }[] = [];
   const idle = (globalThis as IdleHost).requestIdleCallback;
   const run = () => {
     if (cancelled) return;
-    void warm(deps, () => cancelled);
+    void warm(deps, () => cancelled, held);
   };
   if (typeof idle === 'function') idle(run);
   else setTimeout(run, 1);
 
   return () => {
     cancelled = true;
+    for (const item of held.splice(0)) item.dispose();
   };
 }
 
-async function warm(deps: WarmDeps, cancelled: () => boolean): Promise<void> {
+async function warm(
+  deps: WarmDeps,
+  cancelled: () => boolean,
+  held: { dispose(): void }[],
+): Promise<void> {
   const skip = () => cancelled() || deps.stale();
   if (skip()) return;
 
@@ -80,13 +89,15 @@ async function warm(deps: WarmDeps, cancelled: () => boolean): Promise<void> {
       bloom.warm();
     }
   } finally {
-    bloom?.dispose();
     renderer.setRenderTarget(null);
-    if (word) {
-      deps.stage.scene.remove(word.group);
-      word.dispose();
-    }
+    if (word) deps.stage.scene.remove(word.group);
     target.dispose();
+    // Held, not disposed. three refcounts a program per material, so disposing the throwaway
+    // here releases the very programs this just linked — measured as `info.programs` going
+    // straight back to 0 — and the first fire links them again. What the warm buys is only kept
+    // by keeping a reference until that fire arrives.
+    if (word) held.push(word);
+    if (bloom) held.push(bloom);
     // A fire that started while this ran arms its own teardown when it settles; arming here too
     // would set an 8s timer against an effect that has not finished.
     if (!skip()) deps.stage.scheduleIdleTeardown();

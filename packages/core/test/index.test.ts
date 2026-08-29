@@ -21,6 +21,7 @@ import type { Vec3 } from '../src/pose.js';
 import { BloomPath } from '../src/render/bloom.js';
 import { type EnvPiece, sweep, track } from '../src/render/lighting.js';
 import { BASE_Z, Stage } from '../src/render/stage.js';
+import { Word } from '../src/render/word.js';
 import { DEFAULT_GLYPH_OPTIONS } from '../src/text/glyphs.js';
 import { fromEuler } from '../src/transform.js';
 
@@ -2148,6 +2149,30 @@ describe('the warm', () => {
     await runIdle();
 
     expect(renders).toBe(1);
+  });
+
+  it('holds its throwaway word until a fire needs the programs it linked', async () => {
+    const spy = vi.spyOn(Word.prototype, 'dispose');
+    const bk = create();
+    await runIdle();
+    // three refcounts a program per material: disposing here would hand back what was just linked.
+    expect(spy).not.toHaveBeenCalled();
+
+    const done = bk.fire('HI', INSTANT);
+    await flush();
+
+    expect(spy).toHaveBeenCalled();
+    clock.advance(16);
+    await done;
+  });
+
+  it('frees the throwaway on destroy when no fire ever came', async () => {
+    const spy = vi.spyOn(Word.prototype, 'dispose');
+    const bk = create();
+    await runIdle();
+    bk.destroy();
+
+    expect(spy).toHaveBeenCalled();
   });
 
   it('destroys cleanly when the warm never ran', () => {

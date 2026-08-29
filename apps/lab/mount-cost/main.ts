@@ -66,6 +66,78 @@ async function main(): Promise<void> {
     word.dispose();
   }
 
+  // Why the warm holds its throwaway instead of disposing it. three refcounts a program per
+  // material, so the last reference going away deletes the linked program: the `programs` row
+  // below reads 0 after the disposing variant and 2 after the keeping one. Three looks never drawn
+  // above, so none has been linked yet — one warmed and dropped, one warmed and held, one not.
+  (globalThis as unknown as { RENDERER: THREE.WebGLRenderer }).RENDERER = renderer;
+  const programCount = () => renderer.info.programs?.length ?? -1;
+  const programsBeforeWarm = programCount();
+  const warmScene = new THREE.Scene();
+  warmScene.environment = env.texture;
+  const throwaway = new Word(
+    'A',
+    loaded,
+    'velvet',
+    budget,
+    false,
+    undefined,
+    undefined,
+    env.texture,
+  );
+  warmScene.add(throwaway.group);
+  const pixel = new THREE.WebGLRenderTarget(1, 1);
+  const pixelHeld = new THREE.WebGLRenderTarget(1, 1);
+  renderer.setRenderTarget(pixel);
+  time("warm ('velvet'), throwaway DISPOSED — what klieg used to do", () =>
+    renderer.render(warmScene, camera),
+  );
+  renderer.setRenderTarget(null);
+  warmScene.remove(throwaway.group);
+  throwaway.dispose();
+  pixel.dispose();
+  const programsAfterWarm = programCount();
+
+  // The same warm again, but the throwaway is kept alive — if the disposed run re-links and this
+  // one does not, three's refcount is what decides whether a warm survives, not the driver.
+  const heldScene = new THREE.Scene();
+  heldScene.environment = env.texture;
+  const held = new Word('A', loaded, 'sequin', budget, false, undefined, undefined, env.texture);
+  heldScene.add(held.group);
+  renderer.setRenderTarget(pixelHeld);
+  time("warm ('sequin'), throwaway HELD — what klieg does", () =>
+    renderer.render(heldScene, camera),
+  );
+  renderer.setRenderTarget(null);
+
+  rows.push([
+    `programs: ${programsBeforeWarm} before warm, ${programsAfterWarm} after the disposing warm, ${programCount()} after the keeping one`,
+    Number.NaN,
+  ]);
+
+  const fire = (look: 'velvet' | 'sequin' | 'leather', label: string) => {
+    const scene = new THREE.Scene();
+    scene.environment = env.texture;
+    const word = new Word(
+      'JACKPOT!',
+      loaded,
+      look,
+      budget,
+      false,
+      undefined,
+      undefined,
+      env.texture,
+    );
+    scene.add(word.group);
+    time(`  first render ('${look}', ${label})`, () => renderer.render(scene, camera));
+    word.dispose();
+  };
+  fire('velvet', 'warmed, throwaway disposed');
+  fire('sequin', 'warmed, throwaway kept');
+  fire('leather', 'never warmed');
+  held.dispose();
+  pixelHeld.dispose();
+
   // The persistent half of a warm rests on this: geometry built under one context has to draw
   // under the next one, or an instance-level cache is a use-after-free rather than a saving.
   const survivor = buildGlyphGeometry(loaded.font, 'K', 1, DEFAULT_GLYPH_OPTIONS);
@@ -101,7 +173,7 @@ async function main(): Promise<void> {
     .map(([label, ms]) => `<tr><td>${label}</td><td>${ms.toFixed(1)}ms</td></tr>`)
     .join('');
   (document.getElementById('note') as HTMLElement).textContent =
-    'Everything above the first Word is paid again on every mount — which the 8s idle timeout makes every fire, for a page that fires less often than that.';
+    'Everything above the first Word is paid again on every mount — which the 8s idle timeout makes every fire, for a page that fires less often than that. The programs row is why the warm holds its throwaway: dropping it returns the programs it just linked.';
   (globalThis as unknown as { RESULT: [string, number][] }).RESULT = rows;
 }
 

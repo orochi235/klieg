@@ -10,6 +10,7 @@ import type { LoadedFont } from '../text/font.js';
 import {
   buildGlyphGeometry,
   DEFAULT_GLYPH_OPTIONS,
+  EM,
   GlyphCache,
   glyphToShapes,
 } from '../text/glyphs.js';
@@ -60,7 +61,6 @@ import {
   tintChannelOf,
 } from './tube/tint.js';
 
-const EM = 1; // glyphs are built at 1 em; the group scale does the fitting
 
 /**
  * A tube look carries its colour on the per-vertex run attribute, not on the material: the material

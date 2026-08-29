@@ -692,11 +692,23 @@ export class Word {
 
       const shapes = glyphToShapes(font.font, char, EM);
       debugShapes = shapes;
-      const blueprint = buildTubeBlueprint(
-        shapes,
-        tintedTube(decoration, tintMaterialOf(spec) === 'decoration' ? hue : undefined),
+      // Keyed on the untinted decoration, whose identity is stable across fires; `tintedTube`
+      // builds a fresh object every call, so a key on that would never hit.
+      const decorTint = tintMaterialOf(spec) === 'decoration' ? hue : undefined;
+      const blueprint = this.caches.takeBlueprint(
+        font,
+        decoration,
+        char,
         DEFAULT_GLYPH_OPTIONS.depth,
         i,
+        decorTint,
+        () =>
+          buildTubeBlueprint(
+            shapes,
+            tintedTube(decoration, decorTint),
+            DEFAULT_GLYPH_OPTIONS.depth,
+            i,
+          ),
       );
       this.tubeBlueprints[i] = blueprint;
       const box = new THREE.Box2();
@@ -987,7 +999,9 @@ export class Word {
     for (const material of this.darkMaterials) material?.dispose();
     this.darkMaterials.length = 0;
     this.envMaterials.length = 0;
-    for (const blueprint of this.tubeBlueprints) blueprint?.dispose();
+    for (const blueprint of this.tubeBlueprints) {
+      if (blueprint) this.caches.releaseBlueprint(blueprint);
+    }
     this.tubeBlueprints.length = 0;
     this.tubeBounds.length = 0;
     this.parts.length = 0;

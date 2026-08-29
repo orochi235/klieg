@@ -6,6 +6,7 @@ import { Timeline } from '../../src/motion/compositor.js';
 import type { LetterInfo, MotionPiece } from '../../src/motion/types.js';
 import { NONE, orderKey } from '../../src/motion/types.js';
 import type { PoseOffset } from '../../src/pose.js';
+import { WordCaches } from '../../src/render/caches.js';
 import type { FlakeUniforms } from '../../src/render/flake.js';
 import { type LookSpec, specOf } from '../../src/render/looks.js';
 import type { GradientSpec } from '../../src/render/tube/gradient.js';
@@ -132,6 +133,37 @@ describe('Word', () => {
 
     expect(word.letterCount).toBe(5);
     expect(meshes(word)).toHaveLength(3);
+  });
+
+  it('draws the geometry a borrowed cache holds', () => {
+    const caches = new WordCaches();
+    const font = stubFont();
+    const word = new Word('A', font, 'gold', ROOMY, false, undefined, undefined, null, caches);
+
+    expect(meshes(word)[0]?.geometry).toBe(caches.glyph(font, 'A', DEFAULT_GLYPH_OPTIONS.depth));
+    word.dispose();
+  });
+
+  it('leaves a borrowed cache intact when it disposes', () => {
+    const caches = new WordCaches();
+    const font = stubFont();
+    const first = new Word('A', font, 'gold', ROOMY, false, undefined, undefined, null, caches);
+    const geo = meshes(first)[0]?.geometry as THREE.BufferGeometry;
+    const spy = vi.spyOn(geo, 'dispose');
+    first.dispose();
+    const second = new Word('A', font, 'gold', ROOMY, false, undefined, undefined, null, caches);
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(meshes(second)[0]?.geometry).toBe(geo);
+    second.dispose();
+  });
+
+  it('disposes a cache of its own when it was not given one', () => {
+    const word = new Word('A', stubFont(), 'gold', ROOMY);
+    const spy = vi.spyOn(meshes(word)[0]?.geometry as THREE.BufferGeometry, 'dispose');
+    word.dispose();
+
+    expect(spy).toHaveBeenCalled();
   });
 
   it('shares one cached geometry across repeated letters', () => {

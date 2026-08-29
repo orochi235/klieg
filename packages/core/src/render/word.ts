@@ -7,13 +7,7 @@ import type { LetterInfo } from '../motion/types.js';
 import type { WordExtent } from '../pointer.js';
 import type { Pose, Vec3 } from '../pose.js';
 import type { LoadedFont } from '../text/font.js';
-import {
-  buildGlyphGeometry,
-  DEFAULT_GLYPH_OPTIONS,
-  EM,
-  GlyphCache,
-  glyphToShapes,
-} from '../text/glyphs.js';
+import { DEFAULT_GLYPH_OPTIONS, EM, GlyphCache, glyphToShapes } from '../text/glyphs.js';
 import type { Budget, GlyphMetrics } from '../text/layout.js';
 import { layoutBlock, wrapBlock } from '../text/layout.js';
 import {
@@ -25,6 +19,7 @@ import {
   placeBlock,
 } from '../text/placement.js';
 import type { Transform } from '../transform.js';
+import { WordCaches } from './caches.js';
 import {
   type Blueprint,
   buildChunkBlueprint,
@@ -60,7 +55,6 @@ import {
   tintByRunColor,
   tintChannelOf,
 } from './tube/tint.js';
-
 
 /**
  * A tube look carries its colour on the per-vertex run attribute, not on the material: the material
@@ -199,7 +193,10 @@ export class Word {
   private effectFrame: EffectFrame | null = null;
   /** One scratch colour for the whole word; `writePart` runs per targeted part per frame. */
   private readonly partColor = new THREE.Color();
-  private readonly cache: GlyphCache;
+  private readonly font: LoadedFont;
+  private readonly caches: WordCaches;
+  /** Set only where this word made its own caches, and so is the one that disposes them. */
+  private readonly ownsCaches: boolean;
   private readonly decorCache: GlyphCache<Blueprint> | null;
   /**
    * Tube blueprints, one per letter — a per-letter seed can't go through the char-keyed cache.
@@ -231,6 +228,7 @@ export class Word {
     tint?: number | ((letter: LetterInfo) => number | undefined),
     debug?: WordDebugHooks,
     envMap: THREE.Texture | null = null,
+    caches?: WordCaches,
   ) {
     this.envMap = envMap;
     this.group.add(this.inner);
@@ -238,9 +236,9 @@ export class Word {
     const spec = specOf(look);
     this.bodyBase = frameOwnedBase(spec);
 
-    this.cache = new GlyphCache((char, depth) =>
-      buildGlyphGeometry(font.font, char, EM, { ...DEFAULT_GLYPH_OPTIONS, depth }),
-    );
+    this.font = font;
+    this.ownsCaches = !caches;
+    this.caches = caches ?? new WordCaches();
 
     const decoration = spec.decoration;
     this.decorBase = frameOwnedBase(decoration?.look ?? {});
@@ -257,7 +255,7 @@ export class Word {
     this.decorCache =
       decoration && decoration.kind === 'chunks' && !decoration.bedding
         ? new GlyphCache<Blueprint>((char, depth) =>
-            buildChunkBlueprint(this.cache.get(char, depth), {
+            buildChunkBlueprint(this.glyph(char, depth), {
               pool: poolFor(decoration),
               faceBias: decoration.faceBias,
             }),
@@ -285,7 +283,7 @@ export class Word {
     // Bounds for every glyph first: the fit has to be settled before any cell is built.
     for (let i = 0; i < placed.x.length; i++) {
       const char = placed.char[i] as string;
-      const geo = this.cache.get(char, DEFAULT_GLYPH_OPTIONS.depth);
+      const geo = this.glyph(char, DEFAULT_GLYPH_OPTIONS.depth);
       const drawn = geo.attributes.position?.count ? geo.boundingBox : null;
       this.charOf.push(char);
       this.baseX.push(placed.x[i] as number);
@@ -558,15 +556,19 @@ export class Word {
     }
   }
 
+  private glyph(char: string, depth: number): THREE.ExtrudeGeometry {
+    return this.caches.glyph(this.font, char, depth);
+  }
+
   /** A glyph draws ink when its geometry has vertices — the same test the cell build uses. */
   private drawsInk(char: string): boolean {
-    return !!this.cache.get(char, DEFAULT_GLYPH_OPTIONS.depth).attributes.position?.count;
+    return !!this.glyph(char, DEFAULT_GLYPH_OPTIONS.depth).attributes.position?.count;
   }
 
   private chunkBlueprintFor(char: string, i: number, spec: ChunkSpec): Blueprint {
     const depth = DEFAULT_GLYPH_OPTIONS.depth;
     if (this.decorCache) return this.decorCache.get(char, depth);
-    return buildChunkBlueprint(this.cache.get(char, depth), {
+    return buildChunkBlueprint(this.glyph(char, depth), {
       pool: poolFor(spec),
       faceBias: spec.faceBias,
       bedding: spec.bedding,
@@ -609,7 +611,7 @@ export class Word {
     debug: WordDebugHooks | undefined,
   ): void {
     const char = this.charOf[i] as string;
-    const geo = this.cache.get(char, DEFAULT_GLYPH_OPTIONS.depth);
+    const geo = this.glyph(char, DEFAULT_GLYPH_OPTIONS.depth);
     if (!geo.attributes.position?.count) {
       this.letters.push(null);
       this.bodyMaterials.push(null);
@@ -977,7 +979,6 @@ export class Word {
 
   dispose(): void {
     this.disposed = true;
-    this.cache.dispose();
     for (const material of this.bodyMaterials) material?.dispose();
     this.bodyMaterials.length = 0;
     this.bodyLights.length = 0;
@@ -1007,5 +1008,6 @@ export class Word {
       }
     }
     this.group.clear();
+    if (this.ownsCaches) this.caches.dispose();
   }
 }

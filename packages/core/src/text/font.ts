@@ -25,9 +25,13 @@ export interface LoadedFont {
 
 const warnedCollections = new Set<string>();
 
-/** The member bytes to parse, and the key that tells two faces of one file apart. */
-function resolveFace(fetched: ArrayBuffer, url: string, face?: string): [ArrayBuffer, string] {
-  if (!isFontCollection(fetched)) return [sfntFromCollection(fetched).bytes, url];
+/** The member bytes to parse, the key that tells two faces of one file apart, and its name. */
+function resolveFace(
+  fetched: ArrayBuffer,
+  url: string,
+  face?: string,
+): [ArrayBuffer, string, string | null] {
+  if (!isFontCollection(fetched)) return [sfntFromCollection(fetched).bytes, url, null];
 
   const faces = collectionFaces(fetched);
   if (face && !faces.includes(face)) {
@@ -39,8 +43,8 @@ function resolveFace(fetched: ArrayBuffer, url: string, face?: string): [ArrayBu
       `klieg: ${url} is a collection and no face was named — using ${faces[0]} of ${faces.join(', ')}`,
     );
   }
-  const chosen = face ?? faces[0];
-  return [sfntFromCollection(fetched, chosen).bytes, `${url}#${chosen}`];
+  const chosen = face ?? (faces[0] as string);
+  return [sfntFromCollection(fetched, chosen).bytes, `${url}#${chosen}`, chosen];
 }
 
 export async function loadFont(url: string, face?: string): Promise<LoadedFont> {
@@ -50,12 +54,21 @@ export async function loadFont(url: string, face?: string): Promise<LoadedFont> 
   if (!res.ok) throw new Error(`klieg: failed to load font ${url} (${res.status})`);
 
   const fetched = await res.arrayBuffer();
-  const [bytes, key] = resolveFace(fetched, url, face);
+  const [bytes, key, member] = resolveFace(fetched, url, face);
 
   let font: Font;
   try {
     font = parse(bytes);
   } catch (cause) {
+    // Separating these matters: a collection member that unpacks and then fails to parse is an
+    // opentype.js limit, not a broken container — Helvetica, Times, Courier and Menlo all reach
+    // here, on a cmap format their old Apple TrueType tables use and opentype.js does not read.
+    if (member !== null) {
+      throw new Error(
+        `klieg: ${url} holds ${member}, which unpacked but is not a font opentype.js can parse`,
+        { cause },
+      );
+    }
     // A server that answers 200 with an HTML error page lands here, not on the status check.
     throw new Error(`klieg: ${url} is not a font opentype.js can parse`, { cause });
   }

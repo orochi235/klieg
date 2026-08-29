@@ -131,6 +131,19 @@ describe('loadFont, on a collection', () => {
     expect(isFontCollection(bytes)).toBe(false);
   });
 
+  it('blames the parser, not the container, when a member unpacks and then will not parse', async () => {
+    const cause = new Error('Only format 0, 4, 12 and 14 cmap tables are supported');
+    parse.mockImplementation(() => {
+      throw cause;
+    });
+
+    await expect(loadFont('/f.ttc', 'Cinzel-Regular')).rejects.toMatchObject({
+      message:
+        'klieg: /f.ttc holds Cinzel-Regular, which unpacked but is not a font opentype.js can parse',
+      cause,
+    });
+  });
+
   it('names the members when the face is not one of them', async () => {
     await expect(loadFont('/f.ttc', 'Nope')).rejects.toThrow(
       "klieg: /f.ttc has no face 'Nope' — it holds Anton-Regular, Cinzel-Regular",

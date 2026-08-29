@@ -1,8 +1,12 @@
-/** The CSS family name klieg registers a font under. Deterministic, so two instances share one. */
-export function familyFor(url: string): string {
+/**
+ * The CSS family name klieg registers a font under. Deterministic, so two instances share one.
+ * Takes `LoadedFont.key` rather than the url: two faces of one collection share a url, and one
+ * family for both would have the layer measuring the wrong weight.
+ */
+export function familyFor(key: string): string {
   let h = 2166136261;
-  for (let i = 0; i < url.length; i++) {
-    h ^= url.charCodeAt(i);
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
   return `klieg-${(h >>> 0).toString(36)}`;
@@ -15,8 +19,8 @@ const registered = new Set<string>();
  * download. Returns null where the browser has no `FontFace`, which leaves the layer unbuilt
  * rather than mispositioned against a fallback face.
  */
-export async function registerFace(url: string, bytes: ArrayBuffer): Promise<string | null> {
-  const family = familyFor(url);
+export async function registerFace(key: string, bytes: ArrayBuffer): Promise<string | null> {
+  const family = familyFor(key);
   if (registered.has(family)) return family;
   if (typeof FontFace === 'undefined' || !globalThis.document?.fonts) return null;
 

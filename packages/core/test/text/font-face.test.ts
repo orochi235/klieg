@@ -10,6 +10,10 @@ describe('familyFor', () => {
     expect(familyFor('/fonts/anton.woff2')).not.toBe(familyFor('/fonts/bebas.woff2'));
   });
 
+  it('separates two faces of one collection, which share a url', () => {
+    expect(familyFor('/f.ttc#Helvetica')).not.toBe(familyFor('/f.ttc#Helvetica-Bold'));
+  });
+
   it('is a bare CSS identifier, so it needs no quoting in a font-family', () => {
     expect(familyFor('/fonts/Anton Regular (1).woff2')).toMatch(/^klieg-[a-z0-9]+$/);
   });

@@ -212,3 +212,23 @@ describe('show config', () => {
     expect(resolveConfig({ looks: ['neon'] }).looks).toEqual(['neon']);
   });
 });
+
+describe('show config: the face', () => {
+  it('carries a seeded face through a link', () => {
+    // The wire form is a compact key-value string, so a field on the interface alone rides
+    // nowhere — it needs a short key, a reader and a validator, and only a round trip says so.
+    const link = encodeConfig({ text: 'JACKPOT', font: 'monoton' });
+
+    expect(link).toContain('fn=monoton');
+    expect(decodeConfig(link).font).toBe('monoton');
+  });
+
+  it('drops a face the catalogue does not ship, since a link outlives its face list', () => {
+    expect(decodeConfig('t=X&fn=notaface').font).toBeUndefined();
+  });
+
+  it('says nothing about the face when a link names none', () => {
+    expect(encodeConfig({ text: 'JACKPOT' })).not.toContain('fn=');
+    expect(decodeConfig('t=JACKPOT').font).toBeUndefined();
+  });
+});

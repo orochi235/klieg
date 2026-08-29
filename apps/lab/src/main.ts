@@ -22,7 +22,7 @@ import {
   specOf,
 } from 'klieg';
 
-import { CATALOG } from './fonts/catalog.js';
+import { CATALOG, CLASS_NAMES } from './fonts/catalog.js';
 import { encodeConfig, type ShowConfig } from './show-config.js';
 
 const DEG = Math.PI / 180;
@@ -336,15 +336,8 @@ const PIN = Number.isFinite(requestedPin) && location.search.includes('pin=') ? 
 
 const FONT_URL = `${import.meta.env.BASE_URL}font.ttf`;
 
-/**
- * What `scripts/fonts.mjs` last downloaded, rather than the catalogue: an entry whose binary is
- * not here would offer a face that 404s. `node scripts/fonts.mjs <id>` is what adds one.
- */
-const onDisk: string[] = await fetch(`${import.meta.env.BASE_URL}fonts/manifest.json`)
-  .then((res) => (res.ok ? (res.json() as Promise<string[]>) : []))
-  .catch(() => []);
-
-const FACES = CATALOG.filter((face) => onDisk.includes(face.id));
+/** The catalogue entries whose binaries are committed; the rest would 404. */
+const FACES = CATALOG.filter((face) => face.seeded);
 const FONTS: Record<string, string> = {
   default: FONT_URL,
   ...Object.fromEntries(
@@ -359,7 +352,7 @@ for (const face of FACES) {
   // Value first: an Option built from text alone mirrors it, and relabelling would then
   // rename the font the picker asks for.
   option.value = face.id;
-  option.text = `${face.name} (${face.class})`;
+  option.text = `${face.name} — ${CLASS_NAMES[face.class]}`;
 }
 
 function create(): Klieg {
@@ -540,6 +533,7 @@ function shareConfig(): Partial<ShowConfig> {
   const roll = number('roll');
   return {
     text: textInput.value,
+    font: font.get(),
     look: look.get(),
     lighting: lighting.get(),
     enter: enter.get(),

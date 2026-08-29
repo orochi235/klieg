@@ -13,10 +13,10 @@ export interface CatalogFont {
 }
 
 /**
- * Every face the lab can set type in, whether or not its binary is here. Eight are committed;
- * the rest are one `node scripts/fonts.mjs <id>` away. The picker offers what
- * `public/fonts/manifest.json` says is on disk, so an unseeded entry is an invitation rather
- * than a 404.
+ * Every face the lab can set type in, whether or not its binary is here. `seeded` marks the ones
+ * committed, and is what the picker offers — an unseeded entry is one `node scripts/fonts.mjs
+ * <id>` away, not a 404. The script checks the flags against the directory and says so when they
+ * disagree, which is the only thing keeping them honest.
  */
 export const CATALOG: CatalogFont[] = [
   { id: 'anton', name: 'Anton', class: 'display', google: 'Anton', seeded: true },

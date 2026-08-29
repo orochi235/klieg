@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-// Downloads catalogue faces into apps/lab/public/fonts and writes the manifest the picker
-// reads. Run after adding an entry to apps/lab/src/fonts/catalog.ts:
+// Downloads catalogue faces into apps/lab/public/fonts. The picker offers whatever the catalogue
+// marks `seeded`, so fetching a new face means setting that flag too — this reports the two
+// disagreeing rather than leaving the lab to 404. Run after adding an entry to
+// apps/lab/src/fonts/catalog.ts:
 //
 //   node scripts/fonts.mjs            # every seeded face
 //   node scripts/fonts.mjs rye anton  # or just these, seeded or not
@@ -95,10 +97,14 @@ for (const [index, font] of fonts.entries()) {
   }
 }
 
-// What is actually on disk, which is what the picker may offer.
-const onDisk = (await readdir(fontDir))
-  .filter((name) => name.endsWith('.ttf'))
-  .map((name) => name.slice(0, -4))
-  .sort();
-await writeFile(join(fontDir, 'manifest.json'), `${JSON.stringify(onDisk, null, 2)}\n`);
-console.log(`${(total / 1024 / 1024).toFixed(1)}MB, ${onDisk.length} faces on disk`);
+const onDisk = new Set(
+  (await readdir(fontDir)).filter((name) => name.endsWith('.ttf')).map((name) => name.slice(0, -4)),
+);
+const missing = catalog.filter((font) => font.seeded && !onDisk.has(font.id)).map((f) => f.id);
+const unflagged = [...onDisk].filter((id) => !catalog.some((f) => f.seeded && f.id === id)).sort();
+
+console.log(`${(total / 1024 / 1024).toFixed(1)}MB, ${onDisk.size} faces on disk`);
+if (missing.length > 0) console.log(`seeded but not on disk: ${missing.join(', ')}`);
+if (unflagged.length > 0) {
+  console.log(`on disk but not seeded, so the picker will not offer them: ${unflagged.join(', ')}`);
+}

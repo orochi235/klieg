@@ -12,6 +12,7 @@ import {
   type PoseOffset,
 } from 'klieg';
 import * as THREE from 'three';
+import { CATALOG } from './fonts/catalog.js';
 import { decodeConfig } from './show-config.js';
 
 type Tick = (nowMs: number) => void;
@@ -150,6 +151,7 @@ const DEG = Math.PI / 180;
 function options(look: LookName): FireOptions {
   const base: FireOptions = {
     look,
+    font: chosenFont,
     lighting: config.lighting,
     bloom: config.bloom,
     tint: config.tint,
@@ -184,8 +186,22 @@ function options(look: LookName): FireOptions {
 }
 
 const clock = new ShowClock(() => veil.classList.add('veil--gone'));
+// Every committed face, so a shared link naming one sets type in it. `decodeConfig` has already
+// dropped an id the catalogue does not hold — a link made before a face was added, or after one
+// was dropped — because a link is not a call site anyone can go and fix.
+const FONTS: Record<string, string> = {
+  default: `${import.meta.env.BASE_URL}font.ttf`,
+  ...Object.fromEntries(
+    CATALOG.filter((face) => face.seeded).map((face) => [
+      face.id,
+      `${import.meta.env.BASE_URL}fonts/${face.id}.ttf`,
+    ]),
+  ),
+};
+const chosenFont = config.font ?? 'default';
+
 const klieg = createKlieg({
-  fonts: { display: `${import.meta.env.BASE_URL}font.ttf` },
+  fonts: FONTS,
   clock,
   policy: 'replace',
   // Anchored to the stage, which is `inset: 0` — the same box a fullscreen overlay would take, but

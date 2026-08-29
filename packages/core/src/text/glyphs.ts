@@ -99,32 +99,58 @@ function containsPoint(polygon: THREE.Vector2[], point: THREE.Vector2): boolean 
   return inside;
 }
 
+function signedArea(polygon: THREE.Vector2[]): number {
+  let sum = 0;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i] as THREE.Vector2;
+    const b = polygon[j] as THREE.Vector2;
+    sum += b.x * a.y - a.x * b.y;
+  }
+  return sum / 2;
+}
+
 /**
- * Winding cannot decide this: a font may list a counter after an unrelated contour (Skia's `%`
- * ends with two counters belonging to earlier contours), so nesting depth does it instead.
+ * Which contours are holes, by winding rather than by nesting depth.
+ *
+ * A glyph fills under the non-zero rule, and a counter is marked by running the opposite way
+ * round from its outline. Depth cannot stand in for that: a serif face draws a letter as
+ * overlapping strokes wound the same way — Cinzel's `A` is five, two diagonals, a crossbar and
+ * two feet, with no counter contour at all, its triangle being the gap the strokes leave. Reading
+ * containment there demotes the crossbar to a hole in a diagonal and punches the letter open.
+ *
+ * The reference sign comes from the largest contour rather than the specification, so a font that
+ * winds the other way round throughout still reads correctly. Order is never consulted: a font
+ * may list a counter after an unrelated contour (Skia's `%` ends with two belonging to earlier
+ * ones), so each hole goes to the smallest outline that contains it.
  */
 function nest(contours: THREE.Shape[]): THREE.Shape[] {
   const drawn = contours
     .map((contour) => ({ contour, polygon: contour.getPoints(NESTING_SEGMENTS) }))
     .filter((c) => c.polygon.length >= 3)
-    .map((c) => ({ ...c, anchor: c.polygon[0] as THREE.Vector2 }));
-  const outlines = drawn.map((o) => ({
-    ...o,
-    level: drawn.filter((other) => other !== o && containsPoint(other.polygon, o.anchor)).length,
-  }));
+    .map((c) => ({ ...c, area: signedArea(c.polygon), anchor: c.polygon[0] as THREE.Vector2 }));
+  if (drawn.length === 0) return [];
 
-  const shapes: THREE.Shape[] = [];
-  for (const outline of outlines) {
-    const container =
-      outline.level % 2 === 1
-        ? outlines.find(
-            (o) => o.level === outline.level - 1 && containsPoint(o.polygon, outline.anchor),
-          )
-        : undefined;
-    if (container) container.contour.holes.push(outline.contour);
-    else shapes.push(outline.contour);
+  const largest = drawn.reduce((a, b) => (Math.abs(b.area) > Math.abs(a.area) ? b : a));
+  const outward = Math.sign(largest.area);
+  const outlines = drawn.filter((c) => Math.sign(c.area) === outward);
+  // A hole no outline contains is a contour the glyph draws backwards on its own; keeping it as
+  // a shape shows something rather than dropping it silently. Collected rather than appended to
+  // `outlines`, which is the candidate list — one of these must not become another's container,
+  // because then two of them would nest by file order, the thing winding is here to replace.
+  const orphans: typeof drawn = [];
+
+  for (const hole of drawn) {
+    if (Math.sign(hole.area) === outward) continue;
+    const container = outlines
+      .filter((o) => containsPoint(o.polygon, hole.anchor))
+      .reduce<(typeof outlines)[number] | undefined>(
+        (best, o) => (best && Math.abs(best.area) <= Math.abs(o.area) ? best : o),
+        undefined,
+      );
+    if (container) container.contour.holes.push(hole.contour);
+    else orphans.push(hole);
   }
-  return shapes;
+  return [...outlines, ...orphans].map((o) => o.contour);
 }
 
 export function glyphToShapes(font: Font, char: string, size: number): THREE.Shape[] {

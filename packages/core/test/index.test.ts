@@ -151,7 +151,7 @@ function stubFetch(
 
 function create(opts: Partial<KliegOptions> = {}) {
   // `target` is never read: Stage.mount is the only thing that appends to it.
-  return createKlieg({ fontUrl: '/f.ttf', clock, target: {} as HTMLElement, ...opts });
+  return createKlieg({ fonts: { display: '/f.ttf' }, clock, target: {} as HTMLElement, ...opts });
 }
 
 function stage(): Stage {
@@ -295,7 +295,7 @@ describe('createKlieg', () => {
     // Not stubWebgl(false): that leaves a document in place, which is the one thing an SSR
     // render does not have, and `supported` exists to survive.
     vi.unstubAllGlobals();
-    const bk = createKlieg({ fontUrl: '/f.ttf', clock });
+    const bk = createKlieg({ fonts: { display: '/f.ttf' }, clock });
 
     expect(bk.supported).toBe(false);
     await bk.fire('HELLO');
@@ -2139,5 +2139,90 @@ describe('the warm', () => {
     const bk = create();
 
     expect(() => bk.destroy()).not.toThrow();
+  });
+});
+
+describe('fonts', () => {
+  it('sets a fire in the font it names', async () => {
+    const bk = create({ fonts: { display: '/d.ttf', body: '/b.ttf' } });
+    const fetched: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        fetched.push(url);
+        return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) } as Response;
+      }),
+    );
+
+    const done = bk.fire('X', { ...INSTANT, font: 'body' });
+    await flush();
+    clock.advance(16);
+    await done;
+
+    expect(fetched).toEqual(['/b.ttf']);
+  });
+
+  it('falls to the first entry when a fire names no font', async () => {
+    const bk = create({ fonts: { display: '/d.ttf', body: '/b.ttf' } });
+    const fetched: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        fetched.push(url);
+        return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) } as Response;
+      }),
+    );
+
+    const done = bk.fire('X', INSTANT);
+    await flush();
+    clock.advance(16);
+    await done;
+
+    expect(fetched).toEqual(['/d.ttf']);
+  });
+
+  it('throws at the call site on a font it has not got', () => {
+    const bk = create({ fonts: { display: '/d.ttf' } });
+
+    expect(() => bk.fire('X', { font: 'nope' })).toThrow(
+      "klieg: no font named 'nope' — registered: display",
+    );
+  });
+
+  it('throws on an unknown font even where WebGL is missing, so the typo is not machine-specific', () => {
+    stubWebgl(false);
+    const bk = create({ fonts: { display: '/d.ttf' } });
+
+    expect(() => bk.fire('X', { font: 'nope' })).toThrow("klieg: no font named 'nope'");
+  });
+
+  it('refuses fontUrl and fonts together, which disagree about which font is which', () => {
+    expect(() => create({ fontUrl: '/a.ttf', fonts: { a: '/a.ttf' } })).toThrow(
+      'klieg: pass fonts or fontUrl, not both',
+    );
+  });
+
+  it('refuses neither', () => {
+    expect(() => createKlieg({ clock } as KliegOptions)).toThrow('klieg: fonts is required');
+  });
+
+  it('takes the deprecated fontUrl, warning once for the instance rather than once per fire', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const bk = createKlieg({ fontUrl: '/f.ttf', clock });
+
+    const first = bk.fire('X', INSTANT);
+    await flush();
+    clock.advance(16);
+    await first;
+    const second = bk.fire('Y', INSTANT);
+    await flush();
+    clock.advance(16);
+    await second;
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      'klieg: fontUrl is deprecated — pass fonts: { display: url } instead',
+    );
+    warn.mockRestore();
   });
 });

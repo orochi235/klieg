@@ -22,6 +22,7 @@ import {
   specOf,
 } from 'klieg';
 
+import { CATALOG, CLASS_NAMES } from './fonts/catalog.js';
 import { encodeConfig, type ShowConfig } from './show-config.js';
 
 const DEG = Math.PI / 180;
@@ -335,9 +336,28 @@ const PIN = Number.isFinite(requestedPin) && location.search.includes('pin=') ? 
 
 const FONT_URL = `${import.meta.env.BASE_URL}font.ttf`;
 
+/** The catalogue entries whose binaries are committed; the rest would 404. */
+const FACES = CATALOG.filter((face) => face.seeded);
+const FONTS: Record<string, string> = {
+  default: FONT_URL,
+  ...Object.fromEntries(
+    FACES.map((face) => [face.id, `${import.meta.env.BASE_URL}fonts/${face.id}.ttf`]),
+  ),
+};
+
+const font = choice('font', ['default', ...FACES.map((face) => face.id)]);
+for (const face of FACES) {
+  const option = [...font.select.options].find((o) => o.value === face.id);
+  if (!option) continue;
+  // Value first: an Option built from text alone mirrors it, and relabelling would then
+  // rename the font the picker asks for.
+  option.value = face.id;
+  option.text = `${face.name} — ${CLASS_NAMES[face.class]}`;
+}
+
 function create(): Klieg {
   const instance = createKlieg({
-    fontUrl: FONT_URL,
+    fonts: FONTS,
     policy: policy.get(),
     clock: PIN === null ? undefined : new PinnedClock(PIN),
   });
@@ -359,6 +379,7 @@ function fire(text: string): void {
   // leaves and what the gathered acronym does, which are stages rather than the fire's own slots.
   const options: FireOptions = {
     enter: enter.get(),
+    font: font.get(),
     ...(acrostic ? {} : { active: active.get(), exit: exit.get() }),
     look: chosenLook(),
     effects: chosenEffects(),
@@ -512,6 +533,7 @@ function shareConfig(): Partial<ShowConfig> {
   const roll = number('roll');
   return {
     text: textInput.value,
+    font: font.get(),
     look: look.get(),
     lighting: lighting.get(),
     enter: enter.get(),

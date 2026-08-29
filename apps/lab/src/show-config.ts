@@ -11,6 +11,7 @@ import {
   LOOK_NAMES,
   type LookName,
 } from 'klieg';
+import { CATALOG } from './fonts/catalog.js';
 
 /**
  * What a `show` URL carries: a query string holding only what differs from the defaults
@@ -45,6 +46,8 @@ export interface ShowConfig {
 
   /** The one look the link was composed against, distinct from the `looks` cycle list. */
   look?: LookName;
+  /** A catalogue face id, or `'default'` for the lab's own font. Unknown ids fall back to it. */
+  font?: string;
   enter?: EnterName;
   active?: ActiveName;
   exit?: ExitName;
@@ -82,6 +85,7 @@ const DEFAULT_CYCLE_MS = 3000;
  */
 const SHORT: Record<string, string> = {
   text: 't',
+  font: 'fn',
   look: 'lk',
   looks: 'ls',
   enter: 'en',
@@ -117,6 +121,7 @@ export function encodeConfig(config: Partial<ShowConfig>, opaque = false): strin
   };
 
   if (c.text !== base.text) put('text', c.text);
+  put('font', c.font);
   // Read off the input rather than off `c`: a lone `look` resolves to a cycle of one, and writing
   // that back out would name the same look twice.
   const looks = pickLooks((config as Partial<ShowConfig>)?.looks);
@@ -235,6 +240,7 @@ function fromQuery(raw: string): Record<string, unknown> {
     pivot: flag('pivot'),
     tint: color('tint'),
     look: text('look'),
+    font: text('font'),
     enter: text('enter'),
     active: text('active'),
     exit: text('exit'),
@@ -270,6 +276,9 @@ export function resolveConfig(input: unknown): ShowConfig {
     pivot: raw.pivot !== false,
     tint: pickTint(raw.tint),
     look,
+    // Validated against the catalogue here, so `show` never asks klieg for a face it has no url
+    // for: a link outlives the face list it was written against.
+    font: pickName(raw.font, FACE_IDS),
     enter: pickName(raw.enter, ENTER_NAMES),
     active: pickName(raw.active, ACTIVE_NAMES),
     exit: pickName(raw.exit, EXIT_NAMES),
@@ -284,6 +293,8 @@ export function resolveConfig(input: unknown): ShowConfig {
 }
 
 const ALIGNS = ['start', 'center', 'end'] as const;
+/** The faces whose binaries ship, which is what a link may name. */
+const FACE_IDS = CATALOG.filter((face) => face.seeded).map((face) => face.id);
 const MAX_DEGREES = 180;
 const MAX_BLEND_MS = 10_000;
 const MAX_PAUSE_MS = 60_000;

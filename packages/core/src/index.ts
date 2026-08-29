@@ -30,8 +30,9 @@ import {
 import { scheduleWarm } from './render/warm.js';
 import { Word } from './render/word.js';
 import { type SelectableMode, TextLayer } from './text/dom-layer.js';
-import { type LoadedFont, loadFont } from './text/font.js';
+import type { LoadedFont } from './text/font.js';
 import { measureBaselineRatio, registerFace } from './text/font-face.js';
+import { FontRegistry, type FontSpec } from './text/font-registry.js';
 import { DEFAULT_GLYPH_OPTIONS } from './text/glyphs.js';
 import type { Align } from './text/layout.js';
 import type { Arrangement } from './text/placement.js';
@@ -176,7 +177,19 @@ export interface KliegOptions {
    * An element placement is its own parent, so it cannot be combined with `target`.
    */
   placement?: Placement;
-  fontUrl: string;
+  /**
+   * The fonts this instance can set type in, addressed by name from `fire()`. A value may name a
+   * face within a `.ttc` collection, which is how the fonts macOS ships — Helvetica, Times,
+   * Courier, Menlo — are loadable at all.
+   *
+   * The first entry is the default; `defaultFont` overrides it. Key order is what JS fixes for
+   * string keys, so reordering the literal is what changes which font a bare `fire()` uses.
+   */
+  fonts?: Record<string, FontSpec>;
+  /** Which entry a `fire()` with no `font` uses. Defaults to the first. */
+  defaultFont?: string;
+  /** @deprecated Pass `fonts` instead: `fonts: { display: url }`. */
+  fontUrl?: string;
   clock?: Clock;
   /**
    * `concurrent` is unsound for `sweep`: every live effect writes the shared environment
@@ -276,6 +289,8 @@ export interface FireOptions {
    * block in the frame.
    */
   lineAlign?: Align;
+  /** A name from the instance's `fonts`. Defaults to `defaultFont`, else the first entry. */
+  font?: string;
   /** Break long lines to whatever arrangement renders largest. Explicit newlines always break. */
   wrap?: boolean;
   /** Let the overlay swallow the dismissing click instead of passing it through to the page. */
@@ -371,6 +386,22 @@ interface FireControl {
   latched: boolean;
 }
 
+/**
+ * One registry from either surface, so nothing downstream knows which the host used. The
+ * deprecation warns once per instance rather than once per process: a host that constructs klieg
+ * per fire should hear it every time, and a per-process latch would make the warning depend on
+ * which instance happened to be built first.
+ */
+function registryFor(options: KliegOptions): FontRegistry {
+  if (options.fonts && options.fontUrl !== undefined) {
+    throw new Error('klieg: pass fonts or fontUrl, not both');
+  }
+  if (options.fonts) return new FontRegistry(options.fonts, options.defaultFont);
+  if (options.fontUrl === undefined) throw new Error('klieg: fonts is required');
+  console.warn('klieg: fontUrl is deprecated — pass fonts: { display: url } instead');
+  return new FontRegistry({ default: options.fontUrl });
+}
+
 export function createKlieg(options: KliegOptions): Klieg {
   const placement = options.placement ?? { kind: 'fullscreen' };
   const anchored = placement.kind === 'element';
@@ -389,6 +420,7 @@ export function createKlieg(options: KliegOptions): Klieg {
   });
 
   const caches = new WordCaches();
+  const fonts = registryFor(options);
   let destroyed = false;
   let fired = false;
   const cancelWarm = supported
@@ -421,15 +453,8 @@ export function createKlieg(options: KliegOptions): Klieg {
     globalThis.removeEventListener('pointermove', onMove);
   }
 
-  let fontPromise: Promise<LoadedFont> | null = null;
-  function font(): Promise<LoadedFont> {
-    if (fontPromise) return fontPromise;
-    // Memoizing the rejection too would make one failed fetch permanent for this instance.
-    fontPromise = loadFont(options.fontUrl).catch((err) => {
-      fontPromise = null;
-      throw err;
-    });
-    return fontPromise;
+  function font(name?: string): Promise<LoadedFont> {
+    return fonts.load(name);
   }
 
   async function run(
@@ -438,7 +463,7 @@ export function createKlieg(options: KliegOptions): Klieg {
     signal: AbortSignal,
     control: FireControl,
   ): Promise<void> {
-    const loaded = await font();
+    const loaded = await font(opts.font);
     if (signal.aborted) return;
 
     const renderer = stage.mount();
@@ -501,7 +526,7 @@ export function createKlieg(options: KliegOptions): Klieg {
     // and a browser with no `FontFace` keeps it rather than getting nothing at all.
     if (layer && mode !== 'none') layer.setHidden(text);
     if (layer && mode === 'layer') {
-      void registerFace(options.fontUrl, loaded.bytes).then((f) => {
+      void registerFace(loaded.key, loaded.bytes).then((f) => {
         if (!f) return;
         baselineRatio = measureBaselineRatio(f);
         family = f;
@@ -777,6 +802,10 @@ export function createKlieg(options: KliegOptions): Klieg {
           "klieg: `hold: 'forever'` never advances a stage, so `stages` cannot apply",
         );
       }
+      // Before the supported check: a typo is a typo on a machine with no WebGL too, and
+      // swallowing it there would make the bug reproduce only on some laptops. The registry
+      // raises it, so the message has one author.
+      if (opts.font !== undefined) fonts.assertKnown(opts.font);
       if (!supported || destroyed) return handle(Promise.resolve());
       return handle(
         queue.push(

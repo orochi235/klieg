@@ -84,6 +84,20 @@ function box(x: number, y: number, w: number, h: number): PathCommand[] {
   ];
 }
 
+/**
+ * The same ring walked the other way round, which is how a font marks a counter — the fill is
+ * non-zero, so an equally-wound contour inside another is a second solid, not a hole.
+ */
+function counter(x: number, y: number, w: number, h: number): PathCommand[] {
+  return [
+    { type: 'M', x, y },
+    { type: 'L', x, y: y + h },
+    { type: 'L', x: x + w, y: y + h },
+    { type: 'L', x: x + w, y },
+    { type: 'L', x, y },
+  ];
+}
+
 /** Enough to catch a curve's bulge; three samples a straight edge at its endpoints regardless. */
 const SAMPLES = 16;
 
@@ -137,7 +151,11 @@ describe('glyphToShapes', () => {
   });
 
   it('nests a counter as a hole instead of a second solid shape', () => {
-    const shapes = glyphToShapes(fontDrawing([...box(0, 0, 10, 10), ...box(3, 3, 4, 4)]), 'O', 1);
+    const shapes = glyphToShapes(
+      fontDrawing([...box(0, 0, 10, 10), ...counter(3, 3, 4, 4)]),
+      'O',
+      1,
+    );
 
     expect(shapes).toHaveLength(1);
     expect(shapes[0]?.holes).toHaveLength(1);
@@ -152,7 +170,7 @@ describe('glyphToShapes', () => {
 
   it('attaches a counter to the contour containing it, not the one preceding it', () => {
     const shapes = glyphToShapes(
-      fontDrawing([...box(0, 0, 10, 10), ...box(20, 0, 10, 10), ...box(3, 3, 4, 4)]),
+      fontDrawing([...box(0, 0, 10, 10), ...box(20, 0, 10, 10), ...counter(3, 3, 4, 4)]),
       '%',
       1,
     );
@@ -164,9 +182,21 @@ describe('glyphToShapes', () => {
     expect(leftOf(withHole[0] as THREE.Shape)).toBe(0);
   });
 
+  it('keeps overlapping strokes solid instead of making one a hole in another', () => {
+    // A serif `A`: two diagonals crossed by a bar, all wound the same way, no counter contour.
+    const shapes = glyphToShapes(
+      fontDrawing([...box(0, 0, 4, 30), ...box(12, 0, 4, 30), ...box(2, 10, 12, 4)]),
+      'A',
+      1,
+    );
+
+    expect(shapes).toHaveLength(3);
+    expect(shapes.every((s) => s.holes.length === 0)).toBe(true);
+  });
+
   it('makes a contour nested two deep solid again', () => {
     const shapes = glyphToShapes(
-      fontDrawing([...box(0, 0, 20, 20), ...box(2, 2, 16, 16), ...box(6, 6, 8, 8)]),
+      fontDrawing([...box(0, 0, 20, 20), ...counter(2, 2, 16, 16), ...box(6, 6, 8, 8)]),
       '@',
       1,
     );
@@ -180,8 +210,8 @@ describe('glyphToShapes', () => {
       fontDrawing([
         ...box(0, 0, 40, 40),
         ...box(10, 10, 20, 20),
-        ...box(14, 14, 12, 12),
-        ...box(4, 4, 32, 32),
+        ...counter(14, 14, 12, 12),
+        ...counter(4, 4, 32, 32),
       ]),
       '@',
       1,

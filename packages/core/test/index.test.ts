@@ -2175,6 +2175,52 @@ describe('the warm', () => {
     expect(spy).toHaveBeenCalled();
   });
 
+  it('links on demand when the host names the instant', async () => {
+    const bk = create();
+    await bk.warm('neon');
+
+    // The word, then the threshold, blur and composite quads.
+    expect(calls).toEqual(['mount', 'idle']);
+    expect(renders).toBe(4);
+  });
+
+  it('warms on demand after a fire, where the automatic one would decline', async () => {
+    const bk = create();
+    const done = bk.fire('HI', INSTANT);
+    await flush();
+    clock.advance(16);
+    await done;
+    const before = renders;
+
+    await bk.warm('gold');
+
+    expect(renders).toBe(before + 1);
+  });
+
+  it('warms the configured look when the host names none', async () => {
+    const bk = create({ warmLook: 'neon' });
+    await bk.warm();
+
+    expect(renders).toBe(4);
+  });
+
+  it('resolves without touching the stage when unsupported', async () => {
+    stubWebgl(false);
+    const bk = create();
+    await bk.warm('neon');
+
+    expect(calls).toEqual([]);
+  });
+
+  it('resolves without touching the stage after destroy', async () => {
+    const bk = create();
+    bk.destroy();
+    await bk.warm('neon');
+
+    // The unmount destroy() schedules has not landed yet; the point is that the warm added nothing.
+    expect(calls).toEqual([]);
+  });
+
   it('destroys cleanly when the warm never ran', () => {
     const bk = create();
 

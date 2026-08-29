@@ -20,6 +20,10 @@ which of the two happened.
 
 ### A fire re-uses what the last one built, and the mount happens before you fire
 
+**`warm(look?)`** links a look's programs on demand, for a host that knows the instant — a page
+swap that has already decided pays the link before the swap rather than inside it. The automatic
+warm still runs on an idle callback after construction and covers the case where nobody asks.
+
 Glyph geometry and tube blueprints now belong to the instance rather than to one `Word`, so a
 repeated fire re-uses them instead of extruding and sweeping the same letters again. They survive
 the idle unmount too: a `BufferGeometry` is CPU-side and re-uploads itself to the next context.
@@ -29,8 +33,14 @@ which lands on the first draw and which `renderer.compile()` does not cover. Tha
 so it is paid earlier: on a `requestIdleCallback` after `createKlieg`, klieg mounts the stage,
 builds the environment and draws one throwaway glyph to a one-pixel target. **`warmLook`** names the
 look it links, defaulting to `'gold'` — the link is per look, so a page that only fires `neon`
-should say so. The warm arms the same idle teardown a settled effect does, so an instance that warms
-and never fires gives its context back.
+should say so, and a look that blooms gets its threshold, blur and composite quads linked too. The
+warm arms the same idle teardown a settled effect does, so an instance that warms and never fires
+gives its context back.
+
+It *holds* the throwaway word it drew until the first fire rather than disposing it: three refcounts
+a shader program per material, so dropping the last reference hands back the program the warm just
+linked. `apps/lab/mount-cost/` reads `renderer.info.programs` at 0 after a warm that disposes and 2
+after one that holds.
 
 ## 0.9.3
 

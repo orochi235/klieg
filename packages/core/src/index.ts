@@ -374,6 +374,15 @@ export interface Klieg {
   readonly supported: boolean;
   /** Resolves when the effect leaves the screen, whether it played out or was cancelled. */
   fire(text: string, options?: FireOptions): FireHandle;
+  /**
+   * Links a look's shader programs now instead of waiting for the idle callback after
+   * construction. For a host that already knows what it is about to fire — a page swap that has
+   * decided — so the link is paid before the swap rather than inside it. Defaults to `warmLook`.
+   *
+   * Resolves once the linking draw has been issued, and never rejects: a warm that cannot run
+   * leaves the fire paying exactly what it would have paid anyway.
+   */
+  warm(look?: Look): Promise<void>;
   /** Cancels everything in flight; the stage comes down once the running effect has settled. */
   destroy(): void;
 }
@@ -423,7 +432,7 @@ export function createKlieg(options: KliegOptions): Klieg {
   const fonts = registryFor(options);
   let destroyed = false;
   let fired = false;
-  const cancelWarm = supported
+  const warmer = supported
     ? scheduleWarm({
         stage,
         font: () => font(),
@@ -431,8 +440,9 @@ export function createKlieg(options: KliegOptions): Klieg {
         blooms: wantsBloom(undefined, options.warmLook ?? 'gold'),
         caches,
         stale: () => destroyed || fired,
+        gone: () => destroyed,
       })
-    : () => {};
+    : null;
 
   let pointerClient: { x: number; y: number } | null = null;
   let pointerAttached = false;
@@ -777,7 +787,7 @@ export function createKlieg(options: KliegOptions): Klieg {
       fired = true;
       // Frees the warm's held throwaway: its programs have done their job the moment a real word
       // is about to be built, and its blueprint lease would otherwise make this fire take a copy.
-      cancelWarm();
+      warmer?.release();
       const control: FireControl = { dismiss: null, latched: false };
       const handle = (promise: Promise<void>): FireHandle =>
         Object.assign(promise, {
@@ -819,9 +829,14 @@ export function createKlieg(options: KliegOptions): Klieg {
         ),
       );
     },
+    warm(look) {
+      if (!supported || destroyed || !warmer) return Promise.resolve();
+      const chosen = look ?? options.warmLook ?? 'gold';
+      return warmer.run(chosen, wantsBloom(undefined, chosen));
+    },
     destroy() {
       destroyed = true;
-      cancelWarm();
+      warmer?.cancel();
       releasePointer();
       // A running effect only notices the abort on its next tick, and tearing down first would
       // leave it re-arming idle teardown against a stage that is already gone.

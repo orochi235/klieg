@@ -12,12 +12,25 @@ const WARM_TEXT = 'A';
 export interface WarmDeps {
   stage: Stage;
   font(): Promise<LoadedFont>;
+  /** The look the automatic warm links; a host-driven `run` names its own. */
   look: Look;
   caches: WordCaches;
-  /** True once the instance is destroyed or a fire has started; both make the warm pointless. */
+  /** True once the instance is destroyed or a fire has started; both make the automatic warm
+   * pointless. A host asking for one directly is not subject to it — it knows what it wants. */
   stale(): boolean;
+  /** True once the instance is destroyed. Nothing may touch the stage after that. */
+  gone(): boolean;
   /** Whether `look` draws through the bloom path, whose quads link programs of their own. */
   blooms: boolean;
+}
+
+export interface Warmer {
+  /** Links `look` now. Resolves once the draw that links it has been issued. */
+  run(look: Look, blooms: boolean): Promise<void>;
+  /** Frees the throwaway the warm is holding — its programs have served their purpose. */
+  release(): void;
+  /** Releases, and stops a scheduled warm that has not run. */
+  cancel(): void;
 }
 
 type IdleHost = { requestIdleCallback?: (cb: () => void) => unknown };
@@ -30,29 +43,44 @@ type IdleHost = { requestIdleCallback?: (cb: () => void) => unknown };
  * The returned function ends the warm and frees what it is holding. Call it when the first fire
  * starts, and on destroy.
  */
-export function scheduleWarm(deps: WarmDeps): () => void {
+export function scheduleWarm(deps: WarmDeps): Warmer {
   let cancelled = false;
   const held: { dispose(): void }[] = [];
-  const idle = (globalThis as IdleHost).requestIdleCallback;
-  const run = () => {
-    if (cancelled) return;
-    void warm(deps, () => cancelled, held);
-  };
-  if (typeof idle === 'function') idle(run);
-  else setTimeout(run, 1);
-
-  return () => {
-    cancelled = true;
+  const release = () => {
     for (const item of held.splice(0)) item.dispose();
+  };
+
+  const idle = (globalThis as IdleHost).requestIdleCallback;
+  const automatic = () => {
+    if (cancelled) return;
+    void warm(deps, deps.look, deps.blooms, () => cancelled || deps.stale(), held);
+  };
+  if (typeof idle === 'function') idle(automatic);
+  else setTimeout(automatic, 1);
+
+  return {
+    run(look, blooms) {
+      // A host that asks names the instant: an earlier fire does not make this one pointless the
+      // way it makes the automatic warm pointless. Only a destroyed instance stops it.
+      release();
+      return warm(deps, look, blooms, () => cancelled || deps.gone(), held);
+    },
+    release,
+    cancel() {
+      cancelled = true;
+      release();
+    },
   };
 }
 
 async function warm(
   deps: WarmDeps,
-  cancelled: () => boolean,
+  look: Look,
+  blooms: boolean,
+  stop: () => boolean,
   held: { dispose(): void }[],
 ): Promise<void> {
-  const skip = () => cancelled() || deps.stale();
+  const skip = stop;
   if (skip()) return;
 
   let loaded: LoadedFont;
@@ -73,7 +101,7 @@ async function warm(
     word = new Word(
       WARM_TEXT,
       loaded,
-      deps.look,
+      look,
       deps.stage.viewportBudget(),
       false,
       undefined,
@@ -84,7 +112,7 @@ async function warm(
     deps.stage.scene.add(word.group);
     renderer.setRenderTarget(target);
     renderer.render(deps.stage.scene, deps.stage.camera);
-    if (deps.blooms) {
+    if (blooms) {
       bloom = new BloomPath(renderer);
       bloom.warm();
     }

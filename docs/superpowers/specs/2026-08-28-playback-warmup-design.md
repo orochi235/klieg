@@ -114,12 +114,11 @@ GL-side numbers stay measurable through `apps/lab/mount-cost/`, which is dev-onl
 
 ## Deferred
 
-**Prebaking the environment.** It is the largest number on the table and it is fully deterministic —
-a const bar array and a const blur sigma, no inputs. Whether it can be *eliminated* rather than
-moved depends on three being able to load an already-prefiltered PMREM without re-running the pass,
-which is unconfirmed. Check that before designing around it.
+**Prebaking the environment — checked, and not worth it.** three exports
+`CubeUVReflectionMapping` but ships no loader that produces that layout, so reusing a prefiltered
+PMREM means writing three's internal mip atlas by hand and re-deriving it every time three changes
+it. Against that, the prefilter is not reliably the 296ms above: three cold profiles under
+`spikes/warm-cold-run.mjs` put it at 27–35ms. Reopen this only with a cold-process measurement that
+shows the 296ms is what a real page pays.
 
-**A host-driven `warm()`.** sherpa knows which page it is swapping to before it swaps, so it could
-warm the right look at the right instant instead of at construction. Worth having, but it is a
-second surface to document and the automatic warm covers the common case; let a real need for the
-instant justify it.
+**A host-driven `warm()`.** Built — see the API section.

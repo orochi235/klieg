@@ -496,6 +496,15 @@ const bounce = transition(700, { from: { scale: 0 }, ease: easeElasticOut });
 | `framing` | `{ width: 0.62, height: 0.3 }` | share of the box the type may fill, per axis — the viewport, or the anchor under an element `placement`; raise it on a page that is nothing but the type. `align: 'start' \| 'center' \| 'end'` places the word in the box at that size, in reading order: an anchored word meets the page's own text edge by default, an overlay stays centred |
 | `placement` | `{ kind: 'fullscreen' }` | fullscreen overlay, or `{ kind: 'element', el }` to anchor the type inside one element; fixed for the instance's lifetime |
 
+`warm(look?)` links a look's shader programs and returns a promise. The instance already does this
+once on an idle callback after construction, so reach for it only when you know the instant — a
+page swap that has decided which look it is about to fire pays the link before the swap instead of
+inside it. It defaults to `warmLook`, resolves once the linking draw is issued, and never rejects.
+
+```js
+await bk.warm('neon'); // then swap the page, then fire
+```
+
 `fire(text, options)`:
 
 | field | default | |

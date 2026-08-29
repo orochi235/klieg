@@ -159,6 +159,26 @@ export class BloomPath {
     if (rect) r.setScissorTest(false);
   }
 
+  /**
+   * Links the three quad programs without painting. `render` composites to the default
+   * framebuffer, which is the canvas the stage has already appended — warming through it would
+   * show a frame of bloom over a page that has fired nothing.
+   */
+  warm(): void {
+    this.resize();
+    this.thresholdSrc.value = this.sceneRT.texture;
+    this.blurSrc.value = this.brightRT.texture;
+    this.blurDir.value.set(0, 0);
+    this.compositeBase.value = this.sceneRT.texture;
+    this.compositeBloom.value = this.brightRT.texture;
+    // Into blurRT for all three: it is the one target none of them samples, so no pass reads the
+    // texture it is writing.
+    for (const material of [this.thresholdMat, this.blurMat, this.compositeMat]) {
+      this.blit(material, this.blurRT);
+    }
+    this.renderer.setRenderTarget(null);
+  }
+
   /** Per frame because the stage resizes the drawing buffer without knowing these targets exist. */
   private resize(): void {
     const size = this.renderer.getDrawingBufferSize(this.drawingBuffer);

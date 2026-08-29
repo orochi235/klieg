@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { LoadedFont } from '../text/font.js';
+import { BloomPath } from './bloom.js';
 import type { WordCaches } from './caches.js';
 import type { Look } from './looks.js';
 import type { Stage } from './stage.js';
@@ -15,6 +16,8 @@ export interface WarmDeps {
   caches: WordCaches;
   /** True once the instance is destroyed or a fire has started; both make the warm pointless. */
   stale(): boolean;
+  /** Whether `look` draws through the bloom path, whose quads link programs of their own. */
+  blooms: boolean;
 }
 
 type IdleHost = { requestIdleCallback?: (cb: () => void) => unknown };
@@ -56,6 +59,7 @@ async function warm(deps: WarmDeps, cancelled: () => boolean): Promise<void> {
   const renderer = deps.stage.mount();
   const target = new THREE.WebGLRenderTarget(1, 1);
   let word: Word | null = null;
+  let bloom: BloomPath | null = null;
   try {
     word = new Word(
       WARM_TEXT,
@@ -71,7 +75,12 @@ async function warm(deps: WarmDeps, cancelled: () => boolean): Promise<void> {
     deps.stage.scene.add(word.group);
     renderer.setRenderTarget(target);
     renderer.render(deps.stage.scene, deps.stage.camera);
+    if (deps.blooms) {
+      bloom = new BloomPath(renderer);
+      bloom.warm();
+    }
   } finally {
+    bloom?.dispose();
     renderer.setRenderTarget(null);
     if (word) {
       deps.stage.scene.remove(word.group);

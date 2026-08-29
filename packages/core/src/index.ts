@@ -428,6 +428,7 @@ export function createKlieg(options: KliegOptions): Klieg {
         stage,
         font: () => font(),
         look: options.warmLook ?? 'gold',
+        blooms: wantsBloom(undefined, options.warmLook ?? 'gold'),
         caches,
         stale: () => destroyed || fired,
       })

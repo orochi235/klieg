@@ -2135,6 +2135,21 @@ describe('the warm', () => {
     expect(calls).toEqual(['mount']);
   });
 
+  it('links the bloom quads too when the warmed look asks for bloom', async () => {
+    create({ warmLook: 'neon' });
+    await runIdle();
+
+    // The word, then the threshold, blur and composite quads — each a program of its own.
+    expect(renders).toBe(4);
+  });
+
+  it('builds no bloom path for a look that does not bloom', async () => {
+    create({ warmLook: 'gold' });
+    await runIdle();
+
+    expect(renders).toBe(1);
+  });
+
   it('destroys cleanly when the warm never ran', () => {
     const bk = create();
 

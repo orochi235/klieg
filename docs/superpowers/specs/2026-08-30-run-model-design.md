@@ -21,7 +21,13 @@ to `@weasel-js/geom` and `@weasel-js/paint` are type-only in practice. Nothing o
 the DOM at import time, and the package's own suite has a block — *"layoutRuns from a font face
 alone"* — covering the case klieg is: font bytes, no atlas, no canvas.
 
-**This is a real change to klieg's dependency posture,** which is one runtime dependency today.
+**`@weasel-js/text` is not on npm.** `npm view @weasel-js/text` 404s; `@weasel-js/font` resolves at
+1.2.0. klieg is itself published, so it cannot depend on a package a consumer's install cannot
+resolve — this blocks the design as written until `text` ships. If it is not going to ship, the
+fallback is the route slice A already took: vendor the walk with attribution, the way
+`text/sfnt.ts` was ported from `@weasel-js/font`.
+
+**And this is a real change to klieg's dependency posture,** which is one runtime dependency today.
 Check what `geom` actually pulls at runtime before merging; the report of it being type-only is
 about how it is used, not how it is declared.
 

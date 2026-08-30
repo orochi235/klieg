@@ -20,6 +20,13 @@ fills its box instead of taking the first break that fits. That search now score
 laying it out through weasel and measuring the `bounds` that come back. `layoutRuns` therefore runs
 once per candidate per fire, which is CPU-only work on an already-cached font.
 
+**The scoring probes call `layoutRuns` directly, not `cachedLayoutRuns`.** That cache holds one
+entry per distinct `(maxWidth, lineHeight, align, outline threshold)` and caps variants per runs
+array at 8, evicting the whole variant set at once rather than the least recent — so a search
+probing more than 8 widths would evict its own set every pass and cost more than not caching.
+`cachedLayoutRuns` is for the arrangement the search settles on, which is the one drawn repeatedly.
+A cached result is shared: treat `LaidOutRuns` as immutable and never write into one.
+
 That package is a 900-line walk with cross-run kerning, word wrap, alignment, and a shared baseline
 across mixed sizes. It is MIT, by the same author, and its only real runtime edge is
 `@weasel-js/font`, whose own only dependency is the `opentype.js` klieg already carries; the edges
@@ -119,43 +126,53 @@ generally makes the type smaller, and nothing in the suite will call that a fail
 single spaces), so under `wrap: true` the slot sequence already comes from normalised text rather
 than the fired string.
 
-**Reading-order alignment comes from weasel.** klieg's `Align` is `start | center | end`, resolved
-against the box's own computed `direction` — an anchored sign meets the host page's text edge, and
-under `rtl` that is the other edge. weasel is adding RTL, so klieg passes its own align through
-rather than mapping start/end to left/right and deleting that mapping later.
+**Reading-order alignment comes from weasel.** `align` gains `start` / `end` alongside the absolute
+trio, and an optional `direction: 'ltr' | 'rtl'` sits on the layout options; `resolveAlign(align,
+direction)` is exported. It is the same split as CSS `text-align` — the relative pair resolves
+against direction, the absolute pair does not. So klieg passes its own `Align` straight through and
+builds no start/end→left/right mapping.
 
-Confirm the shape when it lands — whether `align` gains `start`/`end` or a separate `direction`
-reinterprets `left`/`right` — and confirm it resolves before line boxes are reported, as alignment
-does today. That second point is not cosmetic here: klieg's wrap search scores candidates by the
-`bounds` layout returns, so an alignment that moves `bounds` changes which arrangement wins, and
-therefore how large every wrapped sign is drawn.
+Direction is an input and is never sniffed, because that package has no DOM. klieg goes on reading
+`getComputedStyle(box).direction` and passes what it found.
 
-**Per-line alignment stays klieg's** unless weasel says otherwise. `viewportBudget` carries both an
-`align` and a `lineAlign` — where the block sits, and how lines sit within it — and they are
-independent. klieg applies `lineAlign` after layout.
+**How far RTL goes: alignment only.** The walk still runs forward over code points, so a run's order
+does not reverse, and there is no bidi. Do not design against reversal — if it lands it will be
+said so. Even then it would not mean Arabic works: Hebrew needs no shaping, but Arabic needs GSUB
+joining forms that this walk does not apply.
 
-**A slot for every code point.** klieg keeps a letter slot for each code point, including the ones
-that draw nothing, because `letterCount`, `charOf`, the regroup's renumbering and the selectable
-DOM layer all index by slot. weasel's layout omits cells for **four different reasons**, and
-`caretIndices` cannot tell them apart: a code point the face cannot serve is skipped silently; a
-**leading space on a line is dropped entirely**, which eats one slot per wrapped line; a newline
-never produces a caret stop; and `caretIndices` are UTF-16 offsets while klieg's slots are code
-points, so an astral character makes the two numberings diverge rather than merely gap.
+**The two alignments split differently than klieg's do.** weasel's single `align` is applied per
+line against `maxWidth` — that is klieg's `lineAlign`, and it comes for free. klieg's block `align`
+resolves to a 3D viewport translate under a camera-Z perspective shrink, which is klieg's own and
+stays klieg's, applied after layout.
 
-There is no shaping, no GSUB and no cluster merging anywhere in that walk, so the mapping is 1:1 by
-omission only, never by merging — which is what makes the fix cheap, and **it is being made
-upstream**: a zero-advance cell for an unservable code point, the leading space kept, and per-cell
-ink exposed so `drawsInk` comes from layout. klieg then reads slot `i` from cell `i` and builds no
-reconstruction at all. The klieg-side rebuild from `caretIndices` was considered and rejected: those
-are UTF-16 offsets against code-point slots, so an astral character diverges rather than gaps, and
-nothing distinguishes the four omission causes from each other.
+**One mismatch to handle deliberately:** klieg ranges lines on ink extents, weasel aligns on advance
+width including a trailing space, so a centred line ending in a space sits half a space off in
+weasel where it does not in klieg. CSS hangs trailing whitespace and weasel does not yet. It is a
+known weasel bug, not a klieg regression — do not chase it as one.
+
+**A slot for every code point — solved upstream.** klieg keeps a letter slot for each code point,
+including the ones that draw nothing, because `letterCount`, `charOf`, the regroup's renumbering and
+the selectable DOM layer all index by slot.
+
+`LaidOutLineBox` now carries `cells: LaidOutCell[]` and `srcEnd`, where a cell is
+`{ srcIndex, srcEnd, cp, x, drawsInk }`. **Slot `i` is `cells[i]`; klieg builds no reconstruction.**
+`caretXs` and `caretIndices` are gone — cells subsume both. A code point no tier can serve takes a
+zero-advance cell rather than vanishing. A newline still has no cell: it separates cells rather than
+being one, and `srcEnd` is what a blank line carries instead.
+
+**`drawsInk` is a property of the code point and the face, not of what got painted.** Deciding it
+from whether a quad was emitted is unstable — it flips when a dynamic bake lands or an outline
+threshold is crossed, so identical text would report different slots on two calls. The consequence
+for klieg: a zero-advance combining mark has `drawsInk: true`, because it inks without advancing.
+Any line-ranging that assumes no advance implies no ink is wrong, in both libraries.
 
 ## Blocked on
 
 Two upstream changes, in this order. Neither is klieg's to make.
 
 1. **weasel's changesets release PR merges**, putting `@weasel-js/text` on npm.
-2. **weasel's layout emits a cell per code point** with an ink flag, per the section above.
+2. **`text/cell-per-code-point` merges.** The cell API and reading-order alignment are both built on
+   that branch, but it is neither merged nor published.
 
 Until both land there is nothing to implement against: the dependency will not install, and the
 seam klieg reads does not exist yet.
@@ -168,10 +185,10 @@ seam klieg reads does not exist yet.
 - A run's advance scales with its size; the line's glyphs share one baseline.
 - A wrapped block breaks inside a run and carries that run's styling onto the next line.
 - A word with a sized run reports `atRest()` true once it has settled, and its DOM layer aligns.
-- `'A B'` gives three slots, the middle one blank — the same count the string path gives today,
-  **and the same under `wrap: true`**, where a leading space on a wrapped line is the case that
-  breaks. Note `wrapBlock` normalises whitespace before laying out, so the count is against the
-  normalised text, not the fired string.
+- `'A B'` gives three slots, the middle one blank — the same count the string path gives today, and
+  the same under `wrap: true`. Note `wrapBlock` normalises whitespace before laying out, so the
+  count is against the normalised text, not the fired string.
+- A combining mark gets a slot reporting ink despite adding no advance.
 - A wrapped sign is laid out at least as large as the same sign is today — the search still wins.
 - An `end`-aligned word under `direction: rtl` sits against the same edge it does today.
 - Two instances on one page register different faces under one family name without collision.

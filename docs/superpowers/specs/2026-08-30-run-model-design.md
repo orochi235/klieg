@@ -21,11 +21,14 @@ to `@weasel-js/geom` and `@weasel-js/paint` are type-only in practice. Nothing o
 the DOM at import time, and the package's own suite has a block — *"layoutRuns from a font face
 alone"* — covering the case klieg is: font bytes, no atlas, no canvas.
 
-**`@weasel-js/text` is not on npm.** `npm view @weasel-js/text` 404s; `@weasel-js/font` resolves at
-1.2.0. klieg is itself published, so it cannot depend on a package a consumer's install cannot
-resolve — this blocks the design as written until `text` ships. If it is not going to ship, the
-fallback is the route slice A already took: vendor the walk with attribution, the way
-`text/sfnt.ts` was ported from `@weasel-js/font`.
+**`@weasel-js/text` is not on npm yet.** It 404s while the other 13 weasel packages are at 1.2.0 —
+not a config problem: it was extracted after 1.2.0 published, and the changesets version PR that
+would release it has been open since 2026-08-24. Merging that PR is the fix, and `@weasel-js/core`
+already depends on `text` in-tree, so it cannot ship again without it either. klieg is itself
+published and cannot depend on a package a consumer's install cannot resolve, so **this slice is
+blocked until that release lands.** One wrinkle to expect: the release publishes via OIDC trusted
+publishing, which is configured per package, so a brand-new package may need one manual first
+publish to bootstrap.
 
 **And this is a real change to klieg's dependency posture,** which is one runtime dependency today.
 Check what `geom` actually pulls at runtime before merging; the report of it being type-only is
@@ -73,10 +76,13 @@ fire(text: string | TextRun[], options?: FireOptions): FireHandle;
 **Per-run `look` is out.** Bloom is a whole-frame pass, so one run asking for `neon` would promote
 the whole effect — a run cannot own it.
 
-**Baseline shift is out of this slice.** Super/subscript was asked for, and weasel has no
-per-run vertical offset today. It is being added upstream; klieg picks it up as a `baseline` field
-then, rather than growing a klieg-side offset that has to be unwound. Nothing else in this design
-depends on it.
+**Baseline shift is in, once the release lands.** It was added upstream after this design was
+first written: `StyledRun` gained `script` / `baselineShift` / `fontScale`, and `resolveRuns`
+flattens `script` into a baseline and a scale before layout, so the output shape is unchanged — a
+superscript is an ordinary run whose glyphs carry a different `baselineY`.
+
+The trap that comes with it: for a shifted run `glyph.baselineY !== line.baselineY`, so glyphs
+cannot be grouped onto lines by comparing those two.
 
 ## Two traps in `render/word.ts`
 
@@ -97,21 +103,37 @@ pattern to follow.
 Replacing the layout engine puts three shipped behaviours at risk. None is a reason not to do it;
 each is a thing that will pass unit tests and break a real page.
 
+**The wrap is not the same wrap.** `wrapBlock` (`text/layout.ts:103`) is not a greedy line
+breaker: it enumerates candidate line widths and picks the arrangement that maximises `fitScale` —
+it breaks lines to make the type as large as the box allows, which is the whole point of a sign.
+weasel's wrap is ordinary greedy. Replacing it changes line breaks on **every multi-word fire** and
+generally makes the type smaller, and nothing in the suite will call that a failure.
+
+`wrapBlock` also normalises whitespace before laying out (`trim().split(/\s+/)`, rejoined with
+single spaces), so under `wrap: true` the slot sequence already comes from normalised text rather
+than the fired string.
+
 **Reading-order alignment.** klieg's `Align` is `start | center | end`, resolved against the box's
 own computed `direction` — an anchored word meets the page's text edge, and under `rtl` that edge
-is the other one. weasel's align is `left | center | right`, absolute. klieg maps start/end to
-left/right itself before calling, or RTL regresses.
+is the other one. weasel has no `direction`, no `start`/`end` and no bidi, and none is in flight,
+so klieg maps start/end to left/right itself before calling or RTL regresses.
 
-**Per-line alignment.** `viewportBudget` carries both an `align` and a `lineAlign` — where the
-block sits, and how lines sit within it. weasel exposes one alignment. Confirm whether it can
-express both; if not, `lineAlign` is applied klieg-side after layout.
+**Per-line alignment.** `viewportBudget` carries both an `align` and a `lineAlign`. weasel exposes
+one, and a second is not in flight; `lineAlign` is applied klieg-side after layout.
 
 **A slot for every code point.** klieg keeps a letter slot for each code point, including the ones
-that draw nothing — a space, `U+00A0`, a ZWJ — because `letterCount`, `charOf`, the regroup's
-renumbering and the selectable DOM layer all index by slot, and `drawsInk` is what marks a slot
-blank. A layout that emits only glyphs that draw will not hand back those slots. Rebuild the
-mapping from `caretIndices`, which carries source offsets, rather than from the glyph list. Getting
-this wrong breaks text selection on any word containing a space, and nothing else will report it.
+that draw nothing, because `letterCount`, `charOf`, the regroup's renumbering and the selectable
+DOM layer all index by slot. weasel's layout omits cells for **four different reasons**, and
+`caretIndices` cannot tell them apart: a code point the face cannot serve is skipped silently; a
+**leading space on a line is dropped entirely**, which eats one slot per wrapped line; a newline
+never produces a caret stop; and `caretIndices` are UTF-16 offsets while klieg's slots are code
+points, so an astral character makes the two numberings diverge rather than merely gap.
+
+There is no shaping, no GSUB and no cluster merging anywhere in that walk, so the mapping is 1:1 by
+omission only, never by merging. That is what makes a fix upstream cheap — emit a zero-advance cell
+for an unservable code point, keep the leading space, and expose per-cell ink so `drawsInk` comes
+from layout. **Do not build the klieg-side reconstruction until that fix is ruled out**; it is the
+kind of code that passes every test and breaks selection on a wrapped line.
 
 ## Testing
 

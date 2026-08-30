@@ -12,12 +12,25 @@ On `main` (PR #4), [design](specs/2026-08-28-playback-warmup-design.md),
 [plan](plans/2026-08-28-playback-warmup.md). `node spikes/fire-build-cost.mjs` re-derives the
 CPU-side numbers against the shipped caches; `apps/lab/mount-cost/` measures the GL side.
 
-`WordCaches` keys glyph geometry on the `LoadedFont` object through a `WeakMap` interner, so it
-already discriminates fonts correctly — A needs nothing from it.
+`WordCaches` keys glyph geometry on the `LoadedFont` object through a `WeakMap` interner, and
+`FontRegistry` memoizes on the resolved key so two names for one face share that object — one
+cache, not two.
+
+**A follow-up sits unmerged on branch `warm-bloom`** (worktree `~/src/klieg-worktrees/warm-bloom`,
+rebased onto `main`, unpushed): the warm now links a bloom look's quads, holds its throwaway word
+until the first fire, and gains a host-driven `warm(look?)`. It holds the word because three
+refcounts a shader program per material — disposing it returned the programs the warm had just
+linked, which `apps/lab/mount-cost/` reads as `renderer.info.programs` going 0 → 0 rather than
+0 → 2. Because it adds public API it wants review rather than a quiet merge.
+
+Neither number the design leans on reproduces under `spikes/warm-cold-run.mjs`, which runs that lab
+in a browser whose GPU shader cache has never seen these programs: every link lands at 10–21ms and
+the PMREM prefilter at 27–35ms, against the 138ms and 296ms recorded on a cold process. Nobody has
+shown the warm saving wall-clock; what is demonstrated is that it no longer discards its own work.
 
 ## A — the font registry: **built**
 
-Branch `font-registry`, [design](specs/2026-08-28-font-registry-design.md),
+On `main` (PR #5), [design](specs/2026-08-28-font-registry-design.md),
 [plan](plans/2026-08-28-font-registry.md).
 
 Two things it turned up that its own design did not predict. Unpacking a `.ttc` reaches 40 of the

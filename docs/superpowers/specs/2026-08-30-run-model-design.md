@@ -119,13 +119,20 @@ generally makes the type smaller, and nothing in the suite will call that a fail
 single spaces), so under `wrap: true` the slot sequence already comes from normalised text rather
 than the fired string.
 
-**Reading-order alignment.** klieg's `Align` is `start | center | end`, resolved against the box's
-own computed `direction` — an anchored word meets the page's text edge, and under `rtl` that edge
-is the other one. weasel has no `direction`, no `start`/`end` and no bidi, and none is in flight,
-so klieg maps start/end to left/right itself before calling or RTL regresses.
+**Reading-order alignment comes from weasel.** klieg's `Align` is `start | center | end`, resolved
+against the box's own computed `direction` — an anchored sign meets the host page's text edge, and
+under `rtl` that is the other edge. weasel is adding RTL, so klieg passes its own align through
+rather than mapping start/end to left/right and deleting that mapping later.
 
-**Per-line alignment.** `viewportBudget` carries both an `align` and a `lineAlign`. weasel exposes
-one, and a second is not in flight; `lineAlign` is applied klieg-side after layout.
+Confirm the shape when it lands — whether `align` gains `start`/`end` or a separate `direction`
+reinterprets `left`/`right` — and confirm it resolves before line boxes are reported, as alignment
+does today. That second point is not cosmetic here: klieg's wrap search scores candidates by the
+`bounds` layout returns, so an alignment that moves `bounds` changes which arrangement wins, and
+therefore how large every wrapped sign is drawn.
+
+**Per-line alignment stays klieg's** unless weasel says otherwise. `viewportBudget` carries both an
+`align` and a `lineAlign` — where the block sits, and how lines sit within it — and they are
+independent. klieg applies `lineAlign` after layout.
 
 **A slot for every code point.** klieg keeps a letter slot for each code point, including the ones
 that draw nothing, because `letterCount`, `charOf`, the regroup's renumbering and the selectable

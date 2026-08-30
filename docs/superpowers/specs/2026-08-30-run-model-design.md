@@ -10,9 +10,15 @@ of the three. It needs A, because a run naming a font needs an instance that hol
 
 ## Layout comes from `@weasel-js/text`
 
-klieg takes a runtime dependency on `@weasel-js/text` and deletes its own `layoutLine`,
-`layoutBlock` and `wrapBlock`. Every fire routes through `layoutRuns` — the string form becomes a
-one-run list — so there is one layout engine rather than two that drift.
+klieg takes a runtime dependency on `@weasel-js/text` and deletes its own `layoutLine` and
+`layoutBlock`. Every fire routes through `layoutRuns` — the string form becomes a one-run list — so
+there is one set of advance, kerning and baseline rules rather than two that drift.
+
+**`wrapBlock` stays, and drives `layoutRuns` rather than replacing it.** Its search is the feature:
+it enumerates candidate line widths and keeps the arrangement that maximises `fitScale`, so a sign
+fills its box instead of taking the first break that fits. That search now scores each candidate by
+laying it out through weasel and measuring the `bounds` that come back. `layoutRuns` therefore runs
+once per candidate per fire, which is CPU-only work on an already-cached font.
 
 That package is a 900-line walk with cross-run kerning, word wrap, alignment, and a shared baseline
 across mixed sizes. It is MIT, by the same author, and its only real runtime edge is
@@ -130,10 +136,22 @@ never produces a caret stop; and `caretIndices` are UTF-16 offsets while klieg's
 points, so an astral character makes the two numberings diverge rather than merely gap.
 
 There is no shaping, no GSUB and no cluster merging anywhere in that walk, so the mapping is 1:1 by
-omission only, never by merging. That is what makes a fix upstream cheap — emit a zero-advance cell
-for an unservable code point, keep the leading space, and expose per-cell ink so `drawsInk` comes
-from layout. **Do not build the klieg-side reconstruction until that fix is ruled out**; it is the
-kind of code that passes every test and breaks selection on a wrapped line.
+omission only, never by merging — which is what makes the fix cheap, and **it is being made
+upstream**: a zero-advance cell for an unservable code point, the leading space kept, and per-cell
+ink exposed so `drawsInk` comes from layout. klieg then reads slot `i` from cell `i` and builds no
+reconstruction at all. The klieg-side rebuild from `caretIndices` was considered and rejected: those
+are UTF-16 offsets against code-point slots, so an astral character diverges rather than gaps, and
+nothing distinguishes the four omission causes from each other.
+
+## Blocked on
+
+Two upstream changes, in this order. Neither is klieg's to make.
+
+1. **weasel's changesets release PR merges**, putting `@weasel-js/text` on npm.
+2. **weasel's layout emits a cell per code point** with an ink flag, per the section above.
+
+Until both land there is nothing to implement against: the dependency will not install, and the
+seam klieg reads does not exist yet.
 
 ## Testing
 
@@ -143,7 +161,11 @@ kind of code that passes every test and breaks selection on a wrapped line.
 - A run's advance scales with its size; the line's glyphs share one baseline.
 - A wrapped block breaks inside a run and carries that run's styling onto the next line.
 - A word with a sized run reports `atRest()` true once it has settled, and its DOM layer aligns.
-- `'A B'` gives three slots, the middle one blank — the same count the string path gives today.
+- `'A B'` gives three slots, the middle one blank — the same count the string path gives today,
+  **and the same under `wrap: true`**, where a leading space on a wrapped line is the case that
+  breaks. Note `wrapBlock` normalises whitespace before laying out, so the count is against the
+  normalised text, not the fired string.
+- A wrapped sign is laid out at least as large as the same sign is today — the search still wins.
 - An `end`-aligned word under `direction: rtl` sits against the same edge it does today.
 - Two instances on one page register different faces under one family name without collision.
 

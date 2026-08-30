@@ -16,8 +16,7 @@ CPU-side numbers against the shipped caches; `apps/lab/mount-cost/` measures the
 `FontRegistry` memoizes on the resolved key so two names for one face share that object — one
 cache, not two.
 
-**A follow-up sits unmerged on branch `warm-bloom`** (worktree `~/src/klieg-worktrees/warm-bloom`,
-rebased onto `main`, unpushed): the warm now links a bloom look's quads, holds its throwaway word
+**A follow-up is on `main` too** (merged locally, not yet pushed): the warm now links a bloom look's quads, holds its throwaway word
 until the first fire, and gains a host-driven `warm(look?)`. It holds the word because three
 refcounts a shader program per material — disposing it returned the programs the warm had just
 linked, which `apps/lab/mount-cost/` reads as `renderer.info.programs` going 0 → 0 rather than
@@ -39,15 +38,23 @@ unpack and then hit an opentype.js `cmap` limit. And `nest()` classified counter
 depth, which fills in any letter a serif face draws as overlapping same-wound strokes; it reads
 winding now.
 
-## B — the run model: **not designed**
+## B — the run model: **designed, not implemented**
 
-`fire(TextRun[])` carrying tint, font, size and baseline shift (super/subscript was asked for).
-**weasel has since abstracted this logic out**, and it can be imported as a weasel subpackage
-rather than written again — look there before designing.
+[Design](specs/2026-08-30-run-model-design.md). `fire(TextRun[])` carrying tint, font and size.
+
+The borrow question resolved differently than this file used to guess. `@weasel-js/text` does have
+the layout, and klieg takes it as a runtime dependency and deletes its own `layoutLine` /
+`layoutBlock` / `wrapBlock` — one engine, every fire through it. But it is used for **positions
+only**: its outline tier emits SVG `d` strings, and klieg keeps its own glyph pipeline rather than
+reopening the nesting problem A just fixed.
+
+Two of its gaps are being fixed upstream and picked up later — per-run baseline shift, so
+super/subscript is **out of this slice**, and the module-global font registry, which klieg works
+around meanwhile by namespacing family names per instance.
+
 Per-run `look` was cut: bloom is a whole-frame pass, so one run asking for `neon` promotes it for
-the whole effect. Needs A underneath it.
+the whole effect.
 
-Two traps live in `render/word.ts`. A per-letter scale cannot be baked into `cell.scale`, because
-motion overwrites it every frame (`:955`); and `atRest()` hardcodes `cell.scale === 1` as the
-definition of rest (`:813`), which the selectable DOM layer gates on — so the obvious
-implementation leaves that layer silently unaligned rather than erroring.
+Two traps live in `render/word.ts`, now at `:969` and `:827`, and three shipped behaviours the
+engine swap can silently drop — reading-order alignment under RTL, per-line alignment, and a letter
+slot for every code point including the blank ones. The design carries all five.

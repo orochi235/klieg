@@ -48,16 +48,18 @@ the layout, and klieg takes it as a runtime dependency and deletes its own `layo
 only**: its outline tier emits SVG `d` strings, and klieg keeps its own glyph pipeline rather than
 reopening the nesting problem A just fixed.
 
-**Blocked on two upstream changes**, neither klieg's to make: weasel's changesets release PR has to
-merge (`@weasel-js/text` is not on npm, and klieg is published, so it cannot depend on it yet), and
-weasel's layout has to emit a cell per code point with an ink flag. The second is agreed and being
-built — klieg reads slot `i` from cell `i` rather than reconstructing the mapping, because
-`caretIndices` are UTF-16 offsets against code-point slots and cannot distinguish the four reasons
-a cell goes missing, one of which eats a slot on every wrapped line.
+**Blocked on two upstream merges**, neither klieg's to make: weasel's changesets release PR
+(`@weasel-js/text` is not on npm, and klieg is published, so it cannot depend on it yet), and
+weasel's `text/cell-per-code-point` branch, which carries both things klieg reads.
 
-Baseline shift landed upstream and **is** in this slice. The module-global registry is not being
-fixed; klieg namespaces family names per instance to dodge it. Reading-order alignment and per-line
-alignment are absent from weasel and not in flight, so klieg does both itself or loses RTL.
+What that branch gives klieg: a `cells: LaidOutCell[]` per line, so slot `i` is `cells[i]` and klieg
+reconstructs nothing; and reading-order alignment, so klieg passes its own `start`/`center`/`end`
+through with a `direction` it reads off the box. Baseline shift landed earlier and is in this slice
+too. RTL goes as far as alignment only — the walk does not reverse run order and there is no bidi.
+
+The module-global registry is not being fixed; klieg namespaces family names per instance to dodge
+it. weasel's `align` turns out to be klieg's `lineAlign`; klieg's block `align` is a 3D viewport
+translate that stays klieg's.
 
 klieg keeps its own `wrapBlock`. Its search is not greedy — it maximises `fitScale`, which is what
 makes a sign fill its box — so it stays and scores each candidate by measuring it through

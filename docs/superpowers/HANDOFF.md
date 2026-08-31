@@ -589,13 +589,26 @@ Roughly in order of value; the items are independent of each other.
   the drawing buffer's ink (centres within 10px, bounds within 8), and it is the test that has to be
   re-pointed per alignment.
 
-  **The neon renders smaller than the fallback it replaces.** Observed under `placement: element`,
-  not yet measured. Size comes from `framing` (0.62 wide, 0.3 tall) through `FIT_CAP` in
-  `text/layout.ts`, which an anchored placement already lifts — so what to expose is a scale and
-  offset trim on top of the fit, not another fit. Do not name it for fudging; name it for what it
-  does. **Measure the gap before adding the knob:** a fallback is styled type with its own
-  line-height and cap-height, and if the neon comes out smaller by a consistent ratio that is a fit
-  bug to fix rather than a knob to hand the caller.
+  **The neon does not render smaller than the fallback, and the trim knob would be the wrong fix.**
+  Measured by `node spikes/fallback-gap.mjs`, which fires into an anchor beside the heading it
+  replaces and compares painted ink to painted ink. Across three framings and four strings the neon
+  came out **larger** every time — ×1.25 at the default framing, ×2.11 at the reporter's 0.78×0.55.
+
+  What actually drives it is the string, not a missing constant. Holding the anchor and the
+  fallback fixed and growing the name, the neon's ink falls 47 → 47 → 27 → 25 → 15 px while the
+  fallback holds at 21: short names are **height-bound** and clamp at exactly the height budget
+  (0.55 × 86 = 47), long ones go **width-bound** and lose height per letter added. It passes under
+  the fallback at 23 characters. A sign fits its box; a fallback keeps its CSS size — so any single
+  scale trim is correct at one name length and wrong at every other, which is why the knob this
+  entry used to propose should not be built. **`framing.width` is the size lever for a width-bound
+  anchor**, and `align` is the position lever; the original report conflated them.
+
+  Two traps the instrument hit first, both of which reported the gap backwards. Ink is
+  `alpha >= 128`, not `alpha > 0` — a lit tube lays a faint glow over the whole anchor (13,477
+  pixels under alpha 32 against 3,200 over 224), so counting every non-transparent pixel measures
+  the light and reports the word as tall as its box. And the strip lab's FIRE button fires the
+  literal `'klieg'` whatever the heading says, so driving it measures one word against four
+  fallbacks; the spike carries its own fixture under `spikes/fallback-gap/` for that reason.
 
 - **A macro spell for `flicker` is built** — `FlickerSpec.spell` and `.calm` in
   `effects/pieces.ts`, so a tube stops flickering for a stretch and starts again. `calm: 0` is the

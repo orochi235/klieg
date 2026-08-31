@@ -1,19 +1,35 @@
 import { describe, expect, it } from 'vitest';
-import type { GlyphMetrics } from '../../src/text/layout.js';
-import { layoutBlock } from '../../src/text/layout.js';
+import type { LaidOut, Slot } from '../../src/text/layout.js';
 import { arrange, fitOf, placeBlock } from '../../src/text/placement.js';
 
 const UPEM = 1000;
 const ADVANCE = 600;
-const SCALE_TO_EM = 1 / UPEM;
 /** One advance in em. */
 const STEP = ADVANCE / UPEM;
 
-const metrics: GlyphMetrics = { advanceOf: () => ADVANCE, kernOf: () => 0 };
 const drawsInk = (char: string) => char.trim().length > 0;
 
+/** Slots straight from the text, one even advance apart — placeBlock's own input, unmediated. */
+function laidOf(text: string): LaidOut {
+  const segments = text.split('\n');
+  const slots: Slot[] = [];
+  segments.forEach((segment, line) => {
+    let x = 0;
+    for (const char of Array.from(segment)) {
+      slots.push({ char, x, advance: STEP, line, drawsInk: drawsInk(char) });
+      x += STEP;
+    }
+  });
+  return {
+    slots,
+    lines: segments.map(() => ({ baselineY: 0, x0: 0, x1: 0 })),
+    width: 0,
+    height: 0,
+  };
+}
+
 const place = (text: string, lineEdge?: 'left' | 'right') =>
-  placeBlock(layoutBlock(text, metrics), SCALE_TO_EM, metrics, drawsInk, lineEdge);
+  placeBlock(laidOf(text), drawsInk, lineEdge);
 
 describe('placeBlock', () => {
   it('centres a single line on x = 0', () => {

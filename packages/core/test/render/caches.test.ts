@@ -4,6 +4,7 @@ import { WordCaches } from '../../src/render/caches.js';
 import type { TubeBlueprint, TubeSpec } from '../../src/render/tube/index.js';
 import type { LoadedFont } from '../../src/text/font.js';
 
+const STUB_FAMILY = 'klieg-test-caches';
 const UPEM = 1000;
 const ADVANCE = 600;
 /** Every letter is a 0.5 em box, so each one builds a real geometry. */
@@ -21,6 +22,7 @@ function stubFont(): LoadedFont {
       advanceWidth: ADVANCE,
       getPath: (_x: number, _y: number, size: number) => ({
         commands: char === ' ' ? [] : BOX(size),
+        toPathData: () => 'M0 0',
       }),
     }),
     getKerningValue: () => 0,
@@ -29,6 +31,7 @@ function stubFont(): LoadedFont {
     font,
     unitsPerEm: UPEM,
     key: '/f.ttf',
+    family: STUB_FAMILY,
     metrics: { advanceOf: () => ADVANCE, kernOf: () => 0 },
     bytes: new ArrayBuffer(8),
   };

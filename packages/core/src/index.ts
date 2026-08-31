@@ -37,6 +37,7 @@ import { DEFAULT_GLYPH_OPTIONS } from './text/glyphs.js';
 import type { Align } from './text/layout.js';
 import type { Arrangement } from './text/placement.js';
 import { projectLetters } from './text/projection.js';
+import { plainTextOf, sizeOf, type TextRun, tintOf } from './text/runs.js';
 import { isIdentity, type Transform } from './transform.js';
 
 export {
@@ -231,6 +232,7 @@ export interface Framing {
 
 export type { Placement } from './render/stage.js';
 export type { Align } from './text/layout.js';
+export type { TextRun } from './text/runs.js';
 
 /** A built-in name, your own piece, or several layered together — names and pieces may mix. */
 export type EnterSlot = EnterName | MotionPiece | (EnterName | MotionPiece)[];
@@ -373,7 +375,7 @@ export interface FireHandle extends Promise<void> {
 export interface Klieg {
   readonly supported: boolean;
   /** Resolves when the effect leaves the screen, whether it played out or was cancelled. */
-  fire(text: string, options?: FireOptions): FireHandle;
+  fire(text: string | TextRun[], options?: FireOptions): FireHandle;
   /**
    * Links a look's shader programs now instead of waiting for the idle callback after
    * construction. For a host that already knows what it is about to fire — a page swap that has
@@ -468,14 +470,37 @@ export function createKlieg(options: KliegOptions): Klieg {
     return fonts.load(name);
   }
 
+  /** A run's own tint wins for the slots it covers; the fire's tint paints the rest. */
+  function tintFor(
+    text: string | TextRun[],
+    fireTint: number | ((letter: LetterInfo) => number | undefined) | undefined,
+  ): number | ((letter: LetterInfo) => number | undefined) | undefined {
+    if (typeof text === 'string') return fireTint;
+    const perRun = tintOf(text);
+    return (letter) =>
+      perRun(letter.index) ?? (typeof fireTint === 'function' ? fireTint(letter) : fireTint);
+  }
+
   async function run(
-    text: string,
+    text: string | TextRun[],
     opts: FireOptions,
     signal: AbortSignal,
     control: FireControl,
   ): Promise<void> {
     const loaded = await font(opts.font);
     if (signal.aborted) return;
+
+    // A run names a klieg font; layout resolves a registered family. Every distinct name a run
+    // mentions is loaded (and so registered) before anything is laid out.
+    const named = typeof text === 'string' ? [] : [...new Set(text.flatMap((r) => r.font ?? []))];
+    const families = new Map<string, string>();
+    for (const name of named) families.set(name, (await font(name)).family);
+    if (signal.aborted) return;
+
+    const runs =
+      typeof text === 'string'
+        ? text
+        : text.map((r) => (r.font ? { ...r, font: families.get(r.font) as string } : r));
 
     const renderer = stage.mount();
     const chosen = opts.look ?? 'gold';
@@ -485,7 +510,7 @@ export function createKlieg(options: KliegOptions): Klieg {
     let word: Word;
     try {
       word = new Word(
-        text,
+        runs,
         loaded,
         look,
         stage.viewportBudget(
@@ -495,10 +520,11 @@ export function createKlieg(options: KliegOptions): Klieg {
           opts.lineAlign,
         ),
         opts.wrap,
-        opts.tint,
+        tintFor(text, opts.tint),
         undefined,
         stage.environment?.texture ?? null,
         caches,
+        sizeOf(text),
       );
     } catch (err) {
       // This rejects before the settle() that would otherwise free the bloom's render targets.
@@ -535,7 +561,7 @@ export function createKlieg(options: KliegOptions): Klieg {
     let built = false;
     // Up first even for 'layer', so the word is never absent from the DOM while the face loads —
     // and a browser with no `FontFace` keeps it rather than getting nothing at all.
-    if (layer && mode !== 'none') layer.setHidden(text);
+    if (layer && mode !== 'none') layer.setHidden(plainTextOf(text));
     if (layer && mode === 'layer') {
       void registerFace(loaded.key, loaded.bytes).then((f) => {
         if (!f) return;

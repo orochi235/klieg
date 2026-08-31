@@ -52,12 +52,7 @@ const STYLE = 'normal';
  * Registers a face and resolves once it can serve a layout. Registration parses nothing on its own
  * and `layoutRuns` never starts it, so the ask below is what begins the load rather than a warm-up.
  */
-export async function registerFace(
-  instance: number,
-  font: string,
-  loaded: LoadedFont,
-): Promise<string> {
-  const family = familyFor(instance, font);
+export async function registerFace(family: string, loaded: LoadedFont): Promise<string> {
   if (outlineStatus(family, WEIGHT, STYLE) === 'ready') return family;
   registerFontOutlines(family, {}, loaded.bytes, { parser: () => faceOf(loaded) });
   await ready(family);

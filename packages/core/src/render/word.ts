@@ -9,7 +9,7 @@ import type { Pose, Vec3 } from '../pose.js';
 import type { LoadedFont } from '../text/font.js';
 import { DEFAULT_GLYPH_OPTIONS, EM, GlyphCache, glyphToShapes } from '../text/glyphs.js';
 import type { Budget, GlyphMetrics } from '../text/layout.js';
-import { layoutBlock, wrapBlock } from '../text/layout.js';
+import { LINE_HEIGHT_EM, layoutRunsForKlieg, UNBOUNDED, wrapRuns } from '../text/layout.js';
 import {
   type Arrangement,
   arrange,
@@ -18,6 +18,7 @@ import {
   type GlyphBounds,
   placeBlock,
 } from '../text/placement.js';
+import { styledRunsOf, type TextRun } from '../text/runs.js';
 import type { Transform } from '../transform.js';
 import { WordCaches } from './caches.js';
 import {
@@ -123,6 +124,7 @@ export class Word {
   /** Sits between `group` (the viewport fit) and the letters — see the `transform` accessor. */
   private readonly inner = new THREE.Group();
   private readonly sizeOf: ((slot: number) => number) | undefined;
+  private readonly family: string;
   /** null where the glyph drew no outline (space, U+00A0, ZWJ); the slot still holds its index. */
   private readonly letters: (THREE.Group | null)[] = [];
   /** Layout x per letter. Pose x is an OFFSET onto this — overwriting it collapses the word. */
@@ -221,7 +223,7 @@ export class Word {
   private disposed = false;
 
   constructor(
-    text: string,
+    text: string | TextRun[],
     font: LoadedFont,
     look: Look,
     budget: Budget,
@@ -231,8 +233,10 @@ export class Word {
     envMap: THREE.Texture | null = null,
     caches?: WordCaches,
     sizeOf?: (slot: number) => number,
+    family?: string,
   ) {
     this.sizeOf = sizeOf;
+    this.family = family ?? font.family;
     this.envMap = envMap;
     this.group.add(this.inner);
 
@@ -266,20 +270,15 @@ export class Word {
         : null;
 
     this.scaleToEm = EM / font.unitsPerEm;
-    const block = wrap
-      ? wrapBlock(text, font.metrics, budget, font.unitsPerEm)
-      : layoutBlock(text, font.metrics);
+    const runs = styledRunsOf(text, this.family);
+    const laid = wrap
+      ? wrapRuns(runs, budget, this.layoutOpts())
+      : layoutRunsForKlieg(runs, this.layoutOpts());
 
     this.metrics = font.metrics;
     this.budget = budget;
 
-    const placed = placeBlock(
-      block,
-      this.scaleToEm,
-      font.metrics,
-      (char) => this.drawsInk(char),
-      budget.lineEdge,
-    );
+    const placed = placeBlock(laid, (char) => this.drawsInk(char), budget.lineEdge);
     this.lineCount = placed.lineCount;
     this.columnCount = placed.columnCount;
 
@@ -564,6 +563,11 @@ export class Word {
   }
 
   /** A glyph draws ink when its geometry has vertices — the same test the cell build uses. */
+  /** Line ranging stays klieg's, in `placeBlock`, so weasel is asked only to place. */
+  private layoutOpts() {
+    return { maxWidth: UNBOUNDED, lineHeight: LINE_HEIGHT_EM, align: 'left' as const };
+  }
+
   private drawsInk(char: string): boolean {
     return !!this.glyph(char, DEFAULT_GLYPH_OPTIONS.depth).attributes.position?.count;
   }
@@ -889,14 +893,11 @@ export class Word {
     }
 
     const chars = kept.map((i) => this.charOf[i] as string);
-    const block = layoutBlock(arrange(chars, as), this.metrics);
-    const placed = placeBlock(
-      block,
-      this.scaleToEm,
-      this.metrics,
-      (char) => this.drawsInk(char),
-      this.budget.lineEdge,
+    const laid = layoutRunsForKlieg(
+      styledRunsOf(arrange(chars, as), this.family),
+      this.layoutOpts(),
     );
+    const placed = placeBlock(laid, (char) => this.drawsInk(char), this.budget.lineEdge);
 
     this.lineCount = placed.lineCount;
     this.columnCount = placed.columnCount;

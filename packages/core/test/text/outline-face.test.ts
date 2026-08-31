@@ -21,6 +21,7 @@ function stubLoaded(): LoadedFont {
     unitsPerEm: UPEM,
     metrics: { advanceOf: (ch) => (ch === ' ' ? 250 : 600), kernOf: () => -20 },
     key: '/f.ttf',
+    family: 'klieg-test-face',
     bytes: new ArrayBuffer(8),
   };
 }
@@ -57,13 +58,13 @@ describe('familyFor', () => {
 
 describe('registerFace', () => {
   it('resolves only once the face can actually serve a layout', async () => {
-    const family = await registerFace(101, 'display', stubLoaded());
+    const family = await registerFace(familyFor(101, 'display'), stubLoaded());
 
     expect(outlineStatus(family)).toBe('ready');
   });
 
   it('lays out through weasel once it has resolved', async () => {
-    const family = await registerFace(102, 'display', stubLoaded());
+    const family = await registerFace(familyFor(102, 'display'), stubLoaded());
     const laid = layoutRuns(
       resolveRuns([{ text: 'A B', fontFamily: family, fontSize: 1 }], resolveTextStyle()),
       { maxWidth: 1e6, lineHeight: 1.1, align: 'left' },
@@ -74,8 +75,8 @@ describe('registerFace', () => {
   });
 
   it('returns straight away for a face already registered', async () => {
-    const first = await registerFace(103, 'display', stubLoaded());
-    const second = await registerFace(103, 'display', stubLoaded());
+    const first = await registerFace(familyFor(103, 'display'), stubLoaded());
+    const second = await registerFace(familyFor(103, 'display'), stubLoaded());
 
     expect(second).toBe(first);
   });

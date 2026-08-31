@@ -25,12 +25,37 @@ export function styledRunsOf(text: string | TextRun[], defaultFont: string): Sty
     }));
 }
 
+/**
+ * Spreads one value per run across the slots that run occupies. A newline separates cells rather
+ * than being one, so counting it here would shift every later run's slots by one.
+ */
+function perSlot<T>(runs: TextRun[], of: (run: TextRun) => T): T[] {
+  const out: T[] = [];
+  for (const run of runs) {
+    for (const char of Array.from(run.text)) {
+      if (char === '\n' || char === '\r') continue;
+      out.push(of(run));
+    }
+  }
+  return out;
+}
+
+/** The text a run list spells, for the DOM layer that carries selection and copy. */
+export function plainTextOf(text: string | TextRun[]): string {
+  return typeof text === 'string' ? text : text.map((run) => run.text).join('');
+}
+
 /** Per-run tint never reaches weasel — klieg paints, weasel only places. */
 export function tintOf(text: string | TextRun[]): (slot: number) => number | undefined {
   if (typeof text === 'string') return () => undefined;
-  const perSlot: (number | undefined)[] = [];
-  for (const run of text) {
-    for (const _ of Array.from(run.text)) perSlot.push(run.tint);
-  }
-  return (slot) => perSlot[slot];
+  const tints = perSlot(text, (run) => run.tint);
+  return (slot) => tints[slot];
+}
+
+/** Per-run size, for the scale node inside each letter cell. */
+export function sizeOf(text: string | TextRun[]): ((slot: number) => number) | undefined {
+  if (typeof text === 'string') return undefined;
+  if (!text.some((run) => run.size !== undefined)) return undefined;
+  const sizes = perSlot(text, (run) => run.size ?? 1);
+  return (slot) => sizes[slot] ?? 1;
 }

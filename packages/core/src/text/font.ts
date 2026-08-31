@@ -1,6 +1,7 @@
 import type { Font } from 'opentype.js';
 import * as opentype from 'opentype.js';
 import type { GlyphMetrics } from './layout.js';
+import { familyFor, registerFace } from './outline-face.js';
 import { collectionFaces, isFontCollection, sfntFromCollection } from './sfnt.js';
 
 // opentype.js 2.0 publishes ESM under `module` and a UMD bundle under `main`. Only bundlers read
@@ -15,6 +16,11 @@ export interface LoadedFont {
   metrics: GlyphMetrics;
   /** Identity for the caches and the CSS family: the url, or `url#face` within a collection. */
   key: string;
+  /**
+   * The name this face is registered under with the layout engine. Unique per load, because that
+   * registry is module-global and two instances on one page must not collide.
+   */
+  family: string;
   /**
    * The *extracted* sfnt, kept so a CSS `FontFace` can reuse it instead of downloading again.
    * Never the fetched file for a collection: a `ttcf` container is not a font resource, and
@@ -88,5 +94,19 @@ export async function loadFont(url: string, face?: string): Promise<LoadedFont> 
     kernOf: (a, b) => font.getKerningValue(font.charToGlyph(a), font.charToGlyph(b)),
   };
 
-  return { font, unitsPerEm: font.unitsPerEm, metrics, key, bytes };
+  const loaded: LoadedFont = {
+    font,
+    unitsPerEm: font.unitsPerEm,
+    metrics,
+    key,
+    bytes,
+    family: familyFor(++loads, key),
+  };
+  // Registering here rather than at the call site: a face that reaches layout unregistered lays
+  // out nothing at all, and says nothing about why.
+  await registerFace(loaded.family, loaded);
+  return loaded;
 }
+
+/** Counts loads, not instances: unique per face is what the module-global registry needs. */
+let loads = 0;

@@ -47,6 +47,8 @@ function stubFont(): Font {
       advanceWidth: ADVANCE,
       getPath: (_x: number, _y: number, size: number) => ({
         commands: char === ' ' ? [] : BOX(size),
+        // The layout engine serializes an outline once per glyph; a real opentype Path has this.
+        toPathData: () => 'M0 0Z',
       }),
     }),
     getKerningValue: () => 0,
@@ -2311,5 +2313,95 @@ describe('fonts', () => {
       'klieg: fontUrl is deprecated — pass fonts: { display: url } instead',
     );
     warn.mockRestore();
+  });
+});
+
+describe('firing styled runs', () => {
+  const stubFetch = () =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }) as Response),
+    );
+
+  it('fires a list of runs', async () => {
+    stubFetch();
+    const bk = create({ fonts: { display: '/d.ttf', body: '/b.ttf' } });
+
+    const done = bk.fire([{ text: 'A' }, { text: 'B', font: 'body', size: 0.5 }], INSTANT);
+    await flush();
+
+    expect(words()).toHaveLength(1);
+    clock.advance(16);
+    await done;
+  });
+
+  it('loads every font its runs name, not just the fire-wide one', async () => {
+    const fetched: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        fetched.push(url);
+        return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) } as Response;
+      }),
+    );
+    const bk = create({ fonts: { display: '/d.ttf', body: '/b.ttf' } });
+
+    const done = bk.fire([{ text: 'A' }, { text: 'B', font: 'body' }], INSTANT);
+    await flush();
+    clock.advance(16);
+    await done;
+
+    expect(fetched.sort()).toEqual(['/b.ttf', '/d.ttf']);
+  });
+
+  it('lays a string and one run of the same text out identically', async () => {
+    stubFetch();
+    const bk = create();
+
+    bk.fire('AB', INSTANT);
+    await flush();
+    const fromString = firstCell().position.x;
+    clock.advance(16);
+    await flush();
+
+    bk.fire([{ text: 'AB' }], INSTANT);
+    await flush();
+
+    expect(firstCell().position.x).toBeCloseTo(fromString);
+  });
+
+  it("carries a run's size on the node the pose does not write", async () => {
+    stubFetch();
+    const bk = create();
+
+    const done = bk.fire([{ text: 'A' }, { text: 'B', size: 0.5 }], INSTANT);
+    await flush();
+    const cells = firstCell().parent?.children ?? [];
+
+    expect((cells[1] as THREE.Group).scale.x).toBe(1);
+    expect(((cells[1] as THREE.Group).children[0] as THREE.Group).scale.x).toBeCloseTo(0.5);
+    clock.advance(16);
+    await done;
+  });
+
+  it("lets a run's tint beat the fire's", async () => {
+    stubFetch();
+    const bk = create();
+
+    const done = bk.fire([{ text: 'A' }, { text: 'B', tint: 0x00ff00 }], {
+      ...INSTANT,
+      tint: 0xff0000,
+    });
+    await flush();
+    const cells = firstCell().parent?.children ?? [];
+    const colorOf = (cell: THREE.Object3D) =>
+      (((cell as THREE.Group).children[0] as THREE.Group).children[0] as THREE.Mesh)
+        .material as THREE.MeshPhysicalMaterial;
+
+    expect(colorOf(cells[0] as THREE.Object3D).color.getHex()).not.toBe(
+      colorOf(cells[1] as THREE.Object3D).color.getHex(),
+    );
+    clock.advance(16);
+    await done;
   });
 });

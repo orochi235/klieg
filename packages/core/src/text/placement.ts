@@ -1,4 +1,4 @@
-import type { Block, Budget, GlyphMetrics, Line } from './layout.js';
+import type { Budget, LaidOut, Slot } from './layout.js';
 import { fitScale, LINE_HEIGHT_EM } from './layout.js';
 
 /**
@@ -38,43 +38,47 @@ export function arrange(chars: readonly string[], as: Arrangement): string {
  * lines, which is the one thing the form cannot survive.
  */
 export function placeBlock(
-  block: Block,
-  scaleToEm: number,
-  metrics: GlyphMetrics,
+  laid: LaidOut,
   drawsInk: (char: string) => boolean,
   lineEdge?: 'left' | 'right',
 ): Placement {
+  const perLine: Slot[][] = Array.from({ length: laid.lines.length }, () => []);
+  for (const slot of laid.slots) perLine[slot.line]?.push(slot);
+
   const out: Placement = {
     x: [],
     y: [],
     char: [],
     line: [],
     column: [],
-    lineCount: block.lines.length,
-    columnCount: Math.max(0, ...block.lines.map((l) => l.glyphs.length)),
+    lineCount: laid.lines.length,
+    columnCount: Math.max(0, ...perLine.map((l) => l.length)),
     inkWidth: 0,
   };
 
   let blockInkStart = Number.POSITIVE_INFINITY;
   let blockInkEnd = Number.NEGATIVE_INFINITY;
 
-  for (let ln = 0; ln < block.lines.length; ln++) {
-    const line = block.lines[ln] as Line;
+  for (let ln = 0; ln < perLine.length; ln++) {
     const y = -ln * LINE_HEIGHT_EM;
     const first = out.x.length;
     let inkStart: number | null = null;
     let inkEnd = 0;
 
-    for (const g of line.glyphs) {
-      const x = g.x * scaleToEm;
+    const slots = perLine[ln] as Slot[];
+    for (let col = 0; col < slots.length; col++) {
+      const slot = slots[col] as Slot;
+      const x = slot.x;
       out.x.push(x);
       out.y.push(y);
-      out.char.push(g.char);
+      out.char.push(slot.char);
       out.line.push(ln);
-      out.column.push(g.index);
-      if (drawsInk(g.char)) {
+      out.column.push(col);
+      // klieg's own predicate, not the slot's: this ranges the painted extent, and weasel's
+      // `drawsInk` answers for the code point and face whether or not anything was emitted.
+      if (drawsInk(slot.char)) {
         inkStart ??= x;
-        inkEnd = x + metrics.advanceOf(g.char) * scaleToEm;
+        inkEnd = x + slot.advance;
       }
     }
 

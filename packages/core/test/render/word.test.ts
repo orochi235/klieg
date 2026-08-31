@@ -1,6 +1,6 @@
 import type { Font, PathCommand } from 'opentype.js';
 import * as THREE from 'three';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { EffectPiece, PartInfo } from '../../src/effects/types.js';
 import { Timeline } from '../../src/motion/compositor.js';
 import type { LetterInfo, MotionPiece } from '../../src/motion/types.js';
@@ -15,6 +15,7 @@ import type { LoadedFont } from '../../src/text/font.js';
 import { DEFAULT_GLYPH_OPTIONS } from '../../src/text/glyphs.js';
 import type { Budget } from '../../src/text/layout.js';
 import { LINE_HEIGHT_EM } from '../../src/text/layout.js';
+import { registerFace } from '../../src/text/outline-face.js';
 import { fromEuler } from '../../src/transform.js';
 import { NO_CTX } from '../effects/ctx.js';
 
@@ -39,6 +40,8 @@ function boxPath(w: number, top: number, bottom: number): PathCommand[] {
 }
 
 /** Chars are 0.5 em wide boxes rising 0.7 em; 'g' also drops 0.2 em, and blanks draw nothing. */
+const STUB_FAMILY = 'klieg-test-word';
+
 function stubFont(): LoadedFont {
   const font = {
     charToGlyph: (char: string) => ({
@@ -47,6 +50,7 @@ function stubFont(): LoadedFont {
         commands: BLANK.has(char)
           ? []
           : boxPath(0.5 * size, 0.7 * size, DESCENDS.has(char) ? -0.2 * size : 0),
+        toPathData: () => 'M0 0',
       }),
     }),
   } as unknown as Font;
@@ -55,10 +59,16 @@ function stubFont(): LoadedFont {
     font,
     unitsPerEm: UPEM,
     key: '/f.ttf',
+    family: STUB_FAMILY,
     metrics: { advanceOf: () => ADVANCE, kernOf: () => 0 },
     bytes: new ArrayBuffer(0),
   };
 }
+
+// Layout resolves the face through weasel's module-global registry, so it must be in it.
+beforeAll(async () => {
+  await registerFace(STUB_FAMILY, stubFont());
+});
 
 const ROOMY: Budget = { width: 100, height: 100 };
 

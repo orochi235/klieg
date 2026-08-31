@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { styledRunsOf, type TextRun, tintOf } from '../../src/text/runs.js';
+import { sizeOf, styledRunsOf, type TextRun, tintOf } from '../../src/text/runs.js';
 
 describe('styledRunsOf', () => {
   it('turns a bare string into one run', () => {
@@ -38,5 +38,29 @@ describe('tintOf', () => {
       { text: 'A', tint: 2 },
     ]);
     expect([at(0), at(1)]).toEqual([1, 2]);
+  });
+});
+
+describe('a newline between runs', () => {
+  it('does not take a slot, so a later run keeps its own tint', () => {
+    const at = tintOf([
+      { text: 'A\n', tint: 1 },
+      { text: 'B', tint: 2 },
+    ]);
+
+    expect([at(0), at(1)]).toEqual([1, 2]);
+  });
+});
+
+describe('sizeOf', () => {
+  it('is absent when no run names a size, so nothing scales', () => {
+    expect(sizeOf([{ text: 'A' }])).toBeUndefined();
+    expect(sizeOf('AB')).toBeUndefined();
+  });
+
+  it('gives each run its own size and the rest 1', () => {
+    const at = sizeOf([{ text: 'A' }, { text: 'B', size: 0.5 }]) as (s: number) => number;
+
+    expect([at(0), at(1)]).toEqual([1, 0.5]);
   });
 });

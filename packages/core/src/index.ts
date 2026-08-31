@@ -57,6 +57,7 @@ export {
   type SpringParams,
   spring,
 } from './easing.js';
+export { type IntermittentSpec, intermittent } from './effects/intermittent.js';
 export {
   along,
   fixed,

@@ -272,6 +272,17 @@ that is the inner piece's `unrest`. `epochs` is how many handovers fill a pass, 
 on how many parts a pass can reach before it loops; the default of 96 covers a pool of 29 entirely
 and most of a pool of 55, which is about as wide as a real sign gets. Raise it for a wider one.
 
+**`intermittent(inner, { spell, calm, bouts })`** — runs another piece in bouts and swallows it in
+between, so `intermittent(roving(EFFECTS.flicker()), { spell: 4000, calm: 15000 })` is a sign that
+misbehaves for four seconds a quarter-minute and is otherwise steady. The inner is never reset: it
+keeps running against the same clock and the gate only decides what reaches the part, so each bout
+opens wherever the inner happens to be rather than replaying it. `calm: 0`, the default, is a
+pass-through. `spell` has to cover at least one inner pass, and is refused under it — a shorter one
+shows a sliver of the inner and reads as a glitch.
+
+`flicker` takes its own `spell` and `calm`, which is the better tool when flicker is all you want;
+this is for the pieces that have no such pair, `roving` and `hue` among them.
+
 **`lamp({ source, radius, strength, color, duration })`** — puts light on the parts near a position
 rather than changing what they are made of. `radius` is its reach in em of layout space, `strength`
 the light at the centre falling to nothing at that edge, and `color` the lamp's own, multiplied

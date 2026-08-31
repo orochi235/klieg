@@ -618,13 +618,21 @@ Roughly in order of value; the items are independent of each other.
   of `spell` + `calm`, so a bout boundary falls on a step edge instead of clipping a drop to a
   single frame.
 
-  **The general `intermittent(inner)` wrapper is still unbuilt, and still wanted for `roving` and
-  `hue`.** Folding `spell`/`calm` into `flicker` only serves flicker. The constraint if it is
-  written: the caller must not set a period independent of the inner's — the wrapper picks one off
-  integer ratios with `inner.duration`, the accommodation `roving` already makes when it rounds its
-  epoch. The trap is not reset-versus-swallow but which phases the swallowing leaves visible: on an
-  integer ratio the surviving windows land on the same phases every time, so every burst looks
-  identical while the inner genuinely never resets.
+  **The general `intermittent(inner, { spell, calm, bouts })` wrapper is built**, covering the
+  pieces `flicker`'s own pair cannot — `roving` and `hue` among them.
+
+  The constraint this entry used to record as a contradiction is two different periods, and
+  `roving` already had the answer above its own arithmetic. The **pass** is a whole number of inner
+  passes, which keeps the inner's phase continuous across the loop seam. The **bout** deliberately
+  is not: tie that to the inner as well and every bout opens on phase 0, so they all look identical
+  while the inner genuinely never resets. `node spikes/intermittent-phase.mjs` prints all three
+  readings — the built scheme opens three bouts at phases 0.000/0.333/0.667 with a continuous seam,
+  the resonant one opens all three at 0.000, and a gate on its own clock spreads the phases but
+  jumps the seam.
+
+  The test that pins it is `opens every bout on a different phase of the inner`, and it is
+  verified by mutation: swapping the arithmetic for the resonant version fails that test alone and
+  leaves the other five green.
 
 - **The composition lab is built and on `main`.** `npm run dev:composition-lab -w klieg`, port 5183.
   You build a whole `fire()` in the rail — look, hold, effect layers with their params, targeting,

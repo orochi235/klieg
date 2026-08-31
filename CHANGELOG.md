@@ -2,6 +2,13 @@
 
 ## 0.9.4
 
+### A general on-and-off wrapper
+
+`intermittent(inner, { spell, calm, bouts })` runs any piece in bouts and swallows it between them,
+covering the pieces `flicker`'s own `spell`/`calm` cannot reach — `roving` and `hue` among them. The
+inner keeps running against the same clock rather than restarting, so a bout opens wherever it
+happens to be.
+
 ### Multi-line blocks range left by default
 
 `lineAlign` now defaults to `'start'` rather than `'center'`. Centred lines scatter an acrostic's

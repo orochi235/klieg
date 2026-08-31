@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.4
+## 0.10.0
 
 ### A general on-and-off wrapper
 

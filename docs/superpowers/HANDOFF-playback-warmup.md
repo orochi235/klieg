@@ -77,6 +77,28 @@ parses until a glyph is asked for, and `layoutRuns` is not that ask — `registe
 klieg pins `1.3.0-pre.0` exactly and **must re-pin when a stable 1.3.0 ships** — klieg is published,
 so the pin reaches consumers.
 
+**That re-pin moves eleven packages, not two, and bumping fewer now fails the install.** 1.3.0 makes
+`@weasel-js/font` an exact peer of `core`, `hud` and `text`, and `core` an exact peer of `svg`, so a
+mixed set stops nesting quietly and starts throwing `ERESOLVE`. klieg's set is mixed today: `font`,
+`paint` and `text` are at `1.3.0-pre.0` while `core`, `geom`, `gestures`, `history`, `labkit`,
+`modes`, `theme` and `ui` resolve to 1.2.0. Only four are declared here —
+
+    @weasel-js/font    1.3.0-pre.0    @weasel-js/labkit  ^1.1.0  -> 1.2.0
+    @weasel-js/text    1.3.0-pre.0    @weasel-js/ui      ^1.0.3  -> 1.2.0
+
+— so the eight at 1.2.0 are mostly transitive and a bump of `text` alone will not move them. The
+carets on `labkit` and `ui` are what make the mix easy to miss: the loose-looking pins are the ones
+that fail. `npm ls @weasel-js/core @weasel-js/font` before and after is the check.
+
+**Drop the root `overrides` entry in that same change.** It exists to force one `@weasel-js/font`
+copy, which is the duplication the peer dependency now prevents outright; kept alongside the peer it
+pins a version the resolver is already responsible for.
+
+Two things land in 1.3.0 that klieg is currently working around: the `bounds.width` trailing-space
+fix (so `trimmedWidth` can go, though it stays correct either way) and the peer declaration itself.
+`@weasel-js/labkit` 1.3.0 also adds `FloatingPanel` and `Legend`, which retires the locally declared
+`LegendEntry` in `packages/core/dev/kliegsminister/src/legend.ts` — labkit 1.2.0 exports neither.
+
 **Where the upstream asks landed.** weasel fixed the trailing-space measurement on its `main`:
 `bounds.width` folded `line.width` where it should have folded `inkWidth`, one line. It is
 **unpublished**, so `trimmedWidth` stays until klieg re-pins — and stays correct either way, since

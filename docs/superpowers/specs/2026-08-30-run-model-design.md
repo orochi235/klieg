@@ -43,8 +43,11 @@ dependency reaches every consumer transitively. Either klieg waits for a stable 
 `1.3.0-pre.0` exactly and re-pins on release.
 
 **And this is a real change to klieg's dependency posture,** which is one runtime dependency today.
-Check what `geom` actually pulls at runtime before merging; the report of it being type-only is
-about how it is used, not how it is declared.
+Measured on the installed tree: `text`'s dist JS imports `@weasel-js/font` and nothing else, so
+`geom` and `paint` really are type-only in use. But `text` declares both under `dependencies`, so
+npm installs `geom` and its `polygon-clipping` for every consumer regardless — about 460K that no
+bundler will ship because nothing imports it. Moving those two to peer or dev dependencies is an
+upstream fix, not klieg's.
 
 ### klieg keeps its own glyph geometry
 

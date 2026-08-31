@@ -22,5 +22,8 @@
     "jsdom": "^28.1.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "@weasel-js/font": "1.3.0-pre.0"
   }
 }

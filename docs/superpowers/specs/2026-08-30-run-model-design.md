@@ -73,6 +73,20 @@ Registration resolves asynchronously, and a `layoutRuns` call before it lands si
 nothing. `fire()` already awaits its font, so it must await registration readiness on the same path
 rather than laying out and hoping.
 
+**Readiness is lazy, and only a glyph request starts it.** `registerFontOutlines` returns with the
+face `idle` and parses nothing. `layoutRuns` is not the ask that starts it — it finds no face, lays
+out nothing, and leaves the status where it was however many times it is called. So the wait has to
+be primed: `glyphOutline(family, 400, 'normal', cp)` flips it to `loading`, and
+`subscribeGlyphReady` then fires on `ready`.
+
+**And klieg must resolve the same copy of `@weasel-js/font` that `@weasel-js/text` does.** The
+registry is a module-global `Map`, so two physical copies are two registries: klieg registers into
+one and `layoutRuns` reads the other, every run is skipped, and nothing warns — zero lines and zero
+bounds, indistinguishable from a face that failed to load. npm produces exactly that here by
+default, because `@weasel-js/ui` (a dev-lab dependency) pins `font` at `1.0.3` and npm hoists it,
+nesting the `1.3.0-pre.0` copies separately. The root `package.json` overrides `font` to
+`1.3.0-pre.0` tree-wide to collapse it to one copy. That override is load-bearing, not tidiness.
+
 ## What a run carries
 
 ```ts
@@ -184,8 +198,15 @@ Any line-ranging that assumes no advance implies no ink is wrong, in both librar
 
 Two upstream changes, in this order. Neither is klieg's to make.
 
-Nothing, since `1.3.0-pre.0` published — the dependency installs and the whole seam klieg reads is
-in it. One decision remains before implementation: pin the prerelease, or wait for a stable `1.3.0`.
+Nothing blocking. Everything klieg reads — outline metrics, cells, reading-order alignment,
+baseline shift — is present and correct in `1.3.0-pre.0`. The pin decision stands on its own: pin
+the prerelease, or wait for a stable `1.3.0`.
+
+Two things worth sending upstream, neither blocking. `@weasel-js/text` declares `@weasel-js/font`
+as an ordinary dependency though that package's contract is a module-global registry — a peer
+dependency is what stops npm installing two copies and silently splitting it. And `layoutRuns`
+drops a run whose family resolves no metrics without a word; the tier already warns per missing
+glyph, and the same warning one level up would have named the duplicate-copy failure immediately.
 
 ## Testing
 

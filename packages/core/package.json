@@ -62,8 +62,8 @@
     "dev:composition-lab": "vite dev/composition-lab"
   },
   "dependencies": {
-    "@weasel-js/font": "1.3.0-pre.0",
-    "@weasel-js/text": "1.3.0-pre.0",
+    "@weasel-js/font": "1.3.0",
+    "@weasel-js/text": "1.3.0",
     "opentype.js": "^2.0.0"
   },
   "peerDependencies": {
@@ -75,8 +75,8 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@types/three": "^0.185.4",
-    "@weasel-js/labkit": "1.3.0-pre.0",
-    "@weasel-js/ui": "1.3.0-pre.0",
+    "@weasel-js/labkit": "1.3.0",
+    "@weasel-js/ui": "1.3.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "three": "^0.185.1",

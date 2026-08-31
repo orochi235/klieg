@@ -1,14 +1,7 @@
-/**
- * The lab's ink table, and the key that names it. `LegendEntry` is declared here rather than
- * imported: labkit's `Legend` was deferred, so no published type describes these entries.
- */
-export interface LegendEntry {
-  key: string;
-  label: string;
-  color: string;
-  /** How the swatch is drawn when a plain filled stroke would misread. */
-  mark?: 'dot' | 'dash' | 'band';
-}
+import type { LegendEntry } from '@weasel-js/labkit';
+
+/** The lab's ink table, and the key that names it. */
+export type { LegendEntry };
 
 export const INK = {
   glyph: 'rgba(125, 127, 134, 0.35)',

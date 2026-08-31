@@ -29,14 +29,14 @@ Layout now comes from `@weasel-js/text`; klieg's own line, block and wrap layout
 still picks the arrangement that renders largest, and still breaks at the same places. klieg keeps
 its own glyph geometry — the layout engine is used for positions only.
 
-The dependency is pinned at the exact prerelease `1.3.0-pre.0`, and **must be re-pinned when
-`1.3.0` ships**: klieg is published, so a range on a prerelease would float every consumer onto
-later ones.
+The dependency is `@weasel-js/text` 1.3.0, pinned exactly.
 
-That engine resolves fonts through a module-global registry, so a project that ends up with two
-copies of `@weasel-js/font` gets two registries and klieg silently lays out nothing. If text stops
-appearing after an upgrade, check for a duplicate with `npm ls @weasel-js/font` and collapse it
-with an `overrides` entry.
+That engine resolves fonts through a module-global registry, so two copies of `@weasel-js/font` in
+one project are two registries, and klieg lays out nothing at all against the wrong one. 1.3.0
+declares `font` as an exact peer, which turns that into an install-time `ERESOLVE` rather than a
+blank canvas — so if npm refuses to resolve after an upgrade, the fix is to move **every**
+`@weasel-js` package to the same version rather than to force one with an `overrides` entry.
+`npm ls @weasel-js/font` should report a single copy.
 
 ### Several fonts per instance, and the ones already on the machine
 

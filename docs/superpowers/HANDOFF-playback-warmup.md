@@ -74,48 +74,26 @@ Registration lives in `loadFont`, so a face cannot reach layout unregistered. It
 parses until a glyph is asked for, and `layoutRuns` is not that ask — `registerFace` primes it with
 `glyphOutline` before waiting on `subscribeGlyphReady`.
 
-klieg pins `1.3.0-pre.0` exactly and **must re-pin when a stable 1.3.0 ships** — klieg is published,
-so the pin reaches consumers.
+**klieg is on `@weasel-js` 1.3.0, every package pinned to that one exact version.** The root
+`overrides` entry is gone with it: it existed to force one `@weasel-js/font` copy, which the peer
+declaration in 1.3.0 now guarantees. `npm ls @weasel-js/font` reports one entry with both other
+paths deduped, and there is one `package.json` on disk.
 
-**That re-pin moves eleven packages, not two, and bumping fewer now fails the install.** 1.3.0 makes
-`@weasel-js/font` an exact peer of `core`, `hud` and `text`, and `core` an exact peer of `svg`, so a
-mixed set stops nesting quietly and starts throwing `ERESOLVE`. klieg's set is mixed today: `font`,
-`paint` and `text` are at `1.3.0-pre.0` while `core`, `geom`, `gestures`, `history`, `labkit`,
-`modes`, `theme` and `ui` resolve to 1.2.0. Only four are declared here —
+**Bump all four declared packages together or not at all.** `font`, `text`, `labkit` and `ui` are
+what klieg declares; the other eight arrive transitively, and every package in the group pins its
+siblings exactly, so the four determine the closure. The failure is loud now rather than silent: a
+mixed set gives `ERESOLVE` at install, which is what the caret ranges on `labkit` and `ui` used to
+hide by quietly nesting a second font registry.
 
-    @weasel-js/font    1.3.0-pre.0    @weasel-js/labkit  ^1.1.0  -> 1.2.0
-    @weasel-js/text    1.3.0-pre.0    @weasel-js/ui      ^1.0.3  -> 1.2.0
+Two things that fix landed with, both of which klieg had worked around. `bounds.width` no longer
+counts a wrapped line's trailing space — `trimmedWidth` in `text/layout.ts` is kept anyway, because
+it measures to the last non-blank slot and so guards klieg's fit against the engine rather than
+trusting it, which is what a silent 9% shrink earned. And `layoutRuns` now warns when a run resolves
+no metrics, which is the warning that would have made the duplicate-registry split self-diagnosing.
 
-— so the eight at 1.2.0 are mostly transitive and a bump of `text` alone will not move them. The
-carets on `labkit` and `ui` are what make the mix easy to miss: the loose-looking pins are the ones
-that fail. `npm ls @weasel-js/core @weasel-js/font` before and after is the check.
-
-**Drop the root `overrides` entry in that same change.** It exists to force one `@weasel-js/font`
-copy, which is the duplication the peer dependency now prevents outright; kept alongside the peer it
-pins a version the resolver is already responsible for.
-
-Two things land in 1.3.0 that klieg is currently working around: the `bounds.width` trailing-space
-fix (so `trimmedWidth` can go, though it stays correct either way) and the peer declaration itself.
-`@weasel-js/labkit` 1.3.0 also adds `FloatingPanel` and `Legend`, which retires the locally declared
-`LegendEntry` in `packages/core/dev/kliegsminister/src/legend.ts` — labkit 1.2.0 exports neither.
-
-**Where the upstream asks landed.** weasel fixed the trailing-space measurement on its `main`:
-`bounds.width` folded `line.width` where it should have folded `inkWidth`, one line. It is
-**unpublished**, so `trimmedWidth` stays until klieg re-pins — and stays correct either way, since
-it measures to the last non-blank cell rather than trusting the engine. `line.x1` still includes a
-hung trailing space by design, because it doubles as the caret stop; nothing in klieg reads it
-(checked across source, tests and labs), so that is only a hazard for a future reader who reaches
-for it as a fit measure.
-
-The `geom`/`paint` ask is refuted, not open: `text`'s published `.d.ts` imports `Rect`, `FillStyle`
-and `Stroke` from them, so they are public type surface and have to resolve. The `polygon-clipping`
-pull is fixed separately — `geom` marks it an optional peer on weasel `main`, which `1.3.0-pre.0`
-predates.
-
-**Still open:** `@weasel-js/text` should declare `@weasel-js/font` as a peer dependency, since a
-module-global registry cannot survive duplication. And `layoutRuns` should warn when a run resolves
-no metrics (`packages/text/src/layout/layoutRuns.ts:505`) — that one warning would have made the
-split above self-diagnosing.
+`labkit` 1.3.0 brings `FloatingPanel`, `Legend` and `LegendEntry`. kliegsminister's `legend.ts` takes
+its `LegendEntry` from labkit now; the `Legend` and `FloatingPanel` components are available and the
+lab still renders its own.
 
 Bidi stays out of scope, and is still a switch rather than a rewrite: `layoutRuns` takes a
 `BidiResolver`, `@weasel-js/bidi` implements it, and klieg honours the cell contract that makes

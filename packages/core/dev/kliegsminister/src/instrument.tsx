@@ -12,7 +12,7 @@ import {
 import { type RefObject, useContext, useEffect, useRef, useState } from 'react';
 import type * as THREE from 'three';
 import { Legend } from './LegendPanel.js';
-import { INK } from './legend.js';
+import { INK, layerDrew } from './legend.js';
 import { NODE_KEY, STAGE_NODES, TOGGLE_GROUPS } from './pipeline.js';
 import { buildScene, type CornerMark, type CornerScene, type GlyphBounds } from './scene.js';
 import { isTubeLook, type TubeLook } from './spec.js';
@@ -71,6 +71,22 @@ let font: LoadedFont;
 
 export function provideFont(loaded: LoadedFont): void {
   font = loaded;
+}
+
+type Draw = (
+  ctx: CanvasRenderingContext2D,
+  args: { state: CornerScene; config: Config; zoom: number },
+) => void;
+
+/** Declares a canvas layer that tells the legend it painted. */
+function layer(id: string, draw: Draw): { id: string; draw: Draw } {
+  return {
+    id,
+    draw: (ctx, args) => {
+      layerDrew(id);
+      draw(ctx, args);
+    },
+  };
 }
 
 function stroke(
@@ -417,76 +433,55 @@ export const junction = defineInstrument<CornerScene, Config>({
   canvas: {
     initialView: { zoom: 1600, pan: { x: 0, y: 0 } },
     layers: [
-      {
-        id: 'glyph',
-        draw: (ctx, { state, zoom }) => {
-          // Every front path, counters included — `contour` draws only the path the selected
-          // corner sits on, so without this the rest of the letter is invisible while tuning.
-          for (const path of state.outline) {
-            stroke(ctx, path.points, state.centre, INK.glyph, 1 / zoom);
-          }
-        },
-      },
-      {
-        id: 'floor',
-        draw: (ctx, { state, zoom }) => {
-          ctx.beginPath();
-          ctx.arc(0, 0, state.rhoMin, 0, Math.PI * 2);
-          ctx.strokeStyle = INK.floor;
-          ctx.lineWidth = 1 / zoom;
-          ctx.setLineDash([4 / zoom, 5 / zoom]);
-          ctx.stroke();
+      layer('glyph', (ctx, { state, zoom }) => {
+        // Every front path, counters included — `contour` draws only the path the selected
+        // corner sits on, so without this the rest of the letter is invisible while tuning.
+        for (const path of state.outline) {
+          stroke(ctx, path.points, state.centre, INK.glyph, 1 / zoom);
+        }
+      }),
+      layer('floor', (ctx, { state, zoom }) => {
+        ctx.beginPath();
+        ctx.arc(0, 0, state.rhoMin, 0, Math.PI * 2);
+        ctx.strokeStyle = INK.floor;
+        ctx.lineWidth = 1 / zoom;
+        ctx.setLineDash([4 / zoom, 5 / zoom]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }),
+      layer('contour', (ctx, { state, zoom }) => {
+        stroke(ctx, state.contour, state.centre, INK.contour, 1.2 / zoom);
+        stroke(ctx, state.replaced, state.centre, INK.replaced, 8 / zoom);
+      }),
+      layer('built', (ctx, { state, zoom }) => {
+        for (const run of state.carried) {
+          const ink = run.side === 'after' ? INK.builtAfter : INK.built;
+          stroke(ctx, run.points, state.centre, ink, 2.6 / zoom);
+          run.points.forEach((p, i) => {
+            if (run.authored[i]) dot(ctx, p, state.centre, INK.authored, 2.2 / zoom);
+          });
+        }
+      }),
+      layer('staged', (ctx, { state, zoom }) => {
+        for (const span of state.staged) {
+          stroke(ctx, span, state.centre, INK.staged, 1.6 / zoom);
+        }
+      }),
+      layer('ghost', (ctx, { state, zoom }) => {
+        for (const ghost of state.ghosts) {
+          if (ghost.ran) continue;
+          // A one-vertex site is most of them — `stretch` drops a single vertex per corner —
+          // and a one-point polyline strokes nothing, so the readout would name a ghost the
+          // canvas never drew.
+          mark(ctx, ghost.removed, state.centre, INK.removed, 7 / zoom);
+          ctx.setLineDash([4 / zoom, 4 / zoom]);
+          mark(ctx, ghost.added, state.centre, INK.added, 2.4 / zoom);
           ctx.setLineDash([]);
-        },
-      },
-      {
-        id: 'contour',
-        draw: (ctx, { state, zoom }) => {
-          stroke(ctx, state.contour, state.centre, INK.contour, 1.2 / zoom);
-          stroke(ctx, state.replaced, state.centre, INK.replaced, 8 / zoom);
-        },
-      },
-      {
-        id: 'built',
-        draw: (ctx, { state, zoom }) => {
-          for (const run of state.carried) {
-            const ink = run.side === 'after' ? INK.builtAfter : INK.built;
-            stroke(ctx, run.points, state.centre, ink, 2.6 / zoom);
-            run.points.forEach((p, i) => {
-              if (run.authored[i]) dot(ctx, p, state.centre, INK.authored, 2.2 / zoom);
-            });
-          }
-        },
-      },
-      {
-        id: 'staged',
-        draw: (ctx, { state, zoom }) => {
-          for (const span of state.staged) {
-            stroke(ctx, span, state.centre, INK.staged, 1.6 / zoom);
-          }
-        },
-      },
-      {
-        id: 'ghost',
-        draw: (ctx, { state, zoom }) => {
-          for (const ghost of state.ghosts) {
-            if (ghost.ran) continue;
-            // A one-vertex site is most of them — `stretch` drops a single vertex per corner —
-            // and a one-point polyline strokes nothing, so the readout would name a ghost the
-            // canvas never drew.
-            mark(ctx, ghost.removed, state.centre, INK.removed, 7 / zoom);
-            ctx.setLineDash([4 / zoom, 4 / zoom]);
-            mark(ctx, ghost.added, state.centre, INK.added, 2.4 / zoom);
-            ctx.setLineDash([]);
-          }
-        },
-      },
-      {
-        id: 'repair',
-        draw: (ctx, { state, zoom }) => {
-          if (state.drawn) stroke(ctx, state.drawn, state.centre, INK.drawn, 3 / zoom);
-        },
-      },
+        }
+      }),
+      layer('repair', (ctx, { state, zoom }) => {
+        if (state.drawn) stroke(ctx, state.drawn, state.centre, INK.drawn, 3 / zoom);
+      }),
     ],
   },
 
@@ -554,7 +549,7 @@ export const junction = defineInstrument<CornerScene, Config>({
           setState(buildScene(font, requestOf({ ...config, corner: ordinal })));
         }}
       />
-      <Legend />
+      <Legend scene={state} />
     </>
   ),
 });

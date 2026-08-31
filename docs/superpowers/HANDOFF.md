@@ -761,29 +761,33 @@ Roughly in order of value; the items are independent of each other.
   one worktree silently answered from another's dev server and returned confident wrong answers —
   four bogus failures, and two sessions judging appearance off contaminated runs. A checkout without
   that commit is still exposed.
-- **Material and lighting findings, with a command per item — medium priority, and the pile to try
-  next.** See [the findings note](specs/2026-08-25-material-lighting-findings.md). In short:
-  `envMapIntensity` has never been applied on any look, so every look renders 2.2x dimmer than
-  authored; the extrusion walls read as cement because the studio lights the scene blue on the left
-  and warm on the right; `gem` is red-but-dark at low env and bright-but-gray at high env, and the
-  knob that would fix it — `specularIntensity` — is one of three material properties `LookKey`
-  cannot express; and `sequin` is unreachable by any effect at all.
+- **Light-up letters — medium priority, and the pile to try next.** See
+  [the findings note](specs/2026-08-25-material-lighting-findings.md), which names a spike and its
+  flags per item. **Read the code before acting on any of it: the note is dated Aug 25 and its
+  items 1 and 5 shipped the next day in `deebe56`.** Exposure and the studio are done — every look
+  renders at its authored `envMapIntensity`, which is a `LookKey` now, over a warm-balanced studio.
+  A left-to-right falloff across a long word is the studio's remaining deliberate asymmetry, not the
+  old cement bug.
 
-  Each item names the spike that proves it and the flags to reproduce it. The env fix moves every
-  visual baseline, so it is its own change rather than a footnote to lighting.
+  Three things are actually open, and the first two are independent of each other:
 
+  **A lamp does not land on every look.** `gem` inherits `clearcoat: 1` from `DEFAULTS` and sets no
+  `specularIntensity`, so two specular lobes stack on it: red-but-dark at low env, bright-but-gray
+  at high, nothing between. Both lobes must come down together — either alone still mirrors gray.
+  That recovers saturation but not brightness, and the brightness half is not a material problem:
+  `transmission` samples the scene behind the glass and klieg renders over an empty one. `sequin` is
+  unreachable at all — `PartKind` is still `'run' | 'body'`, and a chunk look builds zero run parts
+  under a near-black body, so it needs a `'chunk'` kind addressing the letter's `InstancedMesh`.
 
+  **The light does not sit under the cursor.** `pointerFrame` maps the canvas's whole −1..1 onto the
+  word's ink extent (`pointer.ts:43`), so the cursor's travel compresses onto the letters and the
+  light leads at one end and lags at the other. A second, larger error is that a lamp measures from
+  each part's *origin* while the cursor is mapped into the *ink* box — in y that spends 69% of a
+  lamp's reach before any horizontal distance counts. Touches no visual baseline.
 
-
-- **Another pass on light-up letters — medium priority.** The design picks a blend and a channel; it
-  does not finish the look. **`gem` cannot be lit with one knob.** At `env=0` it reads red, its
-  `attenuationColor` working as authored; raising env lays specular reflection over that and washes
-  it to blue-gray. Red-but-dark or bright-but-gray, with nothing in between — a transmissive look
-  needs a channel that raises *transmitted* light, not reflected. Metals have no such problem: gold
-  holds its hue from `env=2.2` to `14`. **`sequin` is unreachable** — zero `run` parts and a
-  near-black body under the disc field; it needs a `'chunk'` `PartKind`. **The defaults are
-  unsampled** — radius, strength and falloff were judged at one lamp position on a five-letter word,
-  enough to choose a blend and not enough to ship numbers.
+  **The defaults are unsampled.** Radius, strength and falloff were judged at one lamp position on a
+  five-letter word — enough to choose a blend, not enough to ship numbers. This one goes last: it is
+  tuning against whatever the two above settle.
 
 - **`visual.spec.ts`'s remaining flakiness is the sampled frame, not the wait.** The canvas waits
   were fixed in `e90e7c8` — see the section below. What is left is `bloom path`, `two-line block`

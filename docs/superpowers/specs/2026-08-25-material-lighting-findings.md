@@ -7,6 +7,10 @@ Everything here was found while designing
 [composable lighting](2026-08-25-composable-lighting-design.md) and is verified by rendering, not by
 reading. Each item names the spike that proves it.
 
+**Items 1 and 5 shipped in `deebe56`, after this file was written.** A struck heading means the
+finding is fixed and the item is kept only for the mechanism under it. Re-read the code before
+acting on any item here: the file is dated, the tree is not.
+
 ## The spikes
 
 All three serve klieg's built `dist` over an ephemeral port and drive it headless with
@@ -23,22 +27,17 @@ SwiftShader, so results do not depend on the machine. **Run `npm run build -w kl
 They all write PNGs and print a table; identical md5s across two rows mean the change never reached
 the GPU.
 
-## 1. `envMapIntensity` has never been applied, on any look
+## 1. ~~`envMapIntensity` has never been applied~~ — fixed in `deebe56`
 
-`looks.ts` constructs every material with `envMapIntensity: 2.2`. klieg lights through
-`scene.environment`, and that property only scales a material's **own** `envMap` — which none of
-them have. Every look has rendered at an effective intensity of 1 since the value was written.
+**Shipped.** Materials carry the studio as their own `envMap` now, which makes the authored value
+live and makes `envMapIntensity` a `LookKey` a look can set for itself. Every look renders at its
+authored exposure rather than at an effective 1.
 
-```
-node spikes/lamp-blend.mjs --blends envown --looks gold,gem --env 1     # byte-identical to shipped
-node spikes/lamp-blend.mjs --blends envown --looks gold,gem --env 2.2   # what was authored
-```
-
-Assigning the scene's environment texture to each material makes the knob live. **This moves every
-visual baseline**, so it is its own change.
-
-**Worth trying:** the sweep at `0, 1, 2.2, 6, 14`. Gold holds its hue the whole way and simply gets
-brighter — a much cleaner "brighter gold" than any emissive add.
+The mechanism is worth keeping because it generalizes: three overwrites `envMapIntensity` with
+`scene.environmentIntensity` on any material that has no `envMap` of its own, so a property can be
+set, read back correctly, and never reach a pixel. The test that covered it asserted
+`envMapIntensity === 2.2` on the material it had just constructed and stayed green for the whole
+life of the bug. **Assert what reaches the screen, or assert nothing.**
 
 ## 2. A brightness multiplier is a no-op on seven of eight looks
 
@@ -92,26 +91,16 @@ transparent overlay over an empty one.
 
 `--over` takes any `LookKey`, as `key:value` pairs, with `#` for hex — `--over clearcoat:0,color:#ff0000`.
 
-## 5. The extrusion walls read as cement because the studio is two-toned
+## 5. ~~The extrusion walls read as cement~~ — fixed in `deebe56`
 
-Faces and walls share one material: `buildGlyphGeometry` makes a single `ExtrudeGeometry` and klieg
-passes one material, so nothing differs in shading. The gray is what they reflect.
+**Shipped, and it had to ship with item 1.** Raising exposure alone made the walls worse: faces and
+walls share one `ExtrudeGeometry` and one material, so a metal's walls show only what they reflect,
+and a blue fill against a warm base colour is gray. The fill bars and shell are warm-balanced at 0.7
+toward the studio's own warm bar, holding each bar's luminance.
 
-A metal reflects `baseColor × envRadiance`, and `render/environment.ts` lights the two sides
-differently:
-
-| bar | position | rgb |
-|---|---|---|
-| left | `x: -14` | `[2.4, 4.0, 7]` — blue |
-| left | `x: -6` | `[2.4, 2.6, 3.4]` — blue-gray |
-| right | `x: 14` | `[6, 4.4, 2.2]` — warm |
-
-Gold is `0xffc44d`. Warm × blue is desaturated gray, so its left-facing walls go gray-lavender while
-the caps and right-facing bevels stay golden. Raising env brightens the cement without warming it.
-
-**Worth trying:** warming the left bars, or the shell (currently `top [0.05, 0.06, 0.12]`,
-`bottom [0.01, 0.01, 0.02]` — blue-dominant and nearly uniform, which is what the walls mostly see).
-This is environment authoring; no lamp channel can reach it.
+A deliberate warm/neutral asymmetry remains — the bar at `x: 14` is warmer than the one at `x: -14`
+— so a wide sign still reads brighter on its right. That is studio lighting, not the cement bug, and
+a left-to-right falloff across a long word is not evidence of a regression.
 
 ## 6. Specular is authorable now; `reflectivity` stays out
 

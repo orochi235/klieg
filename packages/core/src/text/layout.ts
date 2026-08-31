@@ -220,3 +220,71 @@ export function layoutRunsForKlieg(runs: StyledRun[], opts: LayoutRunsOpts): Lai
     height: laid.bounds.height,
   };
 }
+
+/** Wide enough that nothing wraps, so one layout reveals every natural word position. */
+const UNBOUNDED = 1e9;
+
+/**
+ * Candidate line widths, taken from where the words actually fall rather than from summed
+ * advances: kerning makes width non-additive, so a run of words is measured whole. Every
+ * contiguous run of words on a line contributes the width it would occupy alone.
+ */
+function candidateWidths(runs: StyledRun[], opts: LayoutRunsOpts): number[] {
+  const flat = layoutRunsForKlieg(runs, { ...opts, maxWidth: UNBOUNDED });
+  const widths = new Set<number>();
+
+  for (let line = 0; line < flat.lines.length; line++) {
+    const slots = flat.slots.filter((s) => s.line === line);
+    const lefts: number[] = [];
+    const rights: number[] = [];
+    let open = false;
+    for (const slot of slots) {
+      if (/\s/.test(slot.char)) {
+        open = false;
+        continue;
+      }
+      if (!open) {
+        lefts.push(slot.x);
+        rights.push(slot.x + slot.advance);
+        open = true;
+      } else {
+        rights[rights.length - 1] = slot.x + slot.advance;
+      }
+    }
+    for (let i = 0; i < lefts.length; i++) {
+      for (let j = i; j < rights.length; j++) {
+        widths.add((rights[j] as number) - (lefts[i] as number));
+      }
+    }
+  }
+  return [...widths];
+}
+
+/**
+ * Chooses line breaks maximizing `fitScale` — it breaks to make the type as large as the box
+ * allows, which is the whole point of a sign, and is not the greedy break weasel would pick alone.
+ * Only the measuring changed: each candidate is laid out and scored on the bounds that come back.
+ */
+export function wrapRuns(runs: StyledRun[], budget: Budget, opts: LayoutRunsOpts): LaidOut {
+  let best: LaidOut | null = null;
+  let bestScale = -1;
+
+  for (const maxWidth of candidateWidths(runs, opts)) {
+    // layoutRuns, not cachedLayoutRuns: the cache caps variants per runs array at 8 and evicts the
+    // whole set at once, so a search probing more widths than that would thrash its own cache.
+    const laid = layoutRunsForKlieg(runs, { ...opts, maxWidth });
+    const scale = fitScale(laid.width, laid.height, budget);
+    const better =
+      best === null ||
+      scale > bestScale ||
+      (scale === bestScale &&
+        (laid.lines.length < best.lines.length ||
+          (laid.lines.length === best.lines.length && laid.width < best.width)));
+    if (better) {
+      best = laid;
+      bestScale = scale;
+    }
+  }
+
+  return best ?? layoutRunsForKlieg(runs, { ...opts, maxWidth: UNBOUNDED });
+}

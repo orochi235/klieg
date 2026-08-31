@@ -8,6 +8,7 @@ import {
   layoutRunsForKlieg,
   type Slot,
   wrapBlock,
+  wrapRuns,
 } from '../../src/text/layout.js';
 import { registerFace } from '../../src/text/outline-face.js';
 import { styledRunsOf } from '../../src/text/runs.js';
@@ -241,5 +242,55 @@ describe('layoutRunsForKlieg', () => {
 
     expect(fromRun.slots.map((s) => s.x)).toEqual(fromString.slots.map((s) => s.x));
     expect(fromRun.width).toBeCloseTo(fromString.width);
+  });
+});
+
+describe('wrapRuns', () => {
+  const OPTS = { maxWidth: 1e6, lineHeight: LINE_HEIGHT_EM, align: 'left' as const };
+  let family: string;
+
+  beforeAll(async () => {
+    family = await registerFace(901, 'display', stubLoadedFont());
+  });
+
+  it('picks the arrangement that lets the type be largest, not the first that fits', () => {
+    // On one line the pair is 5.05em wide against a 4em box; broken it is 2.4em against 2.2em tall.
+    const wide = wrapRuns(styledRunsOf('AAAA BBBB', family), { width: 4, height: 4 }, OPTS);
+
+    expect(wide.lines).toHaveLength(2);
+  });
+
+  it('keeps a single word on one line, having nowhere to break it', () => {
+    const one = wrapRuns(styledRunsOf('AAAA', family), { width: 4, height: 4 }, OPTS);
+
+    expect(one.lines).toHaveLength(1);
+  });
+
+  it('honours an explicit newline as well as the break it chooses', () => {
+    const laid = wrapRuns(styledRunsOf('AA\nBB', family), { width: 4, height: 4 }, OPTS);
+
+    expect(laid.lines).toHaveLength(2);
+    expect(laid.slots.map((s) => s.char).join('')).toBe('AABB');
+  });
+
+  it('never lays a sign out smaller than the greedy break would', () => {
+    const budget = { width: 4, height: 4 };
+    for (const text of ['AAAA BBBB', 'AA BB CC', 'AAAAAA B', 'A BB CCC DDDD']) {
+      const searched = wrapRuns(styledRunsOf(text, family), budget, OPTS);
+      const greedy = layoutRunsForKlieg(styledRunsOf(text, family), {
+        ...OPTS,
+        maxWidth: budget.width,
+      });
+
+      expect(fitScale(searched.width, searched.height, budget)).toBeGreaterThanOrEqual(
+        fitScale(greedy.width, greedy.height, budget),
+      );
+    }
+  });
+
+  it('gives every code point a slot under wrap, the blank one included', () => {
+    const laid = wrapRuns(styledRunsOf('A B', family), { width: 4, height: 4 }, OPTS);
+
+    expect(laid.slots.map((s) => s.char)).toEqual(['A', ' ', 'B']);
   });
 });

@@ -520,6 +520,7 @@ await bk.warm('neon'); // then swap the page, then fire
 | `blendMs` | `120` | crossfade window straddling each phase boundary |
 | `bloom` | look's choice | adds a glow pass, at the cost of three render targets while the effect runs |
 | `wrap` | `false` | break long text into the arrangement that renders largest |
+| `lineAlign` | `'start'` | how the lines of a multi-line block range against each other, in reading order — `'start' \| 'center' \| 'end'`. Distinct from `framing.align`, which places the whole block in the box |
 | `modal` | `false` | while a `'click'` hold waits, let the overlay swallow the dismissing press |
 | `onPhase` | none | called as the effect crosses each boundary — `{ phase: 'active' }` when the word has landed, `{ phase: 'exit' }` when the hold is over, `{ phase: 'stage', index }` as each stage settles |
 | `dismiss` | `'window'` | who dismisses a `'click'` hold; `'host'` attaches no window listeners and leaves `advance()` as the only way out |

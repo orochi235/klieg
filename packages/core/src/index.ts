@@ -286,9 +286,9 @@ export interface FireOptions {
   placement?: Placement;
   /**
    * How the lines of a multi-line block range against each other, in reading order. Defaults to
-   * `'center'`. `'start'` is what an acrostic wants: centred lines scatter its initials across as
-   * many x positions as there are lines. Distinct from `framing.align`, which places the whole
-   * block in the frame.
+   * `'start'`, which is what an acrostic wants: centred lines scatter its initials across as many
+   * x positions as there are lines. Distinct from `framing.align`, which places the whole block
+   * in the frame. A single-line word places identically either way.
    */
   lineAlign?: Align;
   /** A name from the instance's `fonts`. Defaults to `defaultFont`, else the first entry. */

@@ -244,7 +244,7 @@ export class Stage {
       extent: vh * this.camera.aspect,
       cameraZ: this.camera.position.z,
       edge: edgeFor(align ?? this.defaultAlign(), this.direction()),
-      lineEdge: lineAlign ? edgeFor(lineAlign, this.direction()) : undefined,
+      lineEdge: edgeFor(lineAlign ?? 'start', this.direction()),
       // The anchor's box is the bound already, and filling it is the whole point of anchoring.
       cap: this.placement.kind === 'element' ? Number.POSITIVE_INFINITY : undefined,
     };

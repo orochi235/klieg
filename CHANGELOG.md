@@ -2,6 +2,15 @@
 
 ## 0.9.4
 
+### Multi-line blocks range left by default
+
+`lineAlign` now defaults to `'start'` rather than `'center'`. Centred lines scatter an acrostic's
+initials across as many x positions as there are lines, which is the case the option was added for.
+Pass `lineAlign: 'center'` per fire to keep the old placement.
+
+**A single-line word does not move** — ranging it and then re-centring the block lands on the same
+positions centring it does, so only blocks of two or more lines change.
+
 ### One word, several fonts
 
 `fire()` takes a list of styled runs as well as a string, so a word can change font, size or

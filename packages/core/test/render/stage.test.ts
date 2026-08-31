@@ -361,6 +361,17 @@ describe('which edge an alignment names', () => {
     expect(strip().viewportBudget(0.94, 0.66, 'end').edge).toBe('right');
   });
 
+  it('ranges the lines of a block against the reading edge by default', () => {
+    // Centred lines scatter an acrostic's initials across as many x positions as there are lines.
+    expect(headlessStage().viewportBudget().lineEdge).toBe('left');
+    expect(strip().viewportBudget(0.94, 0.66).lineEdge).toBe('left');
+  });
+
+  it('takes a centred block when the caller asks for one', () => {
+    expect(headlessStage().viewportBudget(0.62, 0.3, undefined, 'center').lineEdge).toBeUndefined();
+    expect(headlessStage().viewportBudget(0.62, 0.3, undefined, 'end').lineEdge).toBe('right');
+  });
+
   it('leaves a fullscreen overlay centred, which has no edge to meet', () => {
     expect(headlessStage().viewportBudget().edge).toBeUndefined();
     expect(headlessStage().viewportBudget(0.62, 0.3, 'start').edge).toBe('left');

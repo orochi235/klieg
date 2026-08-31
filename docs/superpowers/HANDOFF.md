@@ -92,11 +92,6 @@ footprint but eats up to `6 rhoMin` of each leg and leaves 2 of 233 runs margina
 Opposite costs, so both are knobs rather than a decision. No shipped look sets a hairpin weight, so
 baselines are unmoved. `spikes/hairpin-view.mjs` draws them side by side.
 
-**The visual suite is failing three tests on `main` right now, and it is not this branch.** At load
-average 12, `visual.spec.ts` fails the bloom-path, two-line-block and wrap tests. Stashing the run
-budget change and re-running failed the identical three, so they are pre-existing under load. Do not
-read them as a regression; check `uptime` first, as this doc says twice elsewhere.
-
 **`spikes/svg-tube/` is the lab for all of this.** `npx vite --port 5199` from the repo root, then
 `/spikes/svg-tube/`. It reads a **gitignored `art.svg`** from its own directory — bring your own, or
 pass `?svg=name.svg`. Drag to pivot, double-click to reset, and the top bar carries every knob
@@ -310,13 +305,22 @@ with nothing rendering-specific in it, so it went to `effects/types.ts` alongsid
 `EnvPiece` needs it. The plan carries an amendment note under Task 2; read every
 `from '../render/lighting.js'` in Task 2's step text as `from './types.js'`.
 
-**The unit suite times out under load too, not just the visual one.** `vitest.config.ts` sets no
-`testTimeout`, so the default 5s applies, and the three tests that do a dynamic
-`import('../../src/index.js')` — `pieces.test.ts`'s registry check and `motion/enter`/`motion/exit`
-— pull three.js through a cold Vite transform. At load average 134 those failed and then passed on
-re-run with nothing changed. **A timeout in those three is not evidence of a regression; check
-`uptime` before believing it.** The handoff already said this of `npm run test:visual`; it is true
-of `npm run check` as well.
+**Both suites are timing-fragile, and the load numbers this doc used to carry were noise.**
+
+The fragility is bare sleeps. `visual.spec.ts` still has four `page.waitForTimeout` calls (200, 200,
+500 and 3000ms) standing in for a condition; a fixed sleep cannot stretch for a slow machine, where
+the `expect.poll` assertions elsewhere in the file wait up to `CANVAS_TIMEOUT_MS` /
+`LAYER_TIMEOUT_MS` (15s each). Converting the remaining four is the fix.
+
+`vitest.config.ts` sets no `testTimeout`, so the 5s default covers whatever pulls three.js through a cold Vite transform via a dynamic `import('../../src/index.js')` — which is
+`effects/pieces.test.ts` (twice) and `render/tube/stages.test.ts`, **not** `motion/enter` or
+`motion/exit`, which this doc named for months and which contain no dynamic import at all.
+
+**Do not use a load average to decide whether a failure is real.** This doc previously carried three
+thresholds — 12, 97 and 134 — each with a failure count attached. They were single observations of a
+nondeterministic thing, they disagree with each other, and the full Playwright suite has since
+passed 40/40 at load average 70. Re-run instead, or better, time the operation: `--repeat-each=3
+--workers=1` separates cold start from behaviour, and red-then-green-then-green is cold start.
 
 **Three things Task 3 learned, and the first two are about the plan itself.** The plan's `lamp` test
 asserted `.light?.amount` where the plan's own literal code returns a shared `REST` — so the spec
@@ -362,12 +366,6 @@ contains the lab's own `#log`, which prints `fire "BIG"` — so the obvious `'hi
 assertions pass with the feature deleted. The alignment test now reads the drawing buffer's alpha
 bounding box and compares span boxes to rendered pixels, because loose viewport fractions passed
 with the layer 80px off its glyphs. Span centres agree with ink centres within ~3px.
-
-**The visual suite is load-flaky, and this predates the branch.** `fireStill`'s 200ms sleep and
-`fire`'s 4000ms hold lose to the first fire's shader compilation when the machine is busy — the
-layer was measured appearing 1.7–5.9s after FIRE. Under load average 97 that failed 4–8 tests
-including the click-through guarantee, with the canvas never attaching. The new tests poll instead
-of sleeping. Converting the old ones is worth doing before CI trusts them.
 
 ## Two consumer defects, found from outside, both fixed
 
@@ -787,16 +785,6 @@ Roughly in order of value; the items are independent of each other.
   were fixed in `e90e7c8` — see the section below. What is left is `bloom path`, `two-line block`
   and `wrap breaks a long line into rows`, which read the whole drawing buffer inside rAF and
   assert on one sampled frame.
-
-- ~~**`visual.spec.ts` is flaky under parallel load, and it is three tests now, not two.**~~ `bloom path`,
-  `two-line block` and `wrap breaks a long line into rows` have each failed intermittently in the full
-  suite and passed on isolated re-run. It predates the particle work — `two-line block` was seen
-  failing before the `index.ts` changes existed. All three read the whole drawing buffer inside rAF
-  and assert on a single sampled frame, which is the likely cause; that the third is a pure layout
-  test touching no material narrows it further, since it rules out anything look-specific. **A single
-  failure in this file is not evidence of a regression — re-run before believing it**, and note that
-  a passing re-run deletes the failure artifacts, so capture the diff before re-running if you want
-  to diagnose it rather than dismiss it.
 
   **The one captured artifact says the sample, not the render, is what fails.** On a `wrap breaks a
   long line into rows` failure the error context showed `litBands` returning 0 while the page

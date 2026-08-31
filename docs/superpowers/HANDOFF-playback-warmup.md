@@ -16,7 +16,7 @@ CPU-side numbers against the shipped caches; `apps/lab/mount-cost/` measures the
 `FontRegistry` memoizes on the resolved key so two names for one face share that object — one
 cache, not two.
 
-**A follow-up is on `main` too** (merged locally, not yet pushed): the warm now links a bloom look's quads, holds its throwaway word
+**A follow-up is on `main` too**: the warm now links a bloom look's quads, holds its throwaway word
 until the first fire, and gains a host-driven `warm(look?)`. It holds the word because three
 refcounts a shader program per material — disposing it returned the programs the warm had just
 linked, which `apps/lab/mount-cost/` reads as `renderer.info.programs` going 0 → 0 rather than
@@ -77,12 +77,23 @@ parses until a glyph is asked for, and `layoutRuns` is not that ask — `registe
 klieg pins `1.3.0-pre.0` exactly and **must re-pin when a stable 1.3.0 ships** — klieg is published,
 so the pin reaches consumers.
 
-**Two upstream asks, neither blocking, both still open on weasel `main`.** `@weasel-js/text` should
-declare `@weasel-js/font` as a peer dependency, since a module-global registry cannot survive
-duplication. And `layoutRuns` should warn when a run resolves no metrics
-(`packages/text/src/layout/layoutRuns.ts:505`) — that one warning would have made the split above
-self-diagnosing. Separately, `text` declares `geom` and `paint` as dependencies though its shipped
-JS imports neither, so every klieg consumer installs `polygon-clipping` for nothing.
+**Where the upstream asks landed.** weasel fixed the trailing-space measurement on its `main`:
+`bounds.width` folded `line.width` where it should have folded `inkWidth`, one line. It is
+**unpublished**, so `trimmedWidth` stays until klieg re-pins — and stays correct either way, since
+it measures to the last non-blank cell rather than trusting the engine. `line.x1` still includes a
+hung trailing space by design, because it doubles as the caret stop; nothing in klieg reads it
+(checked across source, tests and labs), so that is only a hazard for a future reader who reaches
+for it as a fit measure.
+
+The `geom`/`paint` ask is refuted, not open: `text`'s published `.d.ts` imports `Rect`, `FillStyle`
+and `Stroke` from them, so they are public type surface and have to resolve. The `polygon-clipping`
+pull is fixed separately — `geom` marks it an optional peer on weasel `main`, which `1.3.0-pre.0`
+predates.
+
+**Still open:** `@weasel-js/text` should declare `@weasel-js/font` as a peer dependency, since a
+module-global registry cannot survive duplication. And `layoutRuns` should warn when a run resolves
+no metrics (`packages/text/src/layout/layoutRuns.ts:505`) — that one warning would have made the
+split above self-diagnosing.
 
 Bidi stays out of scope, and is still a switch rather than a rewrite: `layoutRuns` takes a
 `BidiResolver`, `@weasel-js/bidi` implements it, and klieg honours the cell contract that makes

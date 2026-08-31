@@ -5,17 +5,9 @@ learned that its design doc does not carry, and what is worth doing next.
 
 ## Branch state
 
-**Host-driven effects are built.** Branch `host-driven-effects`, worktree
-`~/src/klieg-worktrees/host-driven-effects`, rebased on `main`, **unpushed and unreviewed**. Every
-task in the [plan](plans/2026-08-27-host-driven-effects.md) is done; the
-[spec](specs/2026-08-27-host-driven-effects-design.md) carries the reasoning. Green at **1274 tests
-/ 64 files**, lint, typecheck and `npm run build -w klieg` all clean. Next step is review, then a
-PR.
-
-`fire()` now returns a `FireHandle` and takes `onPhase`, `dismiss` and `signal`. The changelog entry
-sits under `## Unreleased`: `0.9.2` is on npm, so releasing needs a minor bump in
-`packages/core/package.json` before the tag — the release workflow refuses a tag that does not match
-it.
+**Host-driven effects are merged.** `fire()` returns a `FireHandle` and takes `onPhase`,
+`dismiss` and `signal`. See the [plan](plans/2026-08-27-host-driven-effects.md) and the
+[spec](specs/2026-08-27-host-driven-effects-design.md).
 
 The four places the build departs from the spec are listed at the top of the plan. Two were proven
 rather than argued, by reverting them and watching the build break: `FireHandle extends
@@ -570,13 +562,10 @@ working — it needs a caller-supplied `TubeSpec.gradient`.
 
 Roughly in order of value; the items are independent of each other.
 
-- **A composition lab is the live task.** See the section at the top.
-
 - ~~**Selectable text**~~ — built and merged into `main`.
 
-- **Composable lighting — all nine tasks built, on the branch, unmerged.** See the "In flight"
-  section at the top. `PointerLight` and `slotDrivesEnv` are gone and the `aimAt` viewport bug with
-  them. What is left is the decision to merge.
+- **Composable lighting is merged.** `LightingSlot` is on `main`; `PointerLight` and
+  `slotDrivesEnv` are gone and the `aimAt` viewport bug with them.
 
   **Two spikes are the evidence, and they re-run.** `spikes/lamp-falloff.mjs` proves
   `PartOffset.gain` is a byte-identical no-op on seven of eight looks; `spikes/lamp-blend.mjs`
@@ -587,20 +576,18 @@ Roughly in order of value; the items are independent of each other.
 - **The rendered word does not register against the text it stands in for. Asked for directly.**
   Two settings, one theme: klieg replaces real DOM text and does not currently agree with it.
 
-  **Where the word sits in its box is settable now — `framing.align` on the `framing-align` branch,
-  pushed and unmerged, seven commits off `d15979c`.** `Align` is `'start' | 'center' | 'end'`, it
-  places the word at whatever size the framing fractions chose, it measures against the painted edge
-  (bevel included), and an anchored word defaults to the page's text edge. That is the half of this
-  ask that answers the original complaint. It aligns the **block**, computing one `offsetX` for the
-  group off the painted extent.
+  **Both alignment halves shipped.** `framing.align` places the block, measured against the painted
+  edge (bevel included), at whatever size the framing fractions chose; an anchored word defaults to
+  the page's text edge. `lineAlign` ranges the lines inside it. Both are `Align`
+  (`'start' | 'center' | 'end'`), and the `selectable` layer follows for free — `projectLetters`
+  reads the placement `placeBlock` already shifted.
 
-  **Per-line alignment inside a block is still open, and centred is still the wrong default.** `text/placement.ts`
-  centres every line on `x = 0` across the glyphs that draw ink, and nothing exposes a choice. It
-  wants `'left' | 'center' | 'right'`, defaulting to **left**, with the `selectable` layer reading
-  the same setting so its spans keep matching the ink. `apps/lab/test/visual.spec.ts` already
-  compares span boxes to the drawing buffer's ink — centres within 10px, bounds within 8 — so that
-  test is the guard, and it is the one that has to be re-pointed per alignment. Changing the default
-  moves every multi-line baseline — a breaking visual change, and a minor.
+  **What is left is `lineAlign`'s default, and it is a decision rather than a task.** It is
+  `'center'`; `'start'` is what an acrostic wants, because centred lines scatter its initials across
+  as many x positions as there are lines. Changing it moves every multi-line baseline — a breaking
+  visual change, and a minor. `apps/lab/test/visual.spec.ts` is the guard, comparing span boxes to
+  the drawing buffer's ink (centres within 10px, bounds within 8), and it is the test that has to be
+  re-pointed per alignment.
 
   **The neon renders smaller than the fallback it replaces.** Observed under `placement: element`,
   not yet measured. Size comes from `framing` (0.62 wide, 0.3 tall) through `FIT_CAP` in
@@ -610,48 +597,21 @@ Roughly in order of value; the items are independent of each other.
   line-height and cap-height, and if the neon comes out smaller by a consistent ratio that is a fit
   bug to fix rather than a knob to hand the caller.
 
-- **A macro spell for `flicker`, so a tube stops flickering for ~15s and starts again. Asked for
-  directly, and prototyped.** `flicker` is already intermittent per part, but only on a micro scale:
-  `unrest` is the share of a pass spent stuttering across 24 steps of a 1400ms pass, which is a tube
-  buzzing. Two more params give it the long scale — `spell`, the milliseconds of one flickering
-  bout, and `calm`, the quiet between. `calm: 0` is today's behaviour, so every current caller is
-  unchanged.
+- **A macro spell for `flicker` is built** — `FlickerSpec.spell` and `.calm` in
+  `effects/pieces.ts`, so a tube stops flickering for a stretch and starts again. `calm: 0` is the
+  default and today's behaviour, so no existing caller moved. Two things it had to get right, both
+  of which the file now carries: `STEP_MS` is derived (`1400 / 24`) rather than a fixed 24 steps, or
+  a long pass stretches each step into a multi-second strobe; and the pass lengthens to whole cycles
+  of `spell` + `calm`, so a bout boundary falls on a step edge instead of clipping a drop to a
+  single frame.
 
-  **Do this rather than an `intermittent(inner)` wrapper**, which was the first shape considered.
-  A wrapper runs two independent clocks, and when the gate period lands on a whole multiple of the
-  inner duration, the inner phase at the start of every burst is 0 — so every burst opens on the
-  same phase and they all look identical, silently deleting the variation the wrapper exists for.
-  `roving` documents the same resonance from the other side, above its `duration` arithmetic: do not
-  make the epoch a multiple of the inner pass, or every handover samples one fixed phase. Folding
-  the spell into `flicker` derives both scales from the one `t` and the trap cannot exist.
-
-  **`STEPS` has to stop being a constant, and that is the whole risk.** It is hardcoded 24 against
-  the 1400ms default — 58.3ms a step, which the file's own comment ties to ~3 frames at 60fps. A
-  57s pass at 24 steps is a 2.4-second strobe, not a flicker. Derive it as `round(duration / 58.3)`:
-  that returns exactly 24 at the default, so nothing shipped moves, and holds 58.4ms a step at any
-  length. `node spikes/flicker-macro.mjs` prints the derivation and walks a fitted pass — measured
-  57ms shortest drop and a ~16s lit stretch against a 15s calm.
-
-  **The pass length adjusts to fit whole spells**, as `roving` already does for epochs: 60s asked
-  with a 4s spell and 15s calm gives 57s and three spells. `roving` reads `inner.duration`, and
-  `roving(flicker())` against a 57s inner degrades sanely — 18 epochs of ~3.2s.
-
-  **Snap the spell to a whole number of steps, or it clips drops to single frames.** The spell gate
-  runs on its own schedule, so a boundary lands wherever it lands inside a step — measured 5 of 5
-  boundaries mid-step, producing drops as short as 29ms against a 58.3ms step. `flicker`'s own
-  comment above `STEPS` says a one-frame drop "reads as noise rather than as a failing tube", so
-  this quietly breaks the thing that comment exists to protect. Make the spell a whole number of
-  steps and the boundaries fall on step edges.
-
-  **If the wrapper is wanted anyway — for `roving` or `hue`, which this does not cover — derive its
-  period from `inner.duration`.** The ask was for something that wraps "things like roving", and
-  folding `spell`/`calm` into `flicker` only serves flicker. A general wrapper is fine as long as
-  the caller cannot set a period independent of the inner's: the wrapper picks a period off integer
-  ratios with `inner.duration`, the same accommodation `roving` already makes when it rounds its
-  epoch. The semantics are the ones asked for — the gate swallows the inner's output for a stretch
-  rather than resetting it — and the trap is not reset-versus-swallow but which phases the swallowing
-  leaves visible: on an integer ratio the surviving windows land on the same phases every time, so
-  every burst looks identical while the inner genuinely never resets.
+  **The general `intermittent(inner)` wrapper is still unbuilt, and still wanted for `roving` and
+  `hue`.** Folding `spell`/`calm` into `flicker` only serves flicker. The constraint if it is
+  written: the caller must not set a period independent of the inner's — the wrapper picks one off
+  integer ratios with `inner.duration`, the accommodation `roving` already makes when it rounds its
+  epoch. The trap is not reset-versus-swallow but which phases the swallowing leaves visible: on an
+  integer ratio the surviving windows land on the same phases every time, so every burst looks
+  identical while the inner genuinely never resets.
 
 - **The composition lab is built and on `main`.** `npm run dev:composition-lab -w klieg`, port 5183.
   You build a whole `fire()` in the rail — look, hold, effect layers with their params, targeting,

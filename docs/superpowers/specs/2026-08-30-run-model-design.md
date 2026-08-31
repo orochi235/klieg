@@ -167,10 +167,15 @@ line against `maxWidth` — that is klieg's `lineAlign`, and it comes for free. 
 resolves to a 3D viewport translate under a camera-Z perspective shrink, which is klieg's own and
 stays klieg's, applied after layout.
 
-**One mismatch to handle deliberately:** klieg ranges lines on ink extents, weasel aligns on advance
-width including a trailing space, so a centred line ending in a space sits half a space off in
-weasel where it does not in klieg. CSS hangs trailing whitespace and weasel does not yet. It is a
-known weasel bug, not a klieg regression — do not chase it as one.
+**One mismatch that bites twice.** weasel measures a line's advance width including a trailing
+space where klieg ranges on ink, so a centred line ending in a space sits half a space off. That
+half-space is cosmetic and is a known weasel bug — do not chase it as a klieg regression.
+
+The same mismatch in the *fit scoring* is not cosmetic, and it is klieg's to handle: scoring a wrap
+candidate on `bounds.width` counts that trailing space, which made every wrapped sign one space
+advance narrower and shrank the type by up to 9%. `layoutRunsForKlieg` therefore reports the widest
+line measured to its last non-blank slot, not `bounds.width`. Measured against the pre-swap engine
+across 18 text/budget pairs, breaks and fitted scale then match exactly.
 
 **A slot for every code point — solved upstream.** klieg keeps a letter slot for each code point,
 including the ones that draw nothing, because `letterCount`, `charOf`, the regroup's renumbering and

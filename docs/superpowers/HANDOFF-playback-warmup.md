@@ -38,7 +38,7 @@ unpack and then hit an opentype.js `cmap` limit. And `nest()` classified counter
 depth, which fills in any letter a serif face draws as overlapping same-wound strokes; it reads
 winding now.
 
-## B — the run model: **started; four of ten tasks built**
+## B — the run model: **built**
 
 [Design](specs/2026-08-30-run-model-design.md). `fire(TextRun[])` carrying tint, font and size.
 
@@ -48,33 +48,42 @@ the layout, and klieg takes it as a runtime dependency and deletes its own `layo
 only**: its outline tier emits SVG `d` strings, and klieg keeps its own glyph pipeline rather than
 reopening the nesting problem A just fixed.
 
-[Plan](plans/2026-08-30-run-model.md), ten tasks. Four are on `run-model` (worktree
-`~/src/klieg-worktrees/run-model`): the dependency, the outline-face adapter, the `TextRun` type,
-and the per-run scale node. Tasks 3, 5, 6, 8, 9 and 10 remain, and nothing blocks them.
+[Plan](plans/2026-08-30-run-model.md), all ten tasks done on `run-model` (worktree
+`~/src/klieg-worktrees/run-model`), unpushed. `fire()` takes `string | TextRun[]`; every fire routes
+through `@weasel-js/text`, and klieg's `layoutLine`, `layoutBlock` and `wrapBlock` are gone. 1435
+unit tests and all 40 Playwright baselines green — **no baseline moved**, because klieg feeds weasel
+its own advances and kerning through the `parser` hook, so the engine changed and the numbers did
+not.
 
-**The trap that cost this session most of its time, and the reason the root `package.json` now
-carries an `overrides` entry:** weasel's font registry is a module-global `Map`, so two physical
-copies of `@weasel-js/font` are two registries — klieg registers a face into one while `layoutRuns`
-reads the other, every run is skipped, and the symptom is zero lines and zero bounds with no
-warning at all. npm creates that split by default here, because `@weasel-js/ui` pins `font@1.0.3`
-for the dev labs and npm hoists it, nesting the two `1.3.0-pre.0` copies separately. The override
-forces one copy tree-wide; regenerating the lockfile is what makes it take. If layout ever returns
-empty, count the copies first: `find . -name package.json -path '*@weasel-js/font/*'`.
+**Two traps this slice actually hit, both silent, both now covered by a test.**
 
-The other correction to the plan: `registerFontOutlines` leaves a face `idle` and nothing parses
-until a glyph is requested — and `layoutRuns` is not that request. Prime it with `glyphOutline`,
-then wait on `subscribeGlyphReady`.
+A wrapped line's trailing space was being counted in the width the fit is scored on, which shrank
+every wrapped sign by up to 9%. Nothing in the suite caught it — it was found by running 18
+text/budget pairs through the old engine on `main` and the new one side by side. `LaidOut.width` now
+measures to the last non-blank slot. If the wrap ever looks small again, re-run that comparison
+before touching a baseline.
 
-klieg pins `1.3.0-pre.0` exactly and **must re-pin when a stable 1.3.0 ships** — klieg is itself
-published, so the pin reaches consumers.
+weasel's font registry is a module-global `Map`, so two physical copies of `@weasel-js/font` are two
+registries: klieg registers a face into one, `layoutRuns` reads the other, and every run is skipped
+with no warning at all — zero lines, zero bounds. npm split it by default here, because
+`@weasel-js/ui` pins `font@1.0.3` for the dev labs and npm hoists it. The root `package.json` now
+carries an `overrides` entry forcing one copy, and the lockfile had to be regenerated for it to
+take. `find . -name package.json -path '*@weasel-js/font/*'` must report exactly one. The CHANGELOG
+warns consumers about the same hazard.
 
-**Two things worth sending upstream, neither blocking.** `@weasel-js/text` declares
-`@weasel-js/font` as an ordinary dependency though its contract is a module-global registry; a peer
-dependency is what prevents the split above. And `layoutRuns` drops a run whose family resolves no
-metrics silently — the same warning it already emits per missing glyph, one level up, would name
-that failure on sight. Separately, `text` declares `geom` and `paint` as dependencies though its
-shipped JS imports neither, so every klieg consumer installs `polygon-clipping` — about 460K
-nothing will bundle.
+Registration lives in `loadFont`, so a face cannot reach layout unregistered. It is lazy: nothing
+parses until a glyph is asked for, and `layoutRuns` is not that ask — `registerFace` primes it with
+`glyphOutline` before waiting on `subscribeGlyphReady`.
+
+klieg pins `1.3.0-pre.0` exactly and **must re-pin when a stable 1.3.0 ships** — klieg is published,
+so the pin reaches consumers.
+
+**Two upstream asks, neither blocking, both still open on weasel `main`.** `@weasel-js/text` should
+declare `@weasel-js/font` as a peer dependency, since a module-global registry cannot survive
+duplication. And `layoutRuns` should warn when a run resolves no metrics
+(`packages/text/src/layout/layoutRuns.ts:505`) — that one warning would have made the split above
+self-diagnosing. Separately, `text` declares `geom` and `paint` as dependencies though its shipped
+JS imports neither, so every klieg consumer installs `polygon-clipping` for nothing.
 
 What klieg reads from it: `cells: LaidOutCell[]` per line, so slot `i` is `cells[i]` and klieg
 reconstructs nothing; and reading-order alignment, so klieg passes its own `start`/`center`/`end`

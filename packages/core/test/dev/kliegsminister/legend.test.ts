@@ -33,6 +33,11 @@ describe('kliegsminister legend', () => {
     expect(MEASURE_ONLY).toContain('bad');
   });
 
+  it('gives every row a swatch no other row carries', () => {
+    const colors = LEGEND.map((e) => e.color);
+    expect(new Set(colors).size).toBe(colors.length);
+  });
+
   it('labels every entry with something other than its key', () => {
     for (const entry of LEGEND) expect(entry.label.length).toBeGreaterThan(0);
   });

@@ -9,7 +9,7 @@ export const INK = {
   built: '#4d8fe0',
   builtAfter: '#a855f7',
   authored: '#2aa87a',
-  drawn: '#e08a20',
+  drawn: '#d44ba0',
   staged: '#5b6cff',
   added: '#e08a20',
   removed: 'rgba(209, 69, 59, 0.55)',

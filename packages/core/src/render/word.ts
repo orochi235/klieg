@@ -122,6 +122,7 @@ export class Word {
   readonly group = new THREE.Group();
   /** Sits between `group` (the viewport fit) and the letters — see the `transform` accessor. */
   private readonly inner = new THREE.Group();
+  private readonly sizeOf: ((slot: number) => number) | undefined;
   /** null where the glyph drew no outline (space, U+00A0, ZWJ); the slot still holds its index. */
   private readonly letters: (THREE.Group | null)[] = [];
   /** Layout x per letter. Pose x is an OFFSET onto this — overwriting it collapses the word. */
@@ -229,7 +230,9 @@ export class Word {
     debug?: WordDebugHooks,
     envMap: THREE.Texture | null = null,
     caches?: WordCaches,
+    sizeOf?: (slot: number) => number,
   ) {
+    this.sizeOf = sizeOf;
     this.envMap = envMap;
     this.group.add(this.inner);
 
@@ -639,9 +642,14 @@ export class Word {
     this.bodyLights.push(lightBase(look, bodyTint));
 
     const cell = new THREE.Group();
+    // A run's size sits below the cell: the pose overwrites `cell.scale` every frame, and
+    // `atRest()` calls a cell scaled off 1 unsettled — which silently stops the DOM layer.
+    const sized = new THREE.Group();
+    sized.scale.setScalar(this.sizeOf?.(i) ?? 1);
+    cell.add(sized);
     const bodyMesh = new THREE.Mesh(geo, material);
     this.bodyMeshes[i] = bodyMesh;
-    cell.add(bodyMesh);
+    sized.add(bodyMesh);
 
     let debugShapes: THREE.Shape[] | undefined;
 
@@ -721,10 +729,10 @@ export class Word {
       for (const geo of blueprint.lit) {
         const mesh = new THREE.Mesh(geo, decorMaterial);
         litMeshes.push(mesh);
-        cell.add(mesh);
+        sized.add(mesh);
       }
       this.litMeshes[i] = litMeshes;
-      for (const geo of blueprint.dark) cell.add(new THREE.Mesh(geo, darkMaterial));
+      for (const geo of blueprint.dark) sized.add(new THREE.Mesh(geo, darkMaterial));
     } else if (decoration && decoration.kind === 'chunks') {
       const decorMaterial = this.studioMaterial();
       applyLook(
@@ -749,7 +757,7 @@ export class Word {
           instanced.setMatrixAt(m, matrices[m] as THREE.Matrix4);
         }
         instanced.instanceMatrix.needsUpdate = true;
-        cell.add(instanced);
+        sized.add(instanced);
       }
     } else {
       this.decorMaterials.push(null);
@@ -1017,9 +1025,10 @@ export class Word {
     this.chunkGeo?.dispose();
     // An InstancedMesh owns an instanceMatrix buffer that clearing the group does not free.
     for (const cell of this.letters) {
-      for (const child of cell?.children ?? []) {
+      // Traverses rather than iterating: the meshes hang off the cell's scale node, not the cell.
+      cell?.traverse((child) => {
         if (child instanceof THREE.InstancedMesh) child.dispose();
-      }
+      });
     }
     this.group.clear();
     if (this.ownsCaches) this.caches.dispose();

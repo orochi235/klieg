@@ -77,8 +77,13 @@ function groups(word: Word): THREE.Group[] {
   return (word.group.children[0] as THREE.Group).children as THREE.Group[];
 }
 
+/** A letter's meshes hang off a scale node inside the cell, so the pose cannot overwrite a run's size. */
+function drawn(cell: THREE.Group): THREE.Group {
+  return cell.children[0] as THREE.Group;
+}
+
 function meshes(word: Word): THREE.Mesh[] {
-  return groups(word).map((g) => g.children[0] as THREE.Mesh);
+  return groups(word).map((g) => drawn(g).children[0] as THREE.Mesh);
 }
 
 /** Distinct material instances and meshes under a word, counted the way a draw call would be. */
@@ -470,7 +475,7 @@ describe('Word', () => {
   it('adds decoration alongside the body in the same group', () => {
     const word = new Word('A', stubFont(), TUBE, ROOMY);
 
-    expect(groups(word)[0]?.children.length).toBeGreaterThan(1);
+    expect(drawn(groups(word)[0] as THREE.Group).children.length).toBeGreaterThan(1);
   });
 
   it('drives body and decoration from one pose', () => {
@@ -486,7 +491,7 @@ describe('Word', () => {
 
     expect(cell.position.x).toBeCloseTo(rest + 3, 5);
     // The pose lands once, on the cell: body and decoration ride it rather than being posed apart.
-    for (const child of cell.children) expect(child.position.x).toBe(0);
+    for (const child of drawn(cell).children) expect(child.position.x).toBe(0);
   });
 
   it('fades body and decoration to their own base opacities', () => {
@@ -498,7 +503,7 @@ describe('Word', () => {
       NO_CTX,
     );
 
-    const group = groups(word)[0] as THREE.Group;
+    const group = drawn(groups(word)[0] as THREE.Group);
     const body = (group.children[0] as THREE.Mesh).material as THREE.MeshPhysicalMaterial;
     const decor = (group.children[1] as THREE.Mesh).material as THREE.MeshPhysicalMaterial;
     expect(body.opacity).toBeCloseTo(0.05, 10);
@@ -507,7 +512,7 @@ describe('Word', () => {
 
   it('disposes decoration materials and the decoration cache', () => {
     const word = new Word('A', stubFont(), TUBE, ROOMY);
-    const group = groups(word)[0] as THREE.Group;
+    const group = drawn(groups(word)[0] as THREE.Group);
     const decor = (group.children[1] as THREE.Mesh).material as THREE.MeshPhysicalMaterial;
     const spy = vi.spyOn(decor, 'dispose');
 
@@ -518,7 +523,7 @@ describe('Word', () => {
 
   /** The first tube run mesh of the word's first letter; the body mesh is child 0. */
   const firstRun = (word: Word) =>
-    ((groups(word)[0] as THREE.Group).children[1] as THREE.Mesh).geometry;
+    (drawn(groups(word)[0] as THREE.Group).children[1] as THREE.Mesh).geometry;
 
   it('re-uses a tube blueprint the previous word released', () => {
     const caches = new WordCaches();
@@ -546,7 +551,9 @@ describe('Word', () => {
   it('disposes every tube run geometry along with its per-letter blueprint', () => {
     const word = new Word('AB', stubFont(), TUBE, ROOMY);
     const spies = groups(word).map((group) =>
-      group.children.slice(1).map((child) => vi.spyOn((child as THREE.Mesh).geometry, 'dispose')),
+      drawn(group)
+        .children.slice(1)
+        .map((child) => vi.spyOn((child as THREE.Mesh).geometry, 'dispose')),
     );
 
     word.dispose();
@@ -568,7 +575,7 @@ describe('Word', () => {
       },
     };
     const word = new Word('A', stubFont(), flakes, ROOMY);
-    const instanced = (groups(word)[0] as THREE.Group).children[1] as THREE.InstancedMesh;
+    const instanced = drawn(groups(word)[0] as THREE.Group).children[1] as THREE.InstancedMesh;
 
     expect((instanced.material as THREE.Material).side).toBe(THREE.DoubleSide);
   });
@@ -587,7 +594,7 @@ describe('Word', () => {
       },
     };
     const word = new Word('A', stubFont(), chunks, ROOMY);
-    const instanced = (groups(word)[0] as THREE.Group).children[1] as THREE.InstancedMesh;
+    const instanced = drawn(groups(word)[0] as THREE.Group).children[1] as THREE.InstancedMesh;
     const spy = vi.spyOn(instanced, 'dispose');
 
     word.dispose();
@@ -617,8 +624,8 @@ describe('tube run seeding', () => {
 
   /** First position sample of every decoration mesh, in insertion order. */
   function decorFingerprint(cell: THREE.Group): string {
-    return cell.children
-      .slice(1)
+    return drawn(cell)
+      .children.slice(1)
       .flatMap((child) => {
         const pos = (child as THREE.Mesh).geometry.getAttribute('position');
         return [pos.getX(0), pos.getY(0), pos.getZ(0)];
@@ -659,7 +666,7 @@ describe('WordDebugHooks', () => {
       tubeMaterial: (which) => (which === 'lit' ? lit : dark),
     });
     const [cell] = groups(word);
-    const decorMeshes = (cell as THREE.Group).children.slice(1) as THREE.Mesh[];
+    const decorMeshes = drawn(cell as THREE.Group).children.slice(1) as THREE.Mesh[];
 
     expect(decorMeshes.length).toBeGreaterThan(0);
     for (const mesh of decorMeshes) {
@@ -672,7 +679,7 @@ describe('WordDebugHooks', () => {
       tubeMaterial: () => undefined,
     });
     const [cell] = groups(word);
-    const decor = (cell as THREE.Group).children[1] as THREE.Mesh;
+    const decor = drawn(cell as THREE.Group).children[1] as THREE.Mesh;
 
     expect(decor.material).toBeInstanceOf(THREE.MeshPhysicalMaterial);
   });
@@ -826,7 +833,7 @@ describe('flake seeding', () => {
     // children[0] is the body; the decoration meshes follow it.
     const decorSeed = (cell: THREE.Group) =>
       (
-        ((cell.children[1] as THREE.Mesh).material as THREE.MeshPhysicalMaterial).userData
+        ((drawn(cell).children[1] as THREE.Mesh).material as THREE.MeshPhysicalMaterial).userData
           .flake as FlakeUniforms
       ).uFlakeSeed.value;
 
@@ -1183,7 +1190,7 @@ describe('tint as a function', () => {
   function bodyColors(word: Word): number[] {
     const inner = word.group.children[0] as THREE.Group;
     return inner.children.map((cell) => {
-      const mesh = (cell as THREE.Group).children[0] as THREE.Mesh;
+      const mesh = drawn(cell as THREE.Group).children[0] as THREE.Mesh;
       return (mesh.material as THREE.MeshPhysicalMaterial).color.getHex();
     });
   }
@@ -1244,7 +1251,7 @@ describe('positional gradient bounds', () => {
 
   /** The lit and dark run material a letter's decoration meshes share. */
   function decorMaterial(cell: THREE.Group): THREE.Material {
-    return (cell.children[1] as THREE.Mesh).material as THREE.Material;
+    return (drawn(cell).children[1] as THREE.Mesh).material as THREE.Material;
   }
 
   /**
@@ -1285,7 +1292,7 @@ describe('positional gradient bounds', () => {
    */
   function runsOf(cell: THREE.Group): THREE.Box2 {
     const swept = new THREE.Box3();
-    for (const child of cell.children.slice(1)) {
+    for (const child of drawn(cell).children.slice(1)) {
       const geo = (child as THREE.Mesh).geometry;
       geo.computeBoundingBox();
       swept.union(geo.boundingBox as THREE.Box3);
@@ -1467,7 +1474,7 @@ describe('positional gradient bounds', () => {
 describe('frame-owned material properties', () => {
   /** The lit-run material of the first letter: the tube meshes follow the body in the cell. */
   function litTubeMaterial(word: Word): THREE.MeshPhysicalMaterial {
-    const runs = (groups(word)[0] as THREE.Group).children.slice(1);
+    const runs = drawn(groups(word)[0] as THREE.Group).children.slice(1);
     const materials = runs.map((run) => (run as THREE.Mesh).material as THREE.MeshPhysicalMaterial);
     const lit = materials.find((material) => material.emissive.getHex() !== 0x000000);
     if (!lit) throw new Error('the word has no lit tube run to measure');
@@ -1580,8 +1587,10 @@ describe('part pool', () => {
     const parts = word.partsOf('run');
     // Lit meshes come first in a cell and share one material; pool order walks the cells in turn.
     const lit = groups(word).flatMap((cell) => {
-      const litMaterial = (cell.children[1] as THREE.Mesh).material;
-      return (cell.children.slice(1) as THREE.Mesh[]).filter((m) => m.material === litMaterial);
+      const litMaterial = (drawn(cell).children[1] as THREE.Mesh).material;
+      return (drawn(cell).children.slice(1) as THREE.Mesh[]).filter(
+        (m) => m.material === litMaterial,
+      );
     });
     const extent = lit.map((mesh) => {
       mesh.geometry.computeBoundingBox();
@@ -1635,8 +1644,8 @@ describe('effects', () => {
   /** Lit runs in pool order: they follow the body in each cell and share that cell's material. */
   function runColorOf(word: Word, ordinal: number, channel: 'r' | 'g' | 'b' = 'r'): number {
     const meshes = groups(word).flatMap((cell) => {
-      const lit = (cell.children[1] as THREE.Mesh).material;
-      return (cell.children.slice(1) as THREE.Mesh[]).filter((m) => m.material === lit);
+      const lit = (drawn(cell).children[1] as THREE.Mesh).material;
+      return (drawn(cell).children.slice(1) as THREE.Mesh[]).filter((m) => m.material === lit);
     });
     const mesh = meshes[ordinal];
     if (!mesh) throw new Error(`the word has no run ${ordinal}`);
@@ -1648,8 +1657,8 @@ describe('effects', () => {
   /** The crawl buffer only exists where the look declared a gradient. */
   function crawlOf(word: Word, ordinal: number): number | null {
     const meshes = groups(word).flatMap((cell) => {
-      const lit = (cell.children[1] as THREE.Mesh).material;
-      return (cell.children.slice(1) as THREE.Mesh[]).filter((m) => m.material === lit);
+      const lit = (drawn(cell).children[1] as THREE.Mesh).material;
+      return (drawn(cell).children.slice(1) as THREE.Mesh[]).filter((m) => m.material === lit);
     });
     const mesh = meshes[ordinal];
     if (!mesh) throw new Error(`the word has no run ${ordinal}`);
@@ -1946,7 +1955,7 @@ describe('effects', () => {
       NO_CTX,
     );
 
-    const run = cell.children[1] as THREE.Mesh;
+    const run = drawn(cell).children[1] as THREE.Mesh;
     expect(cell.position.x).toBeCloseTo(rest + 1, 10);
     expect([run.position.x, run.position.y]).toEqual([0, 0.25]);
   });
@@ -1976,6 +1985,55 @@ describe('readout', () => {
     word.regroup((l) => l.index === 0, 'line');
 
     expect(word.readout().chars).toEqual(['A']);
+  });
+});
+
+describe("a run's size", () => {
+  /** Halves the second letter, the way a `size: 0.5` run does. */
+  const HALF = (slot: number) => (slot === 1 ? 0.5 : 1);
+
+  function sizedWord(): Word {
+    return new Word(
+      'AB',
+      stubFont(),
+      'gold',
+      ROOMY,
+      false,
+      undefined,
+      undefined,
+      null,
+      undefined,
+      HALF,
+    );
+  }
+
+  it('scales a run below the cell the pose writes', () => {
+    const cell = groups(sizedWord())[1] as THREE.Group;
+
+    expect(cell.scale.x).toBe(1);
+    expect(drawn(cell).scale.x).toBeCloseTo(0.5);
+  });
+
+  it('keeps a sized letter at rest, so the selectable layer still aligns', () => {
+    const word = sizedWord();
+    word.apply(
+      timelineOf(() => ({})),
+      50,
+      NO_CTX,
+    );
+
+    expect(word.atRest()).toBe(true);
+  });
+
+  it('survives a pose, which writes the cell scale every frame', () => {
+    const word = sizedWord();
+    word.apply(
+      timelineOf(() => ({})),
+      50,
+      NO_CTX,
+    );
+
+    expect(drawn(groups(word)[1] as THREE.Group).scale.x).toBeCloseTo(0.5);
   });
 });
 

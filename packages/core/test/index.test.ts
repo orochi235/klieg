@@ -182,7 +182,8 @@ function stubCanvas(box: { left: number; top: number; width: number; height: num
 }
 
 function firstMesh(): THREE.Mesh {
-  return firstCell().children[0] as THREE.Mesh;
+  // A letter's meshes hang off the cell's scale node, which carries the run's size.
+  return (firstCell().children[0] as THREE.Group).children[0] as THREE.Mesh;
 }
 
 /** Every material hanging off the fired word, a decoration's own included. */

@@ -34,14 +34,13 @@ to `@weasel-js/geom` and `@weasel-js/paint` are type-only in practice. Nothing o
 the DOM at import time, and the package's own suite has a block — *"layoutRuns from a font face
 alone"* — covering the case klieg is: font bytes, no atlas, no canvas.
 
-**`@weasel-js/text` is not on npm yet.** It 404s while the other 13 weasel packages are at 1.2.0 —
-not a config problem: it was extracted after 1.2.0 published, and the changesets version PR that
-would release it has been open since 2026-08-24. Merging that PR is the fix, and `@weasel-js/core`
-already depends on `text` in-tree, so it cannot ship again without it either. klieg is itself
-published and cannot depend on a package a consumer's install cannot resolve, so **this slice is
-blocked until that release lands.** One wrinkle to expect: the release publishes via OIDC trusted
-publishing, which is configured per package, so a brand-new package may need one manual first
-publish to bootstrap.
+**It is published, as a prerelease.** `@weasel-js/text` is on npm at `1.2.0` and `1.3.0-pre.0`,
+the latter under the `pre` tag, and `font` / `geom` / `paint` all match at `1.3.0-pre.0`. Only the
+prerelease carries what klieg reads — `1.2.0` predates cells and reading-order alignment.
+
+**Whether klieg pins a prerelease is an open decision.** klieg is itself published, so a `pre`
+dependency reaches every consumer transitively. Either klieg waits for a stable `1.3.0`, or it pins
+`1.3.0-pre.0` exactly and re-pins on release.
 
 **And this is a real change to klieg's dependency posture,** which is one runtime dependency today.
 Check what `geom` actually pulls at runtime before merging; the report of it being type-only is
@@ -135,10 +134,16 @@ builds no start/end→left/right mapping.
 Direction is an input and is never sniffed, because that package has no DOM. klieg goes on reading
 `getComputedStyle(box).direction` and passes what it found.
 
-**How far RTL goes: alignment only.** The walk still runs forward over code points, so a run's order
-does not reverse, and there is no bidi. Do not design against reversal — if it lands it will be
-said so. Even then it would not mean Arabic works: Hebrew needs no shaping, but Arabic needs GSUB
-joining forms that this walk does not apply.
+**Bidi is available, and opt-in.** `layoutRuns` declares a `BidiResolver` interface — `analyze`
+per paragraph, `reorder` per line, `mirror` for L4 — and deliberately does not depend on an
+implementation, so a consumer rendering no right-to-left text never installs the Unicode tables.
+`@weasel-js/bidi` satisfies it structurally and is published alongside.
+
+So klieg *can* have real bidi by installing that package and passing a resolver; without one, cells
+carry `level: 0` and the text is laid out logically. That is a later decision, not this slice's —
+but the cell contract above must be honoured now, or turning it on later is a rewrite rather than a
+switch. Note that reordering still would not make Arabic correct: it needs GSUB joining forms this
+walk does not apply.
 
 **The two alignments split differently than klieg's do.** weasel's single `align` is applied per
 line against `maxWidth` — that is klieg's `lineAlign`, and it comes for free. klieg's block `align`
@@ -155,10 +160,16 @@ including the ones that draw nothing, because `letterCount`, `charOf`, the regro
 the selectable DOM layer all index by slot.
 
 `LaidOutLineBox` now carries `cells: LaidOutCell[]` and `srcEnd`, where a cell is
-`{ srcIndex, srcEnd, cp, x, drawsInk }`. **Slot `i` is `cells[i]`; klieg builds no reconstruction.**
-`caretXs` and `caretIndices` are gone — cells subsume both. A code point no tier can serve takes a
-zero-advance cell rather than vanishing. A newline still has no cell: it separates cells rather than
-being one, and `srcEnd` is what a blank line carries instead.
+`{ srcIndex, srcEnd, cp, x, advance, level, drawsInk }`. **Slot `i` is `cells[i]`; klieg builds no
+reconstruction.** `caretXs` and `caretIndices` are gone — cells subsume both. A code point no tier
+can serve takes a zero-advance cell rather than vanishing. A newline still has no cell: it separates
+cells rather than being one, and `srcEnd` is what a blank line carries instead. Every line gets a
+box including empty ones, so indices line up with the wrap.
+
+**A cell's right edge is `x + advance`, never the next cell's `x`.** Cells stay in logical order and
+their x values do not once a bidi engine reorders a line — that is what `advance` and `level` are
+for. Any klieg code deriving a line's extent by walking cell positions must use the advance, or it
+silently produces garbage the day RTL text arrives.
 
 **`drawsInk` is a property of the code point and the face, not of what got painted.** Deciding it
 from whether a quad was emitted is unstable — it flips when a dynamic bake lands or an outline
@@ -166,16 +177,12 @@ threshold is crossed, so identical text would report different slots on two call
 for klieg: a zero-advance combining mark has `drawsInk: true`, because it inks without advancing.
 Any line-ranging that assumes no advance implies no ink is wrong, in both libraries.
 
-## Blocked on
+## Still to settle
 
 Two upstream changes, in this order. Neither is klieg's to make.
 
-1. **weasel's changesets release PR merges**, putting `@weasel-js/text` on npm.
-2. **`text/cell-per-code-point` merges.** The cell API and reading-order alignment are both built on
-   that branch, but it is neither merged nor published.
-
-Until both land there is nothing to implement against: the dependency will not install, and the
-seam klieg reads does not exist yet.
+Nothing, since `1.3.0-pre.0` published — the dependency installs and the whole seam klieg reads is
+in it. One decision remains before implementation: pin the prerelease, or wait for a stable `1.3.0`.
 
 ## Testing
 

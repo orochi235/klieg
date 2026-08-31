@@ -580,12 +580,16 @@ Roughly in order of value; the items are independent of each other.
   (`'start' | 'center' | 'end'`), and the `selectable` layer follows for free — `projectLetters`
   reads the placement `placeBlock` already shifted.
 
-  **What is left is `lineAlign`'s default, and it is a decision rather than a task.** It is
-  `'center'`; `'start'` is what an acrostic wants, because centred lines scatter its initials across
-  as many x positions as there are lines. Changing it moves every multi-line baseline — a breaking
-  visual change, and a minor. `apps/lab/test/visual.spec.ts` is the guard, comparing span boxes to
-  the drawing buffer's ink (centres within 10px, bounds within 8), and it is the test that has to be
-  re-pointed per alignment.
+  **`lineAlign` now defaults to `'start'`** (`2491378`, unreleased in 0.10.0), because centred lines
+  scatter an acrostic's initials across as many x positions as there are lines. A single-line word
+  does not move — ranging it and then re-centring the block lands where centring does — so all 40
+  Playwright baselines passed unchanged, and no image baseline covers a multi-line block's
+  horizontal placement. The stage and placement unit tests are the guard.
+
+  **`apps/lab`'s share links still decode a missing `lines` to `'center'`** (`show-config.ts:286`),
+  so a link written before the change still renders as written, and a lab link now disagrees with
+  a bare `fire()` of the same text. `2491378` did not touch the lab, so whether that split is
+  wanted has not been decided — aligning them re-renders every existing link.
 
   **The neon does not render smaller than the fallback, and the trim knob would be the wrong fix.**
   Measured by `node spikes/fallback-gap.mjs`, which fires into an anchor beside the heading it

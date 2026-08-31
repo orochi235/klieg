@@ -2,6 +2,26 @@
 
 ## 0.9.4
 
+### One word, several fonts
+
+`fire()` takes a list of styled runs as well as a string, so a word can change font, size or
+color partway through: `fire([{ text: 'BIG ' }, { text: 'MONEY', size: 1.4, tint: 0xff2d6f }])`.
+Runs kern across their boundaries and share one baseline. There is no per-run `look` — bloom is a
+whole-frame pass, so one run cannot own it.
+
+Layout now comes from `@weasel-js/text`; klieg's own line, block and wrap layout are gone. Wrapping
+still picks the arrangement that renders largest, and still breaks at the same places. klieg keeps
+its own glyph geometry — the layout engine is used for positions only.
+
+The dependency is pinned at the exact prerelease `1.3.0-pre.0`, and **must be re-pinned when
+`1.3.0` ships**: klieg is published, so a range on a prerelease would float every consumer onto
+later ones.
+
+That engine resolves fonts through a module-global registry, so a project that ends up with two
+copies of `@weasel-js/font` gets two registries and klieg silently lays out nothing. If text stops
+appearing after an upgrade, check for a duplicate with `npm ls @weasel-js/font` and collapse it
+with an `overrides` entry.
+
 ### Several fonts per instance, and the ones already on the machine
 
 **`fonts`** replaces `fontUrl`, which still works and warns. An instance holds any number of

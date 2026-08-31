@@ -146,8 +146,6 @@ export class Word {
   private readonly envMap: THREE.Texture | null;
   /** Every material this word made carrying the studio, so a lighting turn can reach them all. */
   private readonly envMaterials: THREE.MeshPhysicalMaterial[] = [];
-  /** Font units to em, so a regroup can re-place the survivors on the same scale. */
-  private readonly scaleToEm: number;
   private readonly budget: Budget;
   private fit: Fit;
   /** The fit before the last regroup; `setFitProgress` interpolates between this and `fitTo`. */
@@ -269,7 +267,6 @@ export class Word {
           )
         : null;
 
-    this.scaleToEm = EM / font.unitsPerEm;
     const runs = styledRunsOf(text, this.family);
     const laid = wrap
       ? wrapRuns(runs, budget, this.layoutOpts())

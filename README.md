@@ -505,7 +505,7 @@ inside it. It defaults to `warmLook`, resolves once the linking draw is issued, 
 await bk.warm('neon'); // then swap the page, then fire
 ```
 
-`fire(text, options)`:
+`fire(text, options)` — `text` is a string, or a list of styled runs (below):
 
 | field | default | |
 |---|---|---|
@@ -603,6 +603,29 @@ await bk.fire('BIG\nMONEY');
 type bigger — short text is already at the scale cap and stays on one line. Words are never
 split, and the viewport budget means a block realistically runs to two or three lines before
 height binds; klieg renders banners, not paragraphs.
+
+## One word, several fonts
+
+`fire()` takes a list of runs as well as a string, so a word can change font, size or color
+partway through:
+
+```js
+await bk.fire([{ text: 'BIG ' }, { text: 'MONEY', font: 'script', size: 1.4, tint: 0xff2d6f }]);
+```
+
+| field | default | |
+|---|---|---|
+| `text` | required | the characters this run covers |
+| `font` | the fire's `font` | a name from the instance's `fonts` |
+| `size` | `1` | multiple of the surrounding size |
+| `tint` | the fire's `tint` | recolors only this run's letters |
+
+Runs kern across their boundaries and sit on one baseline, so a run is a span *within* a word
+rather than a word of its own. Everything a fire does to a word — motion, stages, selectable
+text — treats a run list exactly as it treats the same text as a string.
+
+There is no per-run `look`. Bloom is a whole-frame pass, so a single run asking for `neon` would
+promote the glow for the whole effect.
 
 ## Holding until dismissed
 

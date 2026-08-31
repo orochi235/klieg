@@ -36,12 +36,6 @@ function stubLoadedFont(): LoadedFont {
   };
 }
 
-// Every glyph is 10 wide; the pair A|V is kerned 3 tighter.
-const metrics = {
-  advanceOf: (ch: string) => (ch === ' ' ? 5 : 10),
-  kernOf: (a: string, b: string) => (a === 'A' && b === 'V' ? -3 : 0),
-};
-
 describe('fitScale', () => {
   it('fits to width when the word is wide', () => {
     expect(fitScale(100, 10, { width: 62, height: 100 })).toBeCloseTo(0.62, 5);

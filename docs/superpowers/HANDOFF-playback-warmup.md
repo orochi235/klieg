@@ -48,8 +48,7 @@ the layout, and klieg takes it as a runtime dependency and deletes its own `layo
 only**: its outline tier emits SVG `d` strings, and klieg keeps its own glyph pipeline rather than
 reopening the nesting problem A just fixed.
 
-[Plan](plans/2026-08-30-run-model.md), all ten tasks done on `run-model` (worktree
-`~/src/klieg-worktrees/run-model`), unpushed. `fire()` takes `string | TextRun[]`; every fire routes
+[Plan](plans/2026-08-30-run-model.md), all ten tasks done, merged to `main`. `fire()` takes `string | TextRun[]`; every fire routes
 through `@weasel-js/text`, and klieg's `layoutLine`, `layoutBlock` and `wrapBlock` are gone. 1435
 unit tests and all 40 Playwright baselines green — **no baseline moved**, because klieg feeds weasel
 its own advances and kerning through the `parser` hook, so the engine changed and the numbers did
@@ -85,29 +84,6 @@ duplication. And `layoutRuns` should warn when a run resolves no metrics
 self-diagnosing. Separately, `text` declares `geom` and `paint` as dependencies though its shipped
 JS imports neither, so every klieg consumer installs `polygon-clipping` for nothing.
 
-What klieg reads from it: `cells: LaidOutCell[]` per line, so slot `i` is `cells[i]` and klieg
-reconstructs nothing; and reading-order alignment, so klieg passes its own `start`/`center`/`end`
-through with a `direction` it reads off the box. Baseline shift is in too.
-
-Three contracts that produce silent garbage if broken, all in the plan's preamble: a cell's right
-edge is `x + advance` and never the next cell's `x`; `drawsInk` is a property of the code point and
-face, not of whether geometry was emitted; and `registerFontOutlines` returns before the face is
-usable.
-
-Bidi is available but out of scope — `layoutRuns` takes a `BidiResolver` and `@weasel-js/bidi`
-implements it, so it is a later switch provided the cell contract is honoured now.
-
-The module-global registry is not being fixed; klieg namespaces family names per instance to dodge
-it. weasel's `align` turns out to be klieg's `lineAlign`; klieg's block `align` is a 3D viewport
-translate that stays klieg's.
-
-klieg keeps its own `wrapBlock`. Its search is not greedy — it maximises `fitScale`, which is what
-makes a sign fill its box — so it stays and scores each candidate by measuring it through
-`layoutRuns`.
-
-Per-run `look` was cut: bloom is a whole-frame pass, so one run asking for `neon` promotes it for
-the whole effect.
-
-Two traps live in `render/word.ts`, now at `:969` and `:827`, and three shipped behaviours the
-engine swap can silently drop — reading-order alignment under RTL, per-line alignment, and a letter
-slot for every code point including the blank ones. The design carries all five.
+Bidi stays out of scope, and is still a switch rather than a rewrite: `layoutRuns` takes a
+`BidiResolver`, `@weasel-js/bidi` implements it, and klieg honours the cell contract that makes
+turning it on cheap — a cell's right edge is `x + advance`, never the next cell's `x`.

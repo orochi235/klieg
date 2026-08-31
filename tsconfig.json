@@ -5,6 +5,7 @@
     { "path": "packages/core/tsconfig.test.json" },
     { "path": "packages/core/dev/tube-lab" },
     { "path": "packages/core/dev/composition-lab" },
+    { "path": "packages/core/dev/kliegsminister" },
     { "path": "apps/lab" }
   ]
 }

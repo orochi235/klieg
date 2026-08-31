@@ -38,7 +38,7 @@ unpack and then hit an opentype.js `cmap` limit. And `nest()` classified counter
 depth, which fills in any letter a serif face draws as overlapping same-wound strokes; it reads
 winding now.
 
-## B — the run model: **designed, blocked upstream**
+## B — the run model: **designed and planned, not started**
 
 [Design](specs/2026-08-30-run-model-design.md). `fire(TextRun[])` carrying tint, font and size.
 
@@ -48,14 +48,21 @@ the layout, and klieg takes it as a runtime dependency and deletes its own `layo
 only**: its outline tier emits SVG `d` strings, and klieg keeps its own glyph pipeline rather than
 reopening the nesting problem A just fixed.
 
-**Blocked on two upstream merges**, neither klieg's to make: weasel's changesets release PR
-(`@weasel-js/text` is not on npm, and klieg is published, so it cannot depend on it yet), and
-weasel's `text/cell-per-code-point` branch, which carries both things klieg reads.
+[Plan](plans/2026-08-30-run-model.md), ten tasks. **Unblocked:** `@weasel-js/text@1.3.0-pre.0` is
+published and carries everything klieg reads. klieg pins that exact prerelease and **must re-pin
+when a stable 1.3.0 ships** — klieg is itself published, so the pin reaches consumers.
 
-What that branch gives klieg: a `cells: LaidOutCell[]` per line, so slot `i` is `cells[i]` and klieg
+What klieg reads from it: `cells: LaidOutCell[]` per line, so slot `i` is `cells[i]` and klieg
 reconstructs nothing; and reading-order alignment, so klieg passes its own `start`/`center`/`end`
-through with a `direction` it reads off the box. Baseline shift landed earlier and is in this slice
-too. RTL goes as far as alignment only — the walk does not reverse run order and there is no bidi.
+through with a `direction` it reads off the box. Baseline shift is in too.
+
+Three contracts that produce silent garbage if broken, all in the plan's preamble: a cell's right
+edge is `x + advance` and never the next cell's `x`; `drawsInk` is a property of the code point and
+face, not of whether geometry was emitted; and `registerFontOutlines` returns before the face is
+usable.
+
+Bidi is available but out of scope — `layoutRuns` takes a `BidiResolver` and `@weasel-js/bidi`
+implements it, so it is a later switch provided the cell contract is honoured now.
 
 The module-global registry is not being fixed; klieg namespaces family names per instance to dodge
 it. weasel's `align` turns out to be klieg's `lineAlign`; klieg's block `align` is a 3D viewport

@@ -1,4 +1,10 @@
-import type { OutlineFace } from '@weasel-js/font';
+import {
+  glyphOutline,
+  type OutlineFace,
+  outlineStatus,
+  registerFontOutlines,
+  subscribeGlyphReady,
+} from '@weasel-js/font';
 import type { LoadedFont } from './font.js';
 
 /**
@@ -32,4 +38,45 @@ export function faceOf(loaded: LoadedFont): LayoutFace {
     advanceOf: (cp) => loaded.metrics.advanceOf(charOf(cp)) / upem,
     kernOf: (left, right) => loaded.metrics.kernOf(charOf(left), charOf(right)) / upem,
   };
+}
+
+/** weasel's registry is module-global, so the instance number is what keeps two apart. */
+export function familyFor(instance: number, font: string): string {
+  return `klieg-${instance}-${font}`;
+}
+
+const WEIGHT = 400;
+const STYLE = 'normal';
+
+/**
+ * Registers a face and resolves once it can serve a layout. Registration parses nothing on its own
+ * and `layoutRuns` never starts it, so the ask below is what begins the load rather than a warm-up.
+ */
+export async function registerFace(
+  instance: number,
+  font: string,
+  loaded: LoadedFont,
+): Promise<string> {
+  const family = familyFor(instance, font);
+  if (outlineStatus(family, WEIGHT, STYLE) === 'ready') return family;
+  registerFontOutlines(family, {}, loaded.bytes, { parser: () => faceOf(loaded) });
+  await ready(family);
+  return family;
+}
+
+function ready(family: string): Promise<void> {
+  glyphOutline(family, WEIGHT, STYLE, 'A'.codePointAt(0) as number);
+  if (outlineStatus(family, WEIGHT, STYLE) === 'ready') return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const stop = subscribeGlyphReady(() => {
+      const status = outlineStatus(family, WEIGHT, STYLE);
+      if (status === 'ready') {
+        stop();
+        resolve();
+      } else if (status === 'failed') {
+        stop();
+        reject(new Error(`klieg: ${family} failed to register with the layout engine`));
+      }
+    });
+  });
 }

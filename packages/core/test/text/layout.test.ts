@@ -148,6 +148,15 @@ describe('wrapRuns', () => {
     }
   });
 
+  it('measures a wrapped line to its last letter, not past its trailing space', () => {
+    // The engine's own bounds count that space, which shrinks every wrapped sign by one advance.
+    const laid = wrapRuns(styledRunsOf('AAAA BBBB', family), { width: 4, height: 4 }, OPTS);
+
+    expect(laid.lines).toHaveLength(2);
+    // Four glyphs at 0.6em. Counting the trailing space would make it 2.65.
+    expect(laid.width).toBeCloseTo(2.4);
+  });
+
   it('gives every code point a slot under wrap, the blank one included', () => {
     const laid = wrapRuns(styledRunsOf('A B', family), { width: 4, height: 4 }, OPTS);
 

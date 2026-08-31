@@ -101,9 +101,26 @@ export function layoutRunsForKlieg(runs: StyledRun[], opts: LayoutRunsOpts): Lai
   return {
     slots,
     lines: laid.lines.map((l) => ({ baselineY: l.baselineY, x0: l.x0, x1: l.x1 })),
-    width: laid.bounds.width,
+    width: trimmedWidth(slots, laid.lines.length),
     height: laid.bounds.height,
   };
+}
+
+/**
+ * The widest line measured to its last non-blank slot. Not `bounds.width`, which counts a wrapped
+ * line's trailing space: scoring the fit on that shrinks every wrapped sign by one space advance.
+ */
+function trimmedWidth(slots: Slot[], lineCount: number): number {
+  let widest = 0;
+  for (let line = 0; line < lineCount; line++) {
+    const onLine = slots.filter((slot) => slot.line === line);
+    const first = onLine[0];
+    if (!first) continue;
+    let end: number | null = null;
+    for (const slot of onLine) if (!/\s/.test(slot.char)) end = slot.x + slot.advance;
+    if (end !== null) widest = Math.max(widest, end - first.x);
+  }
+  return widest;
 }
 
 /** Wide enough that nothing wraps, so one layout reveals every natural word position. */

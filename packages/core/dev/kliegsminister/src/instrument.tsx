@@ -453,6 +453,11 @@ export const junction = defineInstrument<CornerScene, Config>({
         stroke(ctx, state.contour, state.centre, INK.contour, 1.2 / zoom);
         stroke(ctx, state.replaced, state.centre, INK.replaced, 8 / zoom);
       }),
+      layer('staged', (ctx, { state, zoom }) => {
+        for (const span of state.staged) {
+          stroke(ctx, span, state.centre, INK.staged, 1.6 / zoom);
+        }
+      }),
       layer('built', (ctx, { state, zoom }) => {
         for (const run of state.carried) {
           const ink = run.side === 'after' ? INK.builtAfter : INK.built;
@@ -460,11 +465,6 @@ export const junction = defineInstrument<CornerScene, Config>({
           run.points.forEach((p, i) => {
             if (run.authored[i]) dot(ctx, p, state.centre, INK.authored, 2.2 / zoom);
           });
-        }
-      }),
-      layer('staged', (ctx, { state, zoom }) => {
-        for (const span of state.staged) {
-          stroke(ctx, span, state.centre, INK.staged, 1.6 / zoom);
         }
       }),
       layer('ghost', (ctx, { state, zoom }) => {

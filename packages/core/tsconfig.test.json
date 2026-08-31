@@ -1,8 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   // `types` names node because reports.test.ts reads the lab font off disk; vitest resolves
-  // node: specifiers without it, tsc does not.
-  "compilerOptions": { "noEmit": true, "types": ["node"] },
+  // node: specifiers without it, tsc does not. `jsx` has to match the labs': without it tsc
+  // computes a different output name for a lab's .tsx and reports TS6305 against a file that is
+  // there and current.
+  "compilerOptions": { "noEmit": true, "jsx": "react-jsx", "types": ["node"] },
   "include": ["test"],
   "references": [
     { "path": "./tsconfig.json" },

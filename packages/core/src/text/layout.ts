@@ -1,3 +1,11 @@
+import {
+  type LayoutRunsOpts,
+  layoutRuns,
+  resolveRuns,
+  resolveTextStyle,
+  type StyledRun,
+} from '@weasel-js/text';
+
 export interface GlyphMetrics {
   advanceOf(char: string): number;
   kernOf(left: string, right: string): number;
@@ -165,4 +173,50 @@ export function wrapBlock(
 
   const lines = (best as { text: string[] }).text.map((line) => layoutLine(line, metrics));
   return { lines, width: Math.max(0, ...lines.map((l) => l.width)) };
+}
+
+/** One code point of a fired word, in klieg's slot order. */
+export interface Slot {
+  char: string;
+  /** Pen x at this slot's origin, in em. */
+  x: number;
+  /** This slot's own width, in em. Its right edge is `x + advance` — never the next slot's `x`. */
+  advance: number;
+  line: number;
+  /** From the code point and the face, not from whether geometry was emitted. */
+  drawsInk: boolean;
+}
+
+export interface LaidOut {
+  slots: Slot[];
+  lines: { baselineY: number; x0: number; x1: number }[];
+  /** In em. */
+  width: number;
+  height: number;
+}
+
+/**
+ * Every fire routes through here, so a string and a one-run list take the same path. Slot `i` is
+ * `cells[i]`: weasel gives every code point a cell, and klieg reconstructs nothing.
+ */
+export function layoutRunsForKlieg(runs: StyledRun[], opts: LayoutRunsOpts): LaidOut {
+  const laid = layoutRuns(resolveRuns(runs, resolveTextStyle()), opts);
+  const slots: Slot[] = [];
+  laid.lines.forEach((line, index) => {
+    for (const cell of line.cells) {
+      slots.push({
+        char: String.fromCodePoint(cell.cp),
+        x: cell.x,
+        advance: cell.advance,
+        line: index,
+        drawsInk: cell.drawsInk,
+      });
+    }
+  });
+  return {
+    slots,
+    lines: laid.lines.map((l) => ({ baselineY: l.baselineY, x0: l.x0, x1: l.x1 })),
+    width: laid.bounds.width,
+    height: laid.bounds.height,
+  };
 }

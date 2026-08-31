@@ -1,5 +1,41 @@
-import { describe, expect, it } from 'vitest';
-import { fitScale, layoutBlock, layoutLine, wrapBlock } from '../../src/text/layout.js';
+import { beforeAll, describe, expect, it } from 'vitest';
+import type { LoadedFont } from '../../src/text/font.js';
+import {
+  fitScale,
+  LINE_HEIGHT_EM,
+  layoutBlock,
+  layoutLine,
+  layoutRunsForKlieg,
+  type Slot,
+  wrapBlock,
+} from '../../src/text/layout.js';
+import { registerFace } from '../../src/text/outline-face.js';
+import { styledRunsOf } from '../../src/text/runs.js';
+
+const UPEM = 1000;
+
+/** Every glyph one advance wide, a space a quarter; the pair A|V kerned tighter. */
+function stubLoadedFont(): LoadedFont {
+  const font = {
+    unitsPerEm: UPEM,
+    ascender: 800,
+    charToGlyph: (ch: string) => ({
+      advanceWidth: ch === ' ' ? 250 : 600,
+      getPath: () => ({ commands: ch === ' ' ? [] : [{ type: 'M', x: 0, y: 0 }] }),
+    }),
+    getKerningValue: () => 0,
+  } as unknown as LoadedFont['font'];
+  return {
+    font,
+    unitsPerEm: UPEM,
+    metrics: {
+      advanceOf: (ch) => (ch === ' ' ? 250 : 600),
+      kernOf: (a, b) => (a === 'A' && b === 'V' ? -30 : 0),
+    },
+    key: '/stub.ttf',
+    bytes: new ArrayBuffer(8),
+  };
+}
 
 // Every glyph is 10 wide; the pair A|V is kerned 3 tighter.
 const metrics = {
@@ -165,5 +201,45 @@ describe('fitScale', () => {
   it('returns exactly the cap value for a zero-size word, custom cap included', () => {
     expect(fitScale(0, 0, { width: 10, height: 10 })).toBe(2.2);
     expect(fitScale(0, 0, { width: 10, height: 10, cap: 5 })).toBe(5);
+  });
+});
+
+describe('layoutRunsForKlieg', () => {
+  const OPTS = { maxWidth: 1e6, lineHeight: LINE_HEIGHT_EM, align: 'left' as const };
+  let family: string;
+
+  beforeAll(async () => {
+    family = await registerFace(900, 'display', stubLoadedFont());
+  });
+
+  it('gives every code point a slot, including the blank ones', () => {
+    const laid = layoutRunsForKlieg(styledRunsOf('A B', family), OPTS);
+
+    expect(laid.slots.map((s) => s.char)).toEqual(['A', ' ', 'B']);
+    expect(laid.slots.map((s) => s.drawsInk)).toEqual([true, false, true]);
+  });
+
+  it("takes a slot's right edge from its own advance, never the next slot's x", () => {
+    const laid = layoutRunsForKlieg(styledRunsOf('AB', family), OPTS);
+    const first = laid.slots[0] as Slot;
+
+    expect(first.advance).toBeGreaterThan(0);
+    expect(first.x + first.advance).toBeGreaterThan(first.x);
+  });
+
+  it("puts a newline's two sides on different lines and gives it no slot", () => {
+    const laid = layoutRunsForKlieg(styledRunsOf('A\nB', family), OPTS);
+
+    expect(laid.slots.map((s) => s.char)).toEqual(['A', 'B']);
+    expect(laid.slots[0]?.line).toBe(0);
+    expect(laid.slots[1]?.line).toBe(1);
+  });
+
+  it('lays a string and a single run of the same text out identically', () => {
+    const fromString = layoutRunsForKlieg(styledRunsOf('AB', family), OPTS);
+    const fromRun = layoutRunsForKlieg(styledRunsOf([{ text: 'AB' }], family), OPTS);
+
+    expect(fromRun.slots.map((s) => s.x)).toEqual(fromString.slots.map((s) => s.x));
+    expect(fromRun.width).toBeCloseTo(fromString.width);
   });
 });

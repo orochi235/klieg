@@ -7,7 +7,8 @@ export interface RasterProps {
   rows: number[];
   /** 0..1 within the pass, drawn as a playhead. */
   at: number;
-  /** The kinds `rows` was filtered to, so an empty pool can name itself rather than draw nothing. */
+  /** The kinds `rows` was filtered to, so an empty pool can name itself rather than draw
+   * nothing. */
   kinds: string[];
 }
 

@@ -18,17 +18,21 @@ import {
   type PieceKind,
 } from './pieces.js';
 
+/** Whether the real pool the rail asked for is what the panels are actually drawing. */
+export type RealPoolStatus = 'ready' | 'loading' | 'failed';
+
 export interface RailProps {
   composition: Composition;
   onChange: (next: Composition) => void;
   counts: Record<PartKind, number>;
+  realPoolStatus: RealPoolStatus;
 }
 
 const KINDS: PieceKind[] = ['flicker', 'hue', 'chase', 'lamp'];
 
 const layerBuilds = (layer: EffectLayer): boolean => layerPiece(layer) !== null;
 
-export function Rail({ composition, onChange, counts }: RailProps) {
+export function Rail({ composition, onChange, counts, realPoolStatus }: RailProps) {
   const gradient = hasGradient(composition.look);
 
   const setLayer = (id: string, patch: Partial<EffectLayer>) =>
@@ -111,6 +115,13 @@ export function Rail({ composition, onChange, counts }: RailProps) {
           <option value="synthetic">synthetic</option>
         </select>
       </label>
+      {composition.pool === 'real' && realPoolStatus !== 'ready' ? (
+        <p className="cl-warn">
+          {realPoolStatus === 'loading'
+            ? 'font still loading — panels are drawing the synthetic pool for now'
+            : 'font failed to load — panels are drawing the synthetic pool'}
+        </p>
+      ) : null}
       <p className="cl-note">
         run {counts.run}, body {counts.body}, chunk {counts.chunk}
       </p>

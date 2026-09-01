@@ -201,7 +201,8 @@ export interface BuildOptions {
   lampSource?: LampSourceKind;
 }
 
-/** A persisted layer can predate a param, so every read carries the default it was authored with. */
+/** A persisted layer can predate a param, so every read carries the default it was authored
+ * with. */
 function num(params: Record<string, number>, key: string, fallback: number): number {
   const v = params[key];
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;

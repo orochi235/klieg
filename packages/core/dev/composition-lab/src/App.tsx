@@ -8,7 +8,7 @@ import { CHANNELS, type Channel, Plot } from './Plot.js';
 import { Preview } from './Preview.js';
 import { restore, save } from './persist.js';
 import { poolCounts, realPool, syntheticPool } from './pool.js';
-import { Rail } from './Rail.js';
+import { Rail, type RealPoolStatus } from './Rail.js';
 import { Raster } from './Raster.js';
 import { samplePass } from './sample.js';
 
@@ -29,33 +29,49 @@ export function App() {
   const span = composition.hold + TAIL_MS;
 
   const [font, setFont] = useState<LoadedFont | null>(null);
+  const [fontError, setFontError] = useState(false);
 
   useEffect(() => {
     let live = true;
-    void loadFont(fontUrl).then((f) => {
-      if (live) setFont(f);
-    });
+    void loadFont(fontUrl).then(
+      (f) => {
+        if (live) setFont(f);
+      },
+      () => {
+        if (live) setFontError(true);
+      },
+    );
     return () => {
       live = false;
     };
   }, []);
 
+  const realPoolStatus: RealPoolStatus = font ? 'ready' : fontError ? 'failed' : 'loading';
+
   const synthetic = useMemo(() => syntheticPool(24, 7), []);
 
-  /** The real pool needs a font, so it stands in as synthetic for the one frame before it loads. */
+  /**
+   * The real pool needs a font: synthetic stands in while it loads, however long that takes, and
+   * permanently if the load fails.
+   */
   const parts: PartInfo[] = useMemo(() => {
     if (composition.pool === 'synthetic' || !font) return synthetic;
     return realPool(composition.text, font, composition.look);
   }, [composition.pool, composition.text, composition.look, font, synthetic]);
 
+  /** Kinds some enabled layer targets; empty when none do. */
+  const enabledTargets = useMemo(
+    () => new Set(composition.effects.filter((l) => l.enabled).map((l) => l.target)),
+    [composition.effects],
+  );
+
   /** Rows the raster draws: the kinds some enabled layer targets, or the whole pool when none do. */
   const rows = useMemo(() => {
-    const kinds = new Set(composition.effects.filter((l) => l.enabled).map((l) => l.target));
     return parts
       .map((part, index) => ({ part, index }))
-      .filter(({ part }) => kinds.size === 0 || kinds.has(part.kind))
+      .filter(({ part }) => enabledTargets.size === 0 || enabledTargets.has(part.kind))
       .map(({ index }) => index);
-  }, [composition, parts]);
+  }, [enabledTargets, parts]);
 
   /** A shorter row list can strand `focus` past its end, so clamp rather than index out. */
   const row = Math.min(focus, Math.max(0, rows.length - 1));
@@ -102,7 +118,12 @@ export function App() {
   return (
     <div className="cl-shell">
       <aside className="cl-rail">
-        <Rail composition={composition} onChange={setComposition} counts={poolCounts(parts)} />
+        <Rail
+          composition={composition}
+          onChange={setComposition}
+          counts={poolCounts(parts)}
+          realPoolStatus={realPoolStatus}
+        />
       </aside>
       <main className="cl-main">
         <section className="cl-preview">
@@ -129,7 +150,7 @@ export function App() {
             samples={sampled.data}
             rows={rows}
             at={(elapsed % sampled.pass) / sampled.pass}
-            kinds={[...new Set(composition.effects.filter((l) => l.enabled).map((l) => l.target))]}
+            kinds={[...enabledTargets]}
           />
           <div className="cl-row">
             <select value={channel} onChange={(e) => setChannel(e.target.value as Channel)}>

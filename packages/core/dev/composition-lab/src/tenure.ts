@@ -5,7 +5,7 @@ export interface TenureReport {
   /** One entry per unbroken stretch a part held the effect, in milliseconds. */
   tenures: number[];
   meanTenureMs: number;
-  /** Samples where the holder set changed — including a set widening, not just a baton pass. */
+  /** Samples where the holder set changed between two non-empty sets — not a fade in or out. */
   handovers: number;
   /** Mean distance a handover moved, by pool index and by em. */
   meanJumpParts: number;

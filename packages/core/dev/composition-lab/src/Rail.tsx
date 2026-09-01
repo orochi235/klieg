@@ -321,7 +321,10 @@ export function Rail({ composition, onChange, counts, realPoolStatus }: RailProp
                 />
                 <output>{layer.intermittent.spell}</output>
               </label>
-              <label className="cl-row" title="Milliseconds held quiet between bouts.">
+              <label
+                className="cl-row"
+                title="Milliseconds held quiet between bouts. At 0 the wrapper is a pass-through, so the layer just runs continuously until this is above zero."
+              >
                 <span>bout calm</span>
                 <input
                   type="range"
@@ -335,7 +338,7 @@ export function Rail({ composition, onChange, counts, realPoolStatus }: RailProp
               </label>
               <label
                 className="cl-row"
-                title="Bouts to a pass, and so how long the wrapper's own loop runs before it repeats."
+                title="Bouts to a pass, and so how long the wrapper's own loop runs before it repeats. The pass rounds to a whole number of inner passes, so the count it actually produces can drift from this value."
               >
                 <span>bouts</span>
                 <input

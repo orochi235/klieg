@@ -1,5 +1,5 @@
 import type { PartInfo } from '@core/effects/types.js';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { Channel } from './Plot.js';
 import type { PassSamples } from './sample.js';
 
@@ -21,6 +21,26 @@ const RESTS_AT_ONE = new Set<Channel>(['gain', 'scale']);
  */
 export function Swatch({ samples, parts, channel, at }: SwatchProps) {
   const ref = useRef<HTMLCanvasElement>(null);
+
+  // Color has no magnitude, so it borrows gain's row -- and must borrow gain's rest-at-1 too, or
+  // an untouched part (gain 1) reads as maximally lit instead of as no effect.
+  const source = channel === 'color' ? 'gain' : channel;
+  const rest = RESTS_AT_ONE.has(source) ? 1 : 0;
+
+  // Deviation is relative to the brightest sample anywhere in the pass, not this column alone --
+  // a per-column peak would make the hottest part full brightness in every frame, so scrubbing
+  // to a dim moment would still read as blazing.
+  const peak = useMemo(() => {
+    let peak = 0;
+    for (let i = 0; i < parts.length; i++) {
+      const row = samples[source][i];
+      if (!row) continue;
+      for (let j = 0; j < samples.samples; j++) {
+        peak = Math.max(peak, Math.abs((row[j] as number) - rest));
+      }
+    }
+    return peak;
+  }, [samples, parts, source, rest]);
 
   useEffect(() => {
     const canvas = ref.current;
@@ -51,22 +71,6 @@ export function Swatch({ samples, parts, channel, at }: SwatchProps) {
     const spanY = Math.max(1e-6, maxY - minY);
 
     const column = Math.min(samples.samples - 1, Math.max(0, Math.round(at * samples.samples)));
-    // Color has no magnitude, so it borrows gain's row -- and must borrow gain's rest-at-1 too, or
-    // an untouched part (gain 1) reads as maximally lit instead of as no effect.
-    const source = channel === 'color' ? 'gain' : channel;
-    const rest = RESTS_AT_ONE.has(source) ? 1 : 0;
-
-    // Deviation is relative to the brightest sample anywhere in the pass, not this column alone --
-    // a per-column peak would make the hottest part full brightness in every frame, so scrubbing
-    // to a dim moment would still read as blazing.
-    let peak = 0;
-    for (let i = 0; i < parts.length; i++) {
-      const row = samples[source][i];
-      if (!row) continue;
-      for (let j = 0; j < samples.samples; j++) {
-        peak = Math.max(peak, Math.abs((row[j] as number) - rest));
-      }
-    }
 
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i] as PartInfo;
@@ -84,7 +88,7 @@ export function Swatch({ samples, parts, channel, at }: SwatchProps) {
       g.arc(cx, cy, p.kind === 'body' ? 7 : 4, 0, Math.PI * 2);
       g.fill();
     }
-  }, [samples, parts, channel, at]);
+  }, [samples, parts, source, rest, peak, at]);
 
   return (
     <div className="cl-panel">

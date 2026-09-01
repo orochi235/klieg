@@ -75,4 +75,16 @@ describe('tenureAndJump', () => {
     expect(r.meanTenureMs).toBe(0);
     expect(r.handovers).toBe(0);
   });
+
+  it('joins a stretch that straddles the loop seam instead of halving it', () => {
+    const s = samples([[true, false, true]]);
+    const r = tenureAndJump(s, parts(1), 900);
+    expect(r.tenures).toEqual([600]);
+  });
+
+  it('does not double-count an all-true row when joining the seam', () => {
+    const s = samples([[true, true, true]]);
+    const r = tenureAndJump(s, parts(1), 900);
+    expect(r.tenures).toEqual([900]);
+  });
 });

@@ -5,7 +5,7 @@ export interface TenureReport {
   /** One entry per unbroken stretch a part held the effect, in milliseconds. */
   tenures: number[];
   meanTenureMs: number;
-  /** Samples where the holder set changed. */
+  /** Samples where the holder set changed — including a set widening, not just a baton pass. */
   handovers: number;
   /** Mean distance a handover moved, by pool index and by em. */
   meanJumpParts: number;
@@ -50,17 +50,27 @@ export function tenureAndJump(
 
   const tenures: number[] = [];
   for (const row of samples.moved) {
+    const runs: number[] = [];
     let run = 0;
     for (const on of row) {
       if (on) run += 1;
       else if (run > 0) {
-        tenures.push(run * perSample);
+        runs.push(run);
         run = 0;
       }
     }
     // A stretch still open at the pass end is a tenure; dropping it loses a continuous layer's only
     // one and reports it as never having held anything.
-    if (run > 0) tenures.push(run * perSample);
+    if (run > 0) runs.push(run);
+
+    // A pass loops, so a run open at the end and a run open at the start are one stretch across
+    // the seam. An all-true row is already a single run and needs no joining.
+    if (runs.length > 1 && row[0] === true && row[row.length - 1] === true) {
+      const first = runs.shift() as number;
+      const last = runs.pop() as number;
+      runs.push(first + last);
+    }
+    for (const r of runs) tenures.push(r * perSample);
   }
 
   const jumpParts: number[] = [];

@@ -2,7 +2,8 @@ import type { FrameCtx, PartInfo } from '@core/effects/types.js';
 import { useState } from 'react';
 import type { Composition } from './composition.js';
 import { PARAMS } from './pieces.js';
-import { PASS_SAMPLES, runSweep, type SweepResult } from './sweep.js';
+import { PASS_SAMPLES } from './sample.js';
+import { runSweep, type SweepResult } from './sweep.js';
 
 export interface SweepPanelProps {
   composition: Composition;

@@ -68,9 +68,9 @@ describe('runSweep', () => {
     expect(r.flat).not.toContain('darkShare');
   });
 
-  // The finding the panel exists to reproduce: a column that does not move IS the answer, and has
-  // to be marked rather than left as three numbers a reader has to compare by eye.
-  it('marks a column flat when the param does not reach it', () => {
+  // Every value here is exactly 0, so this reaches the zero floor and not the relative threshold —
+  // the `flatMetrics` cases below are what pin that.
+  it('marks a channel flat when no layer writes it at all', () => {
     const r = runSweep(composition({}), 'a', 'unrest', 0.2, 0.4, 3, PARTS, 60, NO_CTX);
     expect(r.flat).toContain('meanLight');
   });

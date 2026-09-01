@@ -12,8 +12,8 @@ import { Rail, type RealPoolStatus } from './Rail.js';
 import { Raster } from './Raster.js';
 import { Swatch } from './Swatch.js';
 import { Sweep } from './SweepPanel.js';
-import { samplePass } from './sample.js';
-import { PASS_SAMPLES } from './sweep.js';
+import { PASS_SAMPLES, samplePass } from './sample.js';
+
 import { Tenure } from './TenurePanel.js';
 
 /** How far past `hold` the transport runs, so an exit is visible. */

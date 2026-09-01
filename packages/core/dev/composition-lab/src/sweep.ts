@@ -14,9 +14,6 @@ const DARK_GAIN = 0.5;
  */
 const FLAT = 0.05;
 
-/** The sweep and the live panels must sample at one rate, or their numbers do not compare. */
-export const PASS_SAMPLES = 600;
-
 export interface SweepRow {
   value: number;
   /** Share of all part-sample cells sitting below `DARK_GAIN`. */

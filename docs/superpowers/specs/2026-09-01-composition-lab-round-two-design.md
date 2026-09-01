@@ -10,7 +10,7 @@ roster back in step with core, and builds three of the five.
 
 ## The instrument is describing a pool the render is not using
 
-`realPool()` is exported from `pool.ts` and covered by `pool.test.ts`. Nothing calls it.
+`realPool()` is exported from `pool.ts`. Nothing calls it, and no test covers it.
 `App.tsx:29` builds `syntheticPool(24, 7)` unconditionally, so the preview renders whatever `text`
 and `look` the rail says while every panel beneath it describes a fixed 24-run, 7-letter pool.
 Change the text to three letters and the raster still plots seven.

@@ -1,6 +1,9 @@
 import type { EffectFrame } from '@core/effects/frame.js';
 import type { FrameCtx, PartInfo, ResolvedOffset } from '@core/effects/types.js';
 
+/** The sweep and the live panels must sample at one rate, or their numbers do not compare. */
+export const PASS_SAMPLES = 600;
+
 /** One pass sampled on a grid: a row per part, a column per sample. */
 export interface PassSamples {
   samples: number;

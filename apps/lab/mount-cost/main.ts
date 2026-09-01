@@ -170,7 +170,10 @@ async function main(): Promise<void> {
 
   const table = document.getElementById('out') as HTMLElement;
   table.innerHTML = rows
-    .map(([label, ms]) => `<tr><td>${label}</td><td>${ms.toFixed(1)}ms</td></tr>`)
+    .map(
+      ([label, ms]) =>
+        `<tr><td>${label}</td><td>${Number.isNaN(ms) ? '' : `${ms.toFixed(1)}ms`}</td></tr>`,
+    )
     .join('');
   (document.getElementById('note') as HTMLElement).textContent =
     'Everything above the first Word is paid again on every mount — which the 8s idle timeout makes every fire, for a page that fires less often than that. The programs row is why the warm holds its throwaway: dropping it returns the programs it just linked.';

@@ -47,7 +47,7 @@ export const DEFAULT_COMPOSITION: Composition = {
 
 /** The piece a layer contributes, wrapper included. Null when its source will not compile. */
 export function layerPiece(layer: EffectLayer): EffectPiece | null {
-  const inner = buildPiece(layer.kind, layer.params, layer.source);
+  const inner = buildPiece(layer.kind, layer.params, { source: layer.source });
   if (!inner) return null;
   return layer.roving ? roving(inner, layer.roving) : inner;
 }

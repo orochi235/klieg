@@ -299,7 +299,7 @@ export function Rail({ composition, onChange, counts }: RailProps) {
                 className="cl-row"
                 title="Milliseconds of one bout. Shorter than one inner pass and the layer will not build at all — the piece throws rather than showing a sliver."
               >
-                <span>spell</span>
+                <span>bout spell</span>
                 <input
                   type="range"
                   min={200}
@@ -311,7 +311,7 @@ export function Rail({ composition, onChange, counts }: RailProps) {
                 <output>{layer.intermittent.spell}</output>
               </label>
               <label className="cl-row" title="Milliseconds held quiet between bouts.">
-                <span>calm</span>
+                <span>bout calm</span>
                 <input
                   type="range"
                   min={0}
@@ -339,7 +339,7 @@ export function Rail({ composition, onChange, counts }: RailProps) {
               </label>
               {layerBuilds(layer) ? null : (
                 <p className="cl-warn">
-                  spell is shorter than one pass of {layer.kind} — the layer does not build
+                  bout spell is shorter than one pass of {layer.kind} — the layer does not build
                 </p>
               )}
             </>

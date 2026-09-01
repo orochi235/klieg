@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
 import type { PassSamples } from './sample.js';
 
-export type Channel = 'gain' | 'scale' | 'dark' | 'crawl';
+export type Channel = 'gain' | 'scale' | 'dark' | 'crawl' | 'light' | 'color';
 
-export const CHANNELS: Channel[] = ['gain', 'scale', 'dark', 'crawl'];
+export const CHANNELS: Channel[] = ['gain', 'scale', 'dark', 'crawl', 'light', 'color'];
 
 export interface PlotProps {
   samples: PassSamples;
@@ -32,6 +32,24 @@ export function Plot({ samples, channel, part, label, at }: PlotProps) {
     g.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     g.clearRect(0, 0, w, h);
 
+    // A packed colour has no vertical position to plot. -1 is "no layer wrote one", drawn as a gap
+    // rather than as black, which is a colour a layer can genuinely write.
+    if (channel === 'color') {
+      const cw = Math.max(1, w / row.length);
+      for (let s = 0; s < row.length; s++) {
+        const packed = row[s] as number;
+        if (packed < 0) continue;
+        g.fillStyle = `#${packed.toString(16).padStart(6, '0')}`;
+        g.fillRect((s / row.length) * w, 8, cw, h - 16);
+      }
+      g.strokeStyle = '#5aa9e6';
+      g.beginPath();
+      g.moveTo(at * w, 0);
+      g.lineTo(at * w, h);
+      g.stroke();
+      return;
+    }
+
     let lo = Math.min(...row);
     let hi = Math.max(...row);
     // A flat channel would divide by zero and draw nothing; show it as a line at its own value.
@@ -55,7 +73,7 @@ export function Plot({ samples, channel, part, label, at }: PlotProps) {
     g.moveTo(at * w, 0);
     g.lineTo(at * w, h);
     g.stroke();
-  }, [row, at]);
+  }, [row, at, channel]);
 
   const range = row ? `${Math.min(...row).toFixed(3)} … ${Math.max(...row).toFixed(3)}` : 'no data';
   return (

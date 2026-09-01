@@ -781,7 +781,7 @@ Roughly in order of value; the items are independent of each other.
   A left-to-right falloff across a long word is the studio's remaining deliberate asymmetry, not the
   old cement bug.
 
-  Three things are actually open, and the first two are independent of each other:
+  The cursor registration is fixed. What is left is the materials and the tuning:
 
   **A lamp does not land on every look.** `gem` inherits `clearcoat: 1` from `DEFAULTS` and sets no
   `specularIntensity`, so two specular lobes stack on it: red-but-dark at low env, bright-but-gray
@@ -791,22 +791,25 @@ Roughly in order of value; the items are independent of each other.
   unreachable at all — `PartKind` is still `'run' | 'body'`, and a chunk look builds zero run parts
   under a near-black body, so it needs a `'chunk'` kind addressing the letter's `InstancedMesh`.
 
-  **The vertical half is fixed; the horizontal half is not.** `node spikes/lamp-registration.mjs
-  [word] [look]` prints both, and the 69% this entry once claimed was an understatement of the
-  wrong quantity — the real figure was 153%, which is to say *dark*.
+  **Both halves are fixed.** `node spikes/lamp-registration.mjs [word] [look]` prints the vertical
+  one; the 69% this entry once claimed was an understatement of the wrong quantity, the real figure
+  being 153% — which is to say *dark*.
 
-  `PartInfo` carries `ink` now and `lamp` measures to its centre, so the cursor and the light are
-  in the same frame vertically. Before, `PartInfo.x/y` was the letter's origin — one shared
-  baseline for a whole line, at every look — while the cursor was mapped into the ink box, so the
-  top of every word was 153% of a lamp's reach from anything it could light. It is 80% now, and the
-  middle of the ink went 52% → 1%. The bottom edge is dimmer (50% → 91%) because it is the
-  descender region, below the body of every letter that does not descend.
+  Vertically, `PartInfo` carries `ink` and `lamp` measures to its centre. Before, `PartInfo.x/y` was
+  the letter's origin — one shared baseline for a whole line, at every look — while the cursor was
+  mapped into the ink box, so the top of every word sat 153% of a lamp's reach from anything it
+  could light. It is 80% now, and the middle of the ink went 52% → 1%. The bottom edge is dimmer
+  (50% → 91%) because it is the descender region, below the body of every letter that does not
+  descend.
 
-  **Still open: `pointerFrame` stretches the canvas's −1..1 across the ink box** (`pointer.ts:45`),
-  so horizontal travel still compresses onto the letters. The scale to map through is the visible
-  frustum at the word's plane, which `stage.viewportBudget` already derives (`2·tan(fov/2)·cameraZ`,
-  `stage.ts:240`) — but it needs the block's placement offset threaded in too, since `PartInfo.x` is
-  relative to the block centre and alignment moves that off the frustum's axis.
+  Horizontally, `pointerFrame` takes the fit and camera rather than the ink box, and maps through
+  `layoutFromNdc` — the inverse of `projectLetters`, sitting beside it and sharing its `faceHeight`
+  so the two cannot drift. It picks up the block's alignment offset with it.
+
+  The guard worth knowing about is `a cursor lands on the letter it is over` in
+  `test/render/word.test.ts`: it drives the whole chain, because the unit tests either side of the
+  mapping both pass while the pair disagrees. Dropping `aspect` from the inverse sends the outer
+  letters to their neighbours and only that test notices.
 
   **Still open: `ink` resolves per letter, not per part.** `partSlot` indexes the letter, so all 20
   of `tubing`'s parts on `klieg` report the same 5 boxes and a lamp cannot light part of a letter.
@@ -817,8 +820,9 @@ Roughly in order of value; the items are independent of each other.
   `lamp`.
 
   **The defaults are unsampled.** Radius, strength and falloff were judged at one lamp position on a
-  five-letter word — enough to choose a blend, not enough to ship numbers. This one goes last: it is
-  tuning against whatever the two above settle.
+  five-letter word — enough to choose a blend, not enough to ship numbers. Worth redoing now rather
+  than before: they were chosen against a lamp measuring to baselines through a stretched cursor,
+  so they were tuned around the defect as much as around the look.
 
 - **`visual.spec.ts`'s remaining flakiness is the sampled frame, not the wait.** The canvas waits
   were fixed in `e90e7c8` — see the section below. What is left is `bloom path`, `two-line block`

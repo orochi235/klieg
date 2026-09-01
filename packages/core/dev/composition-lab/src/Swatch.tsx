@@ -15,9 +15,9 @@ export interface SwatchProps {
 const RESTS_AT_ONE = new Set<Channel>(['gain', 'scale']);
 
 /**
- * One cell per part at its ink centre in em space, tinted by the channel at the playhead. Parts
- * overlap: every run of a letter reports that letter's ink box, so a tube look draws many cells on
- * one letter and the brightest wins.
+ * One cell per part at its ink centre in em space, tinted by the channel at the playhead. Some
+ * pools give multiple parts the same ink centre; where cells coincide, plain source-over means
+ * the last part drawn wins, not the brightest.
  */
 export function Swatch({ samples, parts, channel, at }: SwatchProps) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -93,7 +93,10 @@ export function Swatch({ samples, parts, channel, at }: SwatchProps) {
   return (
     <div className="cl-panel">
       <h2>
-        swatch <span className="cl-note">{channel} at the playhead, in em</span>
+        swatch{' '}
+        <span className="cl-note">
+          {channel === 'color' ? 'color (via gain)' : channel} at the playhead, in em
+        </span>
       </h2>
       <canvas ref={ref} />
     </div>

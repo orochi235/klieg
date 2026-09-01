@@ -74,8 +74,10 @@ function fullScene(over: Partial<DrawnScene> = {}): DrawnScene {
       { points: pts(5), authored: [false, false, false, false, false], side: 'after' },
     ],
     staged: [pts(4)],
-    ghosts: [{ ran: false, added: pts(1), removed: pts(2) }],
-    drawn: pts(3),
+    ghosts: [
+      { ran: false, added: pts(1), removed: pts(2) },
+      { ran: true, added: pts(2), removed: pts(1) },
+    ],
     ...over,
   };
 }
@@ -138,9 +140,25 @@ describe('kliegsminister legend rows', () => {
     expect(keys).not.toContain('added');
   });
 
-  it('drops `repair` when the scene carries no repaired stretch', () => {
-    expect(keysOf(ALL_LAYERS, fullScene({ drawn: null }))).not.toContain('drawn');
-    expect(keysOf(ALL_LAYERS, fullScene({ drawn: pts(1) }))).not.toContain('drawn');
+  it('shows `repair` for a site that actually ran', () => {
+    const ghosts = [{ ran: true, added: pts(2), removed: [] }];
+    expect(keysOf(ALL_LAYERS, fullScene({ ghosts }))).toContain('drawn');
+  });
+
+  it('keeps `repair` for a one-vertex site that ran, which draws as a dot', () => {
+    const ghosts = [{ ran: true, added: [], removed: pts(1) }];
+    expect(keysOf(ALL_LAYERS, fullScene({ ghosts }))).toContain('drawn');
+  });
+
+  it('drops `repair` when every site was skipped', () => {
+    const ghosts = [{ ran: false, added: pts(2), removed: pts(2) }];
+    expect(keysOf(ALL_LAYERS, fullScene({ ghosts }))).not.toContain('drawn');
+    expect(keysOf(ALL_LAYERS, fullScene({ ghosts: [] }))).not.toContain('drawn');
+  });
+
+  it('drops `repair` when a site ran but reported no geometry to place', () => {
+    const ghosts = [{ ran: true, added: [], removed: [] }];
+    expect(keysOf(ALL_LAYERS, fullScene({ ghosts }))).not.toContain('drawn');
   });
 
   it('drops `replaced` when the stretch is too short to stroke', () => {

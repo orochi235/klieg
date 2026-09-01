@@ -742,6 +742,18 @@ Roughly in order of value; the items are independent of each other.
   labkit's `initialView` is static per instrument, so the whole letter needs zooming out by hand
   from 1600x.
 
+  **The `repair` layer draws the sites that ran**, sourced from the same `ghosts` array the `ghost`
+  layer filters the other way; `CornerScene.drawn` is deleted rather than filled, because the
+  geometry was already there. It carries the ghost layer's dash grammar in one ink — solid removed,
+  dashed added. This matters more than it sounds: with every repair on, *nothing* is skipped, so the
+  ghost layer is empty and the default view reported nothing about repairs at all until now.
+  `node spikes/repair-layer-ink.mjs <layer>` toggles a layer and md5s the canvas, which is the only
+  thing that separates a layer that drew from a legend row that appeared — run it on `ghost` in the
+  default view to watch it correctly say `NO INK`.
+
+  It inherits one lie from the report: **`resume`'s `ran: false` under `bridge`/`relax`** (above)
+  now hides a site that partly ran, where before it drew a ghost for one.
+
   **`npm run check` is green, and was not before.** `main` already failed `biome` on a
   `useLiteralKeys` hit in `dev/tube-lab/src/Rail.tsx`; that is fixed here, so a red `check` from now
   on is a real regression rather than the standing state.

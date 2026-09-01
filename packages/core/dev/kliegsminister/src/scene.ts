@@ -95,9 +95,8 @@ export interface CornerScene {
   corners: CornerMark[];
   /** The run or runs the tube builds through this corner — two where the cut split it. */
   carried: CarriedRun[];
-  /** The stretch a repair replaces, and what the chosen repair draws in its place. */
+  /** The stretch a repair replaces. */
   replaced: THREE.Vector3[];
-  drawn: THREE.Vector3[] | null;
   centre: THREE.Vector3;
   rhoMin: number;
   radius: number;
@@ -227,7 +226,6 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
       corners: [],
       carried: [],
       replaced: [],
-      drawn: null,
       centre: new THREE.Vector3(),
       rhoMin,
       radius,
@@ -374,8 +372,6 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
     });
   }
 
-  const drawn: THREE.Vector3[] | null = null;
-
   return {
     contour: points,
     outline,
@@ -383,7 +379,6 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
     corners,
     carried,
     replaced,
-    drawn,
     centre,
     rhoMin,
     radius,

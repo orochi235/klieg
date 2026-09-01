@@ -45,7 +45,6 @@ export interface DrawnScene {
   carried: readonly { points: readonly unknown[]; authored: readonly boolean[]; side: string }[];
   staged: readonly (readonly unknown[])[];
   ghosts: readonly { ran: boolean; added: readonly unknown[]; removed: readonly unknown[] }[];
-  drawn: readonly unknown[] | null;
 }
 
 interface Source {
@@ -79,7 +78,10 @@ const SOURCES: Record<string, Source> = {
   staged: { layer: 'staged', drawn: (s) => s.staged.some((span) => span.length >= 2) },
   added: { layer: 'ghost', drawn: (s) => s.ghosts.some((g) => !g.ran && g.added.length >= 1) },
   removed: { layer: 'ghost', drawn: (s) => s.ghosts.some((g) => !g.ran && g.removed.length >= 1) },
-  drawn: { layer: 'repair', drawn: (s) => (s.drawn?.length ?? 0) >= 2 },
+  drawn: {
+    layer: 'repair',
+    drawn: (s) => s.ghosts.some((g) => g.ran && (g.added.length >= 1 || g.removed.length >= 1)),
+  },
   frame: { layer: null, drawn: () => true },
 };
 

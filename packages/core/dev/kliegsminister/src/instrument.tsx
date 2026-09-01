@@ -480,7 +480,15 @@ export const junction = defineInstrument<CornerScene, Config>({
         }
       }),
       layer('repair', (ctx, { state, zoom }) => {
-        if (state.drawn) stroke(ctx, state.drawn, state.centre, INK.drawn, 3 / zoom);
+        for (const site of state.ghosts) {
+          if (!site.ran) continue;
+          // Same dash grammar the ghost layer uses — solid removed, dashed added — in the one
+          // ink, so a site reads as what a repair did rather than what one would do.
+          mark(ctx, site.removed, state.centre, INK.drawn, 7 / zoom);
+          ctx.setLineDash([4 / zoom, 4 / zoom]);
+          mark(ctx, site.added, state.centre, INK.drawn, 2.4 / zoom);
+          ctx.setLineDash([]);
+        }
       }),
     ],
   },

@@ -56,6 +56,35 @@ describe('every repair reports across the alphabet', () => {
     expect([...seen].sort()).toEqual([...CUT_REPAIR_IDS].sort());
   });
 
+  // A site with no `points` and no `removed` cannot be drawn: kliegsminister filters it out, so a
+  // repair that reports one is invisible in the lab however loudly it fires. The exit-side setback
+  // reported nothing but a cursor index, against the entry side's 145 of 148.
+  it('gives both sides of a setback the vertices they removed', () => {
+    const ran = { entry: 0, exit: 0 };
+    const placeable = { entry: 0, exit: 0 };
+    for (const look of LOOKS) {
+      for (const letter of LETTERS) {
+        const bp = buildTubeBlueprint(shapesOf(letter), specFor(look), 0.35, 0, {
+          onRepair: (id, site, didRun) => {
+            if (id !== 'setback' || !site || !didRun) return;
+            const side = site.side === 'exit' ? 'exit' : 'entry';
+            ran[side]++;
+            if (site.points.length + site.removed.length > 0) placeable[side]++;
+          },
+        });
+        bp.dispose();
+      }
+    }
+
+    // Both sides fire once per corner, but they do not place identically: a turn whose setback is
+    // shorter than one sample step removes nothing, and the two sides sample differently -- 145 of
+    // 148 on the entry, 141 on the exit. A ratio rather than those numbers, so a geometry change
+    // moves the counts without failing here; zero is the regression this guards.
+    expect(ran.exit).toBe(ran.entry);
+    expect(placeable.entry / ran.entry).toBeGreaterThan(0.9);
+    expect(placeable.exit / ran.exit).toBeGreaterThan(0.9);
+  });
+
   it('reports both sides of every corner repair', () => {
     const bySide = new Map<string, number>();
     for (const letter of LETTERS) {

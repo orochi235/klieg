@@ -734,9 +734,11 @@ Roughly in order of value; the items are independent of each other.
 
   **Left for whoever picks this up.** The `setback`-off-under-`rejoin: 'bridge'` cascade is **2769
   points against 241**, not the 1505 recorded before; the leg-room math assumes the trim happened.
-  The lab reaches that combination and draws it without throwing. An exit-side `setback` site
-  reports only a cursor index — empty `points` and empty `removed` — so it has no ghost; placing it
-  needs the index resolved against the leg it names. **`hairpin`'s toggle is inert in the UI**:
+  The lab reaches that combination and draws it without throwing. An exit-side `setback` site now reports the
+  span it skips, so it draws a ghost like the entry side: the walk resumes at `groupAfter + 1` with
+  the repair off and at `pastSetback` with it on, and the vertices between are what it removes. 141
+  of its 148 sites carry geometry against the entry side's 145 — a turn whose setback is shorter
+  than one sample step removes nothing, and the two sides sample differently. **`hairpin`'s toggle is inert in the UI**:
   neither `piping` nor `tubing` weights it and the look control offers nothing else, so the report
   is only reachable from a test with a spec override. And `subject: 'letter'` does not re-zoom —
   labkit's `initialView` is static per instrument, so the whole letter needs zooming out by hand

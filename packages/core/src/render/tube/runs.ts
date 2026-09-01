@@ -913,7 +913,18 @@ function mergeArc(
   // from the entry-side site above.
   const pastSetback = indexPast(next, decision.groupAfter + 1, fillet.setback, fillet.corner);
   const ranExitSetback = on('setback');
-  report('setback', { at: pastSetback, points: [], removed: [], side: 'exit' }, ranExitSetback);
+  // The vertices the walk skips are exactly the two starts below it: switching the repair off
+  // resumes at `groupAfter + 1` instead, so the span between them is what running it removes.
+  report(
+    'setback',
+    {
+      at: pastSetback,
+      points: [],
+      removed: next.slice(decision.groupAfter + 1, pastSetback),
+      side: 'exit',
+    },
+    ranExitSetback,
+  );
   const start = ranExitSetback ? pastSetback : decision.groupAfter + 1;
   const ranExitResume = on('resume');
   if (rejoin === 'bridge') {

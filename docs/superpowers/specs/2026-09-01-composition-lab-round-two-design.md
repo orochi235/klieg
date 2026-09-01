@@ -106,8 +106,9 @@ every part and sample.
 
 **A column that does not move is the result.** That is the finding the first round produced:
 `dwell` across 1600 / 3200 / 6400 gave dark share 19.9% / 19.9% / 20.3%. The panel marks a column
-flat when its spread across the sweep is under 1% of its own mean, rather than leaving a reader to
-eyeball three near-identical numbers and guess whether they differ.
+flat when its spread across the sweep is under 5% of its own mean — that example is 2%, and a param
+that does reach a column moves it by 10% or more — rather than leaving a reader to eyeball three
+near-identical numbers and guess whether they differ.
 
 ## Layout
 

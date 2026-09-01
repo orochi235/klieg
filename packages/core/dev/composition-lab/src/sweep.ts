@@ -7,8 +7,12 @@ import { tenureAndJump } from './tenure.js';
 /** Below this a part reads as dropped rather than dimmed. Gain rests at 1. */
 const DARK_GAIN = 0.5;
 
-/** A column whose spread is under this share of its own mean is reported as flat, not as a trend. */
-const FLAT = 0.01;
+/**
+ * Spread under this share of a column's own mean reads as flat, not a trend. Sits between the
+ * design's null case (dwell moving dark share 19.9/19.9/20.3 — 2%) and the 10%+ a param that
+ * does reach a column moves it.
+ */
+const FLAT = 0.05;
 
 export interface SweepRow {
   value: number;
@@ -110,6 +114,21 @@ function aggregate(
 }
 
 /**
+ * Metrics the sweep never moved. Fewer than two rows report none: one row has nothing to be flat
+ * against, and calling every metric flat off a single measurement is the false finding this
+ * column exists to prevent.
+ */
+export function flatMetrics(rows: readonly SweepRow[]): SweepMetric[] {
+  if (rows.length < 2) return [];
+  return METRICS.filter((m) => {
+    const values = rows.map((r) => r[m]);
+    const spread = Math.max(...values) - Math.min(...values);
+    const scale = Math.abs(values.reduce((a, b) => a + b, 0) / values.length);
+    return spread <= Math.max(scale * FLAT, 1e-9);
+  });
+}
+
+/**
  * Resamples the whole pass once per value of one param. Every row rebuilds the `EffectFrame` from
  * `toFireOptions`, so a sweep measures the composition the preview would render rather than a
  * shortcut through the piece alone.
@@ -146,16 +165,5 @@ export function runSweep(
     rows.push(aggregate(value, samplePass(frame, parts, pass, samples, ctx), parts, pass));
   }
 
-  // One row has nothing to be flat against, and reporting every metric flat off a single
-  // measurement is the false finding this column exists to prevent.
-  if (rows.length < 2) return { param, rows, flat: [] };
-
-  const flat = METRICS.filter((m) => {
-    const values = rows.map((r) => r[m]);
-    const spread = Math.max(...values) - Math.min(...values);
-    const scale = Math.abs(values.reduce((a, b) => a + b, 0) / values.length);
-    return spread <= Math.max(scale * FLAT, 1e-9);
-  });
-
-  return { param, rows, flat };
+  return { param, rows, flat: flatMetrics(rows) };
 }

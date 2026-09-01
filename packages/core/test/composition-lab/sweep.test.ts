@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { Composition } from '../../dev/composition-lab/src/composition.js';
 import { syntheticPool } from '../../dev/composition-lab/src/pool.js';
 import type { PassSamples } from '../../dev/composition-lab/src/sample.js';
-import { longestLitMs, runSweep } from '../../dev/composition-lab/src/sweep.js';
+import {
+  flatMetrics,
+  longestLitMs,
+  runSweep,
+  type SweepRow,
+} from '../../dev/composition-lab/src/sweep.js';
 import { NO_CTX } from '../effects/ctx.js';
 
 /** `gain` is the only field `longestLitMs` reads; the rest of a PassSamples is filler. */
@@ -91,5 +96,34 @@ describe('longestLitMs', () => {
   it('has nothing to join when dark at both the first and last sample', () => {
     const s = samples([[0.2, 1, 0.2]]);
     expect(longestLitMs(s, 900)).toBe(300);
+  });
+});
+
+/** Only `darkShare` varies; every other metric is 0 and so exercises the absolute floor. */
+function darkShares(values: number[]): SweepRow[] {
+  return values.map((darkShare, i) => ({
+    value: i,
+    darkShare,
+    longestLitMs: 0,
+    coverage: 0,
+    meanTenureMs: 0,
+    meanJumpParts: 0,
+    meanLight: 0,
+  }));
+}
+
+describe('flatMetrics', () => {
+  // The design's own worked example: a 4x `dwell` change moved dark share 19.9 / 19.9 / 20.3.
+  // Marking that is the whole point of the column, and a 1% threshold missed it.
+  it('marks the null result the panel exists to report', () => {
+    expect(flatMetrics(darkShares([0.199, 0.199, 0.203]))).toContain('darkShare');
+  });
+
+  it('leaves a column the param does move unmarked', () => {
+    expect(flatMetrics(darkShares([0.199, 0.21, 0.22]))).not.toContain('darkShare');
+  });
+
+  it('reports nothing flat off a single row, which has nothing to be flat against', () => {
+    expect(flatMetrics(darkShares([0.199]))).toEqual([]);
   });
 });

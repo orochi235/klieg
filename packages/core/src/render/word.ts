@@ -177,6 +177,10 @@ export class Word {
   private readonly darkMaterials: (THREE.Material | null)[] = [];
   /** Indexed by letter slot; a slot whose glyph drew no outline is a hole. */
   private readonly bodyMeshes: (THREE.Mesh | null)[] = [];
+  /** A letter's whole chunk field as one instanced draw; indexed by letter slot. */
+  private readonly chunkMeshes: (THREE.InstancedMesh | null)[] = [];
+  /** The emissive and hue a chunk field's lamp light resolves against; indexed by letter slot. */
+  private readonly chunkLights: (LightBase | null)[] = [];
   /** A tube letter's lit-run meshes in blueprint order; indexed by letter slot. */
   private readonly litMeshes: THREE.Mesh[][] = [];
   /**
@@ -184,7 +188,7 @@ export class Word {
    * its own material and no such contract, so writing that buffer would write into nothing.
    */
   private readonly litReadsRunColor: boolean[] = [];
-  /** The word-wide part pool, body parts first and then run parts. */
+  /** The word-wide part pool: body parts, then run parts, then chunk parts. */
   private readonly parts: PartInfo[] = [];
   private readonly partMeshes: THREE.Mesh[] = [];
   /**
@@ -390,6 +394,21 @@ export class Word {
       this.partSlot.push(run.slot);
       walked += run.length;
     }
+
+    const fields: number[] = [];
+    for (let i = 0; i < this.charOf.length; i++) {
+      if (this.chunkMeshes[i]) fields.push(i);
+    }
+    for (let n = 0; n < fields.length; n++) {
+      const i = fields[n] as number;
+      this.parts.push(
+        this.partInfo('chunk', n, fields.length, i, n / fields.length, 1 / fields.length),
+      );
+      this.partMeshes.push(this.chunkMeshes[i] as THREE.InstancedMesh);
+      this.partBaseColor.push(0xffffff);
+      this.partReadsRunColor.push(false);
+      this.partSlot.push(i);
+    }
   }
 
   /**
@@ -527,11 +546,14 @@ export class Word {
     mesh.rotation.set(...out.rotation);
     mesh.scale.setScalar(out.scale);
 
-    if (part.kind === 'body') {
+    if (part.kind === 'body' || part.kind === 'chunk') {
+      const body = part.kind === 'body';
       const material = mesh.material as THREE.MeshPhysicalMaterial;
-      const light = this.bodyLights[this.partSlot[index] as number];
+      const slot = this.partSlot[index] as number;
+      const light = body ? this.bodyLights[slot] : this.chunkLights[slot];
       if (light) material.emissive.setHex(litEmissive(light.emissive, light.hue, out.light));
-      setEmissiveIntensity(material, this.bodyBase.emissiveIntensity * out.gain);
+      const base = body ? this.bodyBase : this.decorBase;
+      setEmissiveIntensity(material, base.emissiveIntensity * out.gain);
       return;
     }
 
@@ -668,6 +690,7 @@ export class Word {
       this.letters.push(null);
       this.bodyMaterials.push(null);
       this.bodyLights.push(null);
+      this.chunkLights.push(null);
       this.decorMaterials.push(null);
       this.darkMaterials.push(null);
       this.tubeBounds.push(null);
@@ -689,6 +712,10 @@ export class Word {
     material.emissiveIntensity = this.bodyBase.emissiveIntensity;
     this.bodyMaterials.push(material);
     this.bodyLights.push(lightBase(look, bodyTint));
+    const decorTint = tintMaterialOf(spec) === 'decoration' ? hue : undefined;
+    this.chunkLights.push(
+      decoration?.kind === 'chunks' ? lightBase(decoration.look, decorTint) : null,
+    );
 
     const cell = new THREE.Group();
     // A run's size sits below the cell: the pose overwrites `cell.scale` every frame, and
@@ -706,11 +733,7 @@ export class Word {
       const litOverride = debug?.tubeMaterial?.('lit');
       const decorMaterial = litOverride ?? this.studioMaterial();
       if (!litOverride) {
-        applyLook(
-          decorMaterial as THREE.MeshPhysicalMaterial,
-          decoration.look,
-          tintMaterialOf(spec) === 'decoration' ? hue : undefined,
-        );
+        applyLook(decorMaterial as THREE.MeshPhysicalMaterial, decoration.look, decorTint);
       }
       this.litReadsRunColor[i] = !litOverride;
       // Only when the look was applied: an override brings its own material and its own meaning
@@ -751,7 +774,6 @@ export class Word {
       debugShapes = shapes;
       // Keyed on the untinted decoration, whose identity is stable across fires; `tintedTube`
       // builds a fresh object every call, so a key on that would never hit.
-      const decorTint = tintMaterialOf(spec) === 'decoration' ? hue : undefined;
       const blueprint = this.caches.takeBlueprint(
         font,
         decoration,
@@ -784,11 +806,7 @@ export class Word {
       for (const geo of blueprint.dark) sized.add(new THREE.Mesh(geo, darkMaterial));
     } else if (decoration && decoration.kind === 'chunks') {
       const decorMaterial = this.studioMaterial();
-      applyLook(
-        decorMaterial,
-        decoration.look,
-        tintMaterialOf(spec) === 'decoration' ? hue : undefined,
-      );
+      applyLook(decorMaterial, decoration.look, decorTint);
       decorMaterial.transparent = true;
       if (decoration.kind === 'chunks') decorMaterial.side = chunkGeometrySide(decoration);
       seedFlake(decorMaterial, i);
@@ -806,6 +824,7 @@ export class Word {
           instanced.setMatrixAt(m, matrices[m] as THREE.Matrix4);
         }
         instanced.instanceMatrix.needsUpdate = true;
+        this.chunkMeshes[i] = instanced;
         sized.add(instanced);
       }
     } else {
@@ -1033,6 +1052,13 @@ export class Word {
         decor.opacity = pose.opacity * this.decorBase.opacity;
         setEmissiveIntensity(decor, this.decorBase.emissiveIntensity);
       }
+      // Off the field's own mesh rather than `decorMaterials`, which a tube debug override may
+      // have filled with a material carrying no emissive at all.
+      const field = this.chunkMeshes[i];
+      const fieldLight = this.chunkLights[i];
+      if (field && fieldLight) {
+        (field.material as THREE.MeshPhysicalMaterial).emissive.setHex(fieldLight.emissive);
+      }
       const dark = this.darkMaterials[i];
       if (dark) {
         dark.opacity = pose.opacity * this.darkBase.opacity;
@@ -1048,6 +1074,8 @@ export class Word {
     for (const material of this.bodyMaterials) material?.dispose();
     this.bodyMaterials.length = 0;
     this.bodyLights.length = 0;
+    this.chunkMeshes.length = 0;
+    this.chunkLights.length = 0;
     for (const material of this.decorMaterials) material?.dispose();
     this.decorMaterials.length = 0;
     for (const material of this.darkMaterials) material?.dispose();

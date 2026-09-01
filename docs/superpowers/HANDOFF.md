@@ -797,9 +797,12 @@ Roughly in order of value; the items are independent of each other.
   `ei 2.2 / si 0` are the same point reached two ways, and `cc 0 / si 0` is a black stone.
   Colouring the lobe is the only move that leaves the highlight structure standing.
 
-  `sequin` is unreachable at all — `PartKind` is still `'run' | 'body'`, and a chunk look builds
-  zero run parts under a near-black body, so it needs a `'chunk'` kind addressing the letter's
-  `InstancedMesh`.
+  **`sequin` is reachable now**, through a third `PartKind`. A `chunk` part is a letter's whole
+  scattered field — one instanced draw sharing one material, so it lights per letter, not per
+  sequin. `node spikes/chunk-lamp.mjs` compares the targets on the shipped look: `chunk` lights
+  6884 px at gain 40.7 against `body`'s 2003 at 3.6, and the lit pool's centroid tracks the lamp
+  (197 → 305 → 402 across `--lx` -0.8, 0, 0.8), so it lands where it is aimed. No visual baseline
+  moved — nothing changes until a caller targets the new kind.
 
   **Both halves are fixed.** `node spikes/lamp-registration.mjs [word] [look]` prints the vertical
   one; the 69% this entry once claimed was an understatement of the wrong quantity, the real figure
@@ -945,6 +948,13 @@ to move into `oil`'s own film.
   to the other. `spikes/run-decomposition.mjs`.
 
 ## Traps
+
+**"The lamp landed" cannot tell one light base from another.** A chunk part reading the *body's*
+`lightBase` rather than its field's still brightens the material, so every brightness assertion
+passes — `sequin`'s field is tan over a near-black body, and only the colour separates them. Two of
+the three chunk writes had no test until mutation said so. The third, the per-frame emissive reset,
+is reachable only when a regroup retires a lit letter: the write path covers every other frame, so
+deleting the reset leaves the whole suite green.
 
 **A whole-frame tolerance cannot guard a one-run effect.** One run going dark is 187 to 258 pixels
 of an 800x600 baseline, and `looks.spec.ts` gated everything at `maxDiffPixelRatio: 0.001` — 480

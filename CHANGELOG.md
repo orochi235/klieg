@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### A lamp can reach a scattered look
+
+`PartKind` gains `chunk`: a letter's whole scattered field as one addressable part. `sequin` builds
+no runs and hides a near-black body under its sequins, so until now it had nothing an effect could
+usefully target — `{ kind: 'chunk' }` lights it about eleven times harder than aiming the same lamp
+at the body. The field is one instanced draw sharing one material, so it lights per letter rather
+than per sequin.
+
 ### A lamp reads on `gem`
 
 `gem`'s specular lobe now takes the stone's own colour instead of white, through a new

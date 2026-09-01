@@ -70,7 +70,7 @@ export function syntheticPool(runs: number, letters: number): PartInfo[] {
  */
 export function realPool(text: string, font: LoadedFont, look: LookName): PartInfo[] {
   const word = new Word(text, font, look, { width: 6, height: 2 });
-  return [...word.partsOf('body'), ...word.partsOf('run')];
+  return [...word.partsOf('body'), ...word.partsOf('run'), ...word.partsOf('chunk')];
 }
 
 /** How many parts of each kind the pool holds. Zero is the silent no-op a layer needs warning about. */
@@ -78,5 +78,6 @@ export function poolCounts(parts: readonly PartInfo[]): Record<PartKind, number>
   return {
     run: parts.filter((p) => p.kind === 'run').length,
     body: parts.filter((p) => p.kind === 'body').length,
+    chunk: parts.filter((p) => p.kind === 'chunk').length,
   };
 }

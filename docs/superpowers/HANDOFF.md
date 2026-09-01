@@ -791,11 +791,32 @@ Roughly in order of value; the items are independent of each other.
   unreachable at all — `PartKind` is still `'run' | 'body'`, and a chunk look builds zero run parts
   under a near-black body, so it needs a `'chunk'` kind addressing the letter's `InstancedMesh`.
 
-  **The light does not sit under the cursor.** `pointerFrame` maps the canvas's whole −1..1 onto the
-  word's ink extent (`pointer.ts:43`), so the cursor's travel compresses onto the letters and the
-  light leads at one end and lags at the other. A second, larger error is that a lamp measures from
-  each part's *origin* while the cursor is mapped into the *ink* box — in y that spends 69% of a
-  lamp's reach before any horizontal distance counts. Touches no visual baseline.
+  **The light does not sit under the cursor, and the top of every word is unlit.** Measured by
+  `node spikes/lamp-registration.mjs [word] [look]`; the 69% this entry used to claim was an
+  understatement of the wrong quantity.
+
+  `pointerFrame` maps the canvas's whole −1..1 onto the word's *ink* box (`pointer.ts:45`), while
+  `lamp` measures to each part's *origin* (`lamp.ts:101`) — and `PartInfo.x/y` is the letter's
+  origin, not its ink. On a single line that is one y for the whole pool, at every look: `klieg`
+  builds 5 parts at `gold` and 20 at `tubing`, and **both have exactly one distinct origin y**. So
+  the cursor ranges over a height no part occupies. With the cursor at the top of the ink box the
+  nearest origin is 0.764 em away against a 0.5 em reach — **153% of it, so nothing lights at all,
+  whatever the cursor's x**. At the vertical middle it is still 52%. A two-line block has two
+  origin y and the same dead band at the top (148%).
+
+  `OrbitSpec`'s comment already records the mechanism for `orbit` (`lamp.ts:29`); what was missed is
+  that it applies to `fromPointer` too.
+
+  **x resolves per letter, not per part.** `tubing` on `klieg` is 20 parts over **5 distinct origin
+  x**: `partSlot` indexes the *letter*, so every run of a letter shares its glyph bounds and a lamp
+  cannot light part of one. Fixing that needs each run's own bounds recorded, which the run meshes
+  carry and `Word` does not keep — a separate piece of work from the frame bug above.
+
+  The scale to map through is not the ink box but the visible frustum at the word's plane, which
+  `stage.viewportBudget` already derives (`2·tan(fov/2)·cameraZ`, `stage.ts:240`). Doing it needs
+  the block's placement offset too, since `PartInfo.x` is relative to the block centre and
+  alignment moves that off the frustum's axis. Touches no visual baseline — no `.spec.ts` names
+  `lamp`.
 
   **The defaults are unsampled.** Radius, strength and falloff were judged at one lamp position on a
   five-letter word — enough to choose a blend, not enough to ship numbers. This one goes last: it is

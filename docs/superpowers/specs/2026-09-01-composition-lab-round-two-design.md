@@ -35,7 +35,7 @@ rather than as a blank canvas.
 
 `PieceKind` gains **`lamp`**. It is an ordinary `EffectPiece`, so it needs no new layer machinery —
 but its `source` is a function rather than a number, so the rail carries a source picker beside the
-params: `pointer`, `fixed(x, y)`, `orbit(radius, x, y)`.
+params. Which sources, and why not the shipped default, is below.
 
 **`intermittent(inner, { spell, calm, bouts })`** joins `roving` as a second wrapper. It shipped
 after the first round and the rail has never offered it. The two nest, so a layer can carry both.
@@ -48,19 +48,32 @@ after the first round and the rail has never offered it. The two nest, so a laye
 Without this a lamp layer renders in the preview and plots nothing: `touched` flips, every plotted
 channel stays flat, and the panels read exactly as they would for a piece that does not work.
 
-## The pointer surface is the preview
+## There is no pointer surface, and the lamp's sources say so
 
-Core listens for `pointermove` on `globalThis` and maps client coordinates through the **canvas**
-rect (`index.ts:450`, `pointerFrame` at `index.ts:722`). A separate pointer surface therefore cannot
-exist: hovering one would drive the preview's lamp to a position mapped off the canvas while the
-panels claimed something else. The first design's swatch grid doubling as that surface is void for
-this reason.
+The lab offers `fixed(x, y)` and `orbit(radius, x, y)`. Not `fromPointer`, which is the shipped
+default.
 
-So the preview is the surface. The lab replaces its fixed `CTX` (`App.tsx:17`) with one built by
-calling core's own `pointerFrame` on the same canvas rect and client point. Panels and render agree
-by construction — the same argument that put `planEffects` in core rather than in the lab.
+`pointerFrame` takes a `PlacedWord` — the word's fit together with the stage camera's fov, z and
+aspect (`index.ts:722`) — and every one of those lives inside the running fire. A lab that wants a
+live `pointerInWord` must either reconstruct the fit, which is the re-derivation this lab exists to
+avoid, or core must grow a way to read the placed frame from outside. Neither belongs in this round.
 
-A lamp being *swept* wants `fixed`, not a hovering hand: a sweep row has to be reproducible.
+So `CTX` keeps its null pointer, and the two sources that ignore it are the two on offer. Panels and
+preview agree because neither reads a cursor. A lamp being swept wants `fixed` anyway: a sweep row
+has to be reproducible.
+
+The first design had the swatch grid doubling as a pointer surface. That is void — it would drive
+the panels while core's own `globalThis` `pointermove` listener (`index.ts:450`), mapping through
+the canvas rect, drove the preview to somewhere else.
+
+## Two constraints the wrappers impose
+
+`roving` substitutes a part's `index` while leaving its `x`/`y` alone, so a position-dependent inner
+is invalid — its docstring names `lamp` as the example. The rail refuses the pairing rather than
+offering a control that produces nonsense.
+
+`intermittent` throws when `spell` is shorter than the inner's own pass. `layerPiece` returns null
+for a piece that will not build; it catches this the same way, and the rail says why.
 
 ## Swatch grid
 

@@ -73,9 +73,7 @@ describe('layerPiece wrappers', () => {
     expect(layerPiece({ ...base, intermittent: { spell: 100, calm: 1000, bouts: 3 } })).toBeNull();
   });
 
-  // roving calls its inner with the caller's x/y and a substituted index, so a lamp under it
-  // lights the wrong place. The rail hides the pairing; a composition persisted before it did
-  // still has to build something honest.
+  // The rail hides this pairing, but a composition persisted before it did still has to load.
   it('drops a roving wrapper from a lamp rather than lighting the wrong part', () => {
     const layer = {
       ...base,

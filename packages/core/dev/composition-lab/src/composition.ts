@@ -60,6 +60,12 @@ export const DEFAULT_COMPOSITION: Composition = {
   pool: 'real',
 };
 
+/** `roving` substitutes a part's index and leaves its x/y alone, so a position-dependent piece
+ * such as `lamp` would light the part it is standing on rather than the one holding the fault. */
+export function carriesRoving(layer: EffectLayer): layer is EffectLayer & { roving: RovingWrap } {
+  return layer.roving !== undefined && layer.kind !== 'lamp';
+}
+
 /** The piece a layer contributes, wrappers included. Null when it will not build. */
 export function layerPiece(layer: EffectLayer): EffectPiece | null {
   const inner = buildPiece(layer.kind, layer.params, {
@@ -68,9 +74,7 @@ export function layerPiece(layer: EffectLayer): EffectPiece | null {
   });
   if (!inner) return null;
 
-  // roving substitutes a part's index and leaves its x/y alone, so a position-dependent inner
-  // lights the part it is standing on rather than the one holding the fault.
-  const roved = layer.roving && layer.kind !== 'lamp' ? roving(inner, layer.roving) : inner;
+  const roved = carriesRoving(layer) ? roving(inner, layer.roving) : inner;
   if (!layer.intermittent) return roved;
   try {
     return intermittent(roved, layer.intermittent);

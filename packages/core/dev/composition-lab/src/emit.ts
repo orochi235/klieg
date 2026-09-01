@@ -1,4 +1,4 @@
-import type { Composition, EffectLayer } from './composition.js';
+import { type Composition, carriesRoving, type EffectLayer } from './composition.js';
 
 const args = (params: Record<string, number>) =>
   Object.entries(params)
@@ -24,7 +24,7 @@ function layerSource(layer: EffectLayer): string {
     // klieg exports `roving` by name but reaches the built-ins only through `EFFECTS`.
     piece = `EFFECTS.${layer.kind}({ ${args(layer.params)} })`;
   }
-  if (layer.roving && layer.kind !== 'lamp') {
+  if (carriesRoving(layer)) {
     piece = `roving(${piece}, { dwell: ${layer.roving.dwell}, seed: ${layer.roving.seed}, epochs: ${layer.roving.epochs} })`;
   }
   if (layer.intermittent) {
@@ -50,7 +50,7 @@ export function emit(c: Composition): string {
   if (live.some((l) => l.kind === 'lamp')) names.push('lamp');
   if (live.some((l) => l.intermittent)) names.push('intermittent');
   if (live.some((l) => l.kind === 'lamp' && l.lampSource === 'orbit')) names.push('orbit');
-  if (live.some((l) => l.roving && l.kind !== 'lamp')) names.push('roving');
+  if (live.some(carriesRoving)) names.push('roving');
   const imports = names.length > 0 ? `import { ${names.join(', ')} } from 'klieg';\n\n` : '';
 
   return `${imports}klieg.fire(${JSON.stringify(c.text)}, {

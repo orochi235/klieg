@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_COMPOSITION } from '../../dev/composition-lab/src/composition.js';
+import {
+  DEFAULT_COMPOSITION,
+  type EffectLayer,
+  layerPiece,
+} from '../../dev/composition-lab/src/composition.js';
 import { emit } from '../../dev/composition-lab/src/emit.js';
 import { EFFECTS } from '../../src/effects/pieces.js';
 import { roving } from '../../src/effects/roving.js';
@@ -231,6 +235,22 @@ describe('emit for the round-two shapes', () => {
       ],
     });
     expect(out).toContain('orbit({ radius: 0.8, x: 0, y: 0 })');
+  });
+
+  it('drops a stale roving wrapper on a lamp the same way in emit and layerPiece', () => {
+    const lampWithStaleRoving: EffectLayer = {
+      ...layer,
+      kind: 'lamp',
+      lampSource: 'fixed',
+      params: { duration: 4000, radius: 0.5, strength: 2, x: 0.4, y: 0.35 },
+      roving: { dwell: 3200, seed: 0, epochs: 96 },
+    };
+
+    const out = emit({ ...base, effects: [lampWithStaleRoving] });
+    expect(out).not.toContain('roving');
+
+    const piece = layerPiece(lampWithStaleRoving);
+    expect(piece).toHaveProperty('duration', 4000);
   });
 
   it('wraps in intermittent outside roving, matching the order layerPiece applies them', () => {

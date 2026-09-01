@@ -10,12 +10,16 @@ import { restore, save } from './persist.js';
 import { poolCounts, realPool, syntheticPool } from './pool.js';
 import { Rail, type RealPoolStatus } from './Rail.js';
 import { Raster } from './Raster.js';
+import { Swatch } from './Swatch.js';
+import { Sweep } from './SweepPanel.js';
 import { samplePass } from './sample.js';
+import { Tenure } from './TenurePanel.js';
 
 /** How far past `hold` the transport runs, so an exit is visible. */
 const TAIL_MS = 2000;
 
-/** The lab's own frame context. A pointer panel replaces this when `lamp` arrives. */
+/** The lab's own frame context. There is no pointer surface: `pointerFrame` needs a `PlacedWord`
+ * only the running fire has, and both lamp sources on offer ignore the cursor. */
 const CTX: FrameCtx = { pointer: null, pointerInWord: null, dt: 16.7 };
 
 export function App() {
@@ -145,14 +149,16 @@ export function App() {
             {(elapsed / 1000).toFixed(2)}s / {(span / 1000).toFixed(1)}s
           </span>
         </section>
-        <section className="cl-panels">
-          <Raster
-            samples={sampled.data}
-            rows={rows}
-            at={(elapsed % sampled.pass) / sampled.pass}
-            kinds={[...enabledTargets]}
-          />
-          <div className="cl-row">
+        <section className="cl-deck">
+          <div className="cl-span2">
+            <Raster
+              samples={sampled.data}
+              rows={rows}
+              at={(elapsed % sampled.pass) / sampled.pass}
+              kinds={[...enabledTargets]}
+            />
+          </div>
+          <div className="cl-row cl-span2">
             <select value={channel} onChange={(e) => setChannel(e.target.value as Channel)}>
               {CHANNELS.map((c) => (
                 <option key={c} value={c}>
@@ -177,6 +183,14 @@ export function App() {
             label={label}
             at={(elapsed % sampled.pass) / sampled.pass}
           />
+          <Swatch
+            samples={sampled.data}
+            parts={parts}
+            channel={channel}
+            at={(elapsed % sampled.pass) / sampled.pass}
+          />
+          <Tenure samples={sampled.data} parts={parts} pass={sampled.pass} />
+          <Sweep composition={composition} parts={parts} ctx={CTX} />
         </section>
       </main>
     </div>

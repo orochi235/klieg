@@ -61,20 +61,35 @@ function readOverlay(page: Page, frames: number): Promise<Reading> {
 // gets by default. Every canvas wait below carries this, so a busy machine decides nothing.
 const CANVAS_TIMEOUT_MS = 15000;
 
-/** Fires one long-held effect and returns once its canvas is on the page. */
-async function fire(page: Page, options: { bloom: boolean }): Promise<void> {
-  await page.goto('/');
-  // Long enough that the sampler, slowed by a full-buffer readPixels per frame, stays inside it.
-  await page.locator('#hold').fill('4000');
-  if (options.bloom) await page.locator('#bloom').selectOption('on');
-  await page.getByRole('button', { name: 'FIRE', exact: true }).click();
-  await expect(page.locator('canvas')).toBeAttached({ timeout: CANVAS_TIMEOUT_MS });
+/**
+ * The hold every spec below fires with, and it has to dwarf `CANVAS_TIMEOUT_MS` rather than merely
+ * cover the sampling. klieg starts the hold's clock at `fire()`, while a spec cannot read a pixel
+ * until the canvas attaches — so the whole cold path is spent inside the hold, and a 4000ms one
+ * left an attach measured at up to 5.8s sampling an effect that had already exited. That reads
+ * back as an empty buffer, or worse as a partly faded one that merges two bands into one.
+ */
+const HOLD_MS = 30000;
+
+/** How long a sample waited after FIRE, so a failure can say whether the effect was still up. */
+function heldFor(firedAt: number): string {
+  return `sampled ${Date.now() - firedAt}ms after FIRE, into a ${HOLD_MS}ms hold`;
 }
 
-function expectTransparentOverlay(reading: Reading): void {
+/** Fires one long-held effect and returns once its canvas is on the page. */
+async function fire(page: Page, options: { bloom: boolean }): Promise<number> {
+  await page.goto('/');
+  await page.locator('#hold').fill(String(HOLD_MS));
+  if (options.bloom) await page.locator('#bloom').selectOption('on');
+  const firedAt = Date.now();
+  await page.getByRole('button', { name: 'FIRE', exact: true }).click();
+  await expect(page.locator('canvas')).toBeAttached({ timeout: CANVAS_TIMEOUT_MS });
+  return firedAt;
+}
+
+function expectTransparentOverlay(reading: Reading, firedAt: number): void {
   expect(
     reading.drawn,
-    `not one of ${reading.frames} sampled frames held a non-transparent pixel: either the letters never drew, or the sampler never caught a live draw and the check below proves nothing`,
+    `not one of ${reading.frames} sampled frames held a non-transparent pixel (${heldFor(firedAt)}): either the letters never drew, or the effect had already exited before the first sample`,
   ).toBeGreaterThan(0);
   expect(
     reading.best.clear,
@@ -85,8 +100,8 @@ function expectTransparentOverlay(reading: Reading): void {
 test('the direct path lights the letters and leaves the rest of the overlay transparent', async ({
   page,
 }) => {
-  await fire(page, { bloom: false });
-  expectTransparentOverlay(await readOverlay(page, SAMPLE_FRAMES));
+  const firedAt = await fire(page, { bloom: false });
+  expectTransparentOverlay(await readOverlay(page, SAMPLE_FRAMES), firedAt);
 });
 
 // The composite shader computes the glow's alpha as max(base.a, luma * alphaBoost), which is the
@@ -94,8 +109,8 @@ test('the direct path lights the letters and leaves the rest of the overlay tran
 test('the bloom path lights the letters and leaves the rest of the overlay transparent', async ({
   page,
 }) => {
-  await fire(page, { bloom: true });
-  expectTransparentOverlay(await readOverlay(page, SAMPLE_FRAMES));
+  const firedAt = await fire(page, { bloom: true });
+  expectTransparentOverlay(await readOverlay(page, SAMPLE_FRAMES), firedAt);
 });
 
 /**
@@ -137,40 +152,35 @@ function litBands(page: Page): Promise<number> {
 }
 
 /** Holds a still, fully-arrived word so the band census is not sampled mid-flight. */
-async function fireStill(page: Page, text: string): Promise<void> {
+async function fireStill(page: Page, text: string, wrap = false): Promise<number> {
   await page.goto('/');
   await page.locator('#enter').selectOption('none');
   await page.locator('#active').selectOption('none');
-  await page.locator('#hold').fill('4000');
+  await page.locator('#hold').fill(String(HOLD_MS));
+  if (wrap) await page.locator('#wrap').check();
   await page.locator('#text').fill(text);
+  const firedAt = Date.now();
   await page.getByRole('button', { name: 'FIRE', exact: true }).click();
   await expect(page.locator('canvas')).toBeAttached({ timeout: CANVAS_TIMEOUT_MS });
   await page.waitForTimeout(200);
+  return firedAt;
+}
+
+/** Bands, with the elapsed hold in the message: an empty census usually means a finished effect. */
+async function expectBands(page: Page, firedAt: number, expected: number): Promise<void> {
+  expect(await litBands(page), `band census (${heldFor(firedAt)})`).toBe(expected);
 }
 
 test('a two-line block draws a second row of letters', async ({ page }) => {
-  await fireStill(page, 'BIG');
-  expect(await litBands(page)).toBe(1);
-
-  await fireStill(page, 'BIG\nMONEY');
-  expect(await litBands(page)).toBe(2);
+  await expectBands(page, await fireStill(page, 'BIG'), 1);
+  await expectBands(page, await fireStill(page, 'BIG\nMONEY'), 2);
 });
 
 test('wrap breaks a long line into rows, and leaves it alone unchecked', async ({ page }) => {
-  await fireStill(page, 'BIG MONEY PRIZE');
-  expect(await litBands(page)).toBe(1);
+  await expectBands(page, await fireStill(page, 'BIG MONEY PRIZE'), 1);
 
-  await page.goto('/');
-  await page.locator('#enter').selectOption('none');
-  await page.locator('#active').selectOption('none');
-  await page.locator('#hold').fill('4000');
-  await page.locator('#wrap').check();
-  await page.locator('#text').fill('BIG MONEY PRIZE');
-  await page.getByRole('button', { name: 'FIRE', exact: true }).click();
-  await expect(page.locator('canvas')).toBeAttached({ timeout: CANVAS_TIMEOUT_MS });
-  await page.waitForTimeout(200);
-
-  expect(await litBands(page)).toBeGreaterThan(1);
+  const wrapped = await fireStill(page, 'BIG MONEY PRIZE', true);
+  expect(await litBands(page), `band census (${heldFor(wrapped)})`).toBeGreaterThan(1);
 });
 
 test('an effect held until click stays up, and the click dismisses it', async ({ page }) => {

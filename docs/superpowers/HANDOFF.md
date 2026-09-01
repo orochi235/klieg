@@ -827,16 +827,27 @@ Roughly in order of value; the items are independent of each other.
   than before: they were chosen against a lamp measuring to baselines through a stretched cursor,
   so they were tuned around the defect as much as around the look.
 
-- **`visual.spec.ts`'s remaining flakiness is the sampled frame, not the wait.** The canvas waits
-  were fixed in `e90e7c8` — see the section below. What is left is `bloom path`, `two-line block`
-  and `wrap breaks a long line into rows`, which read the whole drawing buffer inside rAF and
-  assert on one sampled frame.
+- **`visual.spec.ts`'s flakiness was the hold, not the sampled frame.** The captured artifact —
+  `litBands` returning 0 while the page snapshot showed the scene drawn — reads as a sampling
+  problem and was recorded here as one. It is not. `THROTTLE=10 node
+  spikes/visual-sample-timing.mjs` measures both candidates: the renderer draws **40 of 40** frames
+  in every condition it can produce, still or moving, settled or not.
 
-  **The one captured artifact says the sample, not the render, is what fails.** On a `wrap breaks a
-  long line into rows` failure the error context showed `litBands` returning 0 while the page
-  snapshot showed the scene drawn normally. So the frame the assertion read was empty even though a
-  correct frame existed — the harness sampled before or between draws rather than the renderer
-  producing nothing. That points the fix at how these tests choose their frame, not at the effect.
+  What actually happened is that the effect had already exited. klieg starts the hold's clock at
+  `fire()`, while a spec cannot read a pixel until the canvas attaches — and the cold path (vite's
+  transform, the font fetch, the first shader compile) was measured at up to 5.8s against a
+  **4000ms** hold. Attach spends the hold. The spike shows a 300ms hold reading `EMPTY` where 4000
+  and 30000 read lit, at the same attach time.
+
+  The hold is `HOLD_MS = 30000` now, which has to dwarf `CANVAS_TIMEOUT_MS` rather than merely
+  cover the sampling. The failure messages carry `sampled Nms after FIRE, into a Hms hold`, so the
+  next occurrence names its own cause instead of reading as "expected 2, received 0". Verified by
+  mutation: at `HOLD_MS = 300` the two band specs fail with exactly that line.
+
+  Worth knowing for any spike in this area: sampling N throttled frames of full-buffer `readPixels`
+  costs seconds of wall clock, so a second census on the same page measures *much later in the
+  hold*, not the condition it is labelled with. That confound reported the wrong culprit here
+  before a fresh page per condition sorted it out.
 - **`K` and `k` have non-parallel arm sides, and the bevel is what makes it visible.** In Archivo
   Black's own outline the arm's two long edges are 1.31° apart on `K` and 2.56° on `k`, and both
   terminals are cut flat-horizontal — 39.8° off square to the arm. That is the typeface, not klieg:

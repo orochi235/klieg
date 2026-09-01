@@ -45,15 +45,28 @@ describe('tenureAndJump', () => {
     expect(r.meanTenureMs).toBe(500);
   });
 
-  it('counts one handover and measures how far it jumped', () => {
+  // The pass loops, so the holder at the last sample also hands back to the holder at the
+  // first: one handover mid-pass, one more closing the seam.
+  it('counts a handover and measures how far it jumped, seam included', () => {
     const s = samples([
       [true, false],
       [false, true],
     ]);
     const r = tenureAndJump(s, parts(2), 1000);
-    expect(r.handovers).toBe(1);
+    expect(r.handovers).toBe(2);
     expect(r.meanJumpParts).toBe(1);
     expect(r.meanJumpEm).toBeCloseTo(1);
+  });
+
+  it('adds the loop-seam handover the forward walk alone would miss', () => {
+    const s = samples([
+      [true, false, false],
+      [false, true, false],
+      [false, false, true],
+    ]);
+    const r = tenureAndJump(s, parts(3), 900);
+    expect(r.handovers).toBe(3);
+    expect(r.meanJumpParts).toBeCloseTo(4 / 3);
   });
 
   // A layer that drives everything all the time is not a broken readout. It is the honest answer,

@@ -79,11 +79,16 @@ export function tenureAndJump(
   let previousKey = '';
   let previous: Centroid | null = null;
 
-  for (let s = 0; s < samples.samples; s++) {
+  const holdersAt = (s: number): number[] => {
     const holders: number[] = [];
     for (let p = 0; p < samples.moved.length; p++) {
       if ((samples.moved[p] as boolean[])[s]) holders.push(p);
     }
+    return holders;
+  };
+
+  for (let s = 0; s < samples.samples; s++) {
+    const holders = holdersAt(s);
     const key = holders.join(',');
     if (key === previousKey) continue;
     const here = centroid(holders, parts);
@@ -94,6 +99,21 @@ export function tenureAndJump(
     }
     previousKey = key;
     if (here) previous = here;
+  }
+
+  // A pass loops, so the holder at the last sample hands back to the holder at the first -- a
+  // handover the forward walk never sees because it never steps past the array's end.
+  if (samples.samples > 0) {
+    const first = holdersAt(0);
+    const firstKey = first.join(',');
+    if (firstKey !== previousKey) {
+      const here = centroid(first, parts);
+      if (previous && here) {
+        handovers += 1;
+        jumpParts.push(Math.abs(here.index - previous.index));
+        jumpEm.push(Math.hypot(here.x - previous.x, here.y - previous.y));
+      }
+    }
   }
 
   return {

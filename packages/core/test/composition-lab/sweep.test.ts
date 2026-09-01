@@ -1,8 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import type { Composition } from '../../dev/composition-lab/src/composition.js';
 import { syntheticPool } from '../../dev/composition-lab/src/pool.js';
-import { runSweep } from '../../dev/composition-lab/src/sweep.js';
+import type { PassSamples } from '../../dev/composition-lab/src/sample.js';
+import { longestLitMs, runSweep } from '../../dev/composition-lab/src/sweep.js';
 import { NO_CTX } from '../effects/ctx.js';
+
+/** `gain` is the only field `longestLitMs` reads; the rest of a PassSamples is filler. */
+function samples(gain: number[][]): PassSamples {
+  const width = (gain[0] as number[]).length;
+  return {
+    samples: width,
+    gain,
+    scale: gain.map(() => new Array<number>(width).fill(1)),
+    dark: gain.map(() => new Array<number>(width).fill(0)),
+    crawl: gain.map(() => new Array<number>(width).fill(0)),
+    light: gain.map(() => new Array<number>(width).fill(0)),
+    color: gain.map(() => new Array<number>(width).fill(-1)),
+    touched: gain.map(() => false),
+    moved: gain.map(() => new Array<boolean>(width).fill(false)),
+  };
+}
 
 const PARTS = syntheticPool(8, 3);
 
@@ -57,5 +74,22 @@ describe('runSweep', () => {
     expect(runSweep(composition({}), 'nope', 'unrest', 0, 1, 3, PARTS, 60, NO_CTX).rows).toEqual(
       [],
     );
+  });
+});
+
+describe('longestLitMs', () => {
+  it('joins a lit stretch that straddles the loop seam instead of halving it', () => {
+    const s = samples([[1, 0.2, 1]]);
+    expect(longestLitMs(s, 900)).toBe(600);
+  });
+
+  it('reports a pass with no darkness at all as exactly the pass duration', () => {
+    const s = samples([[1, 1, 1]]);
+    expect(longestLitMs(s, 900)).toBe(900);
+  });
+
+  it('has nothing to join when dark at both the first and last sample', () => {
+    const s = samples([[0.2, 1, 0.2]]);
+    expect(longestLitMs(s, 900)).toBe(300);
   });
 });

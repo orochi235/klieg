@@ -41,6 +41,45 @@ export interface SweepResult {
   flat: SweepMetric[];
 }
 
+/**
+ * Longest run of samples with no part dark, in milliseconds. A pass loops, so a lit run open at
+ * the end and one open at the start are one stretch across the seam — the same join
+ * `tenureAndJump` makes. A single run already spanning the whole pass needs no joining.
+ */
+export function longestLitMs(s: PassSamples, pass: number): number {
+  const runs: number[] = [];
+  let run = 0;
+  let firstLit = false;
+  let lastLit = false;
+  for (let c = 0; c < s.samples; c++) {
+    let anyDark = false;
+    for (const row of s.gain) {
+      if ((row[c] as number) < DARK_GAIN) {
+        anyDark = true;
+        break;
+      }
+    }
+    if (c === 0) firstLit = !anyDark;
+    if (c === s.samples - 1) lastLit = !anyDark;
+    if (anyDark) {
+      if (run > 0) runs.push(run);
+      run = 0;
+    } else {
+      run += 1;
+    }
+  }
+  if (run > 0) runs.push(run);
+
+  if (runs.length > 1 && firstLit && lastLit) {
+    const first = runs.shift() as number;
+    const last = runs.pop() as number;
+    runs.push(first + last);
+  }
+
+  const longest = runs.length === 0 ? 0 : Math.max(...runs);
+  return (longest / s.samples) * pass;
+}
+
 function aggregate(
   value: number,
   s: PassSamples,
@@ -58,28 +97,11 @@ function aggregate(
   }
   for (const row of s.light) for (const v of row) light += v;
 
-  let longest = 0;
-  let run = 0;
-  for (let c = 0; c < s.samples; c++) {
-    let anyDark = false;
-    for (const row of s.gain) {
-      if ((row[c] as number) < DARK_GAIN) {
-        anyDark = true;
-        break;
-      }
-    }
-    if (anyDark) run = 0;
-    else {
-      run += 1;
-      longest = Math.max(longest, run);
-    }
-  }
-
   const t = tenureAndJump(s, parts, pass);
   return {
     value,
     darkShare: cells === 0 ? 0 : dark / cells,
-    longestLitMs: (longest / s.samples) * pass,
+    longestLitMs: longestLitMs(s, pass),
     coverage: parts.length === 0 ? 0 : s.touched.filter(Boolean).length / parts.length,
     meanTenureMs: t.meanTenureMs,
     meanJumpParts: t.meanJumpParts,

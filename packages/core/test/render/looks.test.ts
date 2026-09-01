@@ -409,6 +409,49 @@ describe('LookSpec', () => {
     expect(material.sheenColor.getHex()).toBe(0x00ff00);
     expect(material.color.getHex()).toBe(0xffffff);
   });
+
+  it("carries a tintSpecular look's hue onto its specular lobe, tinted or not", () => {
+    const material = createMaterial();
+
+    applyLook(material, { transmission: 1, attenuationColor: 0xd4143c, tintSpecular: true });
+    expect(material.specularColor.getHex()).toBe(0xd4143c);
+
+    applyLook(
+      material,
+      { transmission: 1, attenuationColor: 0xd4143c, tintSpecular: true },
+      0x1f4fd4,
+    );
+    expect(material.specularColor.getHex()).toBe(0x1f4fd4);
+  });
+
+  it('lets a tintSpecular look declare a specular colour of its own anyway', () => {
+    const material = createMaterial();
+
+    applyLook(material, {
+      transmission: 1,
+      attenuationColor: 0xd4143c,
+      specularColor: 0x00ff00,
+      tintSpecular: true,
+    });
+
+    expect(material.specularColor.getHex()).toBe(0x00ff00);
+  });
+
+  it('leaves the specular lobe white on a look that does not ask', () => {
+    const material = createMaterial();
+
+    applyLook(material, { transmission: 1, attenuationColor: 0xd4143c }, 0x1f4fd4);
+
+    expect(material.specularColor.getHex()).toBe(0xffffff);
+  });
+
+  it('gives gem a specular lobe its own colour, so the lamp is not washed grey', () => {
+    const material = createMaterial();
+
+    applyLook(material, 'gem');
+
+    expect(material.specularColor.getHex()).toBe(material.attenuationColor.getHex());
+  });
 });
 
 describe('tintTargetOf', () => {

@@ -785,13 +785,21 @@ Roughly in order of value; the items are independent of each other.
 
   The cursor registration is fixed. What is left is the materials and the tuning:
 
-  **A lamp does not land on every look.** `gem` inherits `clearcoat: 1` from `DEFAULTS` and sets no
-  `specularIntensity`, so two specular lobes stack on it: red-but-dark at low env, bright-but-gray
-  at high, nothing between. Both lobes must come down together — either alone still mirrors gray.
-  That recovers saturation but not brightness, and the brightness half is not a material problem:
-  `transmission` samples the scene behind the glass and klieg renders over an empty one. `sequin` is
-  unreachable at all — `PartKind` is still `'run' | 'body'`, and a chunk look builds zero run parts
-  under a near-black body, so it needs a `'chunk'` kind addressing the letter's `InstancedMesh`.
+  **A lamp lands on `gem` now, and the two-lobe diagnosis this entry used to carry was wrong.**
+  `gem` sets `tintSpecular`, so its specular lobe takes the look's own hue instead of white; that
+  white lobe was the grey. `node spikes/gem-lobes.mjs` measures it — on the shipped look the lamp's
+  pool gains 18.1 luminance against 15.1, and the stone under it goes from saturation 0.185, grey,
+  to 0.493. One visual baseline moved, `look-gem`, and the other 39 did not.
+
+  **Bringing the two lobes down, which this entry used to propose, buys nothing.** `clearcoat` and
+  `specularIntensity` are not a knob separate from exposure: across the full `--cc x --si x --ei`
+  grid every cell lands on one saturation-against-brightness curve, so `ei 0.6 / si 1` and
+  `ei 2.2 / si 0` are the same point reached two ways, and `cc 0 / si 0` is a black stone.
+  Colouring the lobe is the only move that leaves the highlight structure standing.
+
+  `sequin` is unreachable at all — `PartKind` is still `'run' | 'body'`, and a chunk look builds
+  zero run parts under a near-black body, so it needs a `'chunk'` kind addressing the letter's
+  `InstancedMesh`.
 
   **Both halves are fixed.** `node spikes/lamp-registration.mjs [word] [look]` prints the vertical
   one; the 69% this entry once claimed was an understatement of the wrong quantity, the real figure

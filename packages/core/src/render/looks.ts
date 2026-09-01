@@ -142,6 +142,7 @@ export const LOOKS: Record<LookName, LookSpec> = {
     attenuationDistance: 0.6,
     clearcoatRoughness: 0.03,
     dispersion: 4,
+    tintSpecular: true,
   },
   velvet: {
     color: 0x7a1030,
@@ -336,6 +337,13 @@ export function tintMaterialOf(spec: LookSpec): 'body' | 'decoration' {
  */
 export interface LookSpec extends Partial<LookParams> {
   tintTarget?: TintTarget;
+  /**
+   * Colours the specular lobe with the look's own hue instead of leaving it white. Physically
+   * wrong — a dielectric's surface reflection is white — and it is here because klieg renders
+   * over an empty scene, so a transmissive look's colour never arrives through the glass and only
+   * the white lobe is left. A declared `specularColor` still wins.
+   */
+  tintSpecular?: boolean;
   /** Turns the bloom pass on for this look unless the caller says otherwise. */
   bloom?: boolean;
   flake?: FlakeSpec;
@@ -403,14 +411,22 @@ export function createMaterial(envMap: THREE.Texture | null = null): THREE.MeshP
   return material;
 }
 
+/** A spec's params with the tint written to whichever property carries the look's hue. */
+function tintedParams(spec: LookSpec, tint?: number): { params: LookParams; hue: TintTarget } {
+  const params = resolveParams(spec);
+  const hue = tintTargetOf(params, spec.tintTarget);
+  if (tint !== undefined) params[hue] = tint;
+  if (spec.tintSpecular && spec.specularColor === undefined) params.specularColor = params[hue];
+  return { params, hue };
+}
+
 /**
  * Color-valued params are THREE.Color objects. Assigning a hex number over one replaces the
  * object and the material silently stops working, so they must go through .set().
  */
 export function applyLook(material: THREE.MeshPhysicalMaterial, look: Look, tint?: number): void {
   const spec = specOf(look);
-  const params = resolveParams(spec);
-  if (tint !== undefined) params[tintTargetOf(params, spec.tintTarget)] = tint;
+  const { params } = tintedParams(spec, tint);
   const target = material as unknown as Record<string, unknown>;
 
   // A fixed key list rather than the resolved object's own keys: that is what drops a key a
@@ -445,9 +461,6 @@ export interface LightBase {
 }
 
 export function lightBase(look: Look, tint?: number): LightBase {
-  const spec = specOf(look);
-  const params = resolveParams(spec);
-  const target = tintTargetOf(params, spec.tintTarget);
-  if (tint !== undefined) params[target] = tint;
-  return { emissive: params.emissive, hue: params[target] };
+  const { params, hue } = tintedParams(specOf(look), tint);
+  return { emissive: params.emissive, hue: params[hue] };
 }

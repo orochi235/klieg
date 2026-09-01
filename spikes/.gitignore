@@ -1,6 +1,7 @@
 *-out/
 tint-matrix-baseline-0.6.0/
 lamp-*/
+gem-lobes-*/
 show/
 sheet*.png
 svg-tube/*.svg

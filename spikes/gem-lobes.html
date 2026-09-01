@@ -1,0 +1,80 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>gem lobes</title>
+<style>
+  html, body { margin: 0; background: #08090b; }
+  #strip { position: relative; width: 100%; height: 220px; }
+</style>
+<script type="importmap">
+  {
+    "imports": {
+      "three": "/three/three.module.js",
+      "klieg": "/klieg/index.js",
+      "opentype.js": "/opentype/opentype.mjs",
+      "@weasel-js/text": "/weasel-text/index.js",
+      "@weasel-js/font": "/weasel-font/index.js"
+    }
+  }
+</script>
+<div id="strip"></div>
+<script type="module">
+  import { createKlieg, fixed, lamp, specOf } from 'klieg';
+
+  const q = new URLSearchParams(location.search);
+  const num = (name, fallback) => {
+    const v = q.get(name);
+    return v === null ? fallback : Number(v);
+  };
+
+  const look = {
+    ...specOf(q.get('look') ?? 'gem'),
+    clearcoat: num('cc', 1),
+    specularIntensity: num('si', 1),
+    // Absent leaves the look's own lobe, so a run with no --sc measures the shipped gem rather
+    // than silently re-imposing the white one the fix removed.
+    ...(q.get('sc') === null ? {} : { specularColor: Number.parseInt(q.get('sc'), 16) }),
+    ...(q.get('ac') === null ? {} : { attenuationColor: Number.parseInt(q.get('ac'), 16) }),
+    envMapIntensity: num('ei', 2.2),
+  };
+
+  const piece = lamp({
+    source: fixed(num('lx', 0), num('ly', 0)),
+    radius: num('radius', 0.5),
+    strength: num('strength', 2),
+  });
+
+  window.__shot = false;
+  const klieg = createKlieg({
+    fontUrl: '/font.ttf',
+    placement: { kind: 'element', el: document.getElementById('strip') },
+    framing: { width: 0.9, height: 0.6 },
+  });
+
+  void klieg.fire(q.get('text') ?? 'KLIEG', {
+    look,
+    lighting: 'static',
+    enter: 'none',
+    hold: 600_000,
+    effects: q.get('lamp') === '1' ? [{ piece, target: { kind: 'body', by: 'index' } }] : [],
+  });
+
+  // A fixed lamp has no travel to wait out, so settling is purely the first shader compile.
+  setTimeout(() => { window.__shot = true; }, 2500);
+
+  // readPixels after the frame is presented reads an empty buffer — the renderer does not preserve
+  // its drawing buffer — so the read has to happen inside a rAF, before the swap.
+  window.__px = () =>
+    new Promise((res) => {
+      const canvas = document.querySelector('canvas');
+      const gl = canvas.getContext('webgl2');
+      requestAnimationFrame(() => {
+        const { width, height } = canvas;
+        const px = new Uint8Array(width * height * 4);
+        gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        let s = '';
+        const CH = 0x8000;
+        for (let i = 0; i < px.length; i += CH) s += String.fromCharCode(...px.subarray(i, i + CH));
+        res({ width, height, b64: btoa(s) });
+      });
+    });
+</script>

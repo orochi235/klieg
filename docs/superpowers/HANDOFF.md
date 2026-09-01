@@ -811,9 +811,12 @@ Roughly in order of value; the items are independent of each other.
   mapping both pass while the pair disagrees. Dropping `aspect` from the inverse sends the outer
   letters to their neighbours and only that test notices.
 
-  **Still open: `ink` resolves per letter, not per part.** `partSlot` indexes the letter, so all 20
-  of `tubing`'s parts on `klieg` report the same 5 boxes and a lamp cannot light part of a letter.
-  The run meshes carry their own bounds; `Word` keeps only the glyph's.
+  **A run part carries its own ink now**, taken from its tube mesh rather than its letter's glyph
+  box, so `tubing` on `klieg` addresses 20 positions where it addressed 5 and a lamp can light part
+  of a letter. The tube meshes sit in the same letter-local space the glyph geometry does and carry
+  no position of their own, which is what makes the letter's origin place both. Unlike the glyph's
+  box a run's includes the tube radius, so `partExtent` reads marginally wider on tube looks than it
+  did — nothing renders off it.
 
   `OrbitSpec`'s comment already recorded the baseline collapse for `orbit` (`lamp.ts:29`); nobody
   had connected it to `fromPointer`. No visual baseline covers any of this — no `.spec.ts` names

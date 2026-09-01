@@ -46,7 +46,12 @@ const xs = [...new Set(parts.map((p) => +p.x.toFixed(6)))].sort((a, b) => a - b)
 const inkH = extent.maxY - extent.minY;
 const inkW = extent.maxX - extent.minX;
 
-console.log(`'${WORD}' @ ${LOOK}: ${parts.length} parts, ${xs.length} distinct origin x, ${ys.length} distinct origin y`);
+const inkKeys = new Set(
+  parts.map((p) => `${p.ink.minX.toFixed(4)}|${p.ink.maxX.toFixed(4)}|${p.ink.minY.toFixed(4)}`),
+);
+console.log(
+  `'${WORD}' @ ${LOOK}: ${parts.length} parts, ${xs.length} distinct origin x, ${inkKeys.size} distinct ink boxes, ${ys.length} distinct origin y`,
+);
 console.log(`  ink box   x ${extent.minX.toFixed(3)}..${extent.maxX.toFixed(3)} (${inkW.toFixed(3)} em)`);
 console.log(`            y ${extent.minY.toFixed(3)}..${extent.maxY.toFixed(3)} (${inkH.toFixed(3)} em)`);
 console.log(`  origin y  ${ys.map((y) => y.toFixed(3)).join(', ')}`);

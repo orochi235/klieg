@@ -56,14 +56,16 @@ export function Swatch({ samples, parts, channel, at }: SwatchProps) {
     const source = channel === 'color' ? 'gain' : channel;
     const rest = RESTS_AT_ONE.has(source) ? 1 : 0;
 
-    // Deviation is relative to the brightest part in this column, not to an assumed fixed scale --
-    // light's magnitude is unbounded above, so a hardcoded cap would saturate long before the
-    // pool's edge and erase the shape this panel exists to show.
+    // Deviation is relative to the brightest sample anywhere in the pass, not this column alone --
+    // a per-column peak would make the hottest part full brightness in every frame, so scrubbing
+    // to a dim moment would still read as blazing.
     let peak = 0;
     for (let i = 0; i < parts.length; i++) {
       const row = samples[source][i];
       if (!row) continue;
-      peak = Math.max(peak, Math.abs((row[column] as number) - rest));
+      for (let j = 0; j < samples.samples; j++) {
+        peak = Math.max(peak, Math.abs((row[j] as number) - rest));
+      }
     }
 
     for (let i = 0; i < parts.length; i++) {

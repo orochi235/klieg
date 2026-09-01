@@ -283,7 +283,7 @@ export function resolveConfig(input: unknown): ShowConfig {
     active: pickName(raw.active, ACTIVE_NAMES),
     exit: pickName(raw.exit, EXIT_NAMES),
     transform: pickTransform(raw.transform),
-    lineAlign: pickName(raw.lineAlign, ALIGNS) ?? 'center',
+    lineAlign: pickName(raw.lineAlign, ALIGNS) ?? 'start',
     acronym: pickAcronym(raw.acronym),
     hold: pickPause(raw.hold),
     blendMs: pickMs(raw.blendMs, MAX_BLEND_MS),

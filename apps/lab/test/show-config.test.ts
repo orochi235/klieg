@@ -23,10 +23,12 @@ describe('show config: the performance fields', () => {
     expect(round({ transform: { yaw: 9999, pitch: 0, roll: 0 } }).transform?.yaw).toBe(180);
   });
 
-  it('defaults lineAlign to center and keeps a known one', () => {
-    expect(round({}).lineAlign).toBe('center');
-    expect(round({ lineAlign: 'start' }).lineAlign).toBe('start');
-    expect(round({ lineAlign: 'sideways' as never }).lineAlign).toBe('center');
+  // 'start' matches core's `lineAlign` default, so a link with no `lines` renders what a bare
+  // fire() of the same text renders. A link written before that change re-ranges its lines.
+  it('defaults lineAlign to start and keeps a known one', () => {
+    expect(round({}).lineAlign).toBe('start');
+    expect(round({ lineAlign: 'center' }).lineAlign).toBe('center');
+    expect(round({ lineAlign: 'sideways' as never }).lineAlign).toBe('start');
   });
 
   it('carries the acronym routine, or nothing at all', () => {
@@ -63,7 +65,7 @@ describe('show config', () => {
       bloom: undefined,
       pivot: false,
       tint: undefined,
-      lineAlign: 'center',
+      lineAlign: 'start',
       wrap: true,
       chrome: true,
     });
@@ -100,7 +102,7 @@ describe('show config', () => {
       acronym: { caps: 0x2df0ff, read: 1200, settle: 0, hold: 'click' },
     });
     expect(hash).toBe(
-      't=Keep%0ALighting%0AInteresting%2C+Every%0AGlowing+letter&lk=tubing&ln=start' +
+      't=Keep%0ALighting%0AInteresting%2C+Every%0AGlowing+letter&lk=tubing' +
         '&cy=0&hd=click&an=on&cp=2df0ff&rd=1200&st=0&gt=click',
     );
     // Assigning it to `URL.hash` is what `main.ts` does, and it must not re-encode a thing.
@@ -136,7 +138,8 @@ describe('show config', () => {
 
   it('writes only what differs from the defaults', () => {
     expect(encodeConfig({})).toBe('');
-    expect(encodeConfig({ lineAlign: 'center', chrome: true, cycleMs: 3000 })).toBe('');
+    expect(encodeConfig({ lineAlign: 'start', chrome: true, cycleMs: 3000 })).toBe('');
+    expect(encodeConfig({ lineAlign: 'center' })).toBe('ln=center');
   });
 
   for (const [label, raw] of [
@@ -156,7 +159,7 @@ describe('show config', () => {
         bloom: undefined,
         pivot: true,
         tint: undefined,
-        lineAlign: 'center',
+        lineAlign: 'start',
         wrap: true,
         chrome: true,
       });

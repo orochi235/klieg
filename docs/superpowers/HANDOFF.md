@@ -586,10 +586,10 @@ Roughly in order of value; the items are independent of each other.
   Playwright baselines passed unchanged, and no image baseline covers a multi-line block's
   horizontal placement. The stage and placement unit tests are the guard.
 
-  **`apps/lab`'s share links still decode a missing `lines` to `'center'`** (`show-config.ts:286`),
-  so a link written before the change still renders as written, and a lab link now disagrees with
-  a bare `fire()` of the same text. `2491378` did not touch the lab, so whether that split is
-  wanted has not been decided — aligning them re-renders every existing link.
+  **`apps/lab` now decodes a missing `lines` to `'start'` too**, so a lab link and a bare `fire()`
+  of the same text agree. A multi-line link written before this re-ranges its lines; single-line
+  links do not move. The encoder is symmetric off `resolveConfig({})`, so `ln=center` is now the
+  thing written out and `ln=start` the thing omitted.
 
   **The neon does not render smaller than the fallback, and the trim knob would be the wrong fix.**
   Measured by `node spikes/fallback-gap.mjs`, which fires into an anchor beside the heading it

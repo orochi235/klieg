@@ -5,15 +5,31 @@ const args = (params: Record<string, number>) =>
     .map(([k, v]) => `${k}: ${v}`)
     .join(', ');
 
+function lampSource(layer: EffectLayer): string {
+  const p = layer.params;
+  const src =
+    layer.lampSource === 'orbit'
+      ? `orbit({ radius: ${p.sweep ?? 0.3}, x: ${p.x ?? 0}, y: ${p.y ?? 0} })`
+      : `fixed(${p.x ?? 0}, ${p.y ?? 0})`;
+  return `lamp({ source: ${src}, duration: ${p.duration ?? 4000}, radius: ${p.radius ?? 0.5}, strength: ${p.strength ?? 2} })`;
+}
+
 function layerSource(layer: EffectLayer): string {
-  const inner =
-    layer.kind === 'draft'
-      ? `{\n        duration: 1000,\n        at(t, part) {\n${layer.source ?? ''}\n        },\n      }`
-      : // klieg exports `roving` by name but reaches the built-ins only through `EFFECTS`.
-        `EFFECTS.${layer.kind}({ ${args(layer.params)} })`;
-  const piece = layer.roving
-    ? `roving(${inner}, { dwell: ${layer.roving.dwell}, seed: ${layer.roving.seed}, epochs: ${layer.roving.epochs} })`
-    : inner;
+  let piece: string;
+  if (layer.kind === 'draft') {
+    piece = `{\n        duration: 1000,\n        at(t, part) {\n${layer.source ?? ''}\n        },\n      }`;
+  } else if (layer.kind === 'lamp') {
+    piece = lampSource(layer);
+  } else {
+    // klieg exports `roving` by name but reaches the built-ins only through `EFFECTS`.
+    piece = `EFFECTS.${layer.kind}({ ${args(layer.params)} })`;
+  }
+  if (layer.roving && layer.kind !== 'lamp') {
+    piece = `roving(${piece}, { dwell: ${layer.roving.dwell}, seed: ${layer.roving.seed}, epochs: ${layer.roving.epochs} })`;
+  }
+  if (layer.intermittent) {
+    piece = `intermittent(${piece}, { spell: ${layer.intermittent.spell}, calm: ${layer.intermittent.calm}, bouts: ${layer.intermittent.bouts} })`;
+  }
   const stagger = layer.stagger === undefined ? '' : `\n      stagger: ${layer.stagger},`;
   return `    {
       piece: ${piece},
@@ -29,8 +45,12 @@ export function emit(c: Composition): string {
   const effects = layers.length > 0 ? `\n  effects: [\n${layers.join('\n')}\n  ],` : '';
 
   const names: string[] = [];
-  if (live.some((l) => l.kind !== 'draft')) names.push('EFFECTS');
-  if (live.some((l) => l.roving)) names.push('roving');
+  if (live.some((l) => l.kind !== 'draft' && l.kind !== 'lamp')) names.push('EFFECTS');
+  if (live.some((l) => l.kind === 'lamp' && l.lampSource !== 'orbit')) names.push('fixed');
+  if (live.some((l) => l.kind === 'lamp')) names.push('lamp');
+  if (live.some((l) => l.intermittent)) names.push('intermittent');
+  if (live.some((l) => l.kind === 'lamp' && l.lampSource === 'orbit')) names.push('orbit');
+  if (live.some((l) => l.roving && l.kind !== 'lamp')) names.push('roving');
   const imports = names.length > 0 ? `import { ${names.join(', ')} } from 'klieg';\n\n` : '';
 
   return `${imports}klieg.fire(${JSON.stringify(c.text)}, {

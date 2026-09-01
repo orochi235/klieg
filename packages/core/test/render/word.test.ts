@@ -1608,6 +1608,23 @@ describe('part pool', () => {
     expect(new Word('A', stubFont(), 'gold', ROOMY).partsOf('run')).toHaveLength(0);
   });
 
+  // A lamp measures to `ink`, so runs sharing one box means it can only light whole letters.
+  it("gives each run part its own ink rather than the whole letter's", () => {
+    const runs = new Word('A', stubFont(), 'tubing', ROOMY).partsOf('run');
+    const key = (p: PartInfo) => `${p.ink.minX}|${p.ink.maxX}|${p.ink.minY}|${p.ink.maxY}`;
+
+    expect(runs.length).toBeGreaterThan(1);
+    expect(new Set(runs.map(key)).size).toBeGreaterThan(1);
+  });
+
+  it('makes at least one run narrower than the letter it belongs to', () => {
+    const word = new Word('A', stubFont(), 'tubing', ROOMY);
+    const extent = word.partExtent() as { minX: number; maxX: number };
+    const narrowest = Math.min(...word.partsOf('run').map((p) => p.ink.maxX - p.ink.minX));
+
+    expect(narrowest).toBeLessThan(extent.maxX - extent.minX);
+  });
+
   it('numbers run parts across the whole word, not per letter', () => {
     const word = new Word('AA', stubFont(), 'tubing', ROOMY);
     const parts = word.partsOf('run');

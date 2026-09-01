@@ -381,7 +381,9 @@ export class Word {
       const run = runs[n] as (typeof runs)[number];
       const at = total > 0 ? walked / total : n / runs.length;
       const span = total > 0 ? run.length / total : 1 / runs.length;
-      this.parts.push(this.partInfo('run', n, runs.length, run.slot, at, span));
+      this.parts.push(
+        this.partInfo('run', n, runs.length, run.slot, at, span, this.meshInk(run.slot, run.mesh)),
+      );
       this.partMeshes.push(run.mesh);
       this.partBaseColor.push(run.color);
       this.partReadsRunColor.push(run.tinted);
@@ -401,6 +403,7 @@ export class Word {
     slot: number,
     at: number,
     span: number,
+    ink: PartInfo['ink'] = this.inkOf(slot),
   ): PartInfo {
     return {
       kind,
@@ -409,13 +412,33 @@ export class Word {
       letter: this.letterInfo(slot),
       x: this.baseX[slot] as number,
       y: this.baseY[slot] as number,
-      ink: this.inkOf(slot),
+      ink,
       line: this.lineOf[slot] as number,
       column: this.columnOf[slot] as number,
       lineCount: this.lineCount,
       columnCount: this.columnCount,
       at,
       span,
+    };
+  }
+
+  /**
+   * One run's own drawn bounds, rather than its letter's. The tube meshes are built in the same
+   * letter-local space the glyph geometry is, and carry no position of their own, so the letter's
+   * origin places them the same way. Unlike the glyph's box this includes the tube's radius.
+   */
+  private meshInk(slot: number, mesh: THREE.Mesh): PartInfo['ink'] {
+    const geo = mesh.geometry;
+    if (!geo.boundingBox) geo.computeBoundingBox();
+    const box = geo.boundingBox;
+    if (!box) return this.inkOf(slot);
+    const x = this.baseX[slot] as number;
+    const y = this.baseY[slot] as number;
+    return {
+      minX: x + box.min.x,
+      maxX: x + box.max.x,
+      minY: y + box.min.y,
+      maxY: y + box.max.y,
     };
   }
 

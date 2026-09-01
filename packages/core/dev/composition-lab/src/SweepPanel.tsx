@@ -2,7 +2,7 @@ import type { FrameCtx, PartInfo } from '@core/effects/types.js';
 import { useState } from 'react';
 import type { Composition } from './composition.js';
 import { PARAMS } from './pieces.js';
-import { runSweep, type SweepResult } from './sweep.js';
+import { PASS_SAMPLES, runSweep, type SweepResult } from './sweep.js';
 
 export interface SweepPanelProps {
   composition: Composition;
@@ -73,7 +73,9 @@ export function Sweep({ composition, parts, ctx }: SweepPanelProps) {
           disabled={!layer || !active}
           onClick={() =>
             layer &&
-            setResult(runSweep(composition, layer.id, active, min, max, steps, parts, 600, ctx))
+            setResult(
+              runSweep(composition, layer.id, active, min, max, steps, parts, PASS_SAMPLES, ctx),
+            )
           }
         >
           run

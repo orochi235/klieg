@@ -13,6 +13,7 @@ import { Raster } from './Raster.js';
 import { Swatch } from './Swatch.js';
 import { Sweep } from './SweepPanel.js';
 import { samplePass } from './sample.js';
+import { PASS_SAMPLES } from './sweep.js';
 import { Tenure } from './TenurePanel.js';
 
 /** How far past `hold` the transport runs, so an exit is visible. */
@@ -86,7 +87,7 @@ export function App() {
     const specs = toFireOptions(composition).effects ?? [];
     const frame = new EffectFrame(planEffects(specs, parts));
     const pass = Math.max(1, ...specs.map((s) => (s.piece as { duration: number }).duration));
-    return { pass, data: samplePass(frame, parts, pass, 600, CTX) };
+    return { pass, data: samplePass(frame, parts, pass, PASS_SAMPLES, CTX) };
   }, [composition, parts]);
 
   useEffect(() => {

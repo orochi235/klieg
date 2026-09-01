@@ -1,11 +1,13 @@
 import { EffectFrame, planEffects } from '@core/effects/frame.js';
-import type { FrameCtx } from '@core/effects/types.js';
+import type { FrameCtx, PartInfo } from '@core/effects/types.js';
+import { type LoadedFont, loadFont } from '@core/text/font.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { type Composition, toFireOptions } from './composition.js';
+import { fontUrl } from './font.js';
 import { CHANNELS, type Channel, Plot } from './Plot.js';
 import { Preview } from './Preview.js';
 import { restore, save } from './persist.js';
-import { poolCounts, syntheticPool } from './pool.js';
+import { poolCounts, realPool, syntheticPool } from './pool.js';
 import { Rail } from './Rail.js';
 import { Raster } from './Raster.js';
 import { samplePass } from './sample.js';
@@ -26,7 +28,25 @@ export function App() {
   const last = useRef(performance.now());
   const span = composition.hold + TAIL_MS;
 
-  const parts = useMemo(() => syntheticPool(24, 7), []);
+  const [font, setFont] = useState<LoadedFont | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void loadFont(fontUrl).then((f) => {
+      if (live) setFont(f);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const synthetic = useMemo(() => syntheticPool(24, 7), []);
+
+  /** The real pool needs a font, so it stands in as synthetic for the one frame before it loads. */
+  const parts: PartInfo[] = useMemo(() => {
+    if (composition.pool === 'synthetic' || !font) return synthetic;
+    return realPool(composition.text, font, composition.look);
+  }, [composition.pool, composition.text, composition.look, font, synthetic]);
 
   /** Rows the raster draws: the kinds some enabled layer targets, or the whole pool when none do. */
   const rows = useMemo(() => {
@@ -105,7 +125,12 @@ export function App() {
           </span>
         </section>
         <section className="cl-panels">
-          <Raster samples={sampled.data} rows={rows} at={(elapsed % sampled.pass) / sampled.pass} />
+          <Raster
+            samples={sampled.data}
+            rows={rows}
+            at={(elapsed % sampled.pass) / sampled.pass}
+            kinds={[...new Set(composition.effects.filter((l) => l.enabled).map((l) => l.target))]}
+          />
           <div className="cl-row">
             <select value={channel} onChange={(e) => setChannel(e.target.value as Channel)}>
               {CHANNELS.map((c) => (

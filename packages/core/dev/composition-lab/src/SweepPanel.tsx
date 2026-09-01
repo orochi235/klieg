@@ -11,7 +11,7 @@ export interface SweepPanelProps {
 }
 
 const COLUMNS = [
-  ['darkShare', 'dark'],
+  ['darkShare', 'dark share'],
   ['longestLitMs', 'lit ms'],
   ['coverage', 'cover'],
   ['meanTenureMs', 'tenure'],

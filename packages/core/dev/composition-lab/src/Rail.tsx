@@ -117,6 +117,7 @@ export function Rail({ composition, onChange, counts }: RailProps) {
             >
               <option value="run">run</option>
               <option value="body">body</option>
+              <option value="chunk">chunk</option>
             </select>
           </label>
           {counts[layer.target] === 0 ? (

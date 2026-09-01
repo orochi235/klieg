@@ -242,12 +242,15 @@ fire('JACKPOT!', {
 | field | meaning |
 |---|---|
 | `piece` | a name from `EFFECT_NAMES`, or a piece from a factory so it can be tuned |
-| `target` | `{ kind: 'run' \| 'body' }` plus a selection — `by` orders the pool (`'seed'`, `'length'`, `'index'`), `amount` takes a fraction of it and `count` a literal number of members, and `count` wins when both are given |
+| `target` | `{ kind: 'run' \| 'body' \| 'chunk' }` plus a selection — `by` orders the pool (`'seed'`, `'length'`, `'index'`), `amount` takes a fraction of it and `count` a literal number of members, and `count` wins when both are given |
 | `stagger` | per-part phase spread, the same spec `enter` and `exit` take |
 | `seed` | fixes the selection, so a pinned frame is reproducible |
 
 The pool is word-wide, so `{ count: 1 }` picks one bad tube in the sign rather than one in every
-letter. A `body` part only reads brightness; colour reaches `run` parts only.
+letter. A `body` part only reads brightness; colour reaches `run` parts only. A `chunk` part is a
+letter's whole scattered field — `sequin`'s sequins — which is one instanced draw sharing one
+material, so it moves and lights per letter rather than per scatterer. Target it rather than
+`body` on a scattered look: the body sits near-black underneath and barely shows a light.
 
 **`flicker`** — a tube on its way out. `EFFECTS.flicker({ depth, unrest, spell, calm, duration })`:
 `depth` is the floor of its brightness, `unrest` the share of the pass spent stuttering. `spell` and

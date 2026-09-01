@@ -22,6 +22,6 @@ describe('syntheticPool', () => {
 
 describe('poolCounts', () => {
   it('counts each kind, so an empty target can be flagged before it silently does nothing', () => {
-    expect(poolCounts(syntheticPool(5, 2))).toEqual({ run: 5, body: 2 });
+    expect(poolCounts(syntheticPool(5, 2))).toEqual({ run: 5, body: 2, chunk: 0 });
   });
 });

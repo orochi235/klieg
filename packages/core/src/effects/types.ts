@@ -2,8 +2,12 @@ import type { LetterInfo, StaggerSpec } from '../motion/types.js';
 import type { Vec3 } from '../pose.js';
 import type { SelectSpec } from '../select.js';
 
-/** What an effect can address. A part is the smallest thing below a letter. */
-export type PartKind = 'run' | 'body';
+/**
+ * What an effect can address. A part is the smallest thing below a letter. `chunk` is a letter's
+ * whole scattered field, not one scatterer: the field is a single instanced draw sharing one
+ * material, so it moves and lights together or not at all.
+ */
+export type PartKind = 'run' | 'body' | 'chunk';
 
 /**
  * One addressable part, described the way `LetterInfo` describes a letter. The pool is word-wide,

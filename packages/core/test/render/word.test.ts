@@ -6,12 +6,13 @@ import { Timeline } from '../../src/motion/compositor.js';
 import type { LetterInfo, MotionPiece } from '../../src/motion/types.js';
 import { NONE, orderKey } from '../../src/motion/types.js';
 import { pointerFrame } from '../../src/pointer.js';
-import type { PoseOffset } from '../../src/pose.js';
+import type { PoseOffset, Vec3 } from '../../src/pose.js';
 import { WordCaches } from '../../src/render/caches.js';
+import type { ChunkSpec } from '../../src/render/decoration.js';
 import type { FlakeUniforms } from '../../src/render/flake.js';
-import { type LookSpec, specOf } from '../../src/render/looks.js';
+import { LOOKS, type LookSpec, lightBase, specOf } from '../../src/render/looks.js';
 import type { GradientSpec } from '../../src/render/tube/gradient.js';
-import { Word } from '../../src/render/word.js';
+import { litEmissive, Word } from '../../src/render/word.js';
 import type { LoadedFont } from '../../src/text/font.js';
 import { DEFAULT_GLYPH_OPTIONS } from '../../src/text/glyphs.js';
 import type { Budget } from '../../src/text/layout.js';
@@ -112,6 +113,15 @@ function census(word: Word): { meshes: number; materials: number } {
 
 function materialOf(word: Word): THREE.MeshPhysicalMaterial {
   return (meshes(word)[0] as THREE.Mesh).material as THREE.MeshPhysicalMaterial;
+}
+
+/** The material of the first letter's chunk field, which is a sibling of its body mesh. */
+function decorationOf(word: Word): THREE.MeshPhysicalMaterial {
+  const field = drawn(groups(word)[0] as THREE.Group).children.find(
+    (c) => c instanceof THREE.InstancedMesh,
+  );
+  if (!field) throw new Error('the word has no chunk field');
+  return (field as THREE.InstancedMesh).material as THREE.MeshPhysicalMaterial;
 }
 
 /** World-space midpoint of the advance span the drawn glyphs occupy. */
@@ -1608,6 +1618,36 @@ describe('part pool', () => {
     expect(new Word('A', stubFont(), 'gold', ROOMY).partsOf('run')).toHaveLength(0);
   });
 
+  it('builds one chunk part per drawn letter on a chunk look', () => {
+    const parts = new Word('A B', stubFont(), 'sequin', ROOMY).partsOf('chunk');
+
+    expect(parts.map((p) => p.letter.index)).toEqual([0, 2]);
+    expect(parts.map((p) => p.index)).toEqual([0, 1]);
+    expect(parts.every((p) => p.count === 2)).toBe(true);
+  });
+
+  // Derived from LOOKS rather than named, so a look added later is covered without editing this.
+  it('builds chunk parts for exactly the looks that scatter chunks', () => {
+    const scatters = (name: keyof typeof LOOKS) => LOOKS[name].decoration?.kind === 'chunks';
+    const names = Object.keys(LOOKS) as (keyof typeof LOOKS)[];
+
+    const built = names.filter(
+      (name) => new Word('A', stubFont(), name, ROOMY).partsOf('chunk').length > 0,
+    );
+
+    expect(built).toEqual(names.filter(scatters));
+    expect(built).not.toHaveLength(0);
+  });
+
+  // A chunk field covers its whole letter, so unlike a run it has no box of its own to offer.
+  it("gives a chunk part its letter's ink", () => {
+    const word = new Word('A', stubFont(), 'sequin', ROOMY);
+    const [chunk] = word.partsOf('chunk');
+    const [body] = word.partsOf('body');
+
+    expect(chunk?.ink).toEqual(body?.ink);
+  });
+
   // A lamp measures to `ink`, so runs sharing one box means it can only light whole letters.
   it("gives each run part its own ink rather than the whole letter's", () => {
     const runs = new Word('A', stubFont(), 'tubing', ROOMY).partsOf('run');
@@ -1961,6 +2001,99 @@ describe('effects', () => {
     expect(emissive.g).toBeGreaterThan(new THREE.Color(0x008000).g);
   });
 
+  // The reason the kind exists: a chunk look builds no runs, and its body is near-black under the
+  // field, so before this a lamp had nothing on it to land on that anyone could see.
+  it('lights a chunk look through its decoration, which has no run to carry the light', () => {
+    const word = new Word(
+      'A',
+      stubFont(),
+      {
+        ...specOf('sequin'),
+        effects: [{ piece: lamplight, target: { kind: 'chunk', by: 'index' } }],
+      },
+      ROOMY,
+    );
+    const before = decorationOf(word).emissive.clone();
+
+    word.apply(STILL, 0, NO_CTX);
+
+    expect(decorationOf(word).emissive.r).toBeGreaterThan(before.r);
+  });
+
+  // `sequin` tints to its decoration, so the field is tan over a near-black body. Reading the
+  // body's base instead of the field's still brightens the material, which is why "the lamp
+  // landed" is not an assertion that can tell the two apart — the colour it landed in is.
+  it('tints a chunk lamp by the field it lights, not by the body underneath it', () => {
+    const spec = specOf('sequin');
+    const decoration = spec.decoration as ChunkSpec;
+    const word = new Word(
+      'A',
+      stubFont(),
+      { ...spec, effects: [{ piece: lamplight, target: { kind: 'chunk', by: 'index' } }] },
+      ROOMY,
+    );
+    // `lamplight` is white at 0.5, which the compositor folds to this before a material sees it.
+    const shed: Vec3 = [0.5, 0.5, 0.5];
+    const off = (look: LookSpec) => {
+      const base = lightBase(look);
+      return litEmissive(base.emissive, base.hue, shed);
+    };
+
+    word.apply(STILL, 0, NO_CTX);
+
+    expect(decorationOf(word).emissive.getHex()).toBe(off(decoration.look));
+    // The guard on the guard: the line above can only fail on the wrong base if the two differ.
+    expect(off(spec)).not.toBe(off(decoration.look));
+  });
+
+  // A part resolving to rest is not written at all, so what puts a field back when the lamp moves
+  // off it is the per-frame reset — not the write. Comparing against a never-lit word cannot tell.
+  it('puts a chunk field back to its own emissive on a frame the lamp has left', () => {
+    const passing: EffectPiece = {
+      duration: 1000,
+      at: (t) => (t < 0.5 ? { light: { color: 0xffffff, amount: 0.5 } } : {}),
+    };
+    const word = new Word(
+      'A',
+      stubFont(),
+      {
+        ...specOf('sequin'),
+        effects: [{ piece: passing, target: { kind: 'chunk', by: 'index' } }],
+      },
+      ROOMY,
+    );
+    const rest = lightBase((specOf('sequin').decoration as ChunkSpec).look).emissive;
+
+    word.apply(STILL, 0, NO_CTX);
+    const lit = decorationOf(word).emissive.getHex();
+    word.apply(STILL, 750, NO_CTX);
+
+    expect(lit).not.toBe(rest);
+    expect(decorationOf(word).emissive.getHex()).toBe(rest);
+  });
+
+  // sequin's body and its field happen to share an emissiveIntensity, so nothing shipped can tell
+  // the two bases apart; a look whose field carries its own is what makes the wrong one visible.
+  it("scales a chunk part's gain against the decoration's emissive intensity, not the body's", () => {
+    const spec = specOf('sequin');
+    const decoration = spec.decoration as ChunkSpec;
+    const word = new Word(
+      'A',
+      stubFont(),
+      {
+        ...spec,
+        emissiveIntensity: 1,
+        decoration: { ...decoration, look: { ...decoration.look, emissiveIntensity: 4 } },
+        effects: [{ piece: half, target: { kind: 'chunk', by: 'index' } }],
+      },
+      ROOMY,
+    );
+
+    word.apply(STILL, 0, NO_CTX);
+
+    expect(decorationOf(word).emissiveIntensity).toBeCloseTo(2, 6);
+  });
+
   // tubing's runs are 0xff2d95, so red is already saturated and clamping cannot raise it: a lamp
   // this test can see has to be read off green or blue.
   it('adds lamp light into a run colour', () => {
@@ -1988,6 +2121,26 @@ describe('effects', () => {
 
     expect(lit).toBeGreaterThan(unlit.g);
     expect(materialOf(word).emissive.g).toBeCloseTo(unlit.g, 6);
+  });
+
+  // The one case the write path cannot cover: a retired part is skipped by resolve, so without the
+  // per-frame reset its field keeps the last lamp it saw for as long as it is on screen.
+  it('lets a chunk lamp go when a regroup drops the letter it was lighting', () => {
+    const word = new Word(
+      'AB',
+      stubFont(),
+      { ...specOf('sequin'), effects: [{ piece: lamplight, target: { kind: 'chunk', ...FIRST } }] },
+      ROOMY,
+    );
+    const rest = lightBase((specOf('sequin').decoration as ChunkSpec).look).emissive;
+
+    word.apply(STILL, 0, NO_CTX);
+    const lit = decorationOf(word).emissive.getHex();
+    word.regroup((letter) => letter.index === 1, 'line');
+    word.apply(STILL, 0, NO_CTX);
+
+    expect(lit).not.toBe(rest);
+    expect(decorationOf(word).emissive.getHex()).toBe(rest);
   });
 
   it('skips a run whose material came from a debug override and has no run-colour contract', () => {

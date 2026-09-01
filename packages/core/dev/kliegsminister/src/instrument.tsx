@@ -3,11 +3,16 @@ import { CUT_REPAIR_IDS } from '@core/render/tube/repairs.js';
 import { DEFAULT_REJOIN, REJOINS, type Rejoin } from '@core/render/tube/runs.js';
 import { TUBE_STAGES, type TubeStageId } from '@core/render/tube/stages.js';
 import type { LoadedFont } from '@core/text/font.js';
-import { CanvasStackContext, defineInstrument, type ViewTransform } from '@weasel-js/labkit';
-import { useContext, useEffect, useRef, useState } from 'react';
+import {
+  as2DView,
+  CanvasStackContext,
+  defineInstrument,
+  type ViewTransform,
+} from '@weasel-js/labkit';
+import { type RefObject, useContext, useEffect, useRef, useState } from 'react';
 import type * as THREE from 'three';
 import { Legend } from './LegendPanel.js';
-import { INK } from './legend.js';
+import { INK, layerDrew } from './legend.js';
 import { NODE_KEY, STAGE_NODES, TOGGLE_GROUPS } from './pipeline.js';
 import { buildScene, type CornerMark, type CornerScene, type GlyphBounds } from './scene.js';
 import { isTubeLook, type TubeLook } from './spec.js';
@@ -68,17 +73,20 @@ export function provideFont(loaded: LoadedFont): void {
   font = loaded;
 }
 
-/**
- * Puts world origin at the middle of the view. `initialView.pan` is in screen pixels, which an
- * instrument cannot know when it is written, so centring has to happen where the size is known.
- * The offset is in world units so the camera's own scale is not applied twice.
- */
-function centred(ctx: CanvasRenderingContext2D, zoom: number, paint: () => void): void {
-  const dpr = window.devicePixelRatio || 1;
-  ctx.save();
-  ctx.translate(ctx.canvas.width / dpr / 2 / zoom, ctx.canvas.height / dpr / 2 / zoom);
-  paint();
-  ctx.restore();
+type Draw = (
+  ctx: CanvasRenderingContext2D,
+  args: { state: CornerScene; config: Config; zoom: number },
+) => void;
+
+/** Declares a canvas layer that tells the legend it painted. */
+function layer(id: string, draw: Draw): { id: string; draw: Draw } {
+  return {
+    id,
+    draw: (ctx, args) => {
+      layerDrew(id);
+      draw(ctx, args);
+    },
+  };
 }
 
 function stroke(
@@ -105,7 +113,7 @@ function stroke(
 
 /**
  * A ghost's geometry, however short: a run of vertices strokes, a single one draws as a dot. The
- * radius is the stroke's own width — both are already in the glyph's units, which `centred` scales.
+ * radius is the stroke's own width — both are already in the glyph's units, which the camera scales.
  */
 function mark(
   ctx: CanvasRenderingContext2D,
@@ -152,15 +160,60 @@ function mapProject(bounds: GlyphBounds): (x: number, y: number) => MapPoint {
 }
 
 /**
- * What the main canvas frames, in glyph space. Its layers draw relative to `state.centre` with the
- * world origin at the middle of the view, so the pan is what the camera has moved off that corner.
+ * What the main canvas frames, in glyph space. Layers draw `state.centre` at the world origin with
+ * y flipped, and the camera puts world point `p` at `pan + zoom * p`, so inverting the middle of
+ * the canvas — screen `(width / 2, height / 2)` — gives the glyph point at the centre of the view.
  */
 function framedBy(scene: CornerScene, view: ViewTransform, width: number, height: number) {
   const halfW = width / 2 / view.zoom;
   const halfH = height / 2 / view.zoom;
-  const cx = scene.centre.x - view.pan.x / view.zoom;
-  const cy = scene.centre.y + view.pan.y / view.zoom;
+  const cx = scene.centre.x + halfW - view.pan.x / view.zoom;
+  const cy = scene.centre.y - halfH + view.pan.y / view.zoom;
   return { cx, cy, halfW, halfH };
+}
+
+/**
+ * The box of the overlay this element sits in. That overlay covers the canvas stack, so its size is
+ * what the main view frames.
+ */
+function useHostSize(ref: RefObject<HTMLElement | null>) {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    const host = ref.current?.parentElement;
+    if (!host) return;
+    const update = () => {
+      const rect = host.getBoundingClientRect();
+      setSize((prev) =>
+        prev.width === rect.width && prev.height === rect.height
+          ? prev
+          : { width: rect.width, height: rect.height },
+      );
+    };
+    update();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(update);
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, [ref]);
+  return size;
+}
+
+/**
+ * Seeds the pan to the middle of the canvas. labkit's `initialView` is fixed at definition time and
+ * it offers no size-aware view hook, so a pan of exactly zero — what `initialView` and Reset both
+ * leave behind — stands in for "not centred yet".
+ */
+function CentreView({ view, setView }: { view: unknown; setView: (next: unknown) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const size = useHostSize(ref);
+  const current = as2DView(view);
+  const zoom = current?.zoom ?? null;
+  const offCentre = current !== null && (current.pan.x !== 0 || current.pan.y !== 0);
+  useEffect(() => {
+    if (zoom === null || offCentre || size.width === 0) return;
+    setView({ zoom, pan: { x: size.width / 2, y: size.height / 2 } });
+  }, [zoom, offCentre, size, setView]);
+  return <div ref={ref} hidden />;
 }
 
 type Framed = ReturnType<typeof framedBy>;
@@ -243,27 +296,8 @@ function Minimap({
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stack = useContext(CanvasStackContext);
-  const [size, setSize] = useState({ width: 0, height: 0 });
+  const size = useHostSize(boxRef);
   const dpr = window.devicePixelRatio || 1;
-
-  // The overlay this sits in covers the canvas stack, so its box is what the main view frames.
-  useEffect(() => {
-    const host = boxRef.current?.parentElement;
-    if (!host) return;
-    const update = () => {
-      const rect = host.getBoundingClientRect();
-      setSize((prev) =>
-        prev.width === rect.width && prev.height === rect.height
-          ? prev
-          : { width: rect.width, height: rect.height },
-      );
-    };
-    update();
-    if (typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(update);
-    ro.observe(host);
-    return () => ro.disconnect();
-  }, []);
 
   const framed =
     stack && size.width > 0 ? framedBy(scene, stack.view, size.width, size.height) : null;
@@ -399,90 +433,71 @@ export const junction = defineInstrument<CornerScene, Config>({
   canvas: {
     initialView: { zoom: 1600, pan: { x: 0, y: 0 } },
     layers: [
-      {
-        id: 'glyph',
-        draw: (ctx, { state, zoom }) =>
-          centred(ctx, zoom, () => {
-            // Every front path, counters included — `contour` draws only the path the selected
-            // corner sits on, so without this the rest of the letter is invisible while tuning.
-            for (const path of state.outline) {
-              stroke(ctx, path.points, state.centre, INK.glyph, 1 / zoom);
-            }
-          }),
-      },
-      {
-        id: 'floor',
-        draw: (ctx, { state, zoom }) =>
-          centred(ctx, zoom, () => {
-            ctx.beginPath();
-            ctx.arc(0, 0, state.rhoMin, 0, Math.PI * 2);
-            ctx.strokeStyle = INK.floor;
-            ctx.lineWidth = 1 / zoom;
-            ctx.setLineDash([4 / zoom, 5 / zoom]);
-            ctx.stroke();
-            ctx.setLineDash([]);
-          }),
-      },
-      {
-        id: 'contour',
-        draw: (ctx, { state, zoom }) =>
-          centred(ctx, zoom, () => {
-            stroke(ctx, state.contour, state.centre, INK.contour, 1.2 / zoom);
-            stroke(ctx, state.replaced, state.centre, INK.replaced, 8 / zoom);
-          }),
-      },
-      {
-        id: 'built',
-        draw: (ctx, { state, zoom }) =>
-          centred(ctx, zoom, () => {
-            for (const run of state.carried) {
-              const ink = run.side === 'after' ? INK.builtAfter : INK.built;
-              stroke(ctx, run.points, state.centre, ink, 2.6 / zoom);
-              run.points.forEach((p, i) => {
-                if (run.authored[i]) dot(ctx, p, state.centre, INK.authored, 2.2 / zoom);
-              });
-            }
-          }),
-      },
-      {
-        id: 'staged',
-        draw: (ctx, { state, zoom }) =>
-          centred(ctx, zoom, () => {
-            for (const span of state.staged) {
-              stroke(ctx, span, state.centre, INK.staged, 1.6 / zoom);
-            }
-          }),
-      },
-      {
-        id: 'ghost',
-        draw: (ctx, { state, zoom }) =>
-          centred(ctx, zoom, () => {
-            for (const ghost of state.ghosts) {
-              if (ghost.ran) continue;
-              // A one-vertex site is most of them — `stretch` drops a single vertex per corner —
-              // and a one-point polyline strokes nothing, so the readout would name a ghost the
-              // canvas never drew.
-              mark(ctx, ghost.removed, state.centre, INK.removed, 7 / zoom);
-              ctx.setLineDash([4 / zoom, 4 / zoom]);
-              mark(ctx, ghost.added, state.centre, INK.added, 2.4 / zoom);
-              ctx.setLineDash([]);
-            }
-          }),
-      },
-      {
-        id: 'repair',
-        draw: (ctx, { state, zoom }) =>
-          centred(ctx, zoom, () => {
-            if (state.drawn) stroke(ctx, state.drawn, state.centre, INK.drawn, 3 / zoom);
-          }),
-      },
+      layer('glyph', (ctx, { state, zoom }) => {
+        // Every front path, counters included — `contour` draws only the path the selected
+        // corner sits on, so without this the rest of the letter is invisible while tuning.
+        for (const path of state.outline) {
+          stroke(ctx, path.points, state.centre, INK.glyph, 1 / zoom);
+        }
+      }),
+      layer('floor', (ctx, { state, zoom }) => {
+        ctx.beginPath();
+        ctx.arc(0, 0, state.rhoMin, 0, Math.PI * 2);
+        ctx.strokeStyle = INK.floor;
+        ctx.lineWidth = 1 / zoom;
+        ctx.setLineDash([4 / zoom, 5 / zoom]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }),
+      layer('contour', (ctx, { state, zoom }) => {
+        stroke(ctx, state.contour, state.centre, INK.contour, 1.2 / zoom);
+        stroke(ctx, state.replaced, state.centre, INK.replaced, 8 / zoom);
+      }),
+      layer('staged', (ctx, { state, zoom }) => {
+        for (const span of state.staged) {
+          stroke(ctx, span, state.centre, INK.staged, 1.6 / zoom);
+        }
+      }),
+      layer('built', (ctx, { state, zoom }) => {
+        for (const run of state.carried) {
+          const ink = run.side === 'after' ? INK.builtAfter : INK.built;
+          stroke(ctx, run.points, state.centre, ink, 2.6 / zoom);
+          run.points.forEach((p, i) => {
+            if (run.authored[i]) dot(ctx, p, state.centre, INK.authored, 2.2 / zoom);
+          });
+        }
+      }),
+      layer('ghost', (ctx, { state, zoom }) => {
+        for (const ghost of state.ghosts) {
+          if (ghost.ran) continue;
+          // A one-vertex site is most of them — `stretch` drops a single vertex per corner —
+          // and a one-point polyline strokes nothing, so the readout would name a ghost the
+          // canvas never drew.
+          mark(ctx, ghost.removed, state.centre, INK.removed, 7 / zoom);
+          ctx.setLineDash([4 / zoom, 4 / zoom]);
+          mark(ctx, ghost.added, state.centre, INK.added, 2.4 / zoom);
+          ctx.setLineDash([]);
+        }
+      }),
+      layer('repair', (ctx, { state, zoom }) => {
+        for (const site of state.ghosts) {
+          if (!site.ran) continue;
+          // Same dash grammar the ghost layer uses — solid removed, dashed added — in the one
+          // ink, so a site reads as what a repair did rather than what one would do.
+          mark(ctx, site.removed, state.centre, INK.drawn, 7 / zoom);
+          ctx.setLineDash([4 / zoom, 4 / zoom]);
+          mark(ctx, site.added, state.centre, INK.drawn, 2.4 / zoom);
+          ctx.setLineDash([]);
+        }
+      }),
     ],
   },
 
   layers: { ids: ['glyph', 'floor', 'contour', 'staged', 'built', 'ghost', 'repair'] },
 
-  render: ({ state, config, setConfig, setState }) => (
+  render: ({ state, config, setConfig, setState, trial }) => (
     <>
+      <CentreView view={trial.view} setView={trial.setView} />
       <div className="junction">
         <ol className="junction__pipeline">
           {STAGE_NODES.map((node) => {
@@ -542,7 +557,7 @@ export const junction = defineInstrument<CornerScene, Config>({
           setState(buildScene(font, requestOf({ ...config, corner: ordinal })));
         }}
       />
-      <Legend />
+      <Legend scene={state} />
     </>
   ),
 });

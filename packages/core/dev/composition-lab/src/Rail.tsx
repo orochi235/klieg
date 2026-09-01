@@ -3,7 +3,7 @@ import { LOOK_NAMES } from '@core/index.js';
 import type { LookName } from '@core/render/looks.js';
 import type { Composition, EffectLayer, RovingWrap } from './composition.js';
 import { emit } from './emit.js';
-import { defaultParams, PARAMS, type PieceKind } from './pieces.js';
+import { defaultParams, hasGradient, PARAMS, type PieceKind } from './pieces.js';
 
 export interface RailProps {
   composition: Composition;
@@ -14,6 +14,8 @@ export interface RailProps {
 const KINDS: PieceKind[] = ['flicker', 'hue', 'chase'];
 
 export function Rail({ composition, onChange, counts }: RailProps) {
+  const gradient = hasGradient(composition.look);
+
   const setLayer = (id: string, patch: Partial<EffectLayer>) =>
     onChange({
       ...composition,
@@ -120,6 +122,11 @@ export function Rail({ composition, onChange, counts }: RailProps) {
           {counts[layer.target] === 0 ? (
             <p className="cl-warn">
               this pool has no {layer.target} parts — the layer does nothing
+            </p>
+          ) : null}
+          {layer.kind === 'chase' && !gradient ? (
+            <p className="cl-warn">
+              the {composition.look} look declares no gradient — the layer does nothing
             </p>
           ) : null}
 

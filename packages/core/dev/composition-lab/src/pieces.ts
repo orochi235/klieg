@@ -1,5 +1,6 @@
 import { chase, flicker, hue } from '@core/effects/pieces.js';
 import type { EffectPiece } from '@core/effects/types.js';
+import { type Look, specOf } from '@core/render/looks.js';
 import { compileDraft } from './draft.js';
 
 export type PieceKind = 'flicker' | 'hue' | 'chase' | 'draft';
@@ -122,10 +123,16 @@ export const PARAMS: Record<Exclude<PieceKind, 'draft'>, ParamSpec[]> = {
       max: 2,
       step: 0.01,
       value: 0,
-      hint: 'Ramp offset between consecutive parts. Inert on a look with no gradient, and both shipped tube looks are flat.',
+      hint: 'Ramp offset between consecutive parts. Inert on a look with no gradient.',
     },
   ],
 };
+
+/** Whether the look declares the colour ramp `chase` shifts; without one every chase layer is inert. */
+export function hasGradient(look: Look): boolean {
+  const decoration = specOf(look).decoration;
+  return decoration?.kind === 'tube' && decoration.gradient !== undefined;
+}
 
 /** Defaults for a kind, as a plain params object. */
 export function defaultParams(kind: PieceKind): Record<string, number> {

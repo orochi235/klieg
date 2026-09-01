@@ -9,12 +9,17 @@ export interface PassSamples {
   scale: number[][];
   dark: number[][];
   crawl: number[][];
+  /** Length of the merged lamp vector. A lamp writes nothing else, so without this a lamp layer
+   * reads on every other channel exactly as a piece that does nothing does. */
+  light: number[][];
   /** Packed 0xRRGGBB, or -1 where no layer wrote a colour. */
   color: number[][];
   /** Whether any layer ever MOVED this part across the whole pass. Being targeted is not enough:
    * a piece like `roving` addresses the whole pool and afflicts one part of it, and counting the
    * pool would make this blind to exactly the fault it exists to show. */
   touched: boolean[];
+  /** The same question per sample. Tenure is a run of trues; a handover is where the set changes. */
+  moved: boolean[][];
 }
 
 /** Whether a merged offset is doing anything. Multiplicative channels rest at 1, additive at 0. */
@@ -38,6 +43,8 @@ export function samplePass(
 ): PassSamples {
   const grid = (fill: number) =>
     Array.from({ length: parts.length }, () => new Array<number>(samples).fill(fill));
+  const flags = () =>
+    Array.from({ length: parts.length }, () => new Array<boolean>(samples).fill(false));
 
   const out: PassSamples = {
     samples,
@@ -45,18 +52,23 @@ export function samplePass(
     scale: grid(1),
     dark: grid(0),
     crawl: grid(0),
+    light: grid(0),
     color: grid(-1),
     touched: new Array<boolean>(parts.length).fill(false),
+    moved: flags(),
   };
 
   for (let s = 0; s < samples; s++) {
     const resolved = frame.resolve(parts, (s / samples) * duration, ctx);
     for (const [index, o] of resolved) {
-      if (moved(o)) out.touched[index] = true;
+      const active = moved(o);
+      if (active) out.touched[index] = true;
+      (out.moved[index] as boolean[])[s] = active;
       (out.gain[index] as number[])[s] = o.gain;
       (out.scale[index] as number[])[s] = o.scale;
       (out.dark[index] as number[])[s] = o.dark;
       (out.crawl[index] as number[])[s] = o.crawl;
+      (out.light[index] as number[])[s] = Math.hypot(o.light[0], o.light[1], o.light[2]);
       (out.color[index] as number[])[s] = o.color ?? -1;
     }
   }

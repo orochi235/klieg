@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type ProjectionInput, projectLetters } from '../../src/text/projection.js';
+import { layoutFromNdc, type ProjectionInput, projectLetters } from '../../src/text/projection.js';
 
 /** A 90° lens at z = 1 sees exactly 2 world units of height, so px-per-world is height / 2. */
 function input(over: Partial<ProjectionInput> = {}): ProjectionInput {
@@ -129,5 +129,55 @@ describe('a word the framing has aligned', () => {
 
   it('leaves an unaligned word where it was', () => {
     expect(projectLetters(input()).boxes[0]?.left).toBeCloseTo(400, 6);
+  });
+});
+
+describe('layoutFromNdc', () => {
+  /** Where `projectLetters` put a letter's baseline, as a -1..1 point over the canvas box. */
+  function ndcOfBaseline(over: Partial<ProjectionInput>, i = 0) {
+    const cfg = input(over);
+    const out = projectLetters(cfg);
+    const box = out.boxes[i] as { left: number; top: number };
+    return {
+      x: (box.left / cfg.width) * 2 - 1,
+      y: ((box.top + cfg.baselineRatio * out.fontSize) / cfg.height) * 2 - 1,
+    };
+  }
+
+  // The pair has to stay in step or the light lands somewhere the letter is not, so the test is
+  // the round trip rather than an arithmetic restatement of the inverse.
+  it('returns the layout position projectLetters drew at', () => {
+    const over = {
+      chars: ['A', 'B'],
+      x: [0.25, -1.5],
+      y: [0, -1.1],
+      line: [0, 1],
+      fit: { scale: 0.75, midY: 0.4, offsetX: 0.3 },
+      depth: 0.2,
+      bevel: 0.05,
+    };
+
+    for (const i of [0, 1]) {
+      const ndc = ndcOfBaseline(over, i);
+      const back = layoutFromNdc(ndc.x, ndc.y, input(over));
+
+      expect(back.x).toBeCloseTo(over.x[i] as number, 6);
+      expect(back.y).toBeCloseTo(over.y[i] as number, 6);
+    }
+  });
+
+  it('puts the canvas centre on the frustum axis, not on the word', () => {
+    // offsetX shifts the block, so the middle of the canvas is 0.3 world units right of the
+    // block's own origin — a word aligned off-axis must not drag the cursor with it.
+    const back = layoutFromNdc(0, 0, input({ fit: { scale: 1, midY: 0, offsetX: 0.3 } }));
+
+    expect(back.x).toBeCloseTo(-0.3, 6);
+  });
+
+  it('flips y, since NDC grows downward and layout grows upward', () => {
+    const top = layoutFromNdc(0, -1, input());
+    const bottom = layoutFromNdc(0, 1, input());
+
+    expect(top.y).toBeGreaterThan(bottom.y);
   });
 });

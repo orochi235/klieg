@@ -43,15 +43,45 @@ export interface Projection {
   scaleX: number;
 }
 
+/** What places layout em in the frustum: the word's fit, and the camera looking at it. */
+export interface PlacedWord {
+  fit: { scale: number; midY: number; offsetX: number };
+  fov: number;
+  cameraZ: number;
+  aspect: number;
+  depth: number;
+  bevel: number;
+}
+
+/** Visible height in world units at the letters' front face. */
+function faceHeight(input: PlacedWord): number {
+  // three extrudes a shape from z = -bevel to z = depth + bevel, so the front cap clears the
+  // nominal depth by a bevel thickness. Measuring to `depth` puts the plane behind the face.
+  const faceDistance = input.cameraZ - (input.depth + input.bevel) * input.fit.scale;
+  return 2 * Math.tan((input.fov * Math.PI) / 360) * faceDistance;
+}
+
+/**
+ * A -1..1 point over the canvas, back in the layout em `Word` holds — the inverse of the map
+ * `projectLetters` applies. Keeping the pair in one file is the point: a lamp aimed through a
+ * mapping that has drifted from the one that drew the letters lands where they are not.
+ */
+export function layoutFromNdc(nx: number, ny: number, input: PlacedWord): { x: number; y: number } {
+  const vh = faceHeight(input);
+  const scale = input.fit.scale;
+  return {
+    x: ((nx * vh * input.aspect) / 2 - input.fit.offsetX) / scale,
+    // NDC grows downward and layout grows upward.
+    y: (-ny * vh) / 2 / scale + input.fit.midY,
+  };
+}
+
 /**
  * The em-to-pixel map for a front-on, untransformed word. Every letter shares one z, so this is a
  * scale and a translate rather than a per-frame matrix.
  */
 export function projectLetters(input: ProjectionInput): Projection {
-  // three extrudes a shape from z = -bevel to z = depth + bevel, so the front cap clears the
-  // nominal depth by a bevel thickness. Measuring to `depth` puts the plane behind the face.
-  const faceDistance = input.cameraZ - (input.depth + input.bevel) * input.fit.scale;
-  const vh = 2 * Math.tan((input.fov * Math.PI) / 360) * faceDistance;
+  const vh = faceHeight(input);
   const pxPerWorldY = input.height / vh;
   const pxPerWorldX = input.width / (vh * input.aspect);
   const fontSize = input.fit.scale * pxPerWorldY;

@@ -4,7 +4,6 @@ import type { EffectSpec, FrameCtx, PartInfo, PartKind, ResolvedOffset } from '.
 import { blankPose } from '../motion/compositor.js';
 import type { RegroupResult } from '../motion/sequence.js';
 import type { LetterInfo } from '../motion/types.js';
-import type { WordExtent } from '../pointer.js';
 import type { Pose, Vec3 } from '../pose.js';
 import type { LoadedFont } from '../text/font.js';
 import { DEFAULT_GLYPH_OPTIONS, EM, GlyphCache, glyphToShapes } from '../text/glyphs.js';
@@ -119,6 +118,14 @@ export interface WordDebugHooks {
 }
 
 /** One group per letter — per-letter motion (spin, flip, shatter) needs independent transforms. */
+/** The ink bounding box of a word's part pool, in its own layout space. */
+export interface WordExtent {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
 export class Word {
   readonly group = new THREE.Group();
   /** Sits between `group` (the viewport fit) and the letters — see the `transform` accessor. */
@@ -422,6 +429,12 @@ export class Word {
       minY: y + (this.geoMinY[slot] ?? 0),
       maxY: y + (this.geoMaxY[slot] ?? 0),
     };
+  }
+
+  /** The fit placing the word in the frustum. `projectLetters` maps out through it and
+   * `layoutFromNdc` maps back in, so both read the same one. */
+  get placement(): Fit {
+    return { ...this.fit };
   }
 
   /** The word's parts of one kind, in pool order. */

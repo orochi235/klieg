@@ -71,9 +71,9 @@ for (const [label, py] of [
   );
 }
 
-// The x stretch is a rate, not an offset: the cursor crosses the canvas, the light crosses the ink.
-console.log(`  x: the cursor's full canvas travel maps onto ${inkW.toFixed(3)} em of ink, so the`);
-console.log(`     light sweeps the word once per canvas crossing whatever fraction of the canvas`);
-console.log(`     the word covers on screen.`);
+// x is no longer this spike's to measure: the cursor maps through the visible frustum at the
+// word's plane, which needs a camera. `a cursor lands on the letter it is over` in
+// test/render/word.test.ts covers it end to end.
+console.log(`  ink is ${inkW.toFixed(3)} em wide; x registration is covered by word.test.ts`);
 
 word.dispose();

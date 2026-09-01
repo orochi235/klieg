@@ -5,6 +5,7 @@ import type { EffectPiece, PartInfo } from '../../src/effects/types.js';
 import { Timeline } from '../../src/motion/compositor.js';
 import type { LetterInfo, MotionPiece } from '../../src/motion/types.js';
 import { NONE, orderKey } from '../../src/motion/types.js';
+import { pointerFrame } from '../../src/pointer.js';
 import type { PoseOffset } from '../../src/pose.js';
 import { WordCaches } from '../../src/render/caches.js';
 import type { FlakeUniforms } from '../../src/render/flake.js';
@@ -16,6 +17,7 @@ import { DEFAULT_GLYPH_OPTIONS } from '../../src/text/glyphs.js';
 import type { Budget } from '../../src/text/layout.js';
 import { LINE_HEIGHT_EM } from '../../src/text/layout.js';
 import { registerFace } from '../../src/text/outline-face.js';
+import { projectLetters } from '../../src/text/projection.js';
 import { fromEuler } from '../../src/transform.js';
 import { NO_CTX } from '../effects/ctx.js';
 
@@ -1549,6 +1551,44 @@ describe('frame-owned material properties', () => {
   });
 });
 
+/**
+ * The whole chain, end to end: a cursor over a letter on screen has to reach that letter's ink.
+ * The unit tests either side of the mapping can both pass while the pair disagrees.
+ */
+describe('a cursor lands on the letter it is over', () => {
+  const CANVAS = { left: 0, top: 0, width: 800, height: 400 };
+  const CAMERA = { fov: 90, cameraZ: 4, aspect: 2, depth: 0, bevel: 0 };
+
+  it.each([0, 1, 2, 3])('letter %i', (i) => {
+    const word = new Word('HELLO', stubFont(), 'gold', { width: 6, height: 2 });
+    const readout = word.readout();
+    const projected = projectLetters({
+      ...readout,
+      ...CAMERA,
+      width: CANVAS.width,
+      height: CANVAS.height,
+      baselineRatio: 0,
+    });
+    const box = projected.boxes[i] as { left: number; top: number };
+
+    const frame = pointerFrame(
+      CANVAS,
+      { x: box.left, y: box.top },
+      { fit: word.placement, ...CAMERA },
+    );
+    const aimed = frame.pointerInWord as { x: number; y: number };
+
+    // The nearest part to where the cursor mapped is the one drawn under it.
+    const parts = word.partsOf('body');
+    const distances = parts.map((p) =>
+      Math.hypot((p.ink.minX + p.ink.maxX) / 2 - aimed.x, (p.ink.minY + p.ink.maxY) / 2 - aimed.y),
+    );
+    const nearest = distances.indexOf(Math.min(...distances));
+
+    expect(nearest).toBe(i);
+  });
+});
+
 describe('part pool', () => {
   it('has one body part per drawn letter, numbered across the word', () => {
     const word = new Word('AA', stubFont(), 'gold', ROOMY);
@@ -1575,6 +1615,46 @@ describe('part pool', () => {
     expect(parts.length).toBeGreaterThan(1);
     expect(parts.map((p) => p.index)).toEqual(parts.map((_, n) => n));
     expect(new Set(parts.map((p) => p.letter.index))).toEqual(new Set([0, 1]));
+  });
+
+  it("carries each part's own ink, offset by its origin", () => {
+    const parts = new Word('AA', stubFont(), 'gold', ROOMY).partsOf('body');
+    const [a, b] = parts as [PartInfo, PartInfo];
+
+    // Same line, so the origins share a y and only x steps; the ink follows the origin.
+    expect(a.y).toBe(b.y);
+    expect(b.ink.minX - a.ink.minX).toBeCloseTo(b.x - a.x, 5);
+    expect(a.ink.minY).toBeCloseTo(b.ink.minY, 5);
+    expect(a.ink.maxY).toBeCloseTo(b.ink.maxY, 5);
+  });
+
+  // The whole point of the field: a lamp measuring to origins on a single line has one y to
+  // measure against, and the letters stand well above it.
+  it('gives the ink a height the origins on one line do not have', () => {
+    const parts = new Word('AA', stubFont(), 'gold', ROOMY).partsOf('body');
+
+    expect(new Set(parts.map((p) => p.y)).size).toBe(1);
+    for (const part of parts) expect(part.ink.maxY - part.ink.minY).toBeGreaterThan(0);
+  });
+
+  it('drops the ink of a descender below the ink of one that sits on the baseline', () => {
+    const parts = new Word('ag', stubFont(), 'gold', ROOMY).partsOf('body');
+    const [flat, drops] = parts as [PartInfo, PartInfo];
+
+    expect(drops.ink.minY).toBeLessThan(flat.ink.minY);
+  });
+
+  it("unions the parts' ink into exactly the pool extent", () => {
+    const word = new Word('Ag', stubFont(), 'tubing', ROOMY);
+    const extent = word.partExtent();
+    const parts = [...word.partsOf('body'), ...word.partsOf('run')];
+
+    expect(extent).toEqual({
+      minX: Math.min(...parts.map((p) => p.ink.minX)),
+      maxX: Math.max(...parts.map((p) => p.ink.maxX)),
+      minY: Math.min(...parts.map((p) => p.ink.minY)),
+      maxY: Math.max(...parts.map((p) => p.ink.maxY)),
+    });
   });
 
   it('gives every run part a share of the pool extent that sums to one', () => {

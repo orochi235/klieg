@@ -572,9 +572,6 @@ export function createKlieg(options: KliegOptions): Klieg {
     }
 
     const envPieces = resolveLighting(opts.lighting ?? 'sweep');
-    // A construction-time snapshot, as `partExtent` documents: a regroup re-lays the letters and
-    // leaves the pool alone, so this cannot change under a running effect.
-    const extent = word.partExtent();
     const hold = opts.hold ?? 1200;
     const untilClick = hold === 'click';
     const exit = resolveSlot(opts.exit ?? 'fade', EXIT);
@@ -725,7 +722,14 @@ export function createKlieg(options: KliegOptions): Klieg {
             (placed ??= pointerFrame(
               pointerClient ? stage.canvas?.getBoundingClientRect() : null,
               pointerClient,
-              extent,
+              {
+                fit: word.placement,
+                fov: stage.camera.fov,
+                cameraZ: stage.camera.position.z,
+                aspect: stage.camera.aspect,
+                depth: DEFAULT_GLYPH_OPTIONS.depth,
+                bevel: DEFAULT_GLYPH_OPTIONS.bevelThickness,
+              },
             ));
           const ctx: FrameCtx = {
             get pointer() {

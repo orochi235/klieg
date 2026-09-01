@@ -1,11 +1,4 @@
-/** The ink bounding box of a word's part pool, in its own layout space. `Word.partExtent`
- * returns this; it lives here so the mapping below has no render dependency. */
-export interface WordExtent {
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-}
+import { layoutFromNdc, type PlacedWord } from './text/projection.js';
 
 export interface PointerFrame {
   pointer: { x: number; y: number } | null;
@@ -15,12 +8,13 @@ export interface PointerFrame {
 /**
  * Places the cursor for one frame: normalized over the canvas box, and again in the word's own
  * layout space. `box` is the canvas' client rect and `client` the last pointer position seen,
- * both in CSS pixels; `extent` is the word's ink box, or null before any part exists.
+ * both in CSS pixels; `placed` is the fit and camera that put the word on screen, or null before
+ * it has one.
  */
 export function pointerFrame(
   box: { left: number; top: number; width: number; height: number } | null | undefined,
   client: { x: number; y: number } | null,
-  extent: WordExtent | null,
+  placed: PlacedWord | null,
 ): PointerFrame {
   if (!client || !box || box.width <= 0 || box.height <= 0) {
     return { pointer: null, pointerInWord: null };
@@ -32,19 +26,8 @@ export function pointerFrame(
   // anchored canvas would otherwise aim past every range that scales it.
   const pointer = { x: Math.max(-1, Math.min(1, nx)), y: Math.max(-1, Math.min(1, ny)) };
 
-  // A degenerate extent maps every pointer position onto one constant, which reads as tracking
-  // and is not; null is `fromPointer`'s rest.
-  if (!extent || extent.maxX <= extent.minX || extent.maxY <= extent.minY) {
-    return { pointer, pointerInWord: null };
-  }
+  // A collapsed fit divides every position by zero; null is `fromPointer`'s rest.
+  if (!placed || placed.fit.scale <= 0) return { pointer, pointerInWord: null };
 
-  return {
-    pointer,
-    pointerInWord: {
-      // The word is not centred on zero, so map into its real extent rather than scaling.
-      x: extent.minX + ((pointer.x + 1) / 2) * (extent.maxX - extent.minX),
-      // clientY grows downward and layout y grows upward, so the axis flips on the way in.
-      y: extent.maxY - ((pointer.y + 1) / 2) * (extent.maxY - extent.minY),
-    },
-  };
+  return { pointer, pointerInWord: layoutFromNdc(pointer.x, pointer.y, placed) };
 }

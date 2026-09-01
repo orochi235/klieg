@@ -4,7 +4,6 @@ import type { EffectSpec, FrameCtx, PartInfo, PartKind, ResolvedOffset } from '.
 import { blankPose } from '../motion/compositor.js';
 import type { RegroupResult } from '../motion/sequence.js';
 import type { LetterInfo } from '../motion/types.js';
-import type { WordExtent } from '../pointer.js';
 import type { Pose, Vec3 } from '../pose.js';
 import type { LoadedFont } from '../text/font.js';
 import { DEFAULT_GLYPH_OPTIONS, EM, GlyphCache, glyphToShapes } from '../text/glyphs.js';
@@ -119,6 +118,14 @@ export interface WordDebugHooks {
 }
 
 /** One group per letter — per-letter motion (spin, flip, shatter) needs independent transforms. */
+/** The ink bounding box of a word's part pool, in its own layout space. */
+export interface WordExtent {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
 export class Word {
   readonly group = new THREE.Group();
   /** Sits between `group` (the viewport fit) and the letters — see the `transform` accessor. */
@@ -402,6 +409,7 @@ export class Word {
       letter: this.letterInfo(slot),
       x: this.baseX[slot] as number,
       y: this.baseY[slot] as number,
+      ink: this.inkOf(slot),
       line: this.lineOf[slot] as number,
       column: this.columnOf[slot] as number,
       lineCount: this.lineCount,
@@ -409,6 +417,24 @@ export class Word {
       at,
       span,
     };
+  }
+
+  /** A letter's drawn bounds in layout space. A glyph with no outline collapses to its origin. */
+  private inkOf(slot: number): PartInfo['ink'] {
+    const x = this.baseX[slot] as number;
+    const y = this.baseY[slot] as number;
+    return {
+      minX: x + (this.geoMinX[slot] ?? 0),
+      maxX: x + (this.geoMaxX[slot] ?? 0),
+      minY: y + (this.geoMinY[slot] ?? 0),
+      maxY: y + (this.geoMaxY[slot] ?? 0),
+    };
+  }
+
+  /** The fit placing the word in the frustum. `projectLetters` maps out through it and
+   * `layoutFromNdc` maps back in, so both read the same one. */
+  get placement(): Fit {
+    return { ...this.fit };
   }
 
   /** The word's parts of one kind, in pool order. */
@@ -430,12 +456,11 @@ export class Word {
     let minY = Number.POSITIVE_INFINITY;
     let maxY = Number.NEGATIVE_INFINITY;
     for (let i = 0; i < this.parts.length; i++) {
-      const part = this.parts[i] as PartInfo;
-      const slot = this.partSlot[i] as number;
-      minX = Math.min(minX, part.x + (this.geoMinX[slot] ?? 0));
-      maxX = Math.max(maxX, part.x + (this.geoMaxX[slot] ?? 0));
-      minY = Math.min(minY, part.y + (this.geoMinY[slot] ?? 0));
-      maxY = Math.max(maxY, part.y + (this.geoMaxY[slot] ?? 0));
+      const ink = (this.parts[i] as PartInfo).ink;
+      minX = Math.min(minX, ink.minX);
+      maxX = Math.max(maxX, ink.maxX);
+      minY = Math.min(minY, ink.minY);
+      maxY = Math.max(maxY, ink.maxY);
     }
     return { minX, maxX, minY, maxY };
   }

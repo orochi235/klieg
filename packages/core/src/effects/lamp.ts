@@ -98,7 +98,9 @@ export function lamp(spec: LampSpec = {}): EffectPiece {
     at(t, part, ctx) {
       const pose = source(t, ctx);
       if (!pose) return REST;
-      const amount = strength * falloff(Math.hypot(part.x - pose.x, part.y - pose.y), radius);
+      const cx = (part.ink.minX + part.ink.maxX) / 2;
+      const cy = (part.ink.minY + part.ink.maxY) / 2;
+      const amount = strength * falloff(Math.hypot(cx - pose.x, cy - pose.y), radius);
       return amount === 0 ? REST : { light: { color, amount } };
     },
   };

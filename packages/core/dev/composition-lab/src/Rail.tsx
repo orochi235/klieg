@@ -1,9 +1,22 @@
 import type { PartKind } from '@core/effects/types.js';
 import { LOOK_NAMES } from '@core/index.js';
 import type { LookName } from '@core/render/looks.js';
-import type { Composition, EffectLayer, RovingWrap } from './composition.js';
+import {
+  type Composition,
+  type EffectLayer,
+  type IntermittentWrap,
+  layerPiece,
+  type PoolSource,
+  type RovingWrap,
+} from './composition.js';
 import { emit } from './emit.js';
-import { defaultParams, hasGradient, PARAMS, type PieceKind } from './pieces.js';
+import {
+  defaultParams,
+  hasGradient,
+  type LampSourceKind,
+  PARAMS,
+  type PieceKind,
+} from './pieces.js';
 
 export interface RailProps {
   composition: Composition;
@@ -11,7 +24,9 @@ export interface RailProps {
   counts: Record<PartKind, number>;
 }
 
-const KINDS: PieceKind[] = ['flicker', 'hue', 'chase'];
+const KINDS: PieceKind[] = ['flicker', 'hue', 'chase', 'lamp'];
+
+const layerBuilds = (layer: EffectLayer): boolean => layerPiece(layer) !== null;
 
 export function Rail({ composition, onChange, counts }: RailProps) {
   const gradient = hasGradient(composition.look);
@@ -24,6 +39,9 @@ export function Rail({ composition, onChange, counts }: RailProps) {
 
   const setRoving = (layer: EffectLayer, patch: Partial<RovingWrap>) =>
     setLayer(layer.id, { roving: { ...(layer.roving as RovingWrap), ...patch } });
+
+  const setBouts = (layer: EffectLayer, patch: Partial<IntermittentWrap>) =>
+    setLayer(layer.id, { intermittent: { ...(layer.intermittent as IntermittentWrap), ...patch } });
 
   const add = (kind: PieceKind) =>
     onChange({
@@ -38,6 +56,7 @@ export function Rail({ composition, onChange, counts }: RailProps) {
           target: 'run',
           amount: 1,
           seed: 0,
+          ...(kind === 'lamp' ? { lampSource: 'fixed' as LampSourceKind } : {}),
         },
       ],
     });
@@ -79,8 +98,21 @@ export function Rail({ composition, onChange, counts }: RailProps) {
       </label>
 
       <h2>pool</h2>
+      <label
+        className="cl-row"
+        title="Which pool the panels below describe. Real follows the text and look above; synthetic is a fixed 24-run, 7-letter stand-in for exercising a kind this look does not build."
+      >
+        <span>source</span>
+        <select
+          value={composition.pool}
+          onChange={(e) => onChange({ ...composition, pool: e.target.value as PoolSource })}
+        >
+          <option value="real">real</option>
+          <option value="synthetic">synthetic</option>
+        </select>
+      </label>
       <p className="cl-note">
-        run {counts.run}, body {counts.body}
+        run {counts.run}, body {counts.body}, chunk {counts.chunk}
       </p>
 
       <h2>layers</h2>
@@ -147,6 +179,24 @@ export function Rail({ composition, onChange, counts }: RailProps) {
             <output>{layer.amount.toFixed(2)}</output>
           </label>
 
+          {layer.kind === 'lamp' ? (
+            <label
+              className="cl-row"
+              title="fixed parks the lamp at x,y. orbit walks a circle of radius sweep around it, on the layer's own duration."
+            >
+              <span>source</span>
+              <select
+                value={layer.lampSource ?? 'fixed'}
+                onChange={(e) =>
+                  setLayer(layer.id, { lampSource: e.target.value as LampSourceKind })
+                }
+              >
+                <option value="fixed">fixed</option>
+                <option value="orbit">orbit</option>
+              </select>
+            </label>
+          ) : null}
+
           {layer.kind === 'draft'
             ? null
             : PARAMS[layer.kind].map((p) => (
@@ -168,53 +218,130 @@ export function Rail({ composition, onChange, counts }: RailProps) {
                 </label>
               ))}
 
-          <label
-            className="cl-row"
-            title="Moves this layer's affliction from part to part. Its pass is many inner passes long, so a short hold may never reach a second handover."
-          >
-            <input
-              type="checkbox"
-              checked={layer.roving !== undefined}
-              onChange={(e) =>
-                setLayer(layer.id, {
-                  roving: e.target.checked ? { dwell: 3200, seed: 0, epochs: 96 } : undefined,
-                })
-              }
-            />
-            <span>roving</span>
-          </label>
-          {layer.roving ? (
+          {layer.kind === 'lamp' ? (
+            <p className="cl-note">
+              roving substitutes a part index and leaves x/y alone, so it cannot carry a lamp
+            </p>
+          ) : (
             <>
               <label
                 className="cl-row"
-                title="Roughly how long one part keeps the fault. This picks WHO flickers, never how much — that is unrest."
+                title="Moves this layer's affliction from part to part. Its pass is many inner passes long, so a short hold may never reach a second handover."
               >
-                <span>dwell</span>
+                <input
+                  type="checkbox"
+                  checked={layer.roving !== undefined}
+                  onChange={(e) =>
+                    setLayer(layer.id, {
+                      roving: e.target.checked ? { dwell: 3200, seed: 0, epochs: 96 } : undefined,
+                    })
+                  }
+                />
+                <span>roving</span>
+              </label>
+              {layer.roving ? (
+                <>
+                  <label
+                    className="cl-row"
+                    title="Roughly how long one part keeps the fault. This picks WHO flickers, never how much — that is unrest."
+                  >
+                    <span>dwell</span>
+                    <input
+                      type="range"
+                      min={400}
+                      max={9000}
+                      step={100}
+                      value={layer.roving.dwell}
+                      onChange={(e) => setRoving(layer, { dwell: Number(e.target.value) })}
+                    />
+                    <output>{layer.roving.dwell}</output>
+                  </label>
+                  <label
+                    className="cl-row"
+                    title="Handovers to a pass, and so the ceiling on how many parts a pass can reach before it loops. Below the pool size, some parts never take the fault at all."
+                  >
+                    <span>epochs</span>
+                    <input
+                      type="range"
+                      min={4}
+                      max={192}
+                      step={4}
+                      value={layer.roving.epochs}
+                      onChange={(e) => setRoving(layer, { epochs: Number(e.target.value) })}
+                    />
+                    <output>{layer.roving.epochs}</output>
+                  </label>
+                </>
+              ) : null}
+            </>
+          )}
+
+          <label
+            className="cl-row"
+            title="Runs the layer in bouts and swallows it between them. The inner keeps running against the clock, so a bout opens wherever it happens to be."
+          >
+            <input
+              type="checkbox"
+              checked={layer.intermittent !== undefined}
+              onChange={(e) =>
+                setLayer(layer.id, {
+                  intermittent: e.target.checked
+                    ? { spell: 4200, calm: 2000, bouts: 3 }
+                    : undefined,
+                })
+              }
+            />
+            <span>intermittent</span>
+          </label>
+          {layer.intermittent ? (
+            <>
+              <label
+                className="cl-row"
+                title="Milliseconds of one bout. Shorter than one inner pass and the layer will not build at all — the piece throws rather than showing a sliver."
+              >
+                <span>spell</span>
                 <input
                   type="range"
-                  min={400}
-                  max={9000}
+                  min={200}
+                  max={20000}
                   step={100}
-                  value={layer.roving.dwell}
-                  onChange={(e) => setRoving(layer, { dwell: Number(e.target.value) })}
+                  value={layer.intermittent.spell}
+                  onChange={(e) => setBouts(layer, { spell: Number(e.target.value) })}
                 />
-                <output>{layer.roving.dwell}</output>
+                <output>{layer.intermittent.spell}</output>
+              </label>
+              <label className="cl-row" title="Milliseconds held quiet between bouts.">
+                <span>calm</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={30000}
+                  step={100}
+                  value={layer.intermittent.calm}
+                  onChange={(e) => setBouts(layer, { calm: Number(e.target.value) })}
+                />
+                <output>{layer.intermittent.calm}</output>
               </label>
               <label
                 className="cl-row"
-                title="Handovers to a pass, and so the ceiling on how many parts a pass can reach before it loops. Below the pool size, some parts never take the fault at all."
+                title="Bouts to a pass, and so how long the wrapper's own loop runs before it repeats."
               >
-                <span>epochs</span>
+                <span>bouts</span>
                 <input
                   type="range"
-                  min={4}
-                  max={192}
-                  step={4}
-                  value={layer.roving.epochs}
-                  onChange={(e) => setRoving(layer, { epochs: Number(e.target.value) })}
+                  min={1}
+                  max={12}
+                  step={1}
+                  value={layer.intermittent.bouts}
+                  onChange={(e) => setBouts(layer, { bouts: Number(e.target.value) })}
                 />
-                <output>{layer.roving.epochs}</output>
+                <output>{layer.intermittent.bouts}</output>
               </label>
+              {layerBuilds(layer) ? null : (
+                <p className="cl-warn">
+                  spell is shorter than one pass of {layer.kind} — the layer does not build
+                </p>
+              )}
             </>
           ) : null}
         </div>

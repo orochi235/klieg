@@ -791,31 +791,29 @@ Roughly in order of value; the items are independent of each other.
   unreachable at all — `PartKind` is still `'run' | 'body'`, and a chunk look builds zero run parts
   under a near-black body, so it needs a `'chunk'` kind addressing the letter's `InstancedMesh`.
 
-  **The light does not sit under the cursor, and the top of every word is unlit.** Measured by
-  `node spikes/lamp-registration.mjs [word] [look]`; the 69% this entry used to claim was an
-  understatement of the wrong quantity.
+  **The vertical half is fixed; the horizontal half is not.** `node spikes/lamp-registration.mjs
+  [word] [look]` prints both, and the 69% this entry once claimed was an understatement of the
+  wrong quantity — the real figure was 153%, which is to say *dark*.
 
-  `pointerFrame` maps the canvas's whole −1..1 onto the word's *ink* box (`pointer.ts:45`), while
-  `lamp` measures to each part's *origin* (`lamp.ts:101`) — and `PartInfo.x/y` is the letter's
-  origin, not its ink. On a single line that is one y for the whole pool, at every look: `klieg`
-  builds 5 parts at `gold` and 20 at `tubing`, and **both have exactly one distinct origin y**. So
-  the cursor ranges over a height no part occupies. With the cursor at the top of the ink box the
-  nearest origin is 0.764 em away against a 0.5 em reach — **153% of it, so nothing lights at all,
-  whatever the cursor's x**. At the vertical middle it is still 52%. A two-line block has two
-  origin y and the same dead band at the top (148%).
+  `PartInfo` carries `ink` now and `lamp` measures to its centre, so the cursor and the light are
+  in the same frame vertically. Before, `PartInfo.x/y` was the letter's origin — one shared
+  baseline for a whole line, at every look — while the cursor was mapped into the ink box, so the
+  top of every word was 153% of a lamp's reach from anything it could light. It is 80% now, and the
+  middle of the ink went 52% → 1%. The bottom edge is dimmer (50% → 91%) because it is the
+  descender region, below the body of every letter that does not descend.
 
-  `OrbitSpec`'s comment already records the mechanism for `orbit` (`lamp.ts:29`); what was missed is
-  that it applies to `fromPointer` too.
+  **Still open: `pointerFrame` stretches the canvas's −1..1 across the ink box** (`pointer.ts:45`),
+  so horizontal travel still compresses onto the letters. The scale to map through is the visible
+  frustum at the word's plane, which `stage.viewportBudget` already derives (`2·tan(fov/2)·cameraZ`,
+  `stage.ts:240`) — but it needs the block's placement offset threaded in too, since `PartInfo.x` is
+  relative to the block centre and alignment moves that off the frustum's axis.
 
-  **x resolves per letter, not per part.** `tubing` on `klieg` is 20 parts over **5 distinct origin
-  x**: `partSlot` indexes the *letter*, so every run of a letter shares its glyph bounds and a lamp
-  cannot light part of one. Fixing that needs each run's own bounds recorded, which the run meshes
-  carry and `Word` does not keep — a separate piece of work from the frame bug above.
+  **Still open: `ink` resolves per letter, not per part.** `partSlot` indexes the letter, so all 20
+  of `tubing`'s parts on `klieg` report the same 5 boxes and a lamp cannot light part of a letter.
+  The run meshes carry their own bounds; `Word` keeps only the glyph's.
 
-  The scale to map through is not the ink box but the visible frustum at the word's plane, which
-  `stage.viewportBudget` already derives (`2·tan(fov/2)·cameraZ`, `stage.ts:240`). Doing it needs
-  the block's placement offset too, since `PartInfo.x` is relative to the block centre and
-  alignment moves that off the frustum's axis. Touches no visual baseline — no `.spec.ts` names
+  `OrbitSpec`'s comment already recorded the baseline collapse for `orbit` (`lamp.ts:29`); nobody
+  had connected it to `fromPointer`. No visual baseline covers any of this — no `.spec.ts` names
   `lamp`.
 
   **The defaults are unsampled.** Radius, strength and falloff were judged at one lamp position on a

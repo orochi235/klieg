@@ -1,0 +1,78 @@
+import { describe, expect, it } from 'vitest';
+import type { PassSamples } from '../../dev/composition-lab/src/sample.js';
+import { tenureAndJump } from '../../dev/composition-lab/src/tenure.js';
+import type { PartInfo } from '../../src/effects/types.js';
+
+function parts(count: number): PartInfo[] {
+  return Array.from({ length: count }, (_, index) => ({
+    kind: 'run' as const,
+    index,
+    count,
+    letter: { index: 0, count: 1 },
+    x: index,
+    y: 0,
+    ink: { minX: index, maxX: index, minY: 0, maxY: 0 },
+    at: index / count,
+    span: 1 / count,
+  }));
+}
+
+/** `moved` is the only field tenure reads; the rest of a PassSamples is filler. */
+function samples(moved: boolean[][]): PassSamples {
+  const width = (moved[0] as boolean[]).length;
+  const grid = (fill: number) => moved.map(() => new Array<number>(width).fill(fill));
+  return {
+    samples: width,
+    gain: grid(1),
+    scale: grid(1),
+    dark: grid(0),
+    crawl: grid(0),
+    light: grid(0),
+    color: grid(-1),
+    touched: moved.map((row) => row.some(Boolean)),
+    moved,
+  };
+}
+
+describe('tenureAndJump', () => {
+  it("measures a holder's stretch in milliseconds", () => {
+    const s = samples([
+      [true, true, false, false],
+      [false, false, true, true],
+    ]);
+    const r = tenureAndJump(s, parts(2), 1000);
+    expect(r.tenures).toEqual([500, 500]);
+    expect(r.meanTenureMs).toBe(500);
+  });
+
+  it('counts one handover and measures how far it jumped', () => {
+    const s = samples([
+      [true, false],
+      [false, true],
+    ]);
+    const r = tenureAndJump(s, parts(2), 1000);
+    expect(r.handovers).toBe(1);
+    expect(r.meanJumpParts).toBe(1);
+    expect(r.meanJumpEm).toBeCloseTo(1);
+  });
+
+  // A layer that drives everything all the time is not a broken readout. It is the honest answer,
+  // and it is the one a reader is most likely to file as a bug.
+  it('reports a continuous layer as one whole-pass tenure and no jump', () => {
+    const s = samples([
+      [true, true, true],
+      [true, true, true],
+    ]);
+    const r = tenureAndJump(s, parts(2), 900);
+    expect(r.tenures).toEqual([900, 900]);
+    expect(r.handovers).toBe(0);
+    expect(r.meanJumpParts).toBe(0);
+  });
+
+  it('reports nothing rather than NaN when no layer moves anything', () => {
+    const r = tenureAndJump(samples([[false, false]]), parts(1), 1000);
+    expect(r.tenures).toEqual([]);
+    expect(r.meanTenureMs).toBe(0);
+    expect(r.handovers).toBe(0);
+  });
+});

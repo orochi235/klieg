@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### A lamp reads on `gem`
+
+`gem`'s specular lobe now takes the stone's own colour instead of white, through a new
+`tintSpecular` on `LookSpec`. A white lobe over an empty scene was laying grey across the whole
+look, so a lamp landing on it read as a dull lift rather than as light in a red stone; the lit pool
+is half again as saturated now. A tinted `gem` keeps its lobe in step, and a look that declares its
+own `specularColor` still wins.
+
 ## 0.10.0
 
 ### A general on-and-off wrapper

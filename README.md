@@ -164,7 +164,9 @@ await bk.fire('YOU WIN', { look: { metalness: 1, roughness: 0.3, color: 0x00e5ff
 
 Every field is a number, so nothing about three appears in your types. Out-of-range values clamp
 rather than throw. `tintTarget` overrides which channel `tint` writes to when the default
-routing guesses wrong.
+routing guesses wrong, and `tintSpecular: true` colours the specular highlight with the look's hue
+instead of leaving it white — worth setting on a transmissive look, whose colour would otherwise
+come through the glass from a scene klieg does not render.
 
 ### gradient
 

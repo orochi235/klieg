@@ -145,9 +145,12 @@ export function runSweep(
   ctx: FrameCtx,
 ): SweepResult {
   const rows: SweepRow[] = [];
+  // `toFireOptions` drops a disabled layer, so sweeping one measures a composition it never
+  // reaches: identical rows, every column flat, reported as a finding about the param.
+  const target = composition.effects.find((l) => l.id === layerId);
   // `Number.isFinite` rather than `steps >= 1`: a NaN count walks past a `< 1` guard into an empty
   // row set, where every flatness test compares against NaN and reports nothing flat.
-  if (!composition.effects.some((l) => l.id === layerId) || !Number.isFinite(steps) || steps < 1) {
+  if (!target?.enabled || !Number.isFinite(steps) || steps < 1) {
     return { param, rows, flat: [] };
   }
 

@@ -22,7 +22,9 @@ const COLUMNS = [
 /** On demand rather than live: a run rebuilds the frame once per step, which a slider drag would
  * do on every pointermove. */
 export function Sweep({ composition, parts, ctx }: SweepPanelProps) {
-  const layers = composition.effects.filter((l) => l.kind !== 'draft');
+  // Enabled only: `toFireOptions` drops the rest, so a sweep of a disabled layer would tabulate
+  // six unmoved columns as a finding about the param.
+  const layers = composition.effects.filter((l) => l.enabled && l.kind !== 'draft');
   const [layerId, setLayerId] = useState('');
   const [param, setParam] = useState('');
   const [min, setMin] = useState(0);

@@ -75,6 +75,14 @@ describe('runSweep', () => {
     expect(r.flat).toContain('meanLight');
   });
 
+  it('returns no rows for a layer that is switched off, which the composition drops', () => {
+    const c = composition({});
+    (c.effects[0] as { enabled: boolean }).enabled = false;
+    const r = runSweep(c, 'a', 'unrest', 0, 1, 5, PARTS, 60, NO_CTX);
+    expect(r.rows).toEqual([]);
+    expect(r.flat).toEqual([]);
+  });
+
   it('returns no rows for a layer id that is not in the composition', () => {
     expect(runSweep(composition({}), 'nope', 'unrest', 0, 1, 3, PARTS, 60, NO_CTX).rows).toEqual(
       [],

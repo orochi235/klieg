@@ -12,6 +12,7 @@ function pool(count: number): PartInfo[] {
     letter: { index: 0, count: 1 },
     x: index,
     y: 0,
+    ink: { minX: 0, maxX: 0, minY: 0, maxY: 0 },
     at: index / count,
     span: 1 / count,
   }));

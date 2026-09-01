@@ -402,12 +402,25 @@ export class Word {
       letter: this.letterInfo(slot),
       x: this.baseX[slot] as number,
       y: this.baseY[slot] as number,
+      ink: this.inkOf(slot),
       line: this.lineOf[slot] as number,
       column: this.columnOf[slot] as number,
       lineCount: this.lineCount,
       columnCount: this.columnCount,
       at,
       span,
+    };
+  }
+
+  /** A letter's drawn bounds in layout space. A glyph with no outline collapses to its origin. */
+  private inkOf(slot: number): PartInfo['ink'] {
+    const x = this.baseX[slot] as number;
+    const y = this.baseY[slot] as number;
+    return {
+      minX: x + (this.geoMinX[slot] ?? 0),
+      maxX: x + (this.geoMaxX[slot] ?? 0),
+      minY: y + (this.geoMinY[slot] ?? 0),
+      maxY: y + (this.geoMaxY[slot] ?? 0),
     };
   }
 
@@ -430,12 +443,11 @@ export class Word {
     let minY = Number.POSITIVE_INFINITY;
     let maxY = Number.NEGATIVE_INFINITY;
     for (let i = 0; i < this.parts.length; i++) {
-      const part = this.parts[i] as PartInfo;
-      const slot = this.partSlot[i] as number;
-      minX = Math.min(minX, part.x + (this.geoMinX[slot] ?? 0));
-      maxX = Math.max(maxX, part.x + (this.geoMaxX[slot] ?? 0));
-      minY = Math.min(minY, part.y + (this.geoMinY[slot] ?? 0));
-      maxY = Math.max(maxY, part.y + (this.geoMaxY[slot] ?? 0));
+      const ink = (this.parts[i] as PartInfo).ink;
+      minX = Math.min(minX, ink.minX);
+      maxX = Math.max(maxX, ink.maxX);
+      minY = Math.min(minY, ink.minY);
+      maxY = Math.max(maxY, ink.maxY);
     }
     return { minX, maxX, minY, maxY };
   }

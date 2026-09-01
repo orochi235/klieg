@@ -97,11 +97,32 @@ const partAt = (x: number, y = 0): PartInfo => ({
   letter: { index: 0, count: 1 },
   x,
   y,
+  ink: { minX: x, maxX: x, minY: y, maxY: y },
   at: 0,
   span: 1,
 });
 
+/** A letter standing `height` em off its baseline, as every drawn glyph does. */
+const standingAt = (x: number, height: number): PartInfo => ({
+  ...partAt(x, 0),
+  ink: { minX: x - 0.2, maxX: x + 0.2, minY: 0, maxY: height },
+});
+
 describe('lamp', () => {
+  // The bug this replaces: every part of a single line shares one origin y, so a lamp measuring
+  // to origins could not light the top of a word at all -- 153% of its reach away, at any x.
+  it('measures to the part ink rather than to the baseline origin', () => {
+    const piece = lamp({ source: fixed(0, 0.5), radius: 0.4, strength: 2 });
+
+    expect(piece.at(0, standingAt(0, 1), NO_CTX).light?.amount).toBeCloseTo(2);
+  });
+
+  it('still measures from the origin for a part that draws nothing', () => {
+    const piece = lamp({ source: fixed(3, 0), radius: 0.5, strength: 2 });
+
+    expect(piece.at(0, partAt(3), NO_CTX).light?.amount).toBeCloseTo(2);
+  });
+
   it('is brightest at its centre and dark past its radius', () => {
     const piece = lamp({ source: fixed(0, 0), radius: 1, strength: 2 });
     expect(piece.at(0, partAt(0), NO_CTX).light?.amount).toBeCloseTo(2);

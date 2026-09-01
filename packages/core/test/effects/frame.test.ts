@@ -13,6 +13,7 @@ function pool(runs: number, bodies: number): PartInfo[] {
       letter: { index: i, count: bodies },
       x: i,
       y: 0,
+      ink: { minX: 0, maxX: 0, minY: 0, maxY: 0 },
       at: i / bodies,
       span: 1 / bodies,
     });
@@ -25,6 +26,7 @@ function pool(runs: number, bodies: number): PartInfo[] {
       letter: { index: 0, count: bodies },
       x: i,
       y: 0,
+      ink: { minX: 0, maxX: 0, minY: 0, maxY: 0 },
       at: i / runs,
       span: 1 / runs,
     });

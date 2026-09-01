@@ -15,9 +15,16 @@ export interface PartInfo {
   count: number;
   /** The letter this part belongs to, so a piece can order by letter as well as by part. */
   letter: LetterInfo;
-  /** Layout position in em, relative to the block centre. */
+  /** Layout position in em, relative to the block centre. This is the letter's origin, which on
+   * a single line is the shared baseline -- `ink` is where the part is actually drawn. */
   x: number;
   y: number;
+  /**
+   * The part's drawn bounds in the same space as `x`/`y`, so a piece measuring distance has
+   * something with height to measure to. Collapses to the origin for a part that draws nothing.
+   * Resolves per letter: every run of a letter reports that letter's bounds.
+   */
+  ink: { minX: number; maxX: number; minY: number; maxY: number };
   /** The letter's place in the laid-out block, so `stagger`'s `grid` order has something to read. */
   line?: number;
   column?: number;

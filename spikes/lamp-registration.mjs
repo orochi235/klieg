@@ -51,14 +51,24 @@ console.log(`  ink box   x ${extent.minX.toFixed(3)}..${extent.maxX.toFixed(3)} 
 console.log(`            y ${extent.minY.toFixed(3)}..${extent.maxY.toFixed(3)} (${inkH.toFixed(3)} em)`);
 console.log(`  origin y  ${ys.map((y) => y.toFixed(3)).join(', ')}`);
 
-// The cursor is mapped into the ink box; every part it is measured against sits at an origin.
-// At the extremes of the box, the y term alone is this much of the lamp's reach.
-const worst = (pointerY) => Math.min(...ys.map((y) => Math.abs(pointerY - y)));
-for (const [label, py] of [['top of ink', extent.maxY], ['bottom of ink', extent.minY], ['middle', (extent.maxY + extent.minY) / 2]]) {
-  const d = worst(py);
-  const spent = d / RADIUS;
-  const note = spent >= 1 ? '  <- past the reach: no part can light at all' : '';
-  console.log(`  cursor at ${label.padEnd(13)} y=${py.toFixed(3)}: nearest origin is ${d.toFixed(3)} em away, ${(spent * 100).toFixed(0)}% of reach${note}`);
+// `origin` is what `lamp` measured to before `PartInfo.ink` existed; `ink` is what it measures to
+// now. Both are printed because the gap between them is the whole defect.
+const inkCentreY = parts.map((p) => (p.ink.minY + p.ink.maxY) / 2);
+const nearest = (from, pointerY) => Math.min(...from.map((y) => Math.abs(pointerY - y)));
+const pct = (d) => `${((d / RADIUS) * 100).toFixed(0)}%`;
+const flag = (d) => (d >= RADIUS ? ' DARK' : '     ');
+
+console.log('  cursor y              to origin        to ink centre');
+for (const [label, py] of [
+  ['top of ink', extent.maxY],
+  ['bottom of ink', extent.minY],
+  ['middle', (extent.maxY + extent.minY) / 2],
+]) {
+  const o = nearest(ys, py);
+  const i = nearest(inkCentreY, py);
+  console.log(
+    `  ${label.padEnd(14)} ${py.toFixed(3).padStart(6)}  ${o.toFixed(3)} em ${pct(o).padStart(4)}${flag(o)}  ${i.toFixed(3)} em ${pct(i).padStart(4)}${flag(i)}`,
+  );
 }
 
 // The x stretch is a rate, not an offset: the cursor crosses the canvas, the light crosses the ink.

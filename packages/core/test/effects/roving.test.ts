@@ -14,6 +14,7 @@ function partAt(index: number): PartInfo {
     letter: { index: 0, count: 1 },
     x: 0,
     y: 0,
+    ink: { minX: 0, maxX: 0, minY: 0, maxY: 0 },
     at: index / COUNT,
     span: 1 / COUNT,
   };

@@ -1577,6 +1577,46 @@ describe('part pool', () => {
     expect(new Set(parts.map((p) => p.letter.index))).toEqual(new Set([0, 1]));
   });
 
+  it("carries each part's own ink, offset by its origin", () => {
+    const parts = new Word('AA', stubFont(), 'gold', ROOMY).partsOf('body');
+    const [a, b] = parts as [PartInfo, PartInfo];
+
+    // Same line, so the origins share a y and only x steps; the ink follows the origin.
+    expect(a.y).toBe(b.y);
+    expect(b.ink.minX - a.ink.minX).toBeCloseTo(b.x - a.x, 5);
+    expect(a.ink.minY).toBeCloseTo(b.ink.minY, 5);
+    expect(a.ink.maxY).toBeCloseTo(b.ink.maxY, 5);
+  });
+
+  // The whole point of the field: a lamp measuring to origins on a single line has one y to
+  // measure against, and the letters stand well above it.
+  it('gives the ink a height the origins on one line do not have', () => {
+    const parts = new Word('AA', stubFont(), 'gold', ROOMY).partsOf('body');
+
+    expect(new Set(parts.map((p) => p.y)).size).toBe(1);
+    for (const part of parts) expect(part.ink.maxY - part.ink.minY).toBeGreaterThan(0);
+  });
+
+  it('drops the ink of a descender below the ink of one that sits on the baseline', () => {
+    const parts = new Word('ag', stubFont(), 'gold', ROOMY).partsOf('body');
+    const [flat, drops] = parts as [PartInfo, PartInfo];
+
+    expect(drops.ink.minY).toBeLessThan(flat.ink.minY);
+  });
+
+  it("unions the parts' ink into exactly the pool extent", () => {
+    const word = new Word('Ag', stubFont(), 'tubing', ROOMY);
+    const extent = word.partExtent();
+    const parts = [...word.partsOf('body'), ...word.partsOf('run')];
+
+    expect(extent).toEqual({
+      minX: Math.min(...parts.map((p) => p.ink.minX)),
+      maxX: Math.max(...parts.map((p) => p.ink.maxX)),
+      minY: Math.min(...parts.map((p) => p.ink.minY)),
+      maxY: Math.max(...parts.map((p) => p.ink.maxY)),
+    });
+  });
+
   it('gives every run part a share of the pool extent that sums to one', () => {
     const parts = new Word('AA', stubFont(), 'tubing', ROOMY).partsOf('run');
     const total = parts.reduce((a, p) => a + p.span, 0);

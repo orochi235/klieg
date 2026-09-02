@@ -3,6 +3,8 @@ import type { FrameCtx, PartInfo } from '@core/effects/types.js';
 import { type LoadedFont, loadFont } from '@core/text/font.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildLayer, type Composition, finestPass, toFireOptions } from './composition.js';
+import { DraftPane } from './DraftPane.js';
+import { clearDraftFaults, draftFaults } from './draft.js';
 import { fontUrl } from './font.js';
 import { CHANNELS, type Channel, Plot } from './Plot.js';
 import { Preview } from './Preview.js';
@@ -15,6 +17,7 @@ import { Sweep } from './SweepPanel.js';
 import { passSamples, samplePass } from './sample.js';
 
 import { Tenure } from './TenurePanel.js';
+import { Timeline } from './TimelinePanel.js';
 
 /** How far past `hold` the transport runs, so an exit is visible. */
 const TAIL_MS = 2000;
@@ -91,7 +94,11 @@ export function App() {
     // flicker a 306s pass, where a fixed grid steps straight over whole drops.
     const finest = finestPass(composition);
     const count = passSamples(pass, finest);
-    return { pass, finest, count, data: samplePass(frame, parts, pass, count, CTX) };
+    // Cleared either side of the pass so the count belongs to this sampling rather than to
+    // however many frames the preview has drawn since the last one.
+    clearDraftFaults();
+    const data = samplePass(frame, parts, pass, count, CTX);
+    return { pass, finest, count, data, faults: draftFaults() };
   }, [composition, parts]);
 
   /** The one epoch a measured tenure can be read against. Two roving layers have two, and the
@@ -166,6 +173,9 @@ export function App() {
         </section>
         <section className="cl-deck">
           <div className="cl-span2">
+            <Timeline composition={composition} tailMs={TAIL_MS} elapsed={elapsed} onSeek={seek} />
+          </div>
+          <div className="cl-span2">
             <Raster
               samples={sampled.data}
               rows={rows}
@@ -212,6 +222,22 @@ export function App() {
             perPiecePass={(sampled.count * sampled.finest) / sampled.pass}
           />
           <Sweep composition={composition} parts={parts} ctx={CTX} />
+          {composition.effects
+            .filter((l) => l.kind === 'draft')
+            .map((l) => (
+              <div className="cl-span2" key={l.id}>
+                <DraftPane
+                  layer={l}
+                  faults={sampled.faults}
+                  onSource={(source) =>
+                    setComposition((c) => ({
+                      ...c,
+                      effects: c.effects.map((e) => (e.id === l.id ? { ...e, source } : e)),
+                    }))
+                  }
+                />
+              </div>
+            ))}
         </section>
       </main>
     </div>

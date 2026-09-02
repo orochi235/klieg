@@ -209,3 +209,17 @@ body {
 .cl-table th.cl-flat {
   color: var(--cl-hot);
 }
+
+.cl-editor {
+  border: 1px solid var(--cl-edge);
+  max-height: 320px;
+  overflow: auto;
+}
+
+.cl-draft .cl-row {
+  margin-top: 6px;
+}
+
+.cl-ok {
+  color: #7ee787;
+}

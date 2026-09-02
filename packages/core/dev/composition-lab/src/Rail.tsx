@@ -28,7 +28,15 @@ export interface RailProps {
   realPoolStatus: RealPoolStatus;
 }
 
-const KINDS: PieceKind[] = ['flicker', 'hue', 'chase', 'lamp'];
+const KINDS: PieceKind[] = ['flicker', 'hue', 'chase', 'lamp', 'draft'];
+
+/** What a new draft opens on: a piece that builds, so the pane starts from working code. */
+const DRAFT_SOURCE = `return {
+  duration: 1400,
+  at: (t, part) => ({
+    gain: 0.35 + 0.65 * Math.abs(Math.sin(Math.PI * (t + part.at))),
+  }),
+};`;
 
 const layerBuilds = (layer: EffectLayer): boolean => layerPiece(layer) !== null;
 
@@ -61,6 +69,7 @@ export function Rail({ composition, onChange, counts, realPoolStatus }: RailProp
           amount: 1,
           seed: 0,
           ...(kind === 'lamp' ? { lampSource: 'fixed' as LampSourceKind } : {}),
+          ...(kind === 'draft' ? { source: DRAFT_SOURCE } : {}),
         },
       ],
     });

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### A tube look no longer drops a letter
+
+A corner that cannot be filleted without giving up the whole stroke it is bending now cuts there
+instead. It used to give up the stroke: `tubing` on Cinzel drew `C` as two 0.07 em stubs of glass
+and, having no body behind the tube, left a gap in the word. Shipped looks on the packaged face are
+byte-identical — every visual baseline is unmoved — so this reaches you only if you fire a face of
+your own.
+
 ### A corpus can be paid for before the first word
 
 **`preheat(chars, font?)`** fetches, parses and extrudes a face's glyphs for every distinct

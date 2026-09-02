@@ -568,6 +568,26 @@ Roughly in order of value; the items are independent of each other.
   got its shape: a pillowed or rounded profile, a lathe, a swept section, a depth that varies over
   the glyph. It belongs in that design and is missing from it.
 
+- **Why the sparkly looks are hard to read: nothing darkens a letter's sides.** Lighting is a PMREM
+  environment map and nothing else — no directional key, no ambient, no shadows
+  (`environment.ts:70`), and there is no occlusion term of any kind in `render/`. A metallic disc
+  lit only by an env map reflects whatever it faces, and the studio is bright all round, so a
+  sequin on the extrusion wall is as bright as one on the front cap. The form has no shading to
+  carry it, and a fat face makes it worse: more wall per cap, so the unshaded band is a larger
+  share of the letter.
+
+  **The data for the fix is already in the buffer.** Each chunk instance carries the surface normal
+  it sits on, interpolated from its triangle (`decoration.ts:268-275`), and `lie` aligns the disc to
+  it — the orientation is known and simply never reaches the shading. Cheapest route is a
+  per-instance darkening derived from that normal, written as an instanced attribute and folded
+  into the material, which is what `tint.ts` already does for `runColor` and `gradientT`. Real AO or
+  a directional key are the heavier alternatives, and neither is needed to test whether polarity
+  alone fixes the reading.
+
+  Judged against this, an inset margin around the field — suggested earlier here — treats a
+  symptom: the silhouette is unreadable because the whole form is unshaded, not because the field
+  reaches the edge.
+
 - **Asked for, not yet measured: `sequin` and its neighbours are hard to read, and the two obvious
   levers are both awkward.** Tracking is the first — looks do not touch layout at all today, so a
   per-look letterspacing is new coupling rather than a tuning.

@@ -251,31 +251,25 @@ function seedSliders(): void {
   if (spec.flake) {
     grainInput.min = spec.flake.bump ? '1' : '20';
     grainInput.max = spec.flake.bump ? '24' : '400';
-    grainInput.value = String(Math.round(1 / spec.flake.size));
-    densityInput.value = String(Math.round(spec.flake.density * 100));
+    setRange('grain', Math.round(1 / spec.flake.size));
+    setRange('density', Math.round(spec.flake.density * 100));
   }
 
-  el<HTMLInputElement>('bodyOpacity').value = String(Math.round((spec.opacity ?? 1) * 100));
+  setRange('bodyOpacity', Math.round((spec.opacity ?? 1) * 100));
 
   const decoration = spec.decoration;
   if (decoration?.kind === 'tube') {
-    el<HTMLInputElement>('radius').value = String(Math.round(decoration.radius * 1000));
-    el<HTMLInputElement>('level').value = String(Math.round(decoration.level * 1000));
-    el<HTMLInputElement>('runs').value = String(decoration.runs);
-    el<HTMLInputElement>('minRun').value = String(Math.round(decoration.minRun * 1000));
-    el<HTMLInputElement>('litAmount').value = String(
-      Math.round((decoration.select.amount ?? 1) * 100),
-    );
-    el<HTMLInputElement>('amplitude').value = String(
-      Math.round((decoration.amplitude ?? 0) * 1000),
-    );
-    el<HTMLInputElement>('wallDepth').value = String(
-      Math.round((decoration.wallDepth ?? 0.5) * 100),
-    );
-    el<HTMLInputElement>('wallRise').value = String(Math.round((decoration.wallRise ?? 0) * 100));
+    setRange('radius', Math.round(decoration.radius * 1000));
+    setRange('level', Math.round(decoration.level * 1000));
+    setRange('runs', decoration.runs);
+    setRange('minRun', Math.round(decoration.minRun * 1000));
+    setRange('litAmount', Math.round((decoration.select.amount ?? 1) * 100));
+    setRange('amplitude', Math.round((decoration.amplitude ?? 0) * 1000));
+    setRange('wallDepth', Math.round((decoration.wallDepth ?? 0.5) * 100));
+    setRange('wallRise', Math.round((decoration.wallRise ?? 0) * 100));
     const corners = decoration.corners ?? { break: 1, connect: 0 };
-    el<HTMLInputElement>('cornerBreak').value = String(Math.round(corners.break * 100));
-    el<HTMLInputElement>('cornerConnect').value = String(Math.round(corners.connect * 100));
+    setRange('cornerBreak', Math.round(corners.break * 100));
+    setRange('cornerConnect', Math.round(corners.connect * 100));
     surfacesInput.value = surfacesKeyFor(decoration.surfaces);
   } else if (decoration?.kind === 'chunks') {
     setRange('count', decoration.count);

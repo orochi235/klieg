@@ -451,17 +451,18 @@ function hairpinFor(
 const WIDEN_LADDER = [1, 1.3, 1.7, 2.2, 3];
 
 /**
- * Whether both legs meet this fillet at the first vertex clear of its setback — the test a `widen`
- * grows the arc to satisfy, and the condition under which `resumeAt` would not walk at all.
+ * Where each leg picks up again around a fillet, on both sides at once. `keep` is the entry-side
+ * leg's last surviving index and `from` the exit-side leg's first; `at` and `start` are where each
+ * walk began, so a walk that never moved is `keep === at` and `from === start`.
  */
-function joinsAtOnce(
+function rejoinWalk(
   target: THREE.Vector3[],
   next: THREE.Vector3[],
   corner: Corner,
   fillet: Fillet,
   rhoMin: number,
   spacing: number,
-): boolean {
+): { keep: number; at: number; from: number; start: number } {
   const n = fillet.points.length;
   const entry = fillet.points[0] as THREE.Vector3;
   const exit = fillet.points[n - 1] as THREE.Vector3;
@@ -470,9 +471,10 @@ function joinsAtOnce(
 
   const before = target.slice(0, Math.max(0, target.length - 1 - corner.groupBefore));
   trimTail(before, fillet.setback, fillet.corner);
+  const at = before.length - 1;
   const keep = resumeAt(
     before,
-    before.length - 1,
+    at,
     -1,
     entry,
     second,
@@ -480,7 +482,6 @@ function joinsAtOnce(
     rhoMin,
     spacing,
   );
-  if (keep !== before.length - 1) return false;
 
   const start = indexPast(next, corner.groupAfter + 1, fillet.setback, fillet.corner);
   const from = resumeAt(
@@ -493,7 +494,41 @@ function joinsAtOnce(
     rhoMin,
     spacing,
   );
-  return from === start;
+  return { keep, at, from, start };
+}
+
+/**
+ * Whether both legs meet this fillet at the first vertex clear of its setback — the test a `widen`
+ * grows the arc to satisfy, and the condition under which `resumeAt` would not walk at all.
+ */
+function joinsAtOnce(
+  target: THREE.Vector3[],
+  next: THREE.Vector3[],
+  corner: Corner,
+  fillet: Fillet,
+  rhoMin: number,
+  spacing: number,
+): boolean {
+  const walk = rejoinWalk(target, next, corner, fillet, rhoMin, spacing);
+  return walk.keep === walk.at && walk.from === walk.start;
+}
+
+/**
+ * Whether joining through this fillet would cost a whole leg. `resumeAt` answers "nowhere on this
+ * leg clears the floor" with an out-of-range index, and the stitch applies it literally: the entry
+ * side truncates to nothing and the exit side copies nothing, leaving a stub of fillet where the
+ * stroke was. Cinzel's `C` loses 2.4 em of a 3.8 em contour that way and renders as a gap.
+ */
+function wipesALeg(
+  target: THREE.Vector3[],
+  next: THREE.Vector3[],
+  corner: Corner,
+  fillet: Fillet,
+  rhoMin: number,
+  spacing: number,
+): boolean {
+  const walk = rejoinWalk(target, next, corner, fillet, rhoMin, spacing);
+  return walk.keep < 0 || walk.from >= next.length;
 }
 
 /**
@@ -1047,6 +1082,12 @@ function stitchPath(
     }
     let fillet = ranFillet ? filletSite : null;
     if (wantsFillet && !fillet) strategy = 'break';
+    // The material cannot take this bend without giving up the stroke it is bending, which is what
+    // a break already means: cut here and keep both legs.
+    if (fillet && wipesALeg(before, after, c, fillet, rhoMin, spacing)) {
+      strategy = 'break';
+      fillet = null;
+    }
     // A cut end is an electrode, and a letter has two of those rather than thirty. Everywhere else
     // the bender bends the tube out of the plane and paints the return, so the glass carries
     // through and only the light stops — which is the same fillet a connect draws.
@@ -1061,6 +1102,7 @@ function stitchPath(
         }
       }
       fillet = ranFillet ? blockoutFillet : null;
+      if (fillet && wipesALeg(before, after, c, fillet, rhoMin, spacing)) fillet = null;
       if (fillet) strategy = 'return';
     }
     if (strategy === 'hairpin' && hairpin) {

@@ -569,15 +569,22 @@ Roughly in order of value; the items are independent of each other.
   the glyph. It belongs in that design and is missing from it.
 
 - **Asked for, not yet measured: `sequin` and its neighbours are hard to read, and the two obvious
-  levers are both in doubt.** Tracking is the first — looks do not touch layout at all today, so a
-  per-look letterspacing is new coupling rather than a tuning. The second is density, and it does
-  not behave: doubling `count` from 520 to 1040 leaves `looks.spec.ts` **pixel-identical at
-  `maxDiffPixelRatio: 0`**, while a unit probe on `chunkMatrices` returns 520 and 1040 matrices as
-  asked. One of those two is lying and it is not yet known which. The lab does not override a
-  `chunks` decoration (`chosenLook` only retunes `flake`, `opacity` and tube decorations), and the
-  lab resolves `klieg` to source, so neither staleness nor an override explains it. Settle that
-  before tuning anything: if the shipped `count` is inert past some point, every density judgement
-  made from the lab is judging a number that never reached the screen.
+  levers are both awkward.** Tracking is the first — looks do not touch layout at all today, so a
+  per-look letterspacing is new coupling rather than a tuning.
+
+  The second is density, and **the thing to know is that a render diff cannot measure it.**
+  `poolFor` derives the sample pool from `count`, so changing the count reseeds the *whole*
+  arrangement rather than adding to it: every count draws a different field. Measured against the
+  520 baseline, counts of 20, 130, 260 and 390 differ by 12.9k, 13.6k, 14.4k and 15.4k pixels —
+  rising with count rather than converging, which is rearrangement, not density. Judge density by
+  coverage or by instance count, never by diffing two renders.
+
+  What is settled: `count` is honest. `chunkMatrices` returns exactly `count` matrices with
+  `bedding` included, and `looks.spec.ts` detects a changed count at every value tried. An earlier
+  reading here claimed doubling to 1040 left the render pixel-identical; that contradicts the four
+  measurements above and the run is not trustworthy — `reuseExistingServer` is on outside CI, so a
+  server started before the edit can serve the previous module graph. Re-run it against a
+  guaranteed-fresh server before believing anything about saturation.
 
 - **The next major is designed: [wells and fills](specs/2026-09-01-wells-and-fills-design.md).** A
   letter is a solid volume, and the pipeline carves recesses into it rather than laying decorations

@@ -568,13 +568,17 @@ Roughly in order of value; the items are independent of each other.
   got its shape: a pillowed or rounded profile, a lathe, a swept section, a depth that varies over
   the glyph. It belongs in that design and is missing from it.
 
-- **Why the sparkly looks are hard to read: nothing darkens a letter's sides.** Lighting is a PMREM
-  environment map and nothing else — no directional key, no ambient, no shadows
-  (`environment.ts:70`), and there is no occlusion term of any kind in `render/`. A metallic disc
-  lit only by an env map reflects whatever it faces, and the studio is bright all round, so a
-  sequin on the extrusion wall is as bright as one on the front cap. The form has no shading to
-  carry it, and a fat face makes it worse: more wall per cap, so the unshaded band is a larger
-  share of the letter.
+- **Why the sparkly looks are hard to read: nothing separates a letter's face from its sides.**
+  Whatever usually does that job — a key light's cosine falloff, a cavity or occlusion term, a
+  distinct wall material — klieg has none of. Lighting is a PMREM environment map and nothing else
+  (`environment.ts:70`), and there is no occlusion term anywhere in `render/`. A metallic disc lit
+  only by an env map reflects whatever it faces, and the studio is bright all round, so a sequin on
+  the extrusion wall is as bright as one on the front cap. Solid looks read because the bevel
+  highlight draws the edge; a chunk field buries the bevel, and the form loses the only thing
+  carrying it. A fat face makes it worse: more wall per cap.
+
+  The point is the missing separation, not any one technique — AO is one answer, a key light is
+  another, and a darker wall material is a third. What follows is only the cheapest to try.
 
   **The data for the fix is already in the buffer.** Each chunk instance carries the surface normal
   it sits on, interpolated from its triangle (`decoration.ts:268-275`), and `lie` aligns the disc to
@@ -605,6 +609,16 @@ Roughly in order of value; the items are independent of each other.
   measurements above and the run is not trustworthy — `reuseExistingServer` is on outside CI, so a
   server started before the edit can serve the previous module graph. Re-run it against a
   guaranteed-fresh server before believing anything about saturation.
+
+- **The serif face renders wrong glyphs, `Z` among them — reported, not diagnosed.** It is not a
+  build failure: across all eight faces in `apps/lab/public/fonts`, every capital extrudes without
+  throwing, without empty geometry and without a NaN. So it is valid geometry of the wrong outline.
+  The likely mechanism is overlapping contours — `THREE.Shape` plus earcut cannot union, and serif
+  faces routinely draw a stem and its serifs as separate same-winding contours that a union would
+  merge and a triangulator will not. Cheapest next step is to draw `glyphToShapes`' own output as
+  SVG per contour, with winding, and look at `Z` in `cinzel.ttf` — `spikes/svg-tube/` already
+  writes SVG pages, so the harness exists. Confirm which face before assuming it is Cinzel; the
+  set also holds `abril-fatface` and `rye`.
 
 - **The next major is designed: [wells and fills](specs/2026-09-01-wells-and-fills-design.md).** A
   letter is a solid volume, and the pipeline carves recesses into it rather than laying decorations

@@ -104,11 +104,18 @@ per-word: wells are cut per glyph and cached beside glyph geometry, because a le
 depend on its neighbours. And not shader-faked — a parallax dent cannot seat a stone and comes apart
 at the silhouette, which is exactly where a bevelled well reads.
 
-## Measure before committing
+## Measured: the seat costs six times the hole
 
-Every well adds its outline to the plate's triangulation. A forty-stone letter across seven letters
-is a different vertex count from anything the extruder builds today, and the default stone pitch
-should be chosen against that measurement rather than against a still of one letter.
+`node spikes/well-cost.mjs` cuts wells into real glyphs and reads the cost off today's extruder,
+which is all a hole in a plate needs. **A well costs 1,716 vertices bevelled and 276 unbevelled** —
+so the bevel, which is the part that seats the stone, is 84% of the price.
+
+Against a 46,968-vertex baseline for `JACKPOT`, forty stones a letter is 251,160 and eighty is
+457,170: **five to ten times the whole word's geometry today**. That is the number the stone pitch
+has to be chosen against, and it also puts a question to the design that this document should
+answer before the cutter is built: whether the seat is a bevel on the plate at all, or geometry the
+stone brings with it. A stone carrying its own collar cuts the well's cost by six and moves the
+seam from the plate's triangulation to the fill's own mesh, where it is not paid per letter.
 
 ## Order
 

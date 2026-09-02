@@ -562,11 +562,14 @@ working — it needs a caller-supplied `TubeSpec.gradient`.
 
 Roughly in order of value; the items are independent of each other.
 
-- **Asked for, not yet designed: other ways of inflating a letter.** Everything klieg draws is
-  `ExtrudeGeometry` with a bevel — one linear push along z. Inflation is the *volume* half of the
-  wells-and-fills model, which says what to carve into a solid without ever saying how the solid
-  got its shape: a pillowed or rounded profile, a lathe, a swept section, a depth that varies over
-  the glyph. It belongs in that design and is missing from it.
+- **Inflation is designed and prototyped; what is open is the mesher.** It is a profile over the
+  distance field the tube pipeline already builds, and `node spikes/inflate.mjs` renders four of
+  them on a real glyph — `flat` is today, `ridge` creases each stroke and reads as folded channel
+  rather than a cushion. The section is in
+  [the wells-and-fills design](specs/2026-09-01-wells-and-fills-design.md#inflating-the-solid);
+  it carries the cost (9,143 vertices a letter at a 128 grid, against the extruder's 6,700) and the
+  two candidate constructions. Look at the `chrome` shot rather than `gold`: the profiles separate
+  far more clearly on it.
 
 - **A letter's face is now separated from its sides, and `sequin` reads.** `ChunkSpec.relief`
   darkens a chunk by the surface normal the blueprint already carried — a cosine off the studio's

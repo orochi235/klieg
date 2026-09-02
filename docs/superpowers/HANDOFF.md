@@ -562,6 +562,23 @@ working — it needs a caller-supplied `TubeSpec.gradient`.
 
 Roughly in order of value; the items are independent of each other.
 
+- **Asked for, not yet designed: other ways of inflating a letter.** Everything klieg draws is
+  `ExtrudeGeometry` with a bevel — one linear push along z. Inflation is the *volume* half of the
+  wells-and-fills model, which says what to carve into a solid without ever saying how the solid
+  got its shape: a pillowed or rounded profile, a lathe, a swept section, a depth that varies over
+  the glyph. It belongs in that design and is missing from it.
+
+- **Asked for, not yet measured: `sequin` and its neighbours are hard to read, and the two obvious
+  levers are both in doubt.** Tracking is the first — looks do not touch layout at all today, so a
+  per-look letterspacing is new coupling rather than a tuning. The second is density, and it does
+  not behave: doubling `count` from 520 to 1040 leaves `looks.spec.ts` **pixel-identical at
+  `maxDiffPixelRatio: 0`**, while a unit probe on `chunkMatrices` returns 520 and 1040 matrices as
+  asked. One of those two is lying and it is not yet known which. The lab does not override a
+  `chunks` decoration (`chosenLook` only retunes `flake`, `opacity` and tube decorations), and the
+  lab resolves `klieg` to source, so neither staleness nor an override explains it. Settle that
+  before tuning anything: if the shipped `count` is inert past some point, every density judgement
+  made from the lab is judging a number that never reached the screen.
+
 - **The next major is designed: [wells and fills](specs/2026-09-01-wells-and-fills-design.md).** A
   letter is a solid volume, and the pipeline carves recesses into it rather than laying decorations
   on it — what makes a stone read as set is the seat, which nothing additive produces, and the frame

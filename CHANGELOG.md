@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0
 
 ### A tube look no longer drops a letter
 
@@ -39,8 +39,6 @@ than per sequin.
 look, so a lamp landing on it read as a dull lift rather than as light in a red stone; the lit pool
 is half again as saturated now. A tinted `gem` keeps its lobe in step, and a look that declares its
 own `specularColor` still wins.
-
-## 0.10.0
 
 ### A general on-and-off wrapper
 

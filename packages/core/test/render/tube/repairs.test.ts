@@ -204,6 +204,24 @@ describe('the inner pass', () => {
     ).toBe(245);
   });
 
+  // Switching a repair off does not always change one corner. Under `bridge` the leg-room math
+  // assumes the setback trimmed, so switching it off leaves points inside the setback and the walk
+  // runs forward and back over them: eleven times the vertices, on a shape with four corners.
+  // Pinned so a change to that math announces itself rather than quietly moving the blowup.
+  it('cascades when the setback is switched off under a bridge rejoin', () => {
+    const path = [{ points: square(), surface: 'front' as const, closed: true }];
+    const countOf = (opts: Parameters<typeof cutIntoRuns>[1]) =>
+      cutIntoRuns(path, opts).runs.reduce((n, r) => n + r.points.length, 0);
+    expect(countOf({ ...OPTS, rejoin: 'bridge' })).toBe(241);
+    expect(
+      countOf({
+        ...OPTS,
+        rejoin: 'bridge',
+        repairs: new Set(['stretch', 'resume', 'fillet', 'close', 'return', 'hairpin'] as const),
+      }),
+    ).toBe(2769);
+  });
+
   it('reports the resume provider that actually answered', () => {
     const points: number[] = [];
     let reports = 0;

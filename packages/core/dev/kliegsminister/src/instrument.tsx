@@ -1,4 +1,5 @@
 import type { PathSource } from '@core/render/tube/generators.js';
+import { DEFAULT_HAIRPIN, HAIRPIN_SHAPES, type HairpinShape } from '@core/render/tube/index.js';
 import { CUT_REPAIR_IDS } from '@core/render/tube/repairs.js';
 import { DEFAULT_REJOIN, REJOINS, type Rejoin } from '@core/render/tube/runs.js';
 import { TUBE_STAGES, type TubeStageId } from '@core/render/tube/stages.js';
@@ -24,6 +25,8 @@ interface Config {
   corner: number;
   rejoin: string;
   drawAt: string;
+  hairpin: number;
+  hairpinShape: string;
   subject: string;
   /** One key per stage and, from Task 13, per repair — `stage:<id>` and `repair:<id>`. */
   [stageOrRepair: string]: unknown;
@@ -41,6 +44,10 @@ function requestOf(config: Config) {
       ? config.drawAt
       : 'sweep') as TubeStageId,
     repairs: new Set(CUT_REPAIR_IDS.filter((id) => config[`repair:${id}`] !== false)),
+    hairpin: Math.max(0, Math.min(1, config.hairpin)),
+    hairpinShape: (HAIRPIN_SHAPES.includes(config.hairpinShape as HairpinShape)
+      ? config.hairpinShape
+      : DEFAULT_HAIRPIN) as HairpinShape,
     subject: (config.subject === 'letter' ? 'letter' : 'corner') as 'corner' | 'letter',
   };
 }
@@ -198,21 +205,64 @@ function useHostSize(ref: RefObject<HTMLElement | null>) {
   return size;
 }
 
+/** What `initialView` opens on, and what `subject: 'corner'` goes back to. */
+const CORNER_ZOOM = 1600;
+
+/** How much of the canvas a fitted whole letter fills. */
+const FIT = 0.9;
+
 /**
- * Seeds the pan to the middle of the canvas. labkit's `initialView` is fixed at definition time and
- * it offers no size-aware view hook, so a pan of exactly zero — what `initialView` and Reset both
- * leave behind — stands in for "not centred yet".
+ * The zoom a subject wants. A corner is a fixed magnification — the floor circle has to read at
+ * true scale — while a letter is whatever fits the canvas it is in.
  */
-function CentreView({ view, setView }: { view: unknown; setView: (next: unknown) => void }) {
+function zoomFor(
+  subject: string,
+  bounds: GlyphBounds,
+  size: { width: number; height: number },
+): number {
+  if (subject !== 'letter') return CORNER_ZOOM;
+  const w = Math.max(bounds.maxX - bounds.minX, 1e-6);
+  const h = Math.max(bounds.maxY - bounds.minY, 1e-6);
+  return FIT * Math.min(size.width / w, size.height / h);
+}
+
+/**
+ * Seeds the pan to the middle of the canvas, and re-zooms when the subject changes. labkit's
+ * `initialView` is fixed at definition time and it offers no size-aware view hook, so a pan of
+ * exactly zero — what `initialView` and Reset both leave behind — stands in for "not centred yet",
+ * and switching to the whole letter at 1600x otherwise left the reader to zoom out by hand.
+ *
+ * The scene already puts the subject at the world origin, so only the zoom differs between them.
+ */
+function CentreView({
+  view,
+  setView,
+  subject,
+  bounds,
+}: {
+  view: unknown;
+  setView: (next: unknown) => void;
+  subject: string;
+  bounds: GlyphBounds;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const size = useHostSize(ref);
   const current = as2DView(view);
   const zoom = current?.zoom ?? null;
   const offCentre = current !== null && (current.pan.x !== 0 || current.pan.y !== 0);
+  const shown = useRef<string | null>(null);
   useEffect(() => {
-    if (zoom === null || offCentre || size.width === 0) return;
-    setView({ zoom, pan: { x: size.width / 2, y: size.height / 2 } });
-  }, [zoom, offCentre, size, setView]);
+    if (zoom === null || size.width === 0) return;
+    // Recorded whatever happens next, so a view that opens already centred still notices the
+    // first switch rather than waiting for one it has a record of.
+    const switched = shown.current !== null && shown.current !== subject;
+    shown.current = subject;
+    if (!switched && offCentre) return;
+    setView({
+      zoom: switched ? zoomFor(subject, bounds, size) : zoom,
+      pan: { x: size.width / 2, y: size.height / 2 },
+    });
+  }, [zoom, offCentre, size, setView, subject, bounds]);
   return <div ref={ref} hidden />;
 }
 
@@ -367,6 +417,8 @@ export const junction = defineInstrument<CornerScene, Config>({
     drawAt: 'sweep',
     ...Object.fromEntries(TUBE_STAGES.map((stage) => [`stage:${stage.id}`, true])),
     ...Object.fromEntries(CUT_REPAIR_IDS.map((id) => [`repair:${id}`, true])),
+    hairpin: 0,
+    hairpinShape: DEFAULT_HAIRPIN,
     subject: 'corner',
   }),
 
@@ -415,6 +467,24 @@ export const junction = defineInstrument<CornerScene, Config>({
       options: TUBE_STAGES.map((s) => ({ value: s.id, label: s.label })),
     },
     ...repairSwitches(),
+    // Neither shipped look weights a hairpin, so without this the `hairpin` repair toggle beside
+    // it is a switch with nothing on the other end.
+    {
+      key: 'hairpin',
+      label: 'hairpin weight',
+      type: 'slider',
+      default: 0,
+      min: 0,
+      max: 1,
+      step: 0.05,
+    },
+    {
+      key: 'hairpinShape',
+      label: 'hairpin shape',
+      type: 'select',
+      default: DEFAULT_HAIRPIN,
+      options: HAIRPIN_SHAPES.map((h) => ({ value: h, label: h })),
+    },
     {
       key: 'subject',
       label: 'subject',
@@ -431,7 +501,7 @@ export const junction = defineInstrument<CornerScene, Config>({
   onConfigChange: (config) => buildScene(font, requestOf(config)),
 
   canvas: {
-    initialView: { zoom: 1600, pan: { x: 0, y: 0 } },
+    initialView: { zoom: CORNER_ZOOM, pan: { x: 0, y: 0 } },
     layers: [
       layer('glyph', (ctx, { state, zoom }) => {
         // Every front path, counters included — `contour` draws only the path the selected
@@ -497,7 +567,12 @@ export const junction = defineInstrument<CornerScene, Config>({
 
   render: ({ state, config, setConfig, setState, trial }) => (
     <>
-      <CentreView view={trial.view} setView={trial.setView} />
+      <CentreView
+        view={trial.view}
+        setView={trial.setView}
+        subject={requestOf(config).subject}
+        bounds={state.bounds}
+      />
       <div className="junction">
         <ol className="junction__pipeline">
           {STAGE_NODES.map((node) => {

@@ -411,23 +411,23 @@ artifact is immutable and the script regenerates them exactly.
 
 ## State
 
-**0.8.0 is published and is `latest`**, carrying the `lamp`/`EnvPiece` lighting surface,
-`framing.align`, `flicker`'s `spell` and `calm`, `lineAlign`, the `acronym` routine, and per-look
-`envMapIntensity` over a warm-balanced studio. Releases are automatic: push a `v*` tag and
-`release.yml` publishes through npm trusted publishing, checking first that the tag matches
-`packages/core/package.json` and skipping a version already on the registry. `npm view` reports a
-stale version straight after a publish — read `https://registry.npmjs.org/klieg` to see what
-actually landed.
+**0.9.3 is published and is `latest`.** `packages/core/package.json` and the changelog are already
+at **0.10.0** — `intermittent`, `lineAlign` defaulting to `start`, and styled runs laid out by
+`@weasel-js/text` — but no `v0.10.0` tag exists locally or on `origin`, so none of that is on the
+registry. Releases are automatic: push a `v*` tag and `release.yml` publishes through npm trusted
+publishing, checking first that the tag matches `packages/core/package.json` and skipping a version
+already on the registry. `npm view` reports a stale version straight after a publish — read
+`https://registry.npmjs.org/klieg` to see what actually landed.
 
-**`main` is pushed and clean at `9e0ecd8`**, green at 1144 unit tests and 33 visual. `## Unreleased`
-is empty — the next change opens it again.
+**`main` is at `ffe0d4c`, four commits ahead of `origin/main` and unpushed.** `## Unreleased` holds
+the `chunk` part kind and `gem`'s tinted specular lobe, both stacked above that untagged 0.10.0.
+`npm run check` is green at **1518 tests across 79 files** and `npx playwright test --list` reports
+**40 across 3 files**, measured at `44681f6` — `main` plus the composition lab's second round.
 
 **`main` carries the tube lab, the tube geometry rewrite, the colour gradients, the junction
 reconciliation, direct paths by default, element-anchored placement and the effects pipeline, all
-merged.** On `main`, `npm run check` is green at **1110 tests across 55 files** and
-`npx playwright test` at **33 across 2 files**, both measured at `8c4758e`.
-Every count in this doc is measured, not carried over — it has twice claimed a playwright number
-one higher than `--list` reports.
+merged.** Every count in this doc is measured, not carried over — it has twice claimed a playwright
+number one higher than `--list` reports.
 
 **`enter pieces > every piece is finite everywhere` flaked once** in a full `npm test` at `d15979c`
 and passed alone and on the next full run. Order-dependent or seeded; not chased.
@@ -665,11 +665,41 @@ Roughly in order of value; the items are independent of each other.
   count refused to move with `epochs`. `samplePass` counts *moved*, and
   `packages/core/test/composition-lab/sample.test.ts` pins it.
 
-  See [the design](specs/2026-08-27-composition-lab-design.md) and
-  [the plan](plans/2026-08-27-composition-lab.md). The plan's Tasks 1–11 are done; its self-review
-  section lists what was deliberately deferred — timeline lanes, the swatch grid, a tenure/jump
-  readout, a param sweep, and the draft editing pane. `draft.ts` compiles a hand-authored piece
-  already; only its editing UI is missing.
+  **Round two wired the real pool, and it is now the default.** `realPool` had been exported since
+  round one with nothing calling it, so every panel described a fixed 24-run, 7-letter synthetic
+  stand-in while the preview rendered whatever the rail asked for. `ACRONYM` on `tubing` is 29 runs,
+  not 24. The synthetic pool stays as an explicit mode, for exercising a kind the chosen look does
+  not build.
+
+  **The roster gained `lamp`, and any layer can be wrapped in `intermittent`.** The swatch grid, the
+  tenure/jump readout and the param sweep are built. Timeline lanes and the draft editing pane are
+  not — `draft.ts` compiles a hand-authored piece already; only its editing UI is missing.
+
+  **Two constraints the lab enforces without explaining.** `roving` cannot carry a `lamp`: it
+  substitutes a part's index and leaves `x`/`y` alone, so a position-dependent inner lights the part
+  it is standing on rather than the one holding the fault. And there is no `fromPointer` lamp,
+  because `pointerFrame` needs a `PlacedWord` — the word's fit plus the stage camera — that only a
+  running fire has; `fixed` and `orbit`, the two sources on offer, both ignore the cursor.
+
+  **Never name a panel for its own module on a case-insensitive filesystem.** `Tenure.tsx` beside
+  `tenure.ts` differs only in case, so on macOS `./Tenure.js` resolves to `tenure.ts`: `tsc` reports
+  "has no exported member", and vite resolves `.ts` before `.tsx`, so the page breaks too. It stays
+  invisible until something imports the panel. Both files are `TenurePanel.tsx` / `SweepPanel.tsx`
+  now, still exporting `Tenure` and `Sweep`. This would not fail on Linux.
+
+  **The tenure readout and round one's `dwell` measurement disagree, and nobody has reconciled
+  them.** Round one had 3200ms asked delivering 3.15s. On the real `ACRONYM`/`tubing` pool the panel
+  reports 0.60s for `flicker`, 9.47s for `chase`, and the whole pass with no handovers at all for
+  `hue`. Two mechanisms sit in the code unchased: `roving` hands over only when the inner reads as
+  rest, so `chase` holds three epochs and `hue`, which never rests, never lets go; and `samplePass`
+  spends a fixed 600 samples on a pass that `epochs: 96` makes 306s long, so `flicker`'s tenure
+  falls to 0.10s at 4000 samples. Read it as a reading of the inner and the sample rate, not of
+  `dwell`.
+
+  Round one is [design](specs/2026-08-27-composition-lab-design.md) /
+  [plan](plans/2026-08-27-composition-lab.md); round two is
+  [design](specs/2026-09-01-composition-lab-round-two-design.md) /
+  [plan](plans/2026-09-01-composition-lab-round-two.md).
 
   It is a **different lab** from **kliegsminister**, the stage-and-repair lab in
   [the pipeline lab design](specs/2026-08-23-pipeline-lab-design.md) — that one is about tube

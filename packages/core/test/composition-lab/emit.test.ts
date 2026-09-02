@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_COMPOSITION } from '../../dev/composition-lab/src/composition.js';
+import {
+  DEFAULT_COMPOSITION,
+  type EffectLayer,
+  layerPiece,
+} from '../../dev/composition-lab/src/composition.js';
 import { emit } from '../../dev/composition-lab/src/emit.js';
 import { EFFECTS } from '../../src/effects/pieces.js';
 import { roving } from '../../src/effects/roving.js';
@@ -181,5 +185,88 @@ describe('emit', () => {
       ],
     });
     expect(out).toContain("target: { kind: 'body', by: 'index', amount: 0.5 }");
+  });
+});
+
+describe('emit for the round-two shapes', () => {
+  const base = {
+    text: 'HI',
+    look: 'tubing' as const,
+    hold: 6000,
+    enter: 'slam' as const,
+    active: 'none' as const,
+    exit: 'none' as const,
+    pool: 'real' as const,
+  };
+  const layer = {
+    id: 'a',
+    enabled: true,
+    target: 'run' as const,
+    amount: 1,
+    seed: 0,
+  };
+
+  it('prints a fixed lamp with its position, and imports what it names', () => {
+    const out = emit({
+      ...base,
+      effects: [
+        {
+          ...layer,
+          kind: 'lamp' as const,
+          lampSource: 'fixed' as const,
+          params: { duration: 4000, radius: 0.5, strength: 2, x: 0.4, y: 0.35, sweep: 0.3 },
+        },
+      ],
+    });
+    expect(out).toContain('lamp({ source: fixed(0.4, 0.35)');
+    expect(out).toContain("import { fixed, lamp } from 'klieg';");
+  });
+
+  it('prints an orbiting lamp against its sweep rather than its reach', () => {
+    const out = emit({
+      ...base,
+      effects: [
+        {
+          ...layer,
+          kind: 'lamp' as const,
+          lampSource: 'orbit' as const,
+          params: { duration: 4000, radius: 0.5, strength: 2, x: 0, y: 0, sweep: 0.8 },
+        },
+      ],
+    });
+    expect(out).toContain('orbit({ radius: 0.8, x: 0, y: 0 })');
+  });
+
+  it('drops a stale roving wrapper on a lamp the same way in emit and layerPiece', () => {
+    const lampWithStaleRoving: EffectLayer = {
+      ...layer,
+      kind: 'lamp',
+      lampSource: 'fixed',
+      params: { duration: 4000, radius: 0.5, strength: 2, x: 0.4, y: 0.35 },
+      roving: { dwell: 3200, seed: 0, epochs: 96 },
+    };
+
+    const out = emit({ ...base, effects: [lampWithStaleRoving] });
+    expect(out).not.toContain('roving');
+
+    const piece = layerPiece(lampWithStaleRoving);
+    expect(piece).toHaveProperty('duration', 4000);
+  });
+
+  it('wraps in intermittent outside roving, matching the order layerPiece applies them', () => {
+    const out = emit({
+      ...base,
+      effects: [
+        {
+          ...layer,
+          kind: 'flicker' as const,
+          params: { duration: 1400 },
+          roving: { dwell: 3200, seed: 0, epochs: 96 },
+          intermittent: { spell: 4200, calm: 2000, bouts: 3 },
+        },
+      ],
+    });
+    expect(out).toContain('intermittent(roving(');
+    expect(out).toContain("import { EFFECTS, intermittent, roving } from 'klieg';");
   });
 });

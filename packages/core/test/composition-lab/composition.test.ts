@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type Composition,
   DEFAULT_COMPOSITION,
+  layerPiece,
   toFireOptions,
 } from '../../dev/composition-lab/src/composition.js';
 
@@ -48,5 +49,40 @@ describe('toFireOptions', () => {
   it('omits effects entirely when no layer is enabled, so the look keeps its own', () => {
     const c: Composition = { ...DEFAULT_COMPOSITION, effects: [] };
     expect(toFireOptions(c).effects).toBeUndefined();
+  });
+});
+
+describe('layerPiece wrappers', () => {
+  const base = {
+    id: 'a',
+    kind: 'flicker' as const,
+    enabled: true,
+    params: { duration: 1000 },
+    target: 'run' as const,
+    amount: 1,
+    seed: 0,
+  };
+
+  it('lengthens a pass to whole bouts under intermittent', () => {
+    const plain = layerPiece(base);
+    const gated = layerPiece({ ...base, intermittent: { spell: 2000, calm: 1000, bouts: 3 } });
+    expect(gated?.duration).toBeGreaterThan(plain?.duration as number);
+  });
+
+  it('will not build a layer whose spell cannot cover one inner pass', () => {
+    expect(layerPiece({ ...base, intermittent: { spell: 100, calm: 1000, bouts: 3 } })).toBeNull();
+  });
+
+  // The rail hides this pairing, but a composition persisted before it did still has to load.
+  it('drops a roving wrapper from a lamp rather than lighting the wrong part', () => {
+    const layer = {
+      ...base,
+      kind: 'lamp' as const,
+      params: {},
+      roving: { dwell: 3200, seed: 0, epochs: 96 },
+    };
+    const piece = layerPiece(layer);
+    expect(piece).not.toBeNull();
+    expect(piece?.duration).toBe(4000);
   });
 });

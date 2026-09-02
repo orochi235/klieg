@@ -52,7 +52,7 @@ body {
 .cl-preview-host {
   position: relative;
   width: 100%;
-  height: 320px;
+  height: 240px;
   border: 1px solid var(--cl-edge);
   border-radius: 5px;
   overflow: hidden;
@@ -118,6 +118,7 @@ body {
 }
 
 .cl-row input[type="text"],
+.cl-row input[type="number"],
 .cl-row input:not([type]),
 .cl-row select {
   flex: 1;
@@ -162,4 +163,49 @@ body {
   font-size: 11px;
   color: var(--cl-dim);
   margin-top: 8px;
+}
+
+.cl-deck {
+  display: grid;
+  /* minmax(0, …) rather than 1fr: a bare 1fr floors at its content's min-width, and the sweep
+     table's is wider than half the deck. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .cl-deck {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.cl-scroll {
+  overflow-x: auto;
+}
+
+.cl-span2 {
+  grid-column: 1 / -1;
+}
+
+.cl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: inherit;
+}
+
+.cl-table th,
+.cl-table td {
+  text-align: right;
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--cl-edge);
+}
+
+.cl-table th {
+  color: var(--cl-dim);
+  font-weight: 500;
+}
+
+.cl-table th.cl-flat {
+  color: var(--cl-hot);
 }

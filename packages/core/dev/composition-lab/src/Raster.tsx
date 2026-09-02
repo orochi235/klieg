@@ -7,13 +7,16 @@ export interface RasterProps {
   rows: number[];
   /** 0..1 within the pass, drawn as a playhead. */
   at: number;
+  /** The kinds `rows` was filtered to, so an empty pool can name itself rather than draw
+   * nothing. */
+  kinds: string[];
 }
 
 /**
  * Lit is background and a drop is warm. An untouched row is struck through, because "never dark"
  * and "never addressed" look identical otherwise and only one of them is a bug.
  */
-export function Raster({ samples, rows, at }: RasterProps) {
+export function Raster({ samples, rows, at, kinds }: RasterProps) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -52,6 +55,18 @@ export function Raster({ samples, rows, at }: RasterProps) {
     g.lineTo(at * w, h);
     g.stroke();
   }, [samples, rows, at]);
+
+  if (rows.length === 0) {
+    return (
+      <div className="cl-panel">
+        <h2>part &times; time</h2>
+        <p className="cl-warn">
+          no {kinds.join(' or ') || 'addressable'} parts in this pool — only tubing and piping build
+          runs
+        </p>
+      </div>
+    );
+  }
 
   const untouched = rows.filter((r) => !samples.touched[r]).length;
   return (

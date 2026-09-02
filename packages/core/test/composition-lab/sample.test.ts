@@ -78,4 +78,28 @@ describe('samplePass', () => {
     const s = samplePass(frame, parts, 1000, 8, NO_CTX);
     expect(s.touched.filter(Boolean).length).toBeLessThan(4);
   });
+
+  it('samples light, so a lamp layer plots as something rather than as a flat gain', () => {
+    const parts = pool(2);
+    const LAMP: EffectPiece = {
+      duration: 1000,
+      at: (_t, part) => (part.index === 0 ? { light: { color: 0xffffff, amount: 1 } } : {}),
+    };
+    const frame = new EffectFrame(
+      planEffects([{ piece: LAMP, target: { kind: 'run', by: 'index', amount: 1 } }], parts),
+    );
+    const s = samplePass(frame, parts, 1000, 4, NO_CTX);
+    expect(s.light[0]?.every((v) => v > 0)).toBe(true);
+    expect(s.light[1]?.every((v) => v === 0)).toBe(true);
+  });
+
+  it('records moved per sample, not just per pass, so a tenure has an end', () => {
+    const parts = pool(1);
+    const HALF: EffectPiece = { duration: 1000, at: (t) => (t < 0.5 ? { gain: 0.2 } : {}) };
+    const frame = new EffectFrame(
+      planEffects([{ piece: HALF, target: { kind: 'run', by: 'index', amount: 1 } }], parts),
+    );
+    const s = samplePass(frame, parts, 1000, 4, NO_CTX);
+    expect(s.moved[0]).toEqual([true, true, false, false]);
+  });
 });

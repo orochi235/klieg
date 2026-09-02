@@ -2044,8 +2044,9 @@ git commit -m "point the handoff at the composition lab"
 ## Self-review
 
 **Spec coverage.** Preview as primary view — Task 6. Timeline lanes — **not covered; deferred**, see
-below. Channel plot — Task 9. Raster with coverage overlay — Task 7. Swatch grid — **not covered;
-deferred**. Tenure/jump readout — **not covered; deferred**. Sweep — **not covered; deferred**.
+below. Channel plot — Task 9. Raster with coverage overlay — Task 7. Swatch grid — **built in
+[round two](2026-09-01-composition-lab-round-two.md)**. Tenure/jump readout — **built in round
+two**. Sweep — **built in round two**.
 `resolveFrame` — Task 1. Pool sources — Task 5. Empty-target warning — Tasks 5 and 8. Authoring —
 partly: `draft.ts` lands in Task 3, the editing UI is **deferred**. Emit — Task 10. Persist —
 Task 11. Testing — Tasks 1, 3, 4, 5, 10.
@@ -2055,6 +2056,10 @@ measure and paste. The timeline lanes, swatch grid, tenure readout, param sweep 
 editing pane are each additive panels over the same `PassSamples` and `Composition` types, and
 none of them changes an interface the spine defines. They are worth a second plan once the spine
 is real, rather than a longer first one — the spine is what proves the shape.
+
+That second plan is [round two](2026-09-01-composition-lab-round-two.md), which built the swatch
+grid, the tenure readout and the sweep. Timeline lanes and the draft editing pane are still
+deferred.
 
 **Types.** `PassSamples` is defined in Task 4 and consumed in Tasks 7 and 9 under the same field
 names. `Composition`/`EffectLayer` are defined in Task 3 and consumed in Tasks 6, 8, 10, 11.

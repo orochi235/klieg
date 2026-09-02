@@ -70,6 +70,13 @@ export interface ChunkSpec {
   faceBias?: number;
   /** Bands the chunks run in. Omit to scatter them evenly over the surface. */
   bedding?: BeddingSpec;
+  /**
+   * How much the surface a chunk sits on darkens it, 0..1. The studio is an environment map and
+   * nothing else, so a chunk on the extrusion wall reflects as much as one on the front cap and
+   * the letter has no shading to carry its form. Zero is that, and the default; 1 takes a chunk
+   * facing away from the key down to black. See `chunkShade`.
+   */
+  relief?: number;
   look: MaterialSpec;
 }
 
@@ -103,6 +110,24 @@ const SIZE_POWER = 3;
  * two are near 1 and near 0; the bevel between them is the only thing this has to cut.
  */
 const CAP_FACING = 0.5;
+
+/**
+ * Where the studio's light comes from, as the shading sees it. Up, a little to the left and a
+ * little toward the viewer: the two brightest bars in `environment.ts` sit overhead and above-left,
+ * and a term that disagreed with them would read as a second light nobody lit.
+ */
+const KEY = new THREE.Vector3(-0.25, 0.85, 0.45).normalize();
+
+/**
+ * What a chunk's own surface normal does to its brightness. A cosine off the key, mixed in by
+ * `relief` — so 0 leaves every chunk at 1 and cannot move a look that never asked, and the darkest
+ * a chunk can go is `1 - relief` rather than black by accident.
+ */
+export function chunkShade(normal: THREE.Vector3, relief: number): number {
+  if (!(relief > 0)) return 1;
+  const lambert = Math.max(0, normal.dot(KEY));
+  return 1 - Math.min(relief, 1) * (1 - lambert);
+}
 
 /** How far a bed strays from a straight line, in bed spacings. */
 const BED_WANDER = 0.14;
@@ -428,11 +453,18 @@ function nearestInGrid(
   return near;
 }
 
-export function chunkMatrices(
+/** A letter's chunk field: where each chunk sits, and what the surface under it does to its light. */
+export interface ChunkInstances {
+  matrices: THREE.Matrix4[];
+  /** One per matrix, in the same order. All 1 unless the look asked for `relief`. */
+  shades: Float32Array;
+}
+
+export function chunkInstances(
   blueprint: ChunkBlueprint,
   spec: ChunkSpec,
   seed: number,
-): THREE.Matrix4[] {
+): ChunkInstances {
   const random = rng(Math.round(seed * 2654435761) ^ POOL_SEED);
   const pool = blueprint.position.length / 3;
   const lattice = randomQuaternion(random);
@@ -472,6 +504,7 @@ export function chunkMatrices(
   }
 
   const matrices: THREE.Matrix4[] = [];
+  const shades = new Float32Array(chosen.length);
   const scale = new THREE.Vector3(spec.size, spec.size, spec.size);
   const sizeVary = spec.sizeVary ?? 0;
   const sink = spec.sink ?? 0;
@@ -523,10 +556,11 @@ export function chunkMatrices(
       }
       rotation.slerp(lay, lie);
     }
+    shades[matrices.length] = chunkShade(normal, spec.relief ?? 0);
     matrices.push(new THREE.Matrix4().compose(position, rotation, scale));
   }
 
-  return matrices;
+  return { matrices, shades };
 }
 
 /** Segments around a disc. Twelve reads round at the size a chunk is drawn and costs six triangles. */

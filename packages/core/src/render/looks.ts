@@ -284,6 +284,10 @@ export const LOOKS: Record<LookName, LookSpec> = {
       // Not 0: a disc lying exactly in the surface z-fights with it along its whole face.
       proud: 0.08,
       faceBias: 16,
+      // The field is lit by an environment and nothing else, so without this every disc reflects
+      // the same bright studio wherever it sits and the letter has no form. 0.7 rather than 1: at
+      // full strength a disc facing away goes to black and reads as a hole in the field.
+      relief: 0.7,
       bedding: {
         angle: 15,
         spacing: 0.055,

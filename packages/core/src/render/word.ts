@@ -27,7 +27,7 @@ import {
   type ChunkSpec,
   chunkGeometry,
   chunkGeometrySide,
-  chunkMatrices,
+  chunkInstances,
   type DecorationSpec,
   poolFor,
   type TubeBlueprint,
@@ -46,6 +46,7 @@ import {
   specOf,
   tintMaterialOf,
 } from './looks.js';
+import { CHUNK_SHADE_ATTRIBUTE, shadeByInstance } from './shade.js';
 import { CRAWL_ATTRIBUTE, rampTexture } from './tube/gradient.js';
 import {
   GRADIENT_BOUNDS_UNIFORM,
@@ -220,6 +221,8 @@ export class Word {
   /** One ramp for the whole word: every letter's tint samples the same stops. */
   private readonly gradientRamp: THREE.DataTexture | null;
   private readonly chunkGeo: THREE.BufferGeometry | null;
+  /** Per-letter clones of `chunkGeo`, one per field carrying its own shade attribute. */
+  private readonly chunkGeos: THREE.BufferGeometry[] = [];
   private readonly pose = blankPose();
   /**
    * Frame-owned bases, one per material family. `Word` is the only writer of these properties,
@@ -818,8 +821,20 @@ export class Word {
 
       const blueprint = this.chunkBlueprintFor(char, i, decoration);
       if (blueprint.kind === 'chunks' && this.chunkGeo) {
-        const matrices = chunkMatrices(blueprint, decoration, i);
-        const instanced = new THREE.InstancedMesh(this.chunkGeo, decorMaterial, matrices.length);
+        const { matrices, shades } = chunkInstances(blueprint, decoration, i);
+        // An instanced attribute lives on the geometry, and every letter's field is its own, so a
+        // relief look cannot share the one chunk geometry the others do.
+        let geometry = this.chunkGeo;
+        if (decoration.relief) {
+          geometry = this.chunkGeo.clone();
+          geometry.setAttribute(
+            CHUNK_SHADE_ATTRIBUTE,
+            new THREE.InstancedBufferAttribute(shades, 1),
+          );
+          this.chunkGeos.push(geometry);
+          shadeByInstance(decorMaterial);
+        }
+        const instanced = new THREE.InstancedMesh(geometry, decorMaterial, matrices.length);
         for (let m = 0; m < matrices.length; m++) {
           instanced.setMatrixAt(m, matrices[m] as THREE.Matrix4);
         }
@@ -1097,6 +1112,8 @@ export class Word {
     this.gradientRamp?.dispose();
     this.decorCache?.dispose();
     this.chunkGeo?.dispose();
+    for (const geometry of this.chunkGeos) geometry.dispose();
+    this.chunkGeos.length = 0;
     // An InstancedMesh owns an instanceMatrix buffer that clearing the group does not free.
     for (const cell of this.letters) {
       // Traverses rather than iterating: the meshes hang off the cell's scale node, not the cell.

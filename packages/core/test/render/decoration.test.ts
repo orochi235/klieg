@@ -6,7 +6,8 @@ import {
   type ChunkSpec,
   chunkGeometry,
   chunkGeometrySide,
-  chunkMatrices,
+  chunkInstances,
+  chunkShade,
   poolFor,
 } from '../../src/render/decoration.js';
 import { specOf } from '../../src/render/looks.js';
@@ -60,7 +61,7 @@ function standoff(m: THREE.Matrix4, blueprint: { position: Float32Array; normal:
 /** Share of chunks that landed on a cap rather than the extrusion band. */
 function capShare(spec: ChunkSpec): number {
   const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec), faceBias: spec.faceBias });
-  const matrices = chunkMatrices(blueprint, spec, 3);
+  const matrices = chunkInstances(blueprint, spec, 3).matrices;
   let caps = 0;
   for (const m of matrices) {
     const at = new THREE.Vector3().setFromMatrixPosition(m);
@@ -118,8 +119,8 @@ function quaternionOf(m: THREE.Matrix4): THREE.Quaternion {
  */
 function capSpacings(spec: ChunkSpec, bedding: BeddingSpec): number[] {
   const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec), bedding });
-  const at = chunkMatrices(blueprint, { ...spec, bedding }, 3)
-    .map((m) => new THREE.Vector3().setFromMatrixPosition(m))
+  const at = chunkInstances(blueprint, { ...spec, bedding }, 3)
+    .matrices.map((m) => new THREE.Vector3().setFromMatrixPosition(m))
     .filter((v) => Math.abs(v.z) > 0.15 - 1e-3);
 
   const out: number[] = [];
@@ -166,32 +167,32 @@ describe('buildChunkBlueprint', () => {
   });
 });
 
-describe('chunkMatrices', () => {
+describe('chunkInstances', () => {
   it('produces one matrix per requested chunk', () => {
-    const matrices = chunkMatrices(buildChunkBlueprint(box()), CHUNKS, 3);
+    const matrices = chunkInstances(buildChunkBlueprint(box()), CHUNKS, 3).matrices;
 
     expect(matrices).toHaveLength(CHUNKS.count);
   });
 
   it('is deterministic for a given seed', () => {
     const blueprint = buildChunkBlueprint(box());
-    const a = chunkMatrices(blueprint, CHUNKS, 3);
-    const b = chunkMatrices(blueprint, CHUNKS, 3);
+    const a = chunkInstances(blueprint, CHUNKS, 3).matrices;
+    const b = chunkInstances(blueprint, CHUNKS, 3).matrices;
 
     expect(a[0]?.elements).toEqual(b[0]?.elements);
   });
 
   it('gives different letters different scatter', () => {
     const blueprint = buildChunkBlueprint(box());
-    const a = chunkMatrices(blueprint, CHUNKS, 3);
-    const b = chunkMatrices(blueprint, CHUNKS, 4);
+    const a = chunkInstances(blueprint, CHUNKS, 3).matrices;
+    const b = chunkInstances(blueprint, CHUNKS, 4).matrices;
 
     expect(a[0]?.elements).not.toEqual(b[0]?.elements);
   });
 
   it('shares one orientation across a letter at align 1', () => {
     const blueprint = buildChunkBlueprint(box());
-    const matrices = chunkMatrices(blueprint, { ...CHUNKS, align: 1 }, 3);
+    const matrices = chunkInstances(blueprint, { ...CHUNKS, align: 1 }, 3).matrices;
     const first = quaternionOf(matrices[0] as THREE.Matrix4);
 
     for (const m of matrices) {
@@ -201,7 +202,7 @@ describe('chunkMatrices', () => {
 
   it('tumbles freely at align 0', () => {
     const blueprint = buildChunkBlueprint(box());
-    const matrices = chunkMatrices(blueprint, { ...CHUNKS, align: 0 }, 3);
+    const matrices = chunkInstances(blueprint, { ...CHUNKS, align: 0 }, 3).matrices;
     const first = quaternionOf(matrices[0] as THREE.Matrix4);
     const spread = matrices.map((m) => quaternionOf(m).angleTo(first));
 
@@ -210,7 +211,7 @@ describe('chunkMatrices', () => {
 
   it('keeps a full clump from collapsing onto a couple of points', () => {
     const spec = { ...CHUNKS, count: 40, cluster: 1 };
-    const matrices = chunkMatrices(buildChunkBlueprint(box()), spec, 3);
+    const matrices = chunkInstances(buildChunkBlueprint(box()), spec, 3).matrices;
     const at = (m: THREE.Matrix4) => new THREE.Vector3().setFromMatrixPosition(m);
     const distinct = new Set(matrices.map((m) => at(m).toArray().join(',')));
 
@@ -220,7 +221,7 @@ describe('chunkMatrices', () => {
   it('draws a clump tighter than an even scatter', () => {
     const blueprint = buildChunkBlueprint(box());
     const spread = (cluster: number) => {
-      const matrices = chunkMatrices(blueprint, { ...CHUNKS, count: 40, cluster }, 3);
+      const matrices = chunkInstances(blueprint, { ...CHUNKS, count: 40, cluster }, 3).matrices;
       const points = matrices.map((m) => new THREE.Vector3().setFromMatrixPosition(m));
       const mean = points
         .reduce((acc, p) => acc.add(p), new THREE.Vector3())
@@ -233,7 +234,7 @@ describe('chunkMatrices', () => {
 
   it('never places two chunks on one sample point', () => {
     const spec = { ...CHUNKS, count: 90, cluster: 0 };
-    const matrices = chunkMatrices(buildChunkBlueprint(box()), spec, 3);
+    const matrices = chunkInstances(buildChunkBlueprint(box()), spec, 3).matrices;
     const at = (m: THREE.Matrix4) => new THREE.Vector3().setFromMatrixPosition(m);
     const distinct = new Set(matrices.map((m) => at(m).toArray().join(',')));
 
@@ -242,8 +243,8 @@ describe('chunkMatrices', () => {
 
   it('sits chunks proud of the surface', () => {
     const blueprint = buildChunkBlueprint(box());
-    const flush = chunkMatrices(blueprint, { ...CHUNKS, proud: 0 }, 3);
-    const raised = chunkMatrices(blueprint, { ...CHUNKS, proud: 1 }, 3);
+    const flush = chunkInstances(blueprint, { ...CHUNKS, proud: 0 }, 3).matrices;
+    const raised = chunkInstances(blueprint, { ...CHUNKS, proud: 1 }, 3).matrices;
 
     const at = (m: THREE.Matrix4) => new THREE.Vector3().setFromMatrixPosition(m).length();
     expect(at(raised[0] as THREE.Matrix4)).toBeGreaterThan(at(flush[0] as THREE.Matrix4));
@@ -253,7 +254,7 @@ describe('chunkMatrices', () => {
 describe('per-chunk size and stand-off', () => {
   it('keeps one size and one stand-off when neither is asked for', () => {
     const blueprint = buildChunkBlueprint(box());
-    const matrices = chunkMatrices(blueprint, CHUNKS, 3);
+    const matrices = chunkInstances(blueprint, CHUNKS, 3).matrices;
 
     for (const m of matrices) {
       expect(edgeOf(m)).toBeCloseTo(CHUNKS.size, 10);
@@ -263,9 +264,11 @@ describe('per-chunk size and stand-off', () => {
 
   it('grades chunks below the nominal size, never above it', () => {
     const spec = { ...CHUNKS, count: 120, sizeVary: 0.6 };
-    const edges = chunkMatrices(buildChunkBlueprint(box(), { pool: poolFor(spec) }), spec, 3).map(
-      edgeOf,
-    );
+    const edges = chunkInstances(
+      buildChunkBlueprint(box(), { pool: poolFor(spec) }),
+      spec,
+      3,
+    ).matrices.map(edgeOf);
 
     expect(Math.max(...edges)).toBeLessThanOrEqual(spec.size + 1e-9);
     expect(Math.min(...edges)).toBeGreaterThanOrEqual(spec.size * (1 - spec.sizeVary) - 1e-9);
@@ -276,9 +279,11 @@ describe('per-chunk size and stand-off', () => {
   // even spread that thins the whole bed.
   it('leaves most chunks near full size', () => {
     const spec = { ...CHUNKS, count: 200, sizeVary: 0.6 };
-    const edges = chunkMatrices(buildChunkBlueprint(box(), { pool: poolFor(spec) }), spec, 3).map(
-      edgeOf,
-    );
+    const edges = chunkInstances(
+      buildChunkBlueprint(box(), { pool: poolFor(spec) }),
+      spec,
+      3,
+    ).matrices.map(edgeOf);
     const full = edges.filter((e) => e > spec.size * 0.9).length;
 
     expect(full / edges.length).toBeGreaterThan(0.5);
@@ -287,7 +292,7 @@ describe('per-chunk size and stand-off', () => {
   it('sinks some chunks into the surface and leaves others proud', () => {
     const spec = { ...CHUNKS, count: 120, proud: 0.1, sink: 0.45 };
     const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec) });
-    const out = chunkMatrices(blueprint, spec, 3).map((m) => standoff(m, blueprint));
+    const out = chunkInstances(blueprint, spec, 3).matrices.map((m) => standoff(m, blueprint));
 
     expect(Math.max(...out)).toBeLessThanOrEqual(spec.proud + 1e-6);
     expect(Math.min(...out)).toBeLessThan(spec.proud - spec.sink + 0.05);
@@ -315,8 +320,8 @@ describe('bedding', () => {
   /** Widest run of the axis with no chunk on it — the barren rock between two beds. */
   function widestGap(spec: ChunkSpec, axis: 'x' | 'y'): number {
     const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec), bedding: spec.bedding });
-    const at = chunkMatrices(blueprint, spec, 3)
-      .map((m) => new THREE.Vector3().setFromMatrixPosition(m)[axis])
+    const at = chunkInstances(blueprint, spec, 3)
+      .matrices.map((m) => new THREE.Vector3().setFromMatrixPosition(m)[axis])
       .sort((l, r) => l - r);
     let widest = 0;
     for (let i = 1; i < at.length; i++) {
@@ -365,7 +370,7 @@ describe('lie', () => {
 
   it('lays every chunk flat on the surface at 1', () => {
     const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec) });
-    const matrices = chunkMatrices(blueprint, { ...spec, lie: 1 }, 3);
+    const matrices = chunkInstances(blueprint, { ...spec, lie: 1 }, 3).matrices;
 
     const worst = Math.max(...matrices.map((m) => tilt(m, blueprint)));
     expect(worst).toBeLessThan(1e-6);
@@ -373,7 +378,7 @@ describe('lie', () => {
 
   it('leaves a chunk tumbling at 0', () => {
     const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec) });
-    const matrices = chunkMatrices(blueprint, { ...spec, lie: 0 }, 3);
+    const matrices = chunkInstances(blueprint, { ...spec, lie: 0 }, 3).matrices;
 
     // A free tumble sits about a radian off the surface; near zero would mean `lie` leaked.
     const mean = matrices.reduce((sum, m) => sum + tilt(m, blueprint), 0) / matrices.length;
@@ -382,15 +387,15 @@ describe('lie', () => {
 
   it('places a chunk exactly as an omitted lie does at 0', () => {
     const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec) });
-    const off = chunkMatrices(blueprint, spec, 3);
-    const zero = chunkMatrices(blueprint, { ...spec, lie: 0 }, 3);
+    const off = chunkInstances(blueprint, spec, 3).matrices;
+    const zero = chunkInstances(blueprint, { ...spec, lie: 0 }, 3).matrices;
 
     expect(zero.map((m) => m.elements.join())).toEqual(off.map((m) => m.elements.join()));
   });
 
   it('turns a chunk onto the outward normal, not onto the near side of the same plane', () => {
     const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec) });
-    const matrices = chunkMatrices(blueprint, { ...spec, lie: 0.8 }, 3);
+    const matrices = chunkInstances(blueprint, { ...spec, lie: 0.8 }, 3).matrices;
 
     // The far side is the same plane and costs half a turn to reach, but a one-faced chunk laid onto
     // the near side points its face into the letter, which is what keeps the field off FrontSide.
@@ -402,7 +407,7 @@ describe('lie', () => {
 
   it('spins a chunk freely about the normal even when it lies flat', () => {
     const blueprint = buildChunkBlueprint(box(), { pool: poolFor(spec) });
-    const matrices = chunkMatrices(blueprint, { ...spec, lie: 1 }, 3);
+    const matrices = chunkInstances(blueprint, { ...spec, lie: 1 }, 3).matrices;
 
     // Every chunk on one cap shares a normal, so a pinned spin would make them all identical.
     const onCap = matrices.filter(
@@ -528,7 +533,7 @@ describe('sequin', () => {
     const blueprint = buildChunkBlueprint(box());
     let hash = 0x811c9dc5;
     for (let letter = 0; letter < 6; letter++) {
-      for (const m of chunkMatrices(blueprint, spec, letter)) {
+      for (const m of chunkInstances(blueprint, spec, letter).matrices) {
         for (const value of m.elements) {
           hash = Math.imul(hash ^ Math.round(value * PIN_GRID), 0x01000193);
         }
@@ -580,5 +585,61 @@ describe('chunkGeometrySide', () => {
 
   it('leaves a closed cube front-sided', () => {
     expect(chunkGeometrySide({ ...CHUNKS, shape: 'cube' })).toBe(THREE.FrontSide);
+  });
+});
+
+describe('relief', () => {
+  const lit = new THREE.Vector3(-0.25, 0.85, 0.45).normalize();
+
+  it('leaves every chunk at full brightness when the look does not ask', () => {
+    for (const n of [lit, lit.clone().negate(), new THREE.Vector3(0, 0, 1)]) {
+      expect(chunkShade(n, 0)).toBe(1);
+    }
+  });
+
+  it('darkens by how far the surface turns off the key', () => {
+    const facing = chunkShade(lit, 1);
+    const across = chunkShade(new THREE.Vector3(0, 0, 1), 1);
+    const away = chunkShade(lit.clone().negate(), 1);
+    expect(facing).toBeCloseTo(1, 6);
+    expect(across).toBeGreaterThan(away);
+    expect(facing).toBeGreaterThan(across);
+  });
+
+  it('floors at what is left of the light rather than at black', () => {
+    expect(chunkShade(lit.clone().negate(), 0.4)).toBeCloseTo(0.6, 6);
+    expect(chunkShade(lit.clone().negate(), 1)).toBe(0);
+  });
+
+  it('gives a field one shade per chunk, all of them 1 by default', () => {
+    const blueprint = buildChunkBlueprint(box());
+    const { matrices, shades } = chunkInstances(blueprint, CHUNKS, 3);
+    expect(shades).toHaveLength(matrices.length);
+    expect([...shades].every((s) => s === 1)).toBe(true);
+  });
+
+  // A box is caps and band, which is the face-and-side split the term exists to draw.
+  it('separates a letter’s caps from its sides', () => {
+    const blueprint = buildChunkBlueprint(box(), { pool: poolFor({ ...CHUNKS, count: 60 }) });
+    const spec = { ...CHUNKS, count: 60, relief: 1 };
+    const { matrices, shades } = chunkInstances(blueprint, spec, 3);
+    const front: number[] = [];
+    const sides: number[] = [];
+    matrices.forEach((m, i) => {
+      const at = new THREE.Vector3().setFromMatrixPosition(m);
+      if (at.z > 0.15 - 1e-3) front.push(shades[i] as number);
+      else if (at.z > -0.15 + 1e-3) sides.push(shades[i] as number);
+    });
+    expect(front.length).toBeGreaterThan(0);
+    expect(sides.length).toBeGreaterThan(0);
+    const spread = (xs: number[]) => Math.max(...xs) - Math.min(...xs);
+    // The front cap is one plane and comes out one value; the band turns through every direction
+    // and runs from brighter than the cap to dark. That spread is the form the letter was missing —
+    // not "caps are brighter", which is false: a wall facing up meets the key more squarely.
+    expect(spread(front)).toBeLessThan(0.05);
+    expect(spread(sides)).toBeGreaterThan(0.5);
+    const cap = front[0] as number;
+    expect(sides.some((s) => s > cap + 0.1)).toBe(true);
+    expect(sides.some((s) => s < cap - 0.1)).toBe(true);
   });
 });

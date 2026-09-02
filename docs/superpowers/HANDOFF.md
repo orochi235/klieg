@@ -562,6 +562,16 @@ working — it needs a caller-supplied `TubeSpec.gradient`.
 
 Roughly in order of value; the items are independent of each other.
 
+- **The next major is designed: [wells and fills](specs/2026-09-01-wells-and-fills-design.md).** A
+  letter is a solid volume, and the pipeline carves recesses into it rather than laying decorations
+  on it — what makes a stone read as set is the seat, which nothing additive produces, and the frame
+  becomes whatever metal the cutting left standing rather than a spec of its own. A hole in a plate
+  stacked on a slab is a well, so the first cutter needs no CSG. Cutters and fills are both
+  registered, which is what removes the `decoration.kind` switch spread through `word.ts` — that
+  teardown is the first slice, buys nothing visible, and has every baseline unmoved as its
+  acceptance. Diamond encrustation is the worked feature. Shipped looks stay on their current path;
+  re-expressing `tubing`, `piping` and `sequin` as fills moves baselines and is its own slice, last.
+
 - ~~**Selectable text**~~ — built and merged into `main`.
 
 - **Composable lighting is merged.** `LightingSlot` is on `main`; `PointerLight` and

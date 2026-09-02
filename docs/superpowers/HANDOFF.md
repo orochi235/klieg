@@ -560,6 +560,12 @@ working — it needs a caller-supplied `TubeSpec.gradient`.
 
 ## What is worth doing next
 
+**Open right now: the wells-and-fills teardown, and nothing else on this list.** The overnight of
+2026-09-02 closed the degenerate capitals, the face-versus-side separation, the sequin density and
+the serif-tuning question; the entries below are what each of them learned, kept because the next
+person to ask will ask the same thing. Inflation is prototyped and its mesher is the one design
+decision still open.
+
 Roughly in order of value; the items are independent of each other.
 
 - **Inflation is designed and prototyped; what is open is the mesher.** It is a profile over the

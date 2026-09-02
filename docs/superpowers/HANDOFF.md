@@ -627,6 +627,15 @@ Roughly in order of value; the items are independent of each other.
   `cinzel`, type `C`, and the runs knobs are right there. `art.svg` is still the default where
   there is one, and the lab no longer dies on a checkout that has none.
 
+- ~~**Tune `tubing` for a serif face**~~ — measured, and there is nothing to tune. Once the cut
+  stopped giving up legs, Cinzel keeps **71.4%** of its traced contour under the shipped `tubing`,
+  inside a 69–90% band across the eight faces where **`rye` is the lowest at 68.8%**, not Cinzel.
+  `node spikes/serif-tuning.mjs --face <face>` sweeps every knob one at a time: the best single
+  change is `spacing 0.01` at +4.9 points, which is resampling density rather than tuning and costs
+  proportional vertices; nothing else moves it more than 2.5. What separates the faces is how many
+  corners they draw — `monoton` cuts 18 runs a letter against Cinzel's 6.6 — and that is the face,
+  not the look. Shot side by side at `HAMBURGEFONS`, Cinzel is the best-looking of the three.
+
 - **The next major is designed: [wells and fills](specs/2026-09-01-wells-and-fills-design.md).** A
   letter is a solid volume, and the pipeline carves recesses into it rather than laying decorations
   on it — what makes a stone read as set is the seat, which nothing additive produces, and the frame

@@ -35,6 +35,14 @@ function shuffle(count: number, seed: number): number[] {
   return out;
 }
 
+export interface RovingPiece extends EffectPiece {
+  /** The slot `dwell` was rounded to, in milliseconds. A part holds the fault for at least this
+   * long and often longer: a handover is deferred while the outgoing part is not at rest. */
+  readonly epoch: number;
+  /** How many of those fill one pass. */
+  readonly epochs: number;
+}
+
 /**
  * Moves an inner piece's affliction from part to part. Exactly one part of the pool is afflicted at
  * a time and it jumps somewhere unpredictable every few seconds — a travelling fault reads as an
@@ -47,7 +55,7 @@ function shuffle(count: number, seed: number): number[] {
  * calling part's `x`/`y` unchanged but a substituted `index`, so a position-dependent piece such
  * as `lamp` is not a valid inner.
  */
-export function roving(inner: EffectPiece, spec: RovingSpec = {}): EffectPiece {
+export function roving(inner: EffectPiece, spec: RovingSpec = {}): RovingPiece {
   const seed = spec.seed ?? 0;
   const wantedEpochs = Math.max(1, Math.round(spec.epochs ?? EPOCHS));
   const innerDuration = inner.duration > 0 ? inner.duration : 1000;
@@ -107,6 +115,8 @@ export function roving(inner: EffectPiece, spec: RovingSpec = {}): EffectPiece {
 
   return {
     duration,
+    epoch,
+    epochs,
     at(t, part, ctx) {
       if (t !== memoT || part.count !== memoCount) {
         memoT = t;

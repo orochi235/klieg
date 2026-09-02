@@ -53,7 +53,7 @@ function composition(params: Record<string, number>): Composition {
 
 describe('runSweep', () => {
   it('walks min to max inclusive, one row per step', () => {
-    const r = runSweep(composition({}), 'a', 'unrest', 0.1, 0.5, 5, PARTS, 60, NO_CTX);
+    const r = runSweep(composition({}), 'a', 'unrest', 0.1, 0.5, 5, PARTS, NO_CTX);
     expect(r.rows).toHaveLength(5);
     expect(r.rows[0]?.value).toBeCloseTo(0.1);
     expect(r.rows[2]?.value).toBeCloseTo(0.3);
@@ -61,7 +61,7 @@ describe('runSweep', () => {
   });
 
   it('moves dark share with unrest, which is the knob that sets it', () => {
-    const r = runSweep(composition({}), 'a', 'unrest', 0.05, 0.6, 4, PARTS, 120, NO_CTX);
+    const r = runSweep(composition({}), 'a', 'unrest', 0.05, 0.6, 4, PARTS, NO_CTX);
     const first = r.rows[0]?.darkShare as number;
     const last = r.rows[3]?.darkShare as number;
     expect(last).toBeGreaterThan(first);
@@ -71,22 +71,20 @@ describe('runSweep', () => {
   // Every value here is exactly 0, so this reaches the zero floor and not the relative threshold —
   // the `flatMetrics` cases below are what pin that.
   it('marks a channel flat when no layer writes it at all', () => {
-    const r = runSweep(composition({}), 'a', 'unrest', 0.2, 0.4, 3, PARTS, 60, NO_CTX);
+    const r = runSweep(composition({}), 'a', 'unrest', 0.2, 0.4, 3, PARTS, NO_CTX);
     expect(r.flat).toContain('meanLight');
   });
 
   it('returns no rows for a layer that is switched off, which the composition drops', () => {
     const c = composition({});
     (c.effects[0] as { enabled: boolean }).enabled = false;
-    const r = runSweep(c, 'a', 'unrest', 0, 1, 5, PARTS, 60, NO_CTX);
+    const r = runSweep(c, 'a', 'unrest', 0, 1, 5, PARTS, NO_CTX);
     expect(r.rows).toEqual([]);
     expect(r.flat).toEqual([]);
   });
 
   it('returns no rows for a layer id that is not in the composition', () => {
-    expect(runSweep(composition({}), 'nope', 'unrest', 0, 1, 3, PARTS, 60, NO_CTX).rows).toEqual(
-      [],
-    );
+    expect(runSweep(composition({}), 'nope', 'unrest', 0, 1, 3, PARTS, NO_CTX).rows).toEqual([]);
   });
 });
 

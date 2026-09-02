@@ -158,6 +158,16 @@ describe('roving', () => {
     expect(roving(flicker(), { dwell: 3200 }).duration % 1400).toBe(0);
   });
 
+  // An instrument comparing a measured tenure against the asked dwell needs the number the
+  // wrapper actually settled on. Re-deriving it outside drifts the moment this arithmetic moves.
+  it('publishes the epoch it settled on, and the count that divides its pass', () => {
+    const piece = roving(flicker({ duration: 1400 }), { dwell: 3200, epochs: 96 });
+    expect(piece.epochs).toBe(Math.round(piece.duration / piece.epoch));
+    expect(piece.epoch * piece.epochs).toBeCloseTo(piece.duration);
+    expect(piece.epoch).toBeGreaterThan(3000);
+    expect(piece.epoch).toBeLessThan(3400);
+  });
+
   // The deferral, stated as behaviour rather than as arithmetic: an inner piece that never rests
   // never lets the fault go.
   it('defers the handover while the outgoing part is not at rest', () => {

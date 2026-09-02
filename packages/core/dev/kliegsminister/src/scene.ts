@@ -12,9 +12,14 @@ import {
   generatePaths,
   type PathSource,
 } from '@core/render/tube/generators.js';
-import { buildTubeBlueprint, type Run } from '@core/render/tube/index.js';
-import type { CutRepairId, RepairSide } from '@core/render/tube/repairs.js';
-import type { Rejoin } from '@core/render/tube/runs.js';
+import {
+  buildTubeBlueprint,
+  type HairpinShape,
+  type Run,
+  type TubeSpec,
+} from '@core/render/tube/index.js';
+import { CUT_REPAIR_IDS, type CutRepairId, type RepairSide } from '@core/render/tube/repairs.js';
+import { ALL_BREAK, type Rejoin } from '@core/render/tube/runs.js';
 import type { TubeStageId } from '@core/render/tube/stages.js';
 import { surfacesOf } from '@core/render/tube/surfaces.js';
 import { tightestBend } from '@core/render/tube/sweep.js';
@@ -32,6 +37,14 @@ export interface SceneRequest {
   stages: ReadonlySet<TubeStageId>;
   drawAt: TubeStageId;
   repairs: ReadonlySet<CutRepairId>;
+  /**
+   * Weight on the hairpin strategy, against whatever the look already weights. Neither shipped
+   * look sets one, so at 0 — the default — no corner draws a hairpin and its repair toggle has
+   * nothing to switch off.
+   */
+  hairpin: number;
+  /** Which hairpin a corner drawing one turns around with. */
+  hairpinShape: HairpinShape;
   /** Whether the tile is about one corner or the whole glyph. */
   subject: 'corner' | 'letter';
 }
@@ -115,6 +128,55 @@ export interface CornerScene {
 const PAD = 0.3;
 
 /** Every hard corner of a letter's front paths, in a stable order. */
+/** Past this the switched-off repair is cascading rather than changing one corner. */
+const BLOWUP = 1.5;
+
+/**
+ * The vertex count, against the same build with nothing switched off. Only the comparison is
+ * informative: 2769 points reads as a number until it sits beside the 241 every repair draws.
+ */
+function pointsMeasure(font: LoadedFont, req: SceneRequest, built: number): Measure {
+  if (req.repairs.size === CUT_REPAIR_IDS.length) return { label: 'points', value: `${built}` };
+  const all = pointsWithEveryRepair(font, req);
+  const ratio = all === 0 ? 1 : built / all;
+  return {
+    label: 'points',
+    value: `${built} against ${all} (${ratio.toFixed(1)}x)`,
+    bad: ratio > BLOWUP,
+  };
+}
+
+/** The look's tube spec with the lab's own overrides on it. */
+function specFor(req: SceneRequest): TubeSpec {
+  return {
+    ...tubeSpecOf(req.look),
+    pathSource: req.source,
+    rejoin: req.rejoin,
+    corners: { ...(tubeSpecOf(req.look).corners ?? ALL_BREAK), hairpin: req.hairpin },
+    hairpin: req.hairpinShape,
+  };
+}
+
+const pointsIn = (runs: readonly Run[]) => runs.reduce((n, r) => n + r.points.length, 0);
+
+/**
+ * What the same build draws with no repair switched off. A repair can cascade rather than change
+ * one corner — `setback` off under `rejoin: 'bridge'` draws 2769 points where every repair draws
+ * 241, because the leg-room math assumes the trim happened — and a count alone does not say so.
+ */
+function pointsWithEveryRepair(font: LoadedFont, req: SceneRequest): number {
+  const reference = buildTubeBlueprint(
+    glyphToShapes(font.font, req.letter, 1),
+    specFor(req),
+    PAD,
+    0,
+    { stages: req.stages },
+  );
+  const n = pointsIn(reference.runs);
+  reference.dispose();
+  return n;
+}
+
 function hardCorners(font: LoadedFont, req: SceneRequest) {
   const spec = tubeSpecOf(req.look);
   const radius = spec.radius ?? 0.022;
@@ -261,7 +323,7 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
   const allGhosts: Ghost[] = [];
   const blueprint = buildTubeBlueprint(
     glyphToShapes(font.font, req.letter, 1),
-    { ...spec, pathSource: req.source, rejoin: req.rejoin },
+    specFor(req),
     PAD,
     0,
     {
@@ -300,6 +362,7 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
     split: carriersAt(blueprint.runs, f.pathIndex, f.corner.index, f.path.points.length).split,
   }));
 
+  const built = pointsIn(blueprint.runs);
   const { before, after } = carriersAt(blueprint.runs, pathIndex, corner.index, points.length);
   const carried: CarriedRun[] = [];
   if (req.subject === 'letter') {
@@ -330,6 +393,7 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
       value: `${run.shipped.toFixed(2)}r`,
       bad: run.shipped < (rhoMin / radius) * (1 - 1e-6),
     })),
+    pointsMeasure(font, req, built),
     {
       label: 'carried by',
       value:

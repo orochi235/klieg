@@ -1,7 +1,7 @@
 import { EffectFrame, planEffects } from '@core/effects/frame.js';
 import type { FrameCtx, PartInfo } from '@core/effects/types.js';
-import { type Composition, toFireOptions } from './composition.js';
-import { type PassSamples, samplePass } from './sample.js';
+import { type Composition, finestPass, toFireOptions } from './composition.js';
+import { type PassSamples, passSamples, samplePass } from './sample.js';
 import { tenureAndJump } from './tenure.js';
 
 /** Below this a part reads as dropped rather than dimmed. Gain rests at 1. */
@@ -141,7 +141,6 @@ export function runSweep(
   max: number,
   steps: number,
   parts: readonly PartInfo[],
-  samples: number,
   ctx: FrameCtx,
 ): SweepResult {
   const rows: SweepRow[] = [];
@@ -165,7 +164,10 @@ export function runSweep(
     const specs = toFireOptions(at).effects ?? [];
     const pass = Math.max(1, ...specs.map((s) => (s.piece as { duration: number }).duration));
     const frame = new EffectFrame(planEffects(specs, parts));
-    rows.push(aggregate(value, samplePass(frame, parts, pass, samples, ctx), parts, pass));
+    // Per row rather than once: a row that moves a piece's own `duration` moves what has to be
+    // resolved with it, and one rate for every row would under-sample the short end.
+    const count = passSamples(pass, finestPass(at));
+    rows.push(aggregate(value, samplePass(frame, parts, pass, count, ctx), parts, pass));
   }
 
   return { param, rows, flat: flatMetrics(rows) };

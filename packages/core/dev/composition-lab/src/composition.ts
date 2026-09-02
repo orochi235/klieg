@@ -66,21 +66,52 @@ export function carriesRoving(layer: EffectLayer): layer is EffectLayer & { rovi
   return layer.roving !== undefined && layer.kind !== 'lamp';
 }
 
-/** The piece a layer contributes, wrappers included. Null when it will not build. */
-export function layerPiece(layer: EffectLayer): EffectPiece | null {
+export interface BuiltLayer {
+  /** What the frame gets, wrappers included. */
+  piece: EffectPiece;
+  /**
+   * The innermost piece's own pass. This, not `piece.duration`, is what a sampler has to resolve:
+   * `roving` at `epochs: 96` publishes a pass two hundred times longer than the piece inside it.
+   */
+  innerPass: number;
+  /** The slot `roving` settled `dwell` on, for a layer that rovs. Null for one that does not. */
+  epochMs: number | null;
+}
+
+/** A layer's piece and the two durations a panel needs to read it. Null when it will not build. */
+export function buildLayer(layer: EffectLayer): BuiltLayer | null {
   const inner = buildPiece(layer.kind, layer.params, {
     source: layer.source,
     lampSource: layer.lampSource,
   });
   if (!inner) return null;
 
-  const roved = carriesRoving(layer) ? roving(inner, layer.roving) : inner;
-  if (!layer.intermittent) return roved;
+  const roved = carriesRoving(layer) ? roving(inner, layer.roving) : null;
+  const piece = roved ?? inner;
+  const epochMs = roved?.epoch ?? null;
+  if (!layer.intermittent) return { piece, innerPass: inner.duration, epochMs };
   try {
-    return intermittent(roved, layer.intermittent);
+    return { piece: intermittent(piece, layer.intermittent), innerPass: inner.duration, epochMs };
   } catch {
     return null;
   }
+}
+
+/** The piece a layer contributes, wrappers included. Null when it will not build. */
+export function layerPiece(layer: EffectLayer): EffectPiece | null {
+  return buildLayer(layer)?.piece ?? null;
+}
+
+/** A composition with no layer still needs a grid to plot the hold against. */
+const NO_LAYERS_PASS = 1000;
+
+/** The shortest pass any enabled layer's inner piece runs, which is what fixes the sample rate. */
+export function finestPass(c: Composition): number {
+  const passes = c.effects
+    .filter((l) => l.enabled)
+    .map((l) => buildLayer(l)?.innerPass)
+    .filter((d): d is number => typeof d === 'number' && d > 0);
+  return passes.length === 0 ? NO_LAYERS_PASS : Math.min(...passes);
 }
 
 export interface FireArgs {

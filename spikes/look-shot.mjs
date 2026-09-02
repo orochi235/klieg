@@ -1,7 +1,7 @@
 /**
  * One look, rendered by the lab and written to a PNG, so a look change can be judged by eye.
  *
- *   node spikes/look-shot.mjs sequin out.png [text]
+ *   node spikes/look-shot.mjs sequin out.png [text] [face]
  *
  * Drives the same controls the visual suite does and starts its own dev server on the port
  * playwright.config.ts derives for this worktree, so it never answers from another tree's server.
@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 
-const [look = 'sequin', out = 'shot.png', text = 'JACKPOT!'] = process.argv.slice(2);
+const [look = 'sequin', out = 'shot.png', text = 'JACKPOT!', face = 'default'] = process.argv.slice(2);
 
 const root = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const port = 5180 + ((createHash('sha1').update(root).digest()[0] ?? 0) % 64) + 1;
@@ -43,6 +43,7 @@ try {
   await page.selectOption('#exit', 'none');
   await page.selectOption('#lighting', 'static');
   await page.selectOption('#look', look);
+  await page.selectOption('#font', face);
   await page.click('#fire');
   await page.waitForTimeout(900);
   await page.addStyleTag({ content: 'main, .dock { display: none; }' });

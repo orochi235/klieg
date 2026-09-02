@@ -1,4 +1,8 @@
 import type { Font } from 'opentype.js';
+import type { Polygon, Ring } from 'polygon-clipping';
+// The ESM build's only export is the default; the shipped `.d.ts` declares named exports and no
+// default. A namespace or named import type-checks and then resolves to nothing under a bundler.
+import polygonClipping from 'polygon-clipping';
 import * as THREE from 'three';
 
 /** Glyphs are built at 1 em; the group scale does the fitting. */
@@ -153,8 +157,165 @@ function nest(contours: THREE.Shape[]): THREE.Shape[] {
   return [...outlines, ...orphans].map((o) => o.contour);
 }
 
+/** The finest any consumer samples a contour at: `tube/surfaces.ts` reads 24. */
+const UNION_SEGMENTS = 24;
+
+function ringOf(points: THREE.Vector2[]): Ring {
+  const first = points[0];
+  const ring: Ring = points.map((p) => [p.x, p.y]);
+  if (first) ring.push([first.x, first.y]);
+  return ring;
+}
+
+function polygonOf(shape: THREE.Shape): Polygon {
+  const points = shape.extractPoints(UNION_SEGMENTS);
+  return [ringOf(points.shape), ...points.holes.map(ringOf)];
+}
+
+function shapeOf(polygon: Polygon): THREE.Shape {
+  const [outline, ...holes] = polygon;
+  const toPath = (ring: Ring) => ring.map(([x, y]) => new THREE.Vector2(x, y));
+  const shape = new THREE.Shape(toPath(outline ?? []));
+  shape.holes = holes.map((hole) => new THREE.Path(toPath(hole)));
+  return shape;
+}
+
+function ringArea(ring: Ring): number {
+  let sum = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i] as [number, number];
+    const b = ring[j] as [number, number];
+    sum += b[0] * a[1] - a[0] * b[1];
+  }
+  return Math.abs(sum / 2);
+}
+
+function filledArea(polygons: Polygon[]): number {
+  return polygons.reduce(
+    (total, [outline, ...holes]) =>
+      total + ringArea(outline ?? []) - holes.reduce((h, hole) => h + ringArea(hole), 0),
+    0,
+  );
+}
+
+/** A shape of the same size and nesting, whatever order the clipper returned them in. */
+function sameShapeSet(before: Polygon[], after: Polygon[]): boolean {
+  const rings = (polygons: Polygon[]) =>
+    polygons
+      .map((p) => p.length)
+      .sort((a, b) => a - b)
+      .join(',');
+  if (before.length !== after.length || rings(before) !== rings(after)) return false;
+  const area = filledArea(before);
+  return Math.abs(filledArea(after) - area) <= area * 1e-9;
+}
+
+/**
+ * One outline per region of ink, rather than one per contour the font happened to draw.
+ *
+ * A glyph is commonly several strokes laid over each other and left overlapping — a fill under the
+ * non-zero rule unions them for free, so nothing downstream of a rasteriser ever has to. klieg
+ * extrudes each contour as its own solid, which puts two coplanar caps at the same depth wherever
+ * two strokes cross: on Cinzel's `N`, 69 of 228 front-cap triangles are drawn twice. Cinzel's
+ * capitals go from 143 contours to 32 through here.
+ *
+ * The union can only answer in polylines, so it costs the shapes their curves. Where it provably
+ * changed nothing the originals are returned instead, which is every face here but Cinzel and rye.
+ */
+function unionOf(shapes: THREE.Shape[]): THREE.Shape[] {
+  if (shapes.length < 2) return shapes;
+  const polygons = shapes.map(polygonOf);
+  const first = polygons[0];
+  if (!first) return shapes;
+  const merged = polygonClipping.union(first, ...polygons.slice(1));
+  if (merged.length === 0 || sameShapeSet(polygons, merged)) return shapes;
+  return merged.map(shapeOf);
+}
+
 export function glyphToShapes(font: Font, char: string, size: number): THREE.Shape[] {
-  return nest(contoursOf(font, char, size));
+  return unionOf(nest(contoursOf(font, char, size)));
+}
+
+/**
+ * Corners tighter than this get cut back before the bevel runs, and how far back they are cut,
+ * as a fraction of `bevelSize`.
+ *
+ * three offsets a bevel ring by mitering each corner and caps a runaway miter at sqrt(2) units
+ * (`getBevelVec`, "prevent crazy spikes"). At a right angle sqrt(2) is the exact answer and the
+ * ring stands one bevel proud on each axis; the sharper the corner the more of that length points
+ * along the stroke instead, until it leaves a nub standing past the tip of the letter. A symmetric
+ * cut replaces the corner with a short flat and two corners of `90 + angle/2`, which no miter can
+ * run away from however sharp the original was — so the setback is free to be small.
+ */
+const CHAMFER_BELOW_DEGREES = 60;
+const CHAMFER_SETBACK = 0.5;
+
+/** The neighbour of `i` in `direction` that is not sitting on top of it. */
+function distinctNeighbour(
+  ring: THREE.Vector2[],
+  i: number,
+  direction: 1 | -1,
+): THREE.Vector2 | null {
+  for (let step = 1; step < ring.length; step++) {
+    const q = ring[
+      (((i + direction * step) % ring.length) + ring.length) % ring.length
+    ] as THREE.Vector2;
+    if (q.distanceToSquared(ring[i] as THREE.Vector2) > 1e-20) return q;
+  }
+  return null;
+}
+
+/** Vertices a ring actually turns at, which is what a font's zero-area slivers do not have. */
+function cornerCount(ring: THREE.Vector2[]): number {
+  let n = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i] as THREE.Vector2;
+    const b = ring[(i + 1) % ring.length] as THREE.Vector2;
+    if (a.distanceToSquared(b) > 1e-20) n++;
+  }
+  return n;
+}
+
+function chamferRing(ring: THREE.Vector2[], setback: number): THREE.Vector2[] {
+  // A ring enclosing nothing has no corner to cut, and cutting one collapses it onto a point,
+  // which is a triangulation crash rather than a bad-looking letter.
+  if (cornerCount(ring) < 3) return ring;
+  const limit = Math.cos((CHAMFER_BELOW_DEGREES * Math.PI) / 180);
+  const out: THREE.Vector2[] = [];
+  for (let i = 0; i < ring.length; i++) {
+    const c = ring[i] as THREE.Vector2;
+    const p = distinctNeighbour(ring, i, -1);
+    const n = distinctNeighbour(ring, i, 1);
+    if (!p || !n) {
+      out.push(c);
+      continue;
+    }
+    const toPrev = p.clone().sub(c).normalize();
+    const toNext = n.clone().sub(c).normalize();
+    // Both run away from the corner, so their dot rises as the corner closes.
+    if (toPrev.dot(toNext) < limit) {
+      out.push(c);
+      continue;
+    }
+    const back = Math.min(setback, p.distanceTo(c) / 2, n.distanceTo(c) / 2);
+    out.push(c.clone().addScaledVector(toPrev, back), c.clone().addScaledVector(toNext, back));
+  }
+  return out;
+}
+
+/**
+ * The glyph as `ExtrudeGeometry` will read it anyway — it samples every shape at `curveSegments`
+ * and uses nothing else — with sharp corners cut. Sampling here first is what lets the cut be
+ * expressed as points; a line curve re-samples to its own endpoints, so nothing else moves.
+ */
+function chamfered(shapes: THREE.Shape[], opts: GlyphOptions): THREE.Shape[] {
+  const setback = opts.bevelSize * CHAMFER_SETBACK;
+  return shapes.map((source) => {
+    const points = source.extractPoints(opts.curveSegments);
+    const shape = new THREE.Shape(chamferRing(points.shape, setback));
+    shape.holes = points.holes.map((hole) => new THREE.Path(chamferRing(hole, setback)));
+    return shape;
+  });
 }
 
 export function buildGlyphGeometry(
@@ -164,7 +325,7 @@ export function buildGlyphGeometry(
   opts: GlyphOptions,
 ): THREE.ExtrudeGeometry {
   const shapes = glyphToShapes(font, char, size);
-  const geo = new THREE.ExtrudeGeometry(shapes, {
+  const geo = new THREE.ExtrudeGeometry(chamfered(shapes, opts), {
     depth: opts.depth,
     bevelEnabled: true,
     bevelThickness: opts.bevelThickness,

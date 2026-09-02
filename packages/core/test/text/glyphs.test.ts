@@ -182,16 +182,43 @@ describe('glyphToShapes', () => {
     expect(leftOf(withHole[0] as THREE.Shape)).toBe(0);
   });
 
+  it('unions overlapping strokes into a single outline', () => {
+    const shapes = glyphToShapes(fontDrawing([...box(0, 0, 10, 10), ...box(5, 5, 10, 10)]), 'A', 1);
+
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0]?.holes).toHaveLength(0);
+  });
+
+  it('leaves a glyph the union cannot change on its own curves', () => {
+    // One outline and one counter: nothing to merge, so the shape keeps its quadratic rather than
+    // being frozen into a polyline. `curves` is 1 per drawn command, many more once sampled.
+    const [shape] = glyphToShapes(
+      fontDrawing([
+        { type: 'M', x: 0, y: 0 },
+        { type: 'Q', x1: 5, y1: 10, x: 10, y: 0 },
+        { type: 'L', x: 0, y: 0 },
+      ]),
+      'o',
+      1,
+    );
+
+    expect(shape?.curves.some((c) => c.type === 'QuadraticBezierCurve')).toBe(true);
+  });
+
   it('keeps overlapping strokes solid instead of making one a hole in another', () => {
     // A serif `A`: two diagonals crossed by a bar, all wound the same way, no counter contour.
+    // The bar overlaps both diagonals, so the three merge into the one region of ink they fill.
     const shapes = glyphToShapes(
       fontDrawing([...box(0, 0, 4, 30), ...box(12, 0, 4, 30), ...box(2, 10, 12, 4)]),
       'A',
       1,
     );
 
-    expect(shapes).toHaveLength(3);
-    expect(shapes.every((s) => s.holes.length === 0)).toBe(true);
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0]?.holes).toHaveLength(0);
+    expect(leftOf(shapes[0] as THREE.Shape)).toBe(0);
+    expect(topOf(shapes[0] as THREE.Shape)).toBeCloseTo(0, 10);
+    expect(bottomOf(shapes[0] as THREE.Shape)).toBe(-30);
   });
 
   it('makes a contour nested two deep solid again', () => {
@@ -270,7 +297,50 @@ describe('glyphToShapes', () => {
   });
 });
 
+/** A wedge with an 11.4-degree apex — far tighter than any miter can turn. */
+function spike(): PathCommand[] {
+  return [
+    { type: 'M', x: 0, y: 100 },
+    { type: 'L', x: 20, y: 100 },
+    { type: 'L', x: 10, y: 0 },
+    { type: 'L', x: 0, y: 100 },
+  ];
+}
+
 describe('buildGlyphGeometry', () => {
+  it('keeps a sharp apex within one bevel of the outline', () => {
+    const geo = buildGlyphGeometry(fontDrawing(spike()), 'A', 1, DEFAULT_GLYPH_OPTIONS);
+
+    // three caps a runaway miter at sqrt(2) units and offsets along the bisector anyway, which
+    // stands the apex 1.41 bevels proud of a letter every other corner keeps to one.
+    expect(geo.boundingBox?.max.y).toBeLessThanOrEqual(DEFAULT_GLYPH_OPTIONS.bevelSize + 1e-9);
+  });
+
+  it('survives a counter that encloses no area, which a font can draw', () => {
+    // rye's `A` and `G` each carry one: a line out and back, enclosing nothing. Shorter than the
+    // chamfer's own setback, so both cuts land on its midpoint and the ring has nowhere to go.
+    const sliver: PathCommand[] = [
+      { type: 'M', x: 10, y: 10 },
+      { type: 'L', x: 10.001, y: 10.003 },
+      { type: 'L', x: 10, y: 10 },
+    ];
+
+    expect(() =>
+      buildGlyphGeometry(
+        fontDrawing([...box(0, 0, 40, 40), ...sliver]),
+        'A',
+        1,
+        DEFAULT_GLYPH_OPTIONS,
+      ),
+    ).not.toThrow();
+  });
+
+  it('leaves a right angle exactly one bevel proud', () => {
+    const geo = buildGlyphGeometry(fontDrawing(box(0, 0, 10, 10)), 'A', 1, DEFAULT_GLYPH_OPTIONS);
+
+    expect(geo.boundingBox?.max.y).toBeCloseTo(DEFAULT_GLYPH_OPTIONS.bevelSize, 7);
+  });
+
   it('computes a bounding box, which callers use to center a word', () => {
     const geo = buildGlyphGeometry(fontDrawing(box(0, 0, 10, 10)), 'A', 1, DEFAULT_GLYPH_OPTIONS);
 

@@ -2335,6 +2335,30 @@ describe('firing styled runs', () => {
     await done;
   });
 
+  it('preheats a named face, fetching it before any fire asks for it', async () => {
+    const fetched: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        fetched.push(url);
+        return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) } as Response;
+      }),
+    );
+    const bk = create({ fonts: { display: '/d.ttf', body: '/b.ttf' } });
+
+    await bk.preheat('AB', 'body');
+
+    expect(fetched).toEqual(['/b.ttf']);
+  });
+
+  // Same stance as `fire`: a name the instance does not hold is a typo in the host's own code, and
+  // it belongs at the call site rather than in a rejection handler.
+  it('throws where preheat was called for a font it does not hold', () => {
+    stubFetch();
+    const bk = create({ fonts: { display: '/d.ttf' } });
+    expect(() => bk.preheat('AB', 'nope')).toThrow("klieg: no font named 'nope'");
+  });
+
   it('loads every font its runs name, not just the fire-wide one', async () => {
     const fetched: string[] = [];
     vi.stubGlobal(

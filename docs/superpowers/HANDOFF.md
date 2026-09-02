@@ -562,6 +562,79 @@ working — it needs a caller-supplied `TubeSpec.gradient`.
 
 Roughly in order of value; the items are independent of each other.
 
+- **Asked for, not yet designed: other ways of inflating a letter.** Everything klieg draws is
+  `ExtrudeGeometry` with a bevel — one linear push along z. Inflation is the *volume* half of the
+  wells-and-fills model, which says what to carve into a solid without ever saying how the solid
+  got its shape: a pillowed or rounded profile, a lathe, a swept section, a depth that varies over
+  the glyph. It belongs in that design and is missing from it.
+
+- **Why the sparkly looks are hard to read: nothing separates a letter's face from its sides.**
+  Whatever usually does that job — a key light's cosine falloff, a cavity or occlusion term, a
+  distinct wall material — klieg has none of. Lighting is a PMREM environment map and nothing else
+  (`environment.ts:70`), and there is no occlusion term anywhere in `render/`. A metallic disc lit
+  only by an env map reflects whatever it faces, and the studio is bright all round, so a sequin on
+  the extrusion wall is as bright as one on the front cap. Solid looks read because the bevel
+  highlight draws the edge; a chunk field buries the bevel, and the form loses the only thing
+  carrying it. A fat face makes it worse: more wall per cap.
+
+  The point is the missing separation, not any one technique — AO is one answer, a key light is
+  another, and a darker wall material is a third. What follows is only the cheapest to try.
+
+  **The data for the fix is already in the buffer.** Each chunk instance carries the surface normal
+  it sits on, interpolated from its triangle (`decoration.ts:268-275`), and `lie` aligns the disc to
+  it — the orientation is known and simply never reaches the shading. Cheapest route is a
+  per-instance darkening derived from that normal, written as an instanced attribute and folded
+  into the material, which is what `tint.ts` already does for `runColor` and `gradientT`. Real AO or
+  a directional key are the heavier alternatives, and neither is needed to test whether polarity
+  alone fixes the reading.
+
+  Judged against this, an inset margin around the field — suggested earlier here — treats a
+  symptom: the silhouette is unreadable because the whole form is unshaded, not because the field
+  reaches the edge.
+
+- **Asked for, not yet measured: `sequin` and its neighbours are hard to read, and the two obvious
+  levers are both awkward.** Tracking is the first — looks do not touch layout at all today, so a
+  per-look letterspacing is new coupling rather than a tuning.
+
+  The second is density, and **the thing to know is that a render diff cannot measure it.**
+  `poolFor` derives the sample pool from `count`, so changing the count reseeds the *whole*
+  arrangement rather than adding to it: every count draws a different field. Measured against the
+  520 baseline, counts of 20, 130, 260 and 390 differ by 12.9k, 13.6k, 14.4k and 15.4k pixels —
+  rising with count rather than converging, which is rearrangement, not density. Judge density by
+  coverage or by instance count, never by diffing two renders.
+
+  What is settled: `count` is honest. `chunkMatrices` returns exactly `count` matrices with
+  `bedding` included, and `looks.spec.ts` detects a changed count at every value tried. An earlier
+  reading here claimed doubling to 1040 left the render pixel-identical; that contradicts the four
+  measurements above and the run is not trustworthy — `reuseExistingServer` is on outside CI, so a
+  server started before the edit can serve the previous module graph. Re-run it against a
+  guaranteed-fresh server before believing anything about saturation.
+
+- **The degenerate capitals are fixed, and neither the face nor the mechanism was what this entry
+  used to say.** Nothing is wrong with the glyphs or the triangulator: `node spikes/glyph-fidelity.mjs`
+  rasterises `glyphToShapes` against the font's own non-zero fill and every capital of all eight
+  faces agrees to under 0.1%. Overlapping contours are a real thing serif faces do — Cinzel's `A`
+  is five same-winding strokes — and earcut handles them, because their union is what fills.
+
+  What broke was the **tube cut**, and only on the tube looks: Cinzel's `C` kept 3.4% of its
+  contour and `tubing` hides its body, so the letter was a gap in the word. `resumeAt` answers
+  "nowhere on this leg clears the bend floor" with an out-of-range index, and the stitch applied it
+  literally — the entry side truncated the accumulated span to nothing, the exit side copied
+  nothing, and what rendered was two 0.07 em stubs of fillet. A fillet that would cost a whole leg
+  now demotes the corner to `break`, which is what the other three demotion sites in `stitchPath`
+  already do. All 40 visual baselines are unmoved: the shipped face never hit it.
+
+  Two instruments came out of it and both re-run. `node spikes/degenerate-caps.mjs` reports lit
+  tube per letter across every face and seed, and the discard the resume walk reports of itself —
+  Cinzel fell from 4.32 to 1.04 em an alphabet, against a 0.4–0.9 em band for the faces that were
+  always fine. `test/render/tube/faces.test.ts` is the guard: every capital of every shipped face
+  keeps at least 15% of its traced contour, against a floor of 29% for the tightest letter that
+  was never broken.
+
+  **`spikes/svg-tube/` now takes a face as well as art**, which is how this was cornered — pick
+  `cinzel`, type `C`, and the runs knobs are right there. `art.svg` is still the default where
+  there is one, and the lab no longer dies on a checkout that has none.
+
 - **The next major is designed: [wells and fills](specs/2026-09-01-wells-and-fills-design.md).** A
   letter is a solid volume, and the pipeline carves recesses into it rather than laying decorations
   on it — what makes a stone read as set is the seat, which nothing additive produces, and the frame

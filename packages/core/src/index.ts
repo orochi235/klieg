@@ -386,6 +386,19 @@ export interface Klieg {
    * leaves the fire paying exactly what it would have paid anyway.
    */
   warm(look?: Look): Promise<void>;
+  /**
+   * Fetches, parses and extrudes a face's glyphs for every distinct character of `chars`, so the
+   * first fire that draws them pays for none of it. For a host that knows its corpus — a roster of
+   * names is a couple of dozen characters, however many words it fires.
+   *
+   * Letters only. A tube look's blueprint keys on a per-letter seed as well as the character, so
+   * there is nothing a corpus alone can warm; `warm()` covers the shader link beside it.
+   *
+   * Throws synchronously on a font name the instance does not hold, as `fire()` does — that is a
+   * typo in the host's own code. Rejects if the face cannot be fetched or parsed, which is the
+   * same failure the next fire would hit.
+   */
+  preheat(chars: string, font?: string): Promise<void>;
   /** Cancels everything in flight; the stage comes down once the running effect has settled. */
   destroy(): void;
 }
@@ -864,6 +877,16 @@ export function createKlieg(options: KliegOptions): Klieg {
       if (!supported || destroyed || !warmer) return Promise.resolve();
       const chosen = look ?? options.warmLook ?? 'gold';
       return warmer.run(chosen, wantsBloom(undefined, chosen));
+    },
+    preheat(chars, name) {
+      // Before the await, so a name the instance does not hold throws where it was written rather
+      // than arriving as a rejection later.
+      if (name !== undefined) fonts.assertKnown(name);
+      if (destroyed) return Promise.resolve();
+      return fonts.load(name).then((loaded) => {
+        // `destroy` can land while the face is in flight, and the caches are disposed by then.
+        if (!destroyed) caches.preheat(loaded, chars);
+      });
     },
     destroy() {
       destroyed = true;

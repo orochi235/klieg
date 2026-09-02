@@ -521,6 +521,19 @@ inside it. It defaults to `warmLook`, resolves once the linking draw is issued, 
 await bk.warm('neon'); // then swap the page, then fire
 ```
 
+`preheat(chars, font?)` fetches, parses and extrudes a face's glyphs for every distinct character
+of `chars`, so the first fire that draws them pays for none of it. For a host that knows its corpus:
+a roster of names is a couple of dozen characters however many words it fires.
+
+```js
+await bk.preheat(" 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", 'display');
+```
+
+Letters only. A tube look's blueprint keys on a per-letter seed as well as the character, so
+`tubing` and `piping` — the two whose first fire costs the most — have nothing a corpus alone can
+warm; `warm()` covers the shader link beside it. A font name the instance does not hold throws where
+you called it, as `fire()` does.
+
 `fire(text, options)` — `text` is a string, or a list of styled runs (below):
 
 | field | default | |

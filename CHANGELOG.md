@@ -1,6 +1,28 @@
 # Changelog
 
-## Unreleased
+## 0.10.0
+
+### A tube look no longer drops a letter
+
+A corner that cannot be filleted without giving up the whole stroke it is bending now cuts there
+instead. It used to give up the stroke: `tubing` on Cinzel drew `C` as two 0.07 em stubs of glass
+and, having no body behind the tube, left a gap in the word. Shipped looks on the packaged face are
+byte-identical — every visual baseline is unmoved — so this reaches you only if you fire a face of
+your own.
+
+### A corpus can be paid for before the first word
+
+**`preheat(chars, font?)`** fetches, parses and extrudes a face's glyphs for every distinct
+character of `chars`. A host that knows what it will draw — a roster of names is a couple of dozen
+characters however many words it fires — pays for the whole alphabet once instead of stalling on
+the first fire of each word.
+
+Letters only, and deliberately: a tube look's blueprint keys on a per-letter seed as well as the
+character, so `tubing` and `piping` have nothing a character set alone can warm. `warm()` still
+covers the shader link, which is the other first-fire stall.
+
+A font name the instance does not hold throws where `preheat` was called, as `fire()` does; a face
+that cannot be fetched or parsed rejects, which is the same failure the next fire would have hit.
 
 ### A lamp can reach a scattered look
 
@@ -17,8 +39,6 @@ than per sequin.
 look, so a lamp landing on it read as a dull lift rather than as light in a red stone; the lit pool
 is half again as saturated now. A tinted `gem` keeps its lobe in step, and a look that declares its
 own `specularColor` still wins.
-
-## 0.10.0
 
 ### A general on-and-off wrapper
 

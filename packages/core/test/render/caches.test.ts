@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { WordCaches } from '../../src/render/caches.js';
 import type { TubeBlueprint, TubeSpec } from '../../src/render/tube/index.js';
 import type { LoadedFont } from '../../src/text/font.js';
+import { DEFAULT_GLYPH_OPTIONS } from '../../src/text/glyphs.js';
 
 const STUB_FAMILY = 'klieg-test-caches';
 const UPEM = 1000;
@@ -149,5 +150,47 @@ describe('WordCaches.takeBlueprint', () => {
     caches.dispose();
 
     expect(freed(kept)).toBe(true);
+  });
+});
+
+// A host that knows its corpus can pay for every glyph it will ever draw before the first fire.
+describe('WordCaches.preheat', () => {
+  it('builds one geometry per distinct char', () => {
+    const caches = new WordCaches();
+    expect(caches.preheat(stubFont(), 'ABC')).toBe(3);
+    expect(caches.size).toBe(3);
+  });
+
+  it('counts a char once however often the corpus repeats it', () => {
+    expect(new WordCaches().preheat(stubFont(), 'AAAA')).toBe(1);
+  });
+
+  it('builds nothing the second time, which is what makes it a preheat', () => {
+    const caches = new WordCaches();
+    const font = stubFont();
+    caches.preheat(font, 'ABC');
+    expect(caches.preheat(font, 'ABC')).toBe(0);
+    expect(caches.size).toBe(3);
+  });
+
+  // The claim worth pinning: a preheated glyph is the one a fire finds, not a parallel copy in a
+  // cache nothing reads. A letter is built at the library's own depth, not at the look's.
+  it('warms the entry a fire then hits', () => {
+    const caches = new WordCaches();
+    const font = stubFont();
+    caches.preheat(font, 'A');
+    const warmed = caches.glyph(font, 'A', DEFAULT_GLYPH_OPTIONS.depth);
+    expect(caches.size).toBe(1);
+    expect(caches.glyph(font, 'A', DEFAULT_GLYPH_OPTIONS.depth)).toBe(warmed);
+  });
+
+  it('takes a char with no outline without throwing, because a corpus carries spaces', () => {
+    expect(() => new WordCaches().preheat(stubFont(), " 'A")).not.toThrow();
+  });
+
+  it('refuses a disposed cache the way every other entry point does', () => {
+    const caches = new WordCaches();
+    caches.dispose();
+    expect(() => caches.preheat(stubFont(), 'A')).toThrow('WordCaches used after dispose');
   });
 });

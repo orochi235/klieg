@@ -19,6 +19,7 @@ import { Stage } from '../../packages/core/dist/render/stage.js';
 import { buildTubeBlueprint } from '../../packages/core/dist/render/tube/index.js';
 import { tintByRunColor, tintChannelOf } from '../../packages/core/dist/render/tube/tint.js';
 import { svgToShapeGroups } from './svg-shapes.mjs';
+import { FACES, faceUrl, loadFace, typeToShapeGroups } from './type-shapes.mjs';
 import { BACKGROUNDS, SIZES, createWallpaper } from './wallpaper.mjs';
 
 /**
@@ -66,7 +67,7 @@ function build(shapeGroups, tune) {
   let runCount = 0;
   let starved = 0;
 
-  shapeGroups.forEach((shapes, i) => {
+  shapeGroups.forEach(({ shapes, x, y }, i) => {
     const affordable = Math.max(1, Math.floor(perimeterOf(shapes) / tune.minRun));
     if (affordable < tune.runs) starved++;
     const spec = {
@@ -92,8 +93,12 @@ function build(shapeGroups, tune) {
     dark.side = THREE.DoubleSide;
     dark.emissiveIntensity = spec.dark.emissiveIntensity ?? 1;
 
-    for (const geo of blueprint.lit) art.add(new THREE.Mesh(geo, lit));
-    for (const geo of blueprint.dark) art.add(new THREE.Mesh(geo, dark));
+    // Each group carries where it sits: an SVG path is already in place, a letter is not.
+    const placed = new THREE.Group();
+    placed.position.set(x, y, 0);
+    art.add(placed);
+    for (const geo of blueprint.lit) placed.add(new THREE.Mesh(geo, lit));
+    for (const geo of blueprint.dark) placed.add(new THREE.Mesh(geo, dark));
 
     litCount += blueprint.lit.length;
     runCount += blueprint.runs.length;
@@ -139,14 +144,42 @@ host.addEventListener('dblclick', () => {
   view.pitch = 0;
 });
 
-// --- run --------------------------------------------------------------------
-const svgText = await fetch(SVG_URL).then((r) => {
-  if (!r.ok) throw new Error(`${SVG_URL}: ${r.status} — put an SVG beside main.js as art.svg`);
-  return r.text();
-});
-document.getElementById('ref').src = SVG_URL;
+// --- content ----------------------------------------------------------------
+// Two sources feed the same pipeline: an SVG's paths, or a face's glyphs. The art is the default
+// where there is any — `art.svg` is gitignored, so a fresh checkout opens on type instead of on an
+// error page.
+const params = new URLSearchParams(location.search);
+const ART = 'art.svg';
+let content = null;
 
-const { groups, width, height } = svgToShapeGroups(svgText, 1);
+const svgText = await fetch(SVG_URL).then(
+  (r) => (r.ok ? r.text() : null),
+  () => null,
+);
+if (svgText) document.getElementById('ref').src = SVG_URL;
+
+const faceCache = new Map();
+async function faceOf(id) {
+  if (!faceCache.has(id)) faceCache.set(id, await loadFace(faceUrl(id)));
+  return faceCache.get(id);
+}
+
+/** Reads the content controls, loading a face the first time it is asked for. */
+async function readContent() {
+  const face = ui.face.value;
+  if (face === ART) {
+    const { groups, width, height } = svgToShapeGroups(svgText, 1);
+    return { groups: groups.map((shapes) => ({ shapes, x: 0, y: 0 })), width, height };
+  }
+  const font = await faceOf(face);
+  const { groups, width, height, mid } = typeToShapeGroups(font, ui.text.value || 'A');
+  // Centred on the origin, as the SVG source already is.
+  return {
+    groups: groups.map((g) => ({ ...g, x: g.x - width / 2, y: -mid })),
+    width,
+    height,
+  };
+}
 /**
  * Every knob `buildTubeBlueprint` actually reads, in the order a sign is built: the shape the tube
  * follows, how it is cut into runs, which runs light, which surfaces exist, and what they are made
@@ -158,6 +191,12 @@ const LAB_COLOR = 0x22e5e0;
 const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
 const unhex = (s) => Number.parseInt(s.slice(1), 16);
 const CONTROLS = [
+  { group: 'content' },
+  { id: 'face', type: 'select', value: params.get('face') ?? (svgText ? ART : 'cinzel'),
+    options: [...(svgText ? [ART] : []), ...FACES],
+    hint: 'the shapes the tube follows' },
+  { id: 'text', type: 'text', value: params.get('text') ?? 'ABC', hint: 'one blueprint per letter' },
+
   { group: 'shape' },
   { id: 'contract', min: 0, max: 0.09, step: 0.002, value: 0, hint: 'inset before tracing' },
   { id: 'radius', min: 0.004, max: 0.06, step: 0.002, value: D.radius },
@@ -242,6 +281,10 @@ for (const c of CONTROLS) {
     input = document.createElement('button');
     input.type = 'button';
     input.textContent = c.label;
+  } else if (c.type === 'text') {
+    input = document.createElement('input');
+    input.type = 'text';
+    input.value = c.value;
   } else if (c.type === 'color') {
     input = document.createElement('input');
     input.type = 'color';
@@ -308,19 +351,36 @@ function rebuild() {
   }
   const tune = tuneFromUi();
   const t0 = performance.now();
-  const { litCount, runCount, starved, empty } = build(groups, tune);
-  fit(width, height);
+  const { litCount, runCount, starved, empty } = build(content.groups, tune);
+  fit(content.width, content.height);
   const notes = [];
   if (!tune.surfaces.length) notes.push('no surface enabled');
   if (starved) notes.push(`${starved} capped by minRun`);
   if (empty) notes.push(`${empty} EMPTY`);
   stats.textContent =
-    `${groups.length} paths · ${runCount} runs · ${litCount} lit · ${(performance.now() - t0).toFixed(0)}ms` +
+    `${content.groups.length} ${ui.face.value === ART ? 'paths' : 'letters'} · ${runCount} runs · ` +
+    `${litCount} lit · ${(performance.now() - t0).toFixed(0)}ms` +
     (notes.length ? ` · ${notes.join(' · ')}` : '');
+}
+
+/** Loads whatever the content controls now name, then draws it. */
+async function refreshContent() {
+  try {
+    content = await readContent();
+    document.getElementById('err').textContent = '';
+    rebuild();
+  } catch (e) {
+    fail(e);
+  }
 }
 
 for (const [id, input] of Object.entries(ui)) {
   if (id === 'save' || id === 'copyConfig') continue;
+  if (id === 'face' || id === 'text') {
+    input.addEventListener('change', refreshContent);
+    if (id === 'text') input.addEventListener('input', refreshContent);
+    continue;
+  }
   input.addEventListener(input.tagName === 'SELECT' ? 'change' : 'input', rebuild);
 }
 
@@ -344,7 +404,7 @@ ui.copyConfig.addEventListener('click', () => {
 const saveWallpaper = createWallpaper({
   stage,
   bloom,
-  refit: () => fit(width, height),
+  refit: () => fit(content.width, content.height),
   pageColor: getComputedStyle(document.body).backgroundColor,
 });
 ui.save.addEventListener('click', async () => {
@@ -370,15 +430,12 @@ document.getElementById('title').addEventListener('click', () => {
   hud.querySelector('#title .hint').textContent = hidden ? '[show]' : '[hide]';
 });
 
+if (!svgText) document.getElementById('showRef').closest('label').hidden = true;
 document.getElementById('showRef').addEventListener('change', (e) => {
   document.getElementById('silhouette').classList.toggle('on', e.target.checked);
 });
 
-try {
-  rebuild();
-} catch (e) {
-  fail(e);
-}
+await refreshContent();
 
 const euler = new THREE.Euler(0, 0, 0, 'XYZ');
 function frame() {

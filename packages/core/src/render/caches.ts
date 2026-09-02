@@ -50,6 +50,25 @@ export class WordCaches {
   }
 
   /**
+   * Builds the geometry for every distinct char of `chars`, so the first fire to draw them does
+   * not. Answers how many were built, the rest having been warm already.
+   *
+   * Letters only. A tube blueprint keys on a per-letter seed as well as the char, so it cannot be
+   * warmed from a corpus — nothing here knows what word the seeds will belong to. `warm()` covers
+   * the other first-fire stall, which is the shader link.
+   */
+  preheat(font: LoadedFont, chars: string): number {
+    if (this.disposed) throw new Error('klieg: WordCaches used after dispose');
+    let built = 0;
+    for (const char of new Set(chars)) {
+      const before = this.geometries.size;
+      this.glyph(font, char, DEFAULT_GLYPH_OPTIONS.depth);
+      if (this.geometries.size > before) built += 1;
+    }
+    return built;
+  }
+
+  /**
    * A blueprint's lit geometry carries the run-colour buffer a live effect writes every frame, so
    * one blueprint can back one word at a time. A second taker gets its own, kept out of the cache.
    */

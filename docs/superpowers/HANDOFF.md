@@ -584,48 +584,21 @@ Roughly in order of value; the items are independent of each other.
   the thing to revisit if a letter ever needs to read while it tumbles. A real key light or a real
   occlusion pass are still the heavier answers, and neither is needed now.
 
-- **Asked for, not yet measured: `sequin` and its neighbours are hard to read, and the two obvious
-  levers are both awkward.** Tracking is the first — looks do not touch layout at all today, so a
-  per-look letterspacing is new coupling rather than a tuning.
+- **`sequin` was hard to read because the field was half empty, and the lab could not show it.**
+  Density was the lever all along; the reason two sessions failed to see it move is that the lab's
+  count slider was `max="512"`. Every `look-sequin` baseline ever recorded was a 512-chunk field,
+  the shipped look asked for 520, and no count above 512 could be rendered at all — so the earlier
+  finding here ("doubling the count leaves the baseline pixel-identical", blamed on a stale dev
+  server) was measuring a clamp. `setRange` now warns when a spec value will not fit its control.
 
-  The second is density, and **the thing to know is that a render diff cannot measure it.**
-  `poolFor` derives the sample pool from `count`, so changing the count reseeds the *whole*
-  arrangement rather than adding to it: every count draws a different field. Measured against the
-  520 baseline, counts of 20, 130, 260 and 390 differ by 12.9k, 13.6k, 14.4k and 15.4k pixels —
-  rising with count rather than converging, which is rearrangement, not density. Judge density by
-  coverage or by instance count, never by diffing two renders.
+  **Measure coverage, never a render diff** — `poolFor` derives the pool from `count`, so a changed
+  count reseeds the whole arrangement and a diff reports rearrangement. `node
+  spikes/sequin-coverage.mjs` rasterises every disc's own projected footprint into one mask: 520
+  painted 77% of a letter, **1040 paints 96%** and costs 14ms more over seven letters, 2080 paints
+  104% — the field spilling past the silhouette — and costs 170ms. `sequin` ships at 1040.
 
-  What is settled: `count` is honest. `chunkMatrices` returns exactly `count` matrices with
-  `bedding` included, and `looks.spec.ts` detects a changed count at every value tried. An earlier
-  reading here claimed doubling to 1040 left the render pixel-identical; that contradicts the four
-  measurements above and the run is not trustworthy — `reuseExistingServer` is on outside CI, so a
-  server started before the edit can serve the previous module graph. Re-run it against a
-  guaranteed-fresh server before believing anything about saturation.
-
-- **The degenerate capitals are fixed, and neither the face nor the mechanism was what this entry
-  used to say.** Nothing is wrong with the glyphs or the triangulator: `node spikes/glyph-fidelity.mjs`
-  rasterises `glyphToShapes` against the font's own non-zero fill and every capital of all eight
-  faces agrees to under 0.1%. Overlapping contours are a real thing serif faces do — Cinzel's `A`
-  is five same-winding strokes — and earcut handles them, because their union is what fills.
-
-  What broke was the **tube cut**, and only on the tube looks: Cinzel's `C` kept 3.4% of its
-  contour and `tubing` hides its body, so the letter was a gap in the word. `resumeAt` answers
-  "nowhere on this leg clears the bend floor" with an out-of-range index, and the stitch applied it
-  literally — the entry side truncated the accumulated span to nothing, the exit side copied
-  nothing, and what rendered was two 0.07 em stubs of fillet. A fillet that would cost a whole leg
-  now demotes the corner to `break`, which is what the other three demotion sites in `stitchPath`
-  already do. All 40 visual baselines are unmoved: the shipped face never hit it.
-
-  Two instruments came out of it and both re-run. `node spikes/degenerate-caps.mjs` reports lit
-  tube per letter across every face and seed, and the discard the resume walk reports of itself —
-  Cinzel fell from 4.32 to 1.04 em an alphabet, against a 0.4–0.9 em band for the faces that were
-  always fine. `test/render/tube/faces.test.ts` is the guard: every capital of every shipped face
-  keeps at least 15% of its traced contour, against a floor of 29% for the tightest letter that
-  was never broken.
-
-  **`spikes/svg-tube/` now takes a face as well as art**, which is how this was cornered — pick
-  `cinzel`, type `C`, and the runs knobs are right there. `art.svg` is still the default where
-  there is one, and the lab no longer dies on a checkout that has none.
+  Tracking is still untried and still awkward: looks do not touch layout at all, so a per-look
+  letterspacing is new coupling rather than a tuning. It may also no longer be needed.
 
 - ~~**Tune `tubing` for a serif face**~~ — measured, and there is nothing to tune. Once the cut
   stopped giving up legs, Cinzel keeps **71.4%** of its traced contour under the shipped `tubing`,

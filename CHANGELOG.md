@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### `sequin` fills its letters
+
+The field was painting 77% of a letter at its shipped count and the near-black body read through
+the gaps. `sequin` now asks for 1040 chunks rather than 520, which covers 96% — measured as
+coverage, since a denser field reseeds its whole arrangement and cannot be judged by comparing two
+renders. A caller's own `ChunkSpec` is untouched.
+
 ### A scattered look reads as a solid again
 
 `ChunkSpec.relief` darkens a chunk by the surface it sits on. klieg lights with an environment map

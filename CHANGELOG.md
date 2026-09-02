@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### A scattered look reads as a solid again
+
+`ChunkSpec.relief` darkens a chunk by the surface it sits on. klieg lights with an environment map
+and nothing else, so a metal disc on the extrusion wall reflected exactly what one on the front cap
+did, and `sequin` had no form to read — the bevel highlight that carries a solid look is buried
+under the field.
+
+`sequin` ships at 0.7, which drops the underside of a bowl and the wall on the shaded side without
+taking anything to black. Zero is the previous behaviour exactly, and it is the default, so a
+caller's own chunk look does not move.
+
 ## 0.10.0
 
 ### A tube look no longer drops a letter

@@ -568,29 +568,21 @@ Roughly in order of value; the items are independent of each other.
   got its shape: a pillowed or rounded profile, a lathe, a swept section, a depth that varies over
   the glyph. It belongs in that design and is missing from it.
 
-- **Why the sparkly looks are hard to read: nothing separates a letter's face from its sides.**
-  Whatever usually does that job — a key light's cosine falloff, a cavity or occlusion term, a
-  distinct wall material — klieg has none of. Lighting is a PMREM environment map and nothing else
-  (`environment.ts:70`), and there is no occlusion term anywhere in `render/`. A metallic disc lit
-  only by an env map reflects whatever it faces, and the studio is bright all round, so a sequin on
-  the extrusion wall is as bright as one on the front cap. Solid looks read because the bevel
-  highlight draws the edge; a chunk field buries the bevel, and the form loses the only thing
-  carrying it. A fat face makes it worse: more wall per cap.
+- **A letter's face is now separated from its sides, and `sequin` reads.** `ChunkSpec.relief`
+  darkens a chunk by the surface normal the blueprint already carried — a cosine off the studio's
+  own key, folded into the indirect terms where an AO map would land. It has to go there rather
+  than on the diffuse colour: a disc at `metalness: 1` shows what it reflects, and `sequin`'s do.
 
-  The point is the missing separation, not any one technique — AO is one answer, a key light is
-  another, and a darker wall material is a third. What follows is only the cheapest to try.
+  `sequin` ships at **0.7**. The value is the whole judgement: at 1 a disc facing away reaches
+  black and reads as a hole in the field, and at 0.5 the silhouette still does not separate.
+  `relief` defaults to 0, which is byte-identical to before, so `look-sequin` is the only one of the
+  40 baselines that moved.
 
-  **The data for the fix is already in the buffer.** Each chunk instance carries the surface normal
-  it sits on, interpolated from its triangle (`decoration.ts:268-275`), and `lie` aligns the disc to
-  it — the orientation is known and simply never reaches the shading. Cheapest route is a
-  per-instance darkening derived from that normal, written as an instanced attribute and folded
-  into the material, which is what `tint.ts` already does for `runColor` and `gradientT`. Real AO or
-  a directional key are the heavier alternatives, and neither is needed to test whether polarity
-  alone fixes the reading.
-
-  Judged against this, an inset margin around the field — suggested earlier here — treats a
-  symptom: the silhouette is unreadable because the whole form is unshaded, not because the field
-  reaches the edge.
+  **What this does not do is model light.** The term is baked per instance at build time in letter
+  space, so it does not respond to the pivot: turn the word and the shading turns with it, like
+  paint rather than like a lamp. That is arguably right for a sign and definitely cheap, but it is
+  the thing to revisit if a letter ever needs to read while it tumbles. A real key light or a real
+  occlusion pass are still the heavier answers, and neither is needed now.
 
 - **Asked for, not yet measured: `sequin` and its neighbours are hard to read, and the two obvious
   levers are both awkward.** Tracking is the first — looks do not touch layout at all today, so a

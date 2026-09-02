@@ -1,8 +1,31 @@
 import type { EffectFrame } from '@core/effects/frame.js';
 import type { FrameCtx, PartInfo, ResolvedOffset } from '@core/effects/types.js';
 
-/** The sweep and the live panels must sample at one rate, or their numbers do not compare. */
-export const PASS_SAMPLES = 600;
+/**
+ * Samples one pass of the finest piece has to get. Below about 20 a `flicker` drop falls between
+ * two samples, the holder reads as unmoved for the whole epoch, and the handovers either side of
+ * it merge into one — which is how tenure came to report a number four times the truth.
+ */
+export const PER_PIECE_PASS = 32;
+
+/** Enough to plot smoothly, whatever the pieces are doing. */
+export const MIN_SAMPLES = 600;
+
+/** A ceiling on the wait. Past this the panels stop responding to a slider; the tenure panel says
+ * when the cap is what bound, rather than quietly reading a coarser grid. */
+export const MAX_SAMPLES = 8000;
+
+/**
+ * How many samples one pass needs, given the shortest piece in it. The sweep and the live panels
+ * must derive this the same way, or their numbers do not compare — a shared rule rather than a
+ * shared constant, because a constant is a step size only for one pass length, and `roving` at
+ * `epochs: 96` makes the pass two hundred times the piece it wraps.
+ */
+export function passSamples(pass: number, finest: number): number {
+  if (!(pass > 0) || !(finest > 0)) return MIN_SAMPLES;
+  const wanted = Math.ceil((pass / finest) * PER_PIECE_PASS);
+  return Math.min(MAX_SAMPLES, Math.max(MIN_SAMPLES, wanted));
+}
 
 /** One pass sampled on a grid: a row per part, a column per sample. */
 export interface PassSamples {

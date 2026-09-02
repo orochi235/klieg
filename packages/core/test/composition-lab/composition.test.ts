@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildLayer,
   type Composition,
   DEFAULT_COMPOSITION,
+  type EffectLayer,
+  finestPass,
   layerPiece,
   toFireOptions,
 } from '../../dev/composition-lab/src/composition.js';
@@ -84,5 +87,71 @@ describe('layerPiece wrappers', () => {
     const piece = layerPiece(layer);
     expect(piece).not.toBeNull();
     expect(piece?.duration).toBe(4000);
+  });
+});
+
+const LAYER: EffectLayer = {
+  id: 'a',
+  kind: 'flicker',
+  enabled: true,
+  params: { duration: 1400 },
+  target: 'run',
+  amount: 1,
+  seed: 0,
+};
+
+// The sampler has to resolve the piece inside the wrappers, and `roving` at `epochs: 96` publishes
+// a pass two hundred times longer than the flicker in it. Reading the wrapper's pass instead is
+// how the panels came to sample a 306s pass 511ms at a time.
+describe('buildLayer', () => {
+  it("reports the inner's own pass, not the wrapper's", () => {
+    const built = buildLayer({ ...LAYER, roving: { dwell: 3200, seed: 0, epochs: 96 } });
+    expect(built?.innerPass).toBe(1400);
+    expect(built?.piece.duration).toBeGreaterThan(100_000);
+  });
+
+  it("reports roving's settled epoch, so a measured tenure has something to be measured against", () => {
+    const built = buildLayer({ ...LAYER, roving: { dwell: 3200, seed: 0, epochs: 96 } });
+    expect(built?.epochMs).toBeGreaterThan(3000);
+    expect(built?.epochMs).toBeLessThan(3400);
+  });
+
+  it('reports no epoch for a layer that does not rove', () => {
+    expect(buildLayer(LAYER)?.epochMs).toBeNull();
+  });
+
+  it('reports no epoch for a lamp, which cannot be roved', () => {
+    const lamp: EffectLayer = { ...LAYER, kind: 'lamp', params: {}, lampSource: 'fixed' };
+    expect(
+      buildLayer({ ...lamp, roving: { dwell: 3200, seed: 0, epochs: 96 } })?.epochMs,
+    ).toBeNull();
+  });
+});
+
+describe('finestPass', () => {
+  it('takes the shortest inner any enabled layer builds', () => {
+    const c: Composition = {
+      ...DEFAULT_COMPOSITION,
+      effects: [
+        { ...LAYER, id: 'a', params: { duration: 4000 } },
+        { ...LAYER, id: 'b', kind: 'chase', params: { duration: 900 } },
+      ],
+    };
+    expect(finestPass(c)).toBe(900);
+  });
+
+  it('ignores a disabled layer, which contributes no piece to sample', () => {
+    const c: Composition = {
+      ...DEFAULT_COMPOSITION,
+      effects: [
+        { ...LAYER, id: 'a', params: { duration: 4000 } },
+        { ...LAYER, id: 'b', kind: 'chase', params: { duration: 900 }, enabled: false },
+      ],
+    };
+    expect(finestPass(c)).toBe(4000);
+  });
+
+  it('answers a whole pass when no layer builds, so the sampler still has a grid', () => {
+    expect(finestPass({ ...DEFAULT_COMPOSITION, effects: [] })).toBeGreaterThan(0);
   });
 });

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { PassSamples } from '../../dev/composition-lab/src/sample.js';
+import { syntheticPool } from '../../dev/composition-lab/src/pool.js';
+import { type PassSamples, samplePass } from '../../dev/composition-lab/src/sample.js';
 import { tenureAndJump } from '../../dev/composition-lab/src/tenure.js';
+import { EffectFrame, planEffects } from '../../src/effects/frame.js';
+import { flicker } from '../../src/effects/pieces.js';
+import { roving } from '../../src/effects/roving.js';
 import type { PartInfo } from '../../src/effects/types.js';
+import { NO_CTX } from '../effects/ctx.js';
 
 function parts(count: number): PartInfo[] {
   return Array.from({ length: count }, (_, index) => ({
@@ -35,13 +40,13 @@ function samples(moved: boolean[][]): PassSamples {
 }
 
 describe('tenureAndJump', () => {
-  it("measures a holder's stretch in milliseconds", () => {
+  it("measures a holder's stretch as the pass over the handovers in it", () => {
     const s = samples([
       [true, true, false, false],
       [false, false, true, true],
     ]);
     const r = tenureAndJump(s, parts(2), 1000);
-    expect(r.tenures).toEqual([500, 500]);
+    expect(r.handovers).toBe(2);
     expect(r.meanTenureMs).toBe(500);
   });
 
@@ -77,27 +82,71 @@ describe('tenureAndJump', () => {
       [true, true, true],
     ]);
     const r = tenureAndJump(s, parts(2), 900);
-    expect(r.tenures).toEqual([900, 900]);
+    expect(r.meanTenureMs).toBe(900);
     expect(r.handovers).toBe(0);
     expect(r.meanJumpParts).toBe(0);
   });
 
-  it('reports nothing rather than NaN when no layer moves anything', () => {
+  it('reports nothing rather than the whole pass when no layer moves anything', () => {
     const r = tenureAndJump(samples([[false, false]]), parts(1), 1000);
-    expect(r.tenures).toEqual([]);
     expect(r.meanTenureMs).toBe(0);
     expect(r.handovers).toBe(0);
   });
+});
 
-  it('joins a stretch that straddles the loop seam instead of halving it', () => {
-    const s = samples([[true, false, true]]);
-    const r = tenureAndJump(s, parts(1), 900);
-    expect(r.tenures).toEqual([600]);
+// An inner that returns to rest between its own drops leaves the holder unmoved for a sample or
+// two at a time. Read as a holder in its own right, that empty sample is a part letting go and
+// taking the fault straight back: two handovers per drop, each a jump of nothing.
+describe('tenureAndJump, where the inner rests', () => {
+  it('does not count a part resting and resuming as a handover', () => {
+    const s = samples([[true, false, true, true, false, false]]);
+    const r = tenureAndJump(s, parts(1), 600);
+    expect(r.handovers).toBe(0);
+    expect(r.meanTenureMs).toBe(600);
   });
 
-  it('does not double-count an all-true row when joining the seam', () => {
-    const s = samples([[true, true, true]]);
-    const r = tenureAndJump(s, parts(1), 900);
-    expect(r.tenures).toEqual([900]);
+  it('still counts the handover a rest sits between', () => {
+    const s = samples([
+      [true, false, false, false],
+      [false, false, true, false],
+    ]);
+    const r = tenureAndJump(s, parts(2), 400);
+    expect(r.handovers).toBe(2);
+    expect(r.meanJumpParts).toBe(1);
+  });
+
+  // Starting the walk at sample 0 loses this: the pass opens mid-rest, so the first holder reads
+  // as a fade in rather than as the far side of the seam handover.
+  it('finds the seam handover when the pass opens on a sample that moves nothing', () => {
+    const s = samples([
+      [false, true, false, false],
+      [false, false, false, true],
+    ]);
+    const r = tenureAndJump(s, parts(2), 400);
+    expect(r.handovers).toBe(2);
+  });
+});
+
+// The reconciliation itself: what the panel prints against what `roving` says it did. A reading
+// that moves with the sample count is a reading of the instrument, so this pins it at two rates.
+describe('tenure under a roving flicker', () => {
+  const pool = syntheticPool(24, 7);
+  const inner = flicker({ duration: 1400, depth: 0, unrest: 0.18 });
+  const piece = roving(inner, { dwell: 3200, seed: 0, epochs: 8 });
+
+  const read = (rate: number): number => {
+    const specs = [{ piece, target: { kind: 'run' as const, by: 'index' as const, amount: 1 } }];
+    const frame = new EffectFrame(planEffects(specs, pool));
+    const s = samplePass(frame, pool, piece.duration, rate, NO_CTX);
+    return tenureAndJump(s, pool, piece.duration).meanTenureMs;
+  };
+
+  it('reads the same at twice the sample rate', () => {
+    const coarse = read(1600);
+    expect(Math.abs(read(3200) - coarse) / coarse).toBeLessThan(0.05);
+  });
+
+  it('reads at least the epoch, because a handover is deferred and never brought forward', () => {
+    expect(read(1600)).toBeGreaterThanOrEqual(piece.epoch);
   });
 });

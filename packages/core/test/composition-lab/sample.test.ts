@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { samplePass } from '../../dev/composition-lab/src/sample.js';
+import {
+  MAX_SAMPLES,
+  MIN_SAMPLES,
+  PER_PIECE_PASS,
+  passSamples,
+  samplePass,
+} from '../../dev/composition-lab/src/sample.js';
 import { EffectFrame, planEffects } from '../../src/effects/frame.js';
 import type { EffectPiece, PartInfo } from '../../src/effects/types.js';
 import { NO_CTX } from '../effects/ctx.js';
@@ -101,5 +107,27 @@ describe('samplePass', () => {
     );
     const s = samplePass(frame, parts, 1000, 4, NO_CTX);
     expect(s.moved[0]).toEqual([true, true, false, false]);
+  });
+});
+
+// A fixed count is a step size only for one pass length. `roving` at `epochs: 96` makes a 1400ms
+// flicker a 306s pass, where 600 samples land 511ms apart and step straight over whole drops.
+describe('passSamples', () => {
+  it('samples the finest piece, not the pass, so a long wrapper is not under-sampled', () => {
+    const samples = passSamples(306_600, 1400);
+    expect((samples * 1400) / 306_600).toBeGreaterThanOrEqual(PER_PIECE_PASS);
+  });
+
+  it('holds a floor, so a short pass is not sampled more coarsely than the panels want', () => {
+    expect(passSamples(1400, 1400)).toBe(MIN_SAMPLES);
+  });
+
+  it('caps, because a pass long enough to need more is a lab that stops responding', () => {
+    expect(passSamples(30_000_000, 100)).toBe(MAX_SAMPLES);
+  });
+
+  it('falls back to the floor when a pass or a piece has no duration', () => {
+    expect(passSamples(0, 1400)).toBe(MIN_SAMPLES);
+    expect(passSamples(1400, 0)).toBe(MIN_SAMPLES);
   });
 });

@@ -2,7 +2,7 @@ import { EffectFrame, planEffects } from '@core/effects/frame.js';
 import type { FrameCtx, PartInfo } from '@core/effects/types.js';
 import { type LoadedFont, loadFont } from '@core/text/font.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { type Composition, toFireOptions } from './composition.js';
+import { buildLayer, type Composition, finestPass, toFireOptions } from './composition.js';
 import { fontUrl } from './font.js';
 import { CHANNELS, type Channel, Plot } from './Plot.js';
 import { Preview } from './Preview.js';
@@ -12,7 +12,7 @@ import { Rail, type RealPoolStatus } from './Rail.js';
 import { Raster } from './Raster.js';
 import { Swatch } from './Swatch.js';
 import { Sweep } from './SweepPanel.js';
-import { PASS_SAMPLES, samplePass } from './sample.js';
+import { passSamples, samplePass } from './sample.js';
 
 import { Tenure } from './TenurePanel.js';
 
@@ -87,8 +87,22 @@ export function App() {
     const specs = toFireOptions(composition).effects ?? [];
     const frame = new EffectFrame(planEffects(specs, parts));
     const pass = Math.max(1, ...specs.map((s) => (s.piece as { duration: number }).duration));
-    return { pass, data: samplePass(frame, parts, pass, PASS_SAMPLES, CTX) };
+    // The rate follows the finest piece, not the pass: `roving` at `epochs: 96` makes a 1400ms
+    // flicker a 306s pass, where a fixed grid steps straight over whole drops.
+    const finest = finestPass(composition);
+    const count = passSamples(pass, finest);
+    return { pass, finest, count, data: samplePass(frame, parts, pass, count, CTX) };
   }, [composition, parts]);
+
+  /** The one epoch a measured tenure can be read against. Two roving layers have two, and the
+   * panel would be naming one of them without saying which. */
+  const epochMs = useMemo(() => {
+    const found = composition.effects
+      .filter((l) => l.enabled)
+      .map((l) => buildLayer(l)?.epochMs)
+      .filter((n): n is number => typeof n === 'number');
+    return found.length === 1 ? (found[0] as number) : null;
+  }, [composition]);
 
   useEffect(() => {
     save(composition);
@@ -190,7 +204,13 @@ export function App() {
             channel={channel}
             at={(elapsed % sampled.pass) / sampled.pass}
           />
-          <Tenure samples={sampled.data} parts={parts} pass={sampled.pass} />
+          <Tenure
+            samples={sampled.data}
+            parts={parts}
+            pass={sampled.pass}
+            epochMs={epochMs}
+            perPiecePass={(sampled.count * sampled.finest) / sampled.pass}
+          />
           <Sweep composition={composition} parts={parts} ctx={CTX} />
         </section>
       </main>

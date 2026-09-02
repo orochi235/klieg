@@ -419,10 +419,12 @@ publishing, checking first that the tag matches `packages/core/package.json` and
 already on the registry. `npm view` reports a stale version straight after a publish — read
 `https://registry.npmjs.org/klieg` to see what actually landed.
 
-**`main` is at `ffe0d4c`, four commits ahead of `origin/main` and unpushed.** `## Unreleased` holds
-the `chunk` part kind and `gem`'s tinted specular lobe, both stacked above that untagged 0.10.0.
-`npm run check` is green at **1518 tests across 79 files** and `npx playwright test --list` reports
-**40 across 3 files**, measured at `44681f6` — `main` plus the composition lab's second round.
+**Work sits on `tenure-and-leftovers`, 42 commits ahead of `origin/main` and unpushed** — the
+tenure reconciliation, kliegsminister's three leftovers, and the composition lab's third round, on
+top of a `main` that was already 37 ahead. `## Unreleased` holds the `chunk` part kind and `gem`'s
+tinted specular lobe, both stacked above that untagged 0.10.0. `npm run check` is green at **1561
+tests across 82 files** and `npx playwright test --list` reports **40 across 3 files**, measured at
+`d065d66`.
 
 **`main` carries the tube lab, the tube geometry rewrite, the colour gradients, the junction
 reconciliation, direct paths by default, element-anchored placement and the effects pipeline, all
@@ -672,8 +674,18 @@ Roughly in order of value; the items are independent of each other.
   not build.
 
   **The roster gained `lamp`, and any layer can be wrapped in `intermittent`.** The swatch grid, the
-  tenure/jump readout and the param sweep are built. Timeline lanes and the draft editing pane are
-  not — `draft.ts` compiles a hand-authored piece already; only its editing UI is missing.
+  tenure/jump readout and the param sweep are built.
+
+  **Round three built the last two, and the lab is feature-complete against round one's design.**
+  The timeline is a lane per enabled layer on the *fire's* clock rather than on a piece's pass,
+  which is what every other panel plots; its reading is the lane that runs past the edge, and on the
+  default composition that is `flicker · roving` saying **2.6% of one pass plays**. A block means
+  the piece ran, not that a part moved, and the note under the lanes says so — the raster is what
+  answers coverage. The draft layer has a CodeMirror pane (dev-only), and **a throw inside `at` is
+  caught per call and counted** rather than killing the frame, which is the half of the round-one
+  spec that was never built. Round three is
+  [design](specs/2026-09-01-composition-lab-round-three-design.md); there is no plan doc, the work
+  having been done in one session rather than handed to a subagent.
 
   **Two constraints the lab enforces without explaining.** `roving` cannot carry a `lamp`: it
   substitutes a part's index and leaves `x`/`y` alone, so a position-dependent inner lights the part
@@ -687,14 +699,28 @@ Roughly in order of value; the items are independent of each other.
   invisible until something imports the panel. Both files are `TenurePanel.tsx` / `SweepPanel.tsx`
   now, still exporting `Tenure` and `Sweep`. This would not fail on Linux.
 
-  **The tenure readout and round one's `dwell` measurement disagree, and nobody has reconciled
-  them.** Round one had 3200ms asked delivering 3.15s. On the real `ACRONYM`/`tubing` pool the panel
-  reports 0.60s for `flicker`, 9.47s for `chase`, and the whole pass with no handovers at all for
-  `hue`. Two mechanisms sit in the code unchased: `roving` hands over only when the inner reads as
-  rest, so `chase` holds three epochs and `hue`, which never rests, never lets go; and `samplePass`
-  spends a fixed 600 samples on a pass that `epochs: 96` makes 306s long, so `flicker`'s tenure
-  falls to 0.10s at 4000 samples. Read it as a reading of the inner and the sample rate, not of
-  `dwell`.
+  **The tenure readout is reconciled with `dwell`, and it was two faults rather than one.**
+  `node spikes/tenure-vs-dwell.mjs` is the instrument: it reads the true holder off a probe wrapped
+  as `roving`'s inner — the wrapper calls the inner last with the holder's substituted index — and
+  compares it against what the panel prints, at five sample rates.
+
+  The panel used to read an **empty sample as a holder in its own right**, so an inner resting
+  between its own drops counted as letting go and taking the fault straight back: two handovers per
+  drop, every jump pulled toward zero, and a mean run length that halved every time the sample count
+  doubled. Tenure is the pass over the handovers in it now, empty samples are skipped, and the walk
+  starts at the first sample that moves so the seam handover survives a pass that opens mid-rest.
+
+  The second was the **rate**. 600 samples over a 306s pass land 511ms apart and step over whole
+  252ms drops, merging the handovers either side. `passSamples(pass, finest)` fixes the grid to the
+  finest piece in the composition rather than to the pass, and the sweep derives it the same way —
+  a shared rule, not a shared constant, because a constant is a step size only for one pass length.
+  Where the 8000 cap binds, the panel says so rather than quietly reading a coarser grid.
+
+  With both fixed the panel matches the holder **exactly** at every rate: flicker 3.98s, chase
+  9.60s, hue the whole pass. The remaining gap is real and is now named in the panel rather than
+  left as a mystery — `roving` hands over only where the inner reads as rest, so flicker runs 1.2x
+  its epoch, `chase` holds three, and `hue`, which never rests, never lets go. `roving` publishes
+  `epoch` and `epochs` for that comparison, so nothing re-derives the arithmetic.
 
   Round one is [design](specs/2026-08-27-composition-lab-design.md) /
   [plan](plans/2026-08-27-composition-lab.md); round two is
@@ -762,17 +788,25 @@ Roughly in order of value; the items are independent of each other.
   byte-identical to repairs-absent. Gating the exit-side resume moved three off-state counts on the
   test square: resume-off at `drop` 217 → **225**, and the stretch-off pair 225/229 → **241/245**.
 
-  **Left for whoever picks this up.** The `setback`-off-under-`rejoin: 'bridge'` cascade is **2769
-  points against 241**, not the 1505 recorded before; the leg-room math assumes the trim happened.
-  The lab reaches that combination and draws it without throwing. An exit-side `setback` site now reports the
-  span it skips, so it draws a ghost like the entry side: the walk resumes at `groupAfter + 1` with
-  the repair off and at `pastSetback` with it on, and the vertices between are what it removes. 141
-  of its 148 sites carry geometry against the entry side's 145 — a turn whose setback is shorter
-  than one sample step removes nothing, and the two sides sample differently. **`hairpin`'s toggle is inert in the UI**:
-  neither `piping` nor `tubing` weights it and the look control offers nothing else, so the report
-  is only reachable from a test with a spec override. And `subject: 'letter'` does not re-zoom —
-  labkit's `initialView` is static per instrument, so the whole letter needs zooming out by hand
-  from 1600x.
+  **The three things left over are done.** The `setback`-off-under-`rejoin: 'bridge'` cascade is
+  **2769 points against 241** — the leg-room math assumes the trim happened — and the lab drew that
+  without saying so. It reports the count against the same build with nothing switched off and
+  marks it where the ratio reads cascade rather than corner; the square's numbers are pinned in
+  `repairs.test.ts`. **`hairpin` is reachable**: neither shipped look weights it, so a `hairpin
+  weight` slider now sits over the look's own corner weights with the shape beside it, and its
+  repair toggle has something on the other end at last. **`subject: 'letter'` re-zooms** — the
+  scene already puts either subject at the world origin, so only the zoom differed; `CentreView`
+  fits the glyph to the canvas and a corner goes back to 1600x.
+
+  An exit-side `setback` site reports the span it skips, so it draws a ghost like the entry side:
+  the walk resumes at `groupAfter + 1` with the repair off and at `pastSetback` with it on, and the
+  vertices between are what it removes. 141 of its 148 sites carry geometry against the entry side's
+  145 — a turn whose setback is shorter than one sample step removes nothing, and the two sides
+  sample differently.
+
+  **labkit's own zoom readout does not track a programmatic view.** It said 800% at `initialView`'s
+  1600 before any of this, and says 800% after the fit — so the widget is not evidence about the
+  view, and dragging it will jump. Not a regression, and not chased.
 
   **The `repair` layer draws the sites that ran**, sourced from the same `ghosts` array the `ghost`
   layer filters the other way; `CornerScene.drawn` is deleted rather than filled, because the

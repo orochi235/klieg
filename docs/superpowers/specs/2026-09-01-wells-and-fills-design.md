@@ -21,6 +21,31 @@ scattered samples down to something that looks regular, and `decoration.ts:38` r
 mode — small jitter rejects most of what sampling draws and degrades back to free placement. Cutting
 generates sites instead, so regularity is the default rather than something sampling is nagged into.
 
+## Inflating the solid
+
+This model says what to carve out of a solid and never says what shape the solid is, and today the
+answer is always the same one: a linear push along z with a bevel at each end. The other half is a
+**profile over the distance field** — how deep inside the outline a point sits decides how far it
+stands proud. Today's flat cap is the profile `z = 0`.
+
+The field already ships. `signedDistanceField` is the tube pipeline's own, and an inflation is a
+function of it, so this needs no new geometry machinery. `node spikes/inflate.mjs` builds four
+profiles on a real glyph and renders them: `flat`, `pillow` (a circular arc), `dome` (a sine) and
+`ridge` (linear, which creases each stroke down its spine and reads as folded channel rather than
+as a cushion).
+
+**It is affordable.** The prototype meshes the crown as a heightfield over the field's grid, and the
+grid is the entire cost: 9,143 vertices a letter at 128 cells against 83,948 at 384, with nothing to
+tell between 128 and 256 at sign size. Today's extruder spends about 6,700 a letter, so an inflated
+letter is one extra letter's worth of geometry rather than an order of magnitude — unlike a well,
+where the bevel costs six times the hole.
+
+**The mesher is the open question, not the profile.** The heightfield drops any cell the outline
+crosses, so the crown stops one cell short of the silhouette and the bevel underneath shows through
+the rim; invisible at 128, and still the wrong construction to ship. The two candidates are
+subdividing the extruder's own cap and displacing it, and stacking isocontours at successive insets
+— the same profile read as rings, which also survives a stroke pinching into two.
+
 ## Cutting, without CSG
 
 `ExtrudeGeometry` cannot make a blind recess. It can make a **hole**, which is how the counter in a

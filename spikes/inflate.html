@@ -1,0 +1,65 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>inflation profiles</title>
+<style>
+  html, body { margin: 0; background: #0a0c11; }
+  #stage { position: fixed; inset: 0; }
+</style>
+<script type="importmap">
+  { "imports": { "three": "/three/three.module.js" } }
+</script>
+<div id="stage"></div>
+<script type="module">
+  import * as THREE from 'three';
+  import { BloomPath } from '/klieg/render/bloom.js';
+  import { applyLook, createMaterial, specOf } from '/klieg/render/looks.js';
+  import { Stage } from '/klieg/render/stage.js';
+
+  const look = new URLSearchParams(location.search).get('look') ?? 'gold';
+  const data = await fetch('/geometry.json').then((r) => r.json());
+
+  const stage = new Stage({ idleTimeoutMs: 3_600_000, target: document.getElementById('stage') });
+  const renderer = stage.mount();
+  const bloom = new BloomPath(renderer);
+
+  const build = (dump) => {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(dump.position, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(dump.normal, 3));
+    if (dump.index) geo.setIndex(dump.index);
+    return geo;
+  };
+
+  // The target, not its texture, is what `Stage` holds; `createMaterial` wants the map itself, and
+  // a metal handed nothing renders black.
+  const material = createMaterial(stage.environment?.texture ?? null);
+  applyLook(material, specOf(look));
+  const row = new THREE.Group();
+  stage.scene.add(row);
+
+  // One letter per profile, side by side, all on the same body: what differs between them is only
+  // what stands above the flat cap.
+  const PITCH = 1.05;
+  data.crowns.forEach((crown, i) => {
+    const cell = new THREE.Group();
+    cell.position.x = (i - (data.crowns.length - 1) / 2) * PITCH;
+    cell.add(new THREE.Mesh(build(data.body), material));
+    cell.add(new THREE.Mesh(build(crown), material));
+    row.add(cell);
+  });
+
+  const box = new THREE.Box3().setFromObject(row);
+  const size = box.getSize(new THREE.Vector3());
+  const centre = box.getCenter(new THREE.Vector3());
+  const budget = stage.viewportBudget();
+  row.scale.setScalar(Math.min(budget.width / size.x, budget.height / size.y));
+  row.position.set(-centre.x * row.scale.x, -centre.y * row.scale.y, 0);
+
+  let frames = 0;
+  function frame() {
+    bloom.render(stage.scene, stage.camera);
+    if (++frames > 6) window.__shot = true;
+    else requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+</script>

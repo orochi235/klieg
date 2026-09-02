@@ -273,7 +273,9 @@ export const LOOKS: Record<LookName, LookSpec> = {
     tintTo: 'decoration',
     decoration: {
       kind: 'chunks',
-      count: 520,
+      // Measured, not taste: 520 painted 77% of a letter and the body read through as gaps, 2080
+      // spills past the silhouette. `node spikes/sequin-coverage.mjs`.
+      count: 1040,
       size: 0.062,
       shape: 'disc',
       align: 0,

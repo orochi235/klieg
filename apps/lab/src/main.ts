@@ -278,11 +278,25 @@ function seedSliders(): void {
     el<HTMLInputElement>('cornerConnect').value = String(Math.round(corners.connect * 100));
     surfacesInput.value = surfacesKeyFor(decoration.surfaces);
   } else if (decoration?.kind === 'chunks') {
-    el<HTMLInputElement>('count').value = String(decoration.count);
-    el<HTMLInputElement>('chunkSize').value = String(Math.round(decoration.size * 1000));
-    el<HTMLInputElement>('align').value = String(Math.round(decoration.align * 100));
-    el<HTMLInputElement>('cluster').value = String(Math.round(decoration.cluster * 100));
-    el<HTMLInputElement>('proud').value = String(Math.round(decoration.proud * 100));
+    setRange('count', decoration.count);
+    setRange('chunkSize', Math.round(decoration.size * 1000));
+    setRange('align', Math.round(decoration.align * 100));
+    setRange('cluster', Math.round(decoration.cluster * 100));
+    setRange('proud', Math.round(decoration.proud * 100));
+  }
+}
+
+/**
+ * Writes a spec value into a range and says so when the range cannot hold it. A slider clamps
+ * silently, and the lab then tunes and shoots a look nobody ships: `count` sat at `max=512` while
+ * `sequin` asked for 520, so every baseline was of a field eight chunks short and no count above
+ * 512 could be seen at all.
+ */
+function setRange(id: string, value: number): void {
+  const input = el<HTMLInputElement>(id);
+  input.value = String(value);
+  if (input.value !== String(value)) {
+    console.warn(`klieg lab: #${id} clamped ${value} to ${input.value}; widen its range`);
   }
 }
 

@@ -1248,9 +1248,12 @@ needed to.
 A decoration kind now registers a `DecorationBuilder` (`render/decorations/registry.ts`) rather than
 being named in `word.ts`. The builder owns its per-letter geometry and materials, the parts it
 contributes to effect targeting, its per-frame and per-part writes, and its disposal; `tube.ts` and
-`chunks.ts` are the two implementations. `word.ts` went **1,127 lines to 733** and names neither
-kind. [The plan](plans/2026-09-02-decoration-registry-teardown.md) has the task-by-task detail, and
-the [design](specs/2026-09-01-wells-and-fills-design.md) says what it is for.
+`chunks.ts` are the two implementations. `word.ts` went **1,127 lines to 733** and has no
+`decoration.kind` branch left. One tube-specific thing does remain there: `WordDebugHooks`
+carries a `tubeMaterial` hook, which reaches a builder as `ctx.debug` — a new kind wanting to
+override its own material will widen that interface.
+[The plan](plans/2026-09-02-decoration-registry-teardown.md) has the task-by-task detail, and the
+[design](specs/2026-09-01-wells-and-fills-design.md) says what it is for.
 
 Four things the code does not say.
 
@@ -1268,17 +1271,23 @@ public API change nobody has made, and it was deliberately kept out of the teard
 **`collectParts()` walks "highest index written + 1", not the letter count.** Those are equal only
 because `skipLetter` is called for every letter that drew no ink. Both builders assign per-letter
 state by index rather than pushing, so a missed slot leaves a hole instead of shifting everything
-after it — but the invariant is unwritten anywhere except a test, and the third builder is what gets
-it wrong. Test slot alignment with one assertion **per array**, keyed on something the arrays would
+after it. `skipLetter`'s docstring states the requirement; what it cannot state is that a builder
+holding several arrays has to satisfy it in all of them, which is what the third builder gets wrong.
+Test slot alignment with one assertion **per array**, keyed on something the arrays would
 disagree about: a single assertion on the mesh array stays green while a different array is the one
 that slipped, which lands one letter's material state on its neighbour.
 
-**The visual suite lies under load, and its failures look nothing like pixel diffs.** Above a load
-average of roughly 20 the renderers get starved and killed: `page.addStyleTag` "Execution context
-was destroyed", 30s/60s timeouts, "Target page, context or browser has been closed" — and a
-*different* failure set every run, often on looks carrying no decoration at all. Re-run with
-`--workers=1` before believing any of it. The tell is determinism: a real regression fails the same
-test with the same diff at any worker count. A pass is still proof, the comparison being byte-exact.
+**The visual suite lies under load, and `--workers=1` is not the remedy.** Above a load average of
+roughly 20 the renderers get starved and killed: `page.addStyleTag` "Execution context was
+destroyed", 30s/60s timeouts, "Target page, context or browser has been closed" — and a *different*
+failure set each run, often on `sign.spec.ts` DOM assertions or looks carrying no decoration, which
+most changes cannot reach. A single worker does not save you: one run here went **38 failed / 3
+passed** at `--workers=1`, and the identical command four minutes later went **41 passed**.
+
+**The runtime is the tell.** That failing run took 1.4 minutes and the passing one 5.7 — a fast
+suite is renderers dying, not work being done. Re-run when the machine is quiet, not merely
+serially. A real regression fails the same test with the same diff every time; a pass is still
+proof, the comparison being byte-exact.
 
 ## `sequin` is sewn now, and what that cost
 

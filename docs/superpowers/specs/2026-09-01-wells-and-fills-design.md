@@ -147,9 +147,9 @@ seam from the plate's triangulation to the fill's own mesh, where it is not paid
 **The `word.ts` teardown is built.** A decoration kind registers a `DecorationBuilder` in
 `render/decorations/registry.ts`, which owns its per-letter geometry and materials, the parts it
 contributes to effect targeting, its per-frame and per-part writes, and its disposal. `tube.ts` and
-`chunks.ts` are the two implementations; `word.ts` names neither kind. Next is the plate cutter and
-regions; then `stone` and the lattice; then, separately and last, the migration of the three shipped
-looks.
+`chunks.ts` are the two implementations, and `word.ts` has no `decoration.kind` branch left — bar
+one tube-specific debug hook a new kind will want to widen. Next is the plate cutter and regions;
+then `stone` and the lattice; then, separately and last, the migration of the three shipped looks.
 
 **A builder adds geometry to a letter's group — it cannot replace the body.** `Word` builds the body
 mesh itself and hands the builder a group to add to. The plate cutter replaces the slab rather than

@@ -3,8 +3,8 @@ import type { PartInfo, ResolvedOffset } from '../../effects/types.js';
 import type { LoadedFont } from '../../text/font.js';
 import type { WordCaches } from '../caches.js';
 import type { DecorationSpec } from '../decoration.js';
-// Type-only: word.ts imports this module in Task 2, and a type-only import is erased at
-// compile time, so this creates no runtime cycle.
+// Type-only, and must stay so: word.ts imports this module for real, so a value import here
+// would close the cycle. A type-only one is erased at compile time.
 import type { WordDebugHooks } from '../word.js';
 import { ChunksBuilder } from './chunks.js';
 import { TubeBuilder } from './tube.js';
@@ -20,8 +20,6 @@ export interface WordBuildContext {
   /** A fresh material carrying the studio's environment settings. */
   studioMaterial(): THREE.MeshPhysicalMaterial;
   glyph(char: string, depth: number): THREE.ExtrudeGeometry;
-  /** A letter playing its exit; its parts are left alone. */
-  leavingAt(index: number): boolean;
   partInfo(
     kind: PartInfo['kind'],
     ordinal: number,

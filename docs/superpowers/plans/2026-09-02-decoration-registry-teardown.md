@@ -159,8 +159,8 @@ export interface DecorationBuilder {
   boundsAt(index: number): THREE.Box2 | null;
   /** The live letters' union bounds, once known, so a positional gradient can be mapped. */
   applyGradientBounds(word: THREE.Box2): void;
-  /** The emissive and hue this letter's lamp light resolves against, or null. */
-  lightAt(index: number): LightBase | null;
+  /** The effect write for one part this decoration contributed. `Word` owns transform; this owns colour. */
+  writePart(slot: number, mesh: THREE.Mesh, out: ResolvedOffset): void;
   dispose(): void;
 }
 
@@ -418,13 +418,32 @@ Move, verbatim, out of `word.ts`:
   magnitude, and an ordinal share puts a chase's dwell somewhere other than where the glass is.
 - `setGradientBounds`'s material walk, `word.ts:616-628` — becomes `applyGradientBounds()`. The
   bounds union over letters stays on `Word` and is fed from `boundsAt()`.
+
+  **You are the first real user of this pair — chunks made both trivial, so neither has been
+  exercised.** Two things the signatures do not say. `Word` must keep its `word.isEmpty()` early
+  return *before* calling `applyGradientBounds`: an empty `THREE.Box2` is `min +Infinity /
+  max -Infinity`, and handing that to the shader's bounds `Vector4` turns every positional gradient
+  NaN. And the uniform objects are aliased into the compiled shader at `word.ts:585-586`, so
+  `applyGradientBounds` must `.set()` them and never reassign — a fresh object leaves an already
+  compiled letter on the pre-regroup mapping. That comment must survive the move verbatim.
 - the dark material's per-frame write, `word.ts:1077-1081` — folds into `frame()`
 - the tube fields: `darkMaterials`, `litMeshes`, `litReadsRunColor`, `tubeBlueprints`, `tubeBounds`,
   `gradientRamp` (`word.ts:178,186,191,218,220,222`) and their ctor seeding at `word.ts:264,266-269`
 - the tube disposal, `word.ts:1096-1112`
 
-`lightAt()` returns `null` — a run's light comes off `partBaseColor` through the run-colour buffer,
-not off a `LightBase`; `word.ts:556` reads a light only for `'chunk'` and `'body'` parts.
+**`writePart` is where the run's effect write goes.** Task 2 added `writePart` to the interface and
+moved the chunk half out of `Word.writePart`, leaving the run branch inline. Move it now:
+`RUN_COLOR_ATTRIBUTE`, `CRAWL_ATTRIBUTE`, the `partColor` scratch and the `partBaseColor` /
+`partReadsRunColor` reads all belong to `TubeBuilder`. `Word.writePart` should be left with the
+transform write and the `body` branch only — no `PartKind` dispatch for decorations at all.
+
+Keep the two comments in that block verbatim. One says colour composes from `partBaseColor` rather
+than the buffer, because reading last frame's value back and rescaling it compounds and fades the
+sign to black in seconds. The other says hue and emissive are the same colour for a run.
+
+**`setEmissiveIntensity` (`word.ts:70`) is module-private and you are the first outside caller.**
+It guards `'emissiveIntensity' in material` because `debug.tubeMaterial` can hand back a base
+`THREE.Material`. Export it or move it to `looks.ts` — do not copy it into `tube.ts`.
 
 The `debug?.tubeMaterial` hook reaches the builder as `ctx.debug` — it is how the visual specs swap
 in a flat material to read run colours back, and Task 2 put it on the context for this. Its two
@@ -504,8 +523,17 @@ Expected: 41 passed.
 Run: `grep -c "kind === 'tube'\|kind === 'chunks'" packages/core/src/render/word.ts`
 Expected: `0`.
 
+**That grep alone is not sufficient acceptance** — it passes vacuously while a decoration switch
+keyed on `PartKind` remains. Also run:
+
+`grep -n "part.kind\|PartKind" packages/core/src/render/word.ts`
+
+`writePart` should dispatch only `body` against everything else, with every decoration part
+delegated to its builder. If a `'chunk'` or `'run'` test survives there, the switch moved rather
+than died. (Tasks 2 and 3 do this work; this step is the check.)
+
 This is the acceptance for the whole slice. `word.ts` should also be materially shorter — it starts
-at 1,127 lines.
+at 1,127 lines and was 1,030 after Task 2.
 
 - [ ] **Step 6: Commit**
 
@@ -560,4 +588,12 @@ look sets `relief`, so a leak here shows up on `sequin` alone.
 **Parallel arrays are indexed by letter slot, and a letter that drew no ink is a hole, not a gap.**
 Every `push` in the build path has a matching `push` in the no-ink early return. `skipLetter` is
 what keeps that true once the pushes move; drop it and every field after the first blank letter is
-off by one.
+off by one. A word containing a space is the case that breaks, and
+`visual.spec.ts:444` is the baseline that catches it.
+
+**`debugShapes` goes dead when the tube moves.** `word.ts:722` sets it inside the tube branch and
+`word.ts:766-770` passes `debugShapes ?? glyphToShapes(font.font, char, EM)` to `debug.onLetter`.
+Once the branch leaves, `Word` recomputes `glyphToShapes` per tube letter instead of reusing the one
+the tube already built. Behaviorally identical, so it is not a bug — but it is an extra build on the
+debug path the visual specs use, and the variable itself becomes dead. Remove it rather than leaving
+it unread.

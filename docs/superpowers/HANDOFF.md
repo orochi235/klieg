@@ -5,10 +5,11 @@ learned that its design doc does not carry, and what is worth doing next.
 
 ## Branch state
 
-**`face-and-side` is three commits ahead of `origin/face-and-side` and unpushed**, on top of the
-sequin work: the bevel chamfer and contour union, flatness sampling, and this document. Every suite
-is green — `npm run check`, `test:dist`, and 41/41 visual. **The next action is to push**, and then
-the wells-and-fills teardown, which is the only open item below.
+**`face-and-side` is pushed and level with `origin/face-and-side`**: the sequin work, the bevel
+chamfer and contour union, flatness sampling, and this document. `git log --oneline @{u}..HEAD` is
+the live answer for anything unpushed — a count written here is false the moment it is committed.
+Every suite is green — `npm run check`, `test:dist`, and 41/41 visual. The wells-and-fills teardown
+is the only open item below, and `klieg-47` holds it in `.claude/worktrees/wells-teardown`.
 
 
 **Host-driven effects are merged.** `fire()` returns a `FireHandle` and takes `onPhase`,

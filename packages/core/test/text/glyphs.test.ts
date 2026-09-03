@@ -189,6 +189,30 @@ describe('glyphToShapes', () => {
     expect(shapes[0]?.holes).toHaveLength(0);
   });
 
+  it('spends points on a curve in proportion to how much it bends', () => {
+    // Two glyphs identical but for the bulge of one edge, each with a second contour laid over it
+    // so the union runs and has to answer in points. A fixed sampling gives both the same count.
+    const wedge = (bulge: number): PathCommand[] => [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'Q', x1: 0.5, y1: bulge, x: 1, y: 0 },
+      { type: 'L', x: 1, y: 1 },
+      { type: 'L', x: 0, y: 1 },
+      { type: 'L', x: 0, y: 0 },
+      { type: 'M', x: 0.4, y: 0.4 },
+      { type: 'L', x: 1.4, y: 0.4 },
+      { type: 'L', x: 1.4, y: 1.4 },
+      { type: 'L', x: 0.4, y: 1.4 },
+      { type: 'L', x: 0.4, y: 0.4 },
+    ];
+    const pointsOf = (bulge: number) =>
+      glyphToShapes(fontDrawing(wedge(bulge)), 'D', 1).reduce(
+        (n, shape) => n + shape.extractPoints(24).shape.length,
+        0,
+      );
+
+    expect(pointsOf(0.01)).toBeLessThan(pointsOf(0.5));
+  });
+
   it('leaves a glyph the union cannot change on its own curves', () => {
     // One outline and one counter: nothing to merge, so the shape keeps its quadratic rather than
     // being frozen into a polyline. `curves` is 1 per drawn command, many more once sampled.

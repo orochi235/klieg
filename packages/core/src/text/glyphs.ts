@@ -157,19 +157,56 @@ function nest(contours: THREE.Shape[]): THREE.Shape[] {
   return [...outlines, ...orphans].map((o) => o.contour);
 }
 
-/** The finest any consumer samples a contour at: `tube/surfaces.ts` reads 24. */
-const UNION_SEGMENTS = 24;
+/**
+ * How far a chord may sit from the curve it replaces, in em.
+ *
+ * The union answers in points, so this is the whole fidelity budget for a glyph that goes through
+ * it. At a 200px cap height 1e-4 em is 0.028px, and a quarter of that at the largest size klieg
+ * has been shot at — small enough that the sampling is not what anyone sees. Sampling to a fixed
+ * count instead spends the same points on a serif bracket as on a bowl: 16,311 across Cinzel's
+ * capitals at 24 a curve, against 5,552 for this.
+ */
+const FLATNESS = 1e-4;
 
-function ringOf(points: THREE.Vector2[]): Ring {
-  const first = points[0];
-  const ring: Ring = points.map((p) => [p.x, p.y]);
-  if (first) ring.push([first.x, first.y]);
+/** Subdivide until each chord sits within `flatness` of the curve. A straight edge stops at once. */
+function flatten(curve: THREE.Curve<THREE.Vector2>, flatness: number): THREE.Vector2[] {
+  const start = curve.getPoint(0);
+  const points: THREE.Vector2[] = [start];
+  const walk = (t0: number, t1: number, p0: THREE.Vector2, p1: THREE.Vector2, depth: number) => {
+    const middle = (t0 + t1) / 2;
+    const pm = curve.getPoint(middle);
+    const chord = p1.clone().sub(p0);
+    const length = chord.length();
+    const off =
+      length === 0
+        ? pm.distanceTo(p0)
+        : Math.abs((pm.x - p0.x) * chord.y - (pm.y - p0.y) * chord.x) / length;
+    // Ten levels is 1024 segments for one curve, which no glyph outline has ever needed.
+    if (off <= flatness || depth >= 10) {
+      points.push(p1);
+      return;
+    }
+    walk(t0, middle, p0, pm, depth + 1);
+    walk(middle, t1, pm, p1, depth + 1);
+  };
+  walk(0, 1, start, curve.getPoint(1), 0);
+  return points;
+}
+
+function ringOf(path: THREE.Path, flatness: number): Ring {
+  const ring: Ring = [];
+  for (const curve of path.curves)
+    for (const p of flatten(curve, flatness)) {
+      const last = ring[ring.length - 1];
+      if (!last || last[0] !== p.x || last[1] !== p.y) ring.push([p.x, p.y]);
+    }
+  const first = ring[0];
+  if (first) ring.push([first[0], first[1]]);
   return ring;
 }
 
-function polygonOf(shape: THREE.Shape): Polygon {
-  const points = shape.extractPoints(UNION_SEGMENTS);
-  return [ringOf(points.shape), ...points.holes.map(ringOf)];
+function polygonOf(shape: THREE.Shape, flatness: number): Polygon {
+  return [ringOf(shape, flatness), ...shape.holes.map((hole) => ringOf(hole, flatness))];
 }
 
 function shapeOf(polygon: Polygon): THREE.Shape {
@@ -224,7 +261,7 @@ function sameShapeSet(before: Polygon[], after: Polygon[]): boolean {
  */
 function unionOf(shapes: THREE.Shape[]): THREE.Shape[] {
   if (shapes.length < 2) return shapes;
-  const polygons = shapes.map(polygonOf);
+  const polygons = shapes.map((shape) => polygonOf(shape, FLATNESS));
   const first = polygons[0];
   if (!first) return shapes;
   const merged = polygonClipping.union(first, ...polygons.slice(1));

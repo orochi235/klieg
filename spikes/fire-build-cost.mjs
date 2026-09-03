@@ -1,7 +1,7 @@
 /**
  * What a fire() rebuilds that a previous fire() already built.
  *
- *   npm run build -w klieg && node spikes/fire-build-cost.mjs [word] [repeats]
+ *   npm run build -w klieg && node spikes/fire-build-cost.mjs [word] [repeats] [face]
  *
  * Times the CPU-side build a fire pays — extrusion per distinct (char, depth), and tube
  * blueprints, which are per letter because they carry a per-letter seed — with a cache built
@@ -17,9 +17,14 @@ import { DEFAULT_GLYPH_OPTIONS, glyphToShapes } from '../packages/core/dist/text
 
 const WORD = process.argv[2] ?? 'JACKPOT!';
 const REPEATS = Number(process.argv[3] ?? 5);
+const FACE = process.argv[4] ?? 'default';
 const DEPTH = DEFAULT_GLYPH_OPTIONS.depth;
 
-const buf = readFileSync(new URL('../apps/lab/public/font.ttf', import.meta.url));
+const buf = readFileSync(
+  FACE === 'default'
+    ? new URL('../apps/lab/public/font.ttf', import.meta.url)
+    : new URL(`../apps/lab/public/fonts/${FACE}.ttf`, import.meta.url),
+);
 const bytes = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
 
 const t0 = performance.now();

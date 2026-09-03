@@ -108,8 +108,6 @@ export class ChunksBuilder implements DecorationBuilder {
         1 / fields.length,
       ),
       mesh: this.meshes[slot] as THREE.InstancedMesh,
-      baseColor: 0xffffff,
-      readsRunColor: false,
       slot,
     }));
   }

@@ -460,6 +460,16 @@ export function frameOwnedBase(look: Look): FrameOwnedBase {
   };
 }
 
+/**
+ * The decor and dark families write their emissive through here, at construction and per frame
+ * alike: those arrays are typed to the base class so a debug override can supply one without it.
+ */
+export function setEmissiveIntensity(material: THREE.Material | null, value: number): void {
+  if (material && 'emissiveIntensity' in material) {
+    (material as THREE.MeshPhysicalMaterial).emissiveIntensity = value;
+  }
+}
+
 export interface LightBase {
   /** The look's own emissive, which lamp light adds onto rather than replacing. */
   emissive: number;

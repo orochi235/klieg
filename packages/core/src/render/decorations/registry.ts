@@ -7,6 +7,7 @@ import type { DecorationSpec } from '../decoration.js';
 // compile time, so this creates no runtime cycle.
 import type { WordDebugHooks } from '../word.js';
 import { ChunksBuilder } from './chunks.js';
+import { TubeBuilder } from './tube.js';
 
 /** What a builder may reach back into on the `Word` that owns it. */
 export interface WordBuildContext {
@@ -37,10 +38,6 @@ export interface WordBuildContext {
 export interface DecorationPart {
   info: PartInfo;
   mesh: THREE.Mesh | THREE.InstancedMesh;
-  /** The part's own colour, so an effect composes from the base rather than from last frame. */
-  baseColor: number;
-  /** Whether `writePart` may drive this part through the run-colour buffer. */
-  readsRunColor: boolean;
   slot: number;
 }
 
@@ -84,7 +81,4 @@ export function decorationBuilderFor(
 }
 
 registerDecoration('chunks', (spec, ctx) => new ChunksBuilder(spec, ctx));
-// Replaced by the real builder in Task 3.
-registerDecoration('tube', () => {
-  throw new Error('tube builder not yet implemented');
-});
+registerDecoration('tube', (spec, ctx) => new TubeBuilder(spec, ctx));

@@ -1,9 +1,8 @@
 import type * as THREE from 'three';
-import type { PartInfo } from '../../effects/types.js';
+import type { PartInfo, ResolvedOffset } from '../../effects/types.js';
 import type { LoadedFont } from '../../text/font.js';
 import type { WordCaches } from '../caches.js';
 import type { DecorationSpec } from '../decoration.js';
-import type { LightBase } from '../looks.js';
 // Type-only: word.ts imports this module in Task 2, and a type-only import is erased at
 // compile time, so this creates no runtime cycle.
 import type { WordDebugHooks } from '../word.js';
@@ -54,12 +53,12 @@ export interface DecorationBuilder {
   collectParts(): DecorationPart[];
   /** Per-frame material writes for letter `index`; `opacity` is the pose's own. */
   frame(index: number, opacity: number): void;
+  /** The effect write for one part this decoration contributed. `Word` owns transform; this owns colour. */
+  writePart(slot: number, mesh: THREE.Mesh, out: ResolvedOffset): void;
   /** This letter's decoration bounds in its own em space, or null. Drives the gradient span. */
   boundsAt(index: number): THREE.Box2 | null;
   /** The live letters' union bounds, once known, so a positional gradient can be mapped. */
   applyGradientBounds(word: THREE.Box2): void;
-  /** The emissive and hue this letter's lamp light resolves against, or null. */
-  lightAt(index: number): LightBase | null;
   dispose(): void;
 }
 

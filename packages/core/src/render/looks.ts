@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { EffectSpec } from '../effects/types.js';
+import type { Vec3 } from '../pose.js';
 import { ALL_CONNECT, type DecorationSpec } from './decoration.js';
 import {
   createFlakeUniforms,
@@ -464,6 +465,23 @@ export interface LightBase {
   emissive: number;
   /** The colour the look reads as, whichever property carries it. What a lamp multiplies against. */
   hue: number;
+}
+
+const clamp255 = (n: number): number => Math.min(255, Math.max(0, Math.round(n)));
+
+/**
+ * Lamp light landing on a part: `base + lamp x hue`. Multiplying by the hue is what keeps a
+ * material's identity — a white lamp on gold reflects gold, and adding white reflects cream.
+ * @internal exported for test; not part of the public surface.
+ */
+export function litEmissive(base: number, hue: number, light: Vec3): number {
+  const [lr, lg, lb] = light;
+  if (!lr && !lg && !lb) return base;
+  // A non-finite channel contributes nothing rather than blacking the channel out: clamp255(NaN)
+  // is NaN, and NaN << 16 is 0, so the base would vanish on one channel and survive on the others.
+  const ch = (shift: number, l: number): number =>
+    clamp255(((base >> shift) & 0xff) + (Number.isFinite(l) ? l : 0) * ((hue >> shift) & 0xff));
+  return (ch(16, lr) << 16) | (ch(8, lg) << 8) | ch(0, lb);
 }
 
 export function lightBase(look: Look, tint?: number): LightBase {

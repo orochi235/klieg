@@ -1,6 +1,8 @@
 import type { Font, PathCommand } from 'opentype.js';
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { PartInfo, ResolvedOffset } from '../../../src/effects/types.js';
+import type { LetterInfo } from '../../../src/motion/types.js';
 import { WordCaches } from '../../../src/render/caches.js';
 import type { WordBuildContext } from '../../../src/render/decorations/registry.js';
 import { decorationBuilderFor } from '../../../src/render/decorations/registry.js';
@@ -48,18 +50,43 @@ describe('ChunksBuilder', () => {
   });
 
   it('leaves a letter that drew no ink out of the pool without shifting the slots after it', () => {
-    const decoration = specOf('sequin').decoration;
-    const builder = decorationBuilderFor(decoration, wordContext());
+    const builder = decorationBuilderFor(specOf('sequin').decoration, wordContext());
     if (!builder) throw new Error('no builder');
     builder.skipLetter(0);
     builder.buildLetter(1, 'A', new THREE.Group(), undefined);
 
-    expect(builder.lightAt(0)).toBeNull();
-    expect(builder.lightAt(1)).not.toBeNull();
     const parts = builder.collectParts();
     expect(parts).toHaveLength(1);
     expect(parts[0]?.slot).toBe(1);
+
+    // Slot-indexed, not push-packed: letter 1's light has to answer at slot 1 and nothing at 0.
+    const mesh = parts[0]?.mesh as THREE.InstancedMesh;
+    const material = mesh.material as THREE.MeshPhysicalMaterial;
+    builder.writePart(0, mesh, lamplight());
+    const unlit = material.emissive.getHex();
+    builder.writePart(1, mesh, lamplight());
+    expect(material.emissive.getHex()).not.toBe(unlit);
     builder.dispose();
+  });
+
+  // The one leak the visual gate cannot see: a relief look clones the chunk geometry per letter,
+  // and a clone nothing disposes shows up on `sequin` alone.
+  it('disposes every relief clone it made', () => {
+    const decoration = specOf('sequin').decoration;
+    if (decoration?.kind !== 'chunks' || !decoration.relief) {
+      throw new Error('sequin no longer carries relief');
+    }
+    const builder = decorationBuilderFor(decoration, wordContext());
+    if (!builder) throw new Error('no builder');
+    const sized = new THREE.Group();
+    builder.buildLetter(0, 'A', sized, undefined);
+    builder.buildLetter(1, 'A', sized, undefined);
+
+    const clones = sized.children.map((c) => (c as THREE.InstancedMesh).geometry);
+    expect(new Set(clones).size).toBe(2);
+    const spies = clones.map((geometry) => vi.spyOn(geometry, 'dispose'));
+    builder.dispose();
+    for (const spy of spies) expect(spy).toHaveBeenCalled();
   });
 
   // A chunk field covers its whole letter, so it has no box of its own to hand the gradient span.
@@ -121,8 +148,50 @@ function wordContext(): WordBuildContext {
     studioMaterial: () => createMaterial(null),
     glyph: (char, depth) => caches.glyph(font, char, depth),
     leavingAt: () => false,
-    partInfo: (kind, ordinal, of, slot, at, span) =>
-      ({ kind, ordinal, of, slot, at, span }) as never,
-    meshInk: () => 1 as never,
+    partInfo: (kind, index, count, slot, at, span, ink = INK) => ({
+      kind,
+      index,
+      count,
+      letter: letterInfo(slot),
+      x: 0,
+      y: 0,
+      ink,
+      line: 0,
+      column: slot,
+      lineCount: 1,
+      columnCount: 2,
+      at,
+      span,
+    }),
+    meshInk: () => INK,
+  };
+}
+
+const INK: PartInfo['ink'] = { minX: 0, maxX: 0.5, minY: 0, maxY: 0.7 };
+
+function letterInfo(slot: number): LetterInfo {
+  return {
+    char: 'A',
+    index: slot,
+    count: 2,
+    line: 0,
+    column: slot,
+    lineCount: 1,
+    columnCount: 2,
+    x: 0,
+    y: 0,
+  };
+}
+
+/** A white lamp at full strength, which is what makes a lit part distinguishable from an unlit one. */
+function lamplight(): ResolvedOffset {
+  return {
+    gain: 1,
+    dark: 0,
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scale: 1,
+    crawl: 0,
+    light: [1, 1, 1],
   };
 }

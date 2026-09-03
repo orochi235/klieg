@@ -1,8 +1,9 @@
 import * as THREE from 'three';
+import type { ResolvedOffset } from '../../effects/types.js';
 import { DEFAULT_GLYPH_OPTIONS, GlyphCache } from '../../text/glyphs.js';
 import {
-  type Blueprint,
   buildChunkBlueprint,
+  type ChunkBlueprint,
   type ChunkSpec,
   chunkGeometry,
   chunkGeometrySide,
@@ -16,6 +17,7 @@ import {
   frameOwnedBase,
   type LightBase,
   lightBase,
+  litEmissive,
 } from '../looks.js';
 import { CHUNK_SHADE_ATTRIBUTE, shadeByInstance } from '../shade.js';
 import type { DecorationBuilder, DecorationPart, WordBuildContext } from './registry.js';
@@ -23,14 +25,16 @@ import type { DecorationBuilder, DecorationPart, WordBuildContext } from './regi
 /** A letter's chunks as one instanced draw, scattered over its glyph's own surface. */
 export class ChunksBuilder implements DecorationBuilder {
   private readonly base: FrameOwnedBase;
-  private readonly geo: THREE.BufferGeometry;
-  /** Per-letter clones of `geo`, one per field carrying its own shade attribute. */
-  private readonly geos: THREE.BufferGeometry[] = [];
-  private readonly cache: GlyphCache<Blueprint> | null;
+  /** The one chunk every field draws, shared across letters unless the look sets `relief`. */
+  private readonly sharedGeometry: THREE.BufferGeometry;
+  /** Every clone made for a relief field, so each can be disposed. Not indexed by letter. */
+  private readonly reliefClones: THREE.BufferGeometry[] = [];
+  private readonly cache: GlyphCache<ChunkBlueprint> | null;
   /** A letter's whole chunk field as one instanced draw; indexed by letter slot. */
   private readonly meshes: (THREE.InstancedMesh | null)[] = [];
   /** The emissive and hue a chunk field's lamp light resolves against; indexed by letter slot. */
   private readonly lights: (LightBase | null)[] = [];
+  /** A field's own material; indexed by letter slot. */
   private readonly materials: (THREE.MeshPhysicalMaterial | null)[] = [];
 
   constructor(
@@ -38,12 +42,12 @@ export class ChunksBuilder implements DecorationBuilder {
     private readonly ctx: WordBuildContext,
   ) {
     this.base = frameOwnedBase(spec.look);
-    this.geo = chunkGeometry(spec.shape);
+    this.sharedGeometry = chunkGeometry(spec.shape);
     // Bedding places a glyph's chunks by where the glyph sits in the word, so its pool cannot be
     // shared between two letters the way a plain scatter's can.
     this.cache = spec.bedding
       ? null
-      : new GlyphCache<Blueprint>((char, depth) =>
+      : new GlyphCache<ChunkBlueprint>((char, depth) =>
           buildChunkBlueprint(this.ctx.glyph(char, depth), {
             pool: poolFor(spec),
             faceBias: spec.faceBias,
@@ -64,17 +68,14 @@ export class ChunksBuilder implements DecorationBuilder {
     material.emissiveIntensity = this.base.emissiveIntensity;
     this.materials[index] = material;
 
-    const blueprint = this.blueprintFor(char, index);
-    if (blueprint.kind !== 'chunks') return;
-
-    const { matrices, shades } = chunkInstances(blueprint, spec, index);
+    const { matrices, shades } = chunkInstances(this.blueprintFor(char, index), spec, index);
     // An instanced attribute lives on the geometry, and every letter's field is its own, so a
     // relief look cannot share the one chunk geometry the others do.
-    let geometry = this.geo;
+    let geometry = this.sharedGeometry;
     if (spec.relief) {
-      geometry = this.geo.clone();
+      geometry = this.sharedGeometry.clone();
       geometry.setAttribute(CHUNK_SHADE_ATTRIBUTE, new THREE.InstancedBufferAttribute(shades, 1));
-      this.geos.push(geometry);
+      this.reliefClones.push(geometry);
       shadeByInstance(material);
     }
     const instanced = new THREE.InstancedMesh(geometry, material, matrices.length);
@@ -130,22 +131,27 @@ export class ChunksBuilder implements DecorationBuilder {
 
   applyGradientBounds(): void {}
 
-  lightAt(index: number): LightBase | null {
-    return this.lights[index] ?? null;
+  writePart(slot: number, mesh: THREE.Mesh, out: ResolvedOffset): void {
+    const material = mesh.material as THREE.MeshPhysicalMaterial;
+    const light = this.lights[slot];
+    if (light) material.emissive.setHex(litEmissive(light.emissive, light.hue, out.light));
+    material.emissiveIntensity = this.base.emissiveIntensity * out.gain;
   }
 
   dispose(): void {
     for (const material of this.materials) material?.dispose();
     this.materials.length = 0;
+    // The instanced meshes' own buffers are freed by the owning Word's scene traversal; dropping
+    // them here without that traversal leaks an instanceMatrix per letter.
     this.meshes.length = 0;
     this.lights.length = 0;
     this.cache?.dispose();
-    this.geo.dispose();
-    for (const geometry of this.geos) geometry.dispose();
-    this.geos.length = 0;
+    this.sharedGeometry.dispose();
+    for (const geometry of this.reliefClones) geometry.dispose();
+    this.reliefClones.length = 0;
   }
 
-  private blueprintFor(char: string, i: number): Blueprint {
+  private blueprintFor(char: string, i: number): ChunkBlueprint {
     const depth = DEFAULT_GLYPH_OPTIONS.depth;
     if (this.cache) return this.cache.get(char, depth);
     return buildChunkBlueprint(this.ctx.glyph(char, depth), {

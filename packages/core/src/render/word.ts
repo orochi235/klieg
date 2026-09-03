@@ -4,7 +4,7 @@ import type { EffectSpec, FrameCtx, PartInfo, PartKind, ResolvedOffset } from '.
 import { blankPose } from '../motion/compositor.js';
 import type { RegroupResult } from '../motion/sequence.js';
 import type { LetterInfo } from '../motion/types.js';
-import type { Pose, Vec3 } from '../pose.js';
+import type { Pose } from '../pose.js';
 import type { LoadedFont } from '../text/font.js';
 import { DEFAULT_GLYPH_OPTIONS, EM, glyphToShapes } from '../text/glyphs.js';
 import type { Budget, GlyphMetrics } from '../text/layout.js';
@@ -38,6 +38,7 @@ import {
   type Look,
   type LookSpec,
   lightBase,
+  litEmissive,
   specOf,
   tintMaterialOf,
 } from './looks.js';
@@ -73,22 +74,8 @@ function setEmissiveIntensity(material: THREE.Material | null, value: number): v
   }
 }
 
-const clamp255 = (n: number): number => Math.min(255, Math.max(0, Math.round(n)));
-
-/**
- * Lamp light landing on a part: `base + lamp x hue`. Multiplying by the hue is what keeps a
- * material's identity — a white lamp on gold reflects gold, and adding white reflects cream.
- * @internal exported for test; not part of the public surface.
- */
-export function litEmissive(base: number, hue: number, light: Vec3): number {
-  const [lr, lg, lb] = light;
-  if (!lr && !lg && !lb) return base;
-  // A non-finite channel contributes nothing rather than blacking the channel out: clamp255(NaN)
-  // is NaN, and NaN << 16 is 0, so the base would vanish on one channel and survive on the others.
-  const ch = (shift: number, l: number): number =>
-    clamp255(((base >> shift) & 0xff) + (Number.isFinite(l) ? l : 0) * ((hue >> shift) & 0xff));
-  return (ch(16, lr) << 16) | (ch(8, lg) << 8) | ch(0, lb);
-}
+/** @internal exported for test; it lives in looks.ts, beside the `LightBase` it composes with. */
+export { litEmissive };
 
 /**
  * Lab-only diagnostic hooks (see debug.ts). Word owns per-letter layout and the tube pipeline,
@@ -182,6 +169,8 @@ export class Word {
   private readonly partReadsRunColor: boolean[] = [];
   /** Per part, the letter slot it hangs off, so a retired letter's parts can be left alone. */
   private readonly partSlot: number[] = [];
+  /** Where the decoration's own parts start in the pool; they run to its end. */
+  private decorFrom = Number.POSITIVE_INFINITY;
   /** Planned once from the specs; holds the per-frame layer buffers. Null until built. */
   private effectFrame: EffectFrame | null = null;
   /** One scratch colour for the whole word; `writePart` runs per targeted part per frame. */
@@ -366,6 +355,7 @@ export class Word {
       walked += run.length;
     }
 
+    this.decorFrom = this.parts.length;
     for (const part of this.builder?.collectParts() ?? []) {
       this.parts.push(part.info);
       this.partMeshes.push(part.mesh);
@@ -510,14 +500,16 @@ export class Word {
     mesh.rotation.set(...out.rotation);
     mesh.scale.setScalar(out.scale);
 
-    if (part.kind === 'body' || part.kind === 'chunk') {
-      const body = part.kind === 'body';
+    if (index >= this.decorFrom) {
+      this.builder?.writePart(this.partSlot[index] as number, mesh, out);
+      return;
+    }
+
+    if (part.kind === 'body') {
       const material = mesh.material as THREE.MeshPhysicalMaterial;
-      const slot = this.partSlot[index] as number;
-      const light = body ? this.bodyLights[slot] : (this.builder?.lightAt(slot) ?? null);
+      const light = this.bodyLights[this.partSlot[index] as number];
       if (light) material.emissive.setHex(litEmissive(light.emissive, light.hue, out.light));
-      const base = body ? this.bodyBase : this.decorBase;
-      setEmissiveIntensity(material, base.emissiveIntensity * out.gain);
+      setEmissiveIntensity(material, this.bodyBase.emissiveIntensity * out.gain);
       return;
     }
 
@@ -721,8 +713,6 @@ export class Word {
 
       const shapes = glyphToShapes(font.font, char, EM);
       debugShapes = shapes;
-      // A tube's runs need a per-letter seed, so two letters of the same char don't repeat the
-      // same partial-lit pattern — that can't go through a cache keyed on (char, depth) alone.
       // Keyed on the untinted decoration, whose identity is stable across fires; `tintedTube`
       // builds a fresh object every call, so a key on that would never hit.
       const blueprint = this.caches.takeBlueprint(

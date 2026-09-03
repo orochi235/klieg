@@ -80,8 +80,11 @@ highlight every look depends on would quietly go.
 
 A cutter cuts inside a **region**: the glyph inset by a margin, and optionally one surface. The
 margin is the bezel, and it is the only reason the outermost stones do not break the letter's edge.
-Inset is new work — nothing in the tree offsets a contour today, and `surfacesOf` only separates
-front, back and wall.
+
+**A region is a predicate, not a polygon, and it needs no new machinery.** `signedDistanceField` is
+the tube pipeline's own and counts inside as negative, so "at least `bezel` in from every contour"
+is one sample — counters included, because the field already treats them as boundary. Nothing
+offsets a contour. See [the plate cutter](2026-09-03-plate-cutter-design.md).
 
 ## Filling
 
@@ -136,11 +139,15 @@ which is all a hole in a plate needs. **A well costs 1,716 vertices bevelled and
 so the bevel, which is the part that seats the stone, is 84% of the price.
 
 Against a 46,968-vertex baseline for `JACKPOT`, forty stones a letter is 251,160 and eighty is
-457,170: **five to ten times the whole word's geometry today**. That is the number the stone pitch
-has to be chosen against, and it also puts a question to the design that this document should
-answer before the cutter is built: whether the seat is a bevel on the plate at all, or geometry the
-stone brings with it. A stone carrying its own collar cuts the well's cost by six and moves the
-seam from the plate's triangulation to the fill's own mesh, where it is not paid per letter.
+457,170: **five to ten times the whole word's geometry today**.
+
+**Built, that turned out to be 4.5×, and the seat stays on the plate.** A bezel-legal lattice never
+reaches forty wells on a stem, so the count the estimate above assumed is unreachable: an `R` at the
+shipped bezel seats 61 and costs 7,272 vertices to 32,844. The plate's own bevel is also what makes
+an *empty* well read as a setting, so the question this section used to leave open — whether the
+seat is geometry the stone brings instead — is settled for the plate cutter. A stone carrying its
+own collar remains the answer for a CSG cutter, which has no bevel to inherit.
+[The plate cutter](2026-09-03-plate-cutter-design.md) has the measurements.
 
 ## Order
 
@@ -160,3 +167,6 @@ plate half-built.
 **`WordBuildContext.glyph()` answers extruded geometry, and a cutter wants contours.** A cached
 `shapes(char)` beside it would pay three times: `tube.ts` computes `glyphToShapes` per missed
 letter, the debug path recomputes it, and `buildGlyphGeometry` throws one away.
+
+Both are designed in [the plate cutter](2026-09-03-plate-cutter-design.md), with the disposal
+contract `bodyGeometry` needs — it is the reverse of `glyph()`'s, which is the trap.

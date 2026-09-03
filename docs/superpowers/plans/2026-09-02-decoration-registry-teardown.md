@@ -513,20 +513,26 @@ reducible. This task removes them and the last shared per-kind state.
 **Files:**
 - Modify: `packages/core/src/render/word.ts`
 
-- [ ] **Step 1: Confirm what is left**
+- [ ] **Step 1: Delete `decorMaterials` and `decorBase` — both are already dead**
 
-Run: `grep -n "decoration.kind\|decoration?.kind" packages/core/src/render/word.ts`
-Expected: only the `decorMaterials` / `decorBase` seeding remains, if anything. Every hit is a line
-this task deletes or moves.
+Tasks 2 and 3 went further than this step originally assumed. **Do not judge by
+`grep "decoration.kind"` — it returns zero, and the one line it used to catch is now just
+`frameOwnedBase(decoration?.look ?? {})`.** `darkBase` already moved to `TubeBuilder`, and
+`setGradientBounds` no longer reads `decorMaterials`. What is actually left is unreachable code:
 
-- [ ] **Step 2: Move `decorMaterials` and the decoration bases into the builders**
+- `decorMaterials` (`word.ts:108`) — every path now pushes `null` (`word.ts:467`, `word.ts:498`),
+  so the per-frame `if (decor)` at `word.ts:711-714` never fires and the disposal walk at
+  `word.ts:727-728` walks nulls. Delete the field and all four sites.
+- `decorBase` (`word.ts:133`, seeded `word.ts:163`) — feeds only that dead read. Delete it.
+  `bodyBase` stays on `Word`.
 
-`decorMaterials` (`word.ts:176`) is read in two places outside the branches: the per-frame opacity
-write (`word.ts:1065-1069`) and `setGradientBounds` (`word.ts:616`). Both are now builder concerns —
-the first is `frame()`, the second `applyGradientBounds()`. Delete the field and both reads.
+Both builders own their own `FrameOwnedBase` already, so nothing moves; this is pure deletion.
 
-`decorBase` and `darkBase` (frame-owned opacity and emissive intensity) move to the builder that
-owns each. `bodyBase` stays on `Word`.
+- [ ] **Step 2: Fold the redundant body test**
+
+`word.ts:379`'s `if (part.kind === 'body')` is now the only branch below `decorFrom`, and `decorFrom`
+*is* the body/decoration boundary — so the test cannot be false there. Fold it, and the `part` local
+at `word.ts:371` that exists only to ask it goes with the cast.
 
 - [ ] **Step 3: Run the whole check**
 
@@ -580,10 +586,27 @@ interface.
 - [ ] **Step 2: Add a handoff entry**
 
 Under "What is worth doing next", the wells-and-fills entry currently calls the teardown the open
-item. Replace that with what the next person needs: the seam's methods, the two constraints at the
-top of this plan, and the next slice (the plate cutter and regions).
+item. Replace it with what the next person needs. Only what a reader could not get from the code —
+**do not narrate this refactor's process.** Four things qualify:
 
-Only what a reader could not get from the code. **Do not narrate this refactor's process.**
+**The builder contributes geometry; it cannot replace the body.** `Word` builds the body mesh itself
+from `this.glyph(char, depth)` and only ever hands the builder a group to add to. The design's plate
+cutter is subtractive — the plate *replaces* the slab — so it needs a member that does not exist
+(an optional `bodyGeometry(char, depth)`). Purely additive to add, and cheap; the cost is only that
+nothing in the tree says so, and an implementer finds out with a plate half-built.
+
+**`WordBuildContext.glyph()` gives extruded geometry, and a cutter wants contours.** A cached
+`shapes(char)` beside it would pay three times over: `tube.ts` computes `glyphToShapes` per letter,
+the debug path recomputes it, and `buildGlyphGeometry` throws one away. Worth building in the slice
+that needs it, not before.
+
+**`PartKind` is still closed** (`'run' | 'body' | 'chunk'`) and the design moves targeting to
+`{ fill: 'stones' }`. That is a public API change in `effects/types.ts`, deliberately out of this
+slice.
+
+**The one invariant that lives only in a test comment:** both builders' `collectParts()` walk
+"highest index written + 1", which equals the letter count only because `skipLetter` is called for
+every blank letter. The third builder is what gets this wrong.
 
 - [ ] **Step 3: Commit**
 

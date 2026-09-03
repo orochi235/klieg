@@ -104,8 +104,6 @@ export class Word {
   /** Indexed by letter slot, null where the glyph drew no outline. */
   private readonly bodyMaterials: (THREE.MeshPhysicalMaterial | null)[] = [];
   private readonly bodyLights: (LightBase | null)[] = [];
-  /** A debug hook may swap in a non-physical material, so these are typed to the material base. */
-  private readonly decorMaterials: (THREE.Material | null)[] = [];
   /** Indexed by letter slot; a slot whose glyph drew no outline is a hole. */
   private readonly bodyMeshes: (THREE.Mesh | null)[] = [];
   /** The word-wide part pool: body parts, then the decoration's own. */
@@ -128,11 +126,10 @@ export class Word {
   private readonly builder: DecorationBuilder | null;
   private readonly pose = blankPose();
   /**
-   * Frame-owned bases, one per material family. `Word` is the only writer of these properties,
-   * and seeds all of them at construction: a word before its first frame is a word at rest.
+   * The body's frame-owned base. `Word` is its only writer, and seeds it at construction:
+   * a word before its first frame is a word at rest.
    */
   private readonly bodyBase: FrameOwnedBase;
-  private readonly decorBase: FrameOwnedBase;
   private disposed = false;
 
   constructor(
@@ -161,9 +158,7 @@ export class Word {
     this.ownsCaches = !caches;
     this.caches = caches ?? new WordCaches();
 
-    const decoration = spec.decoration;
-    this.decorBase = frameOwnedBase(decoration?.look ?? {});
-    this.builder = decorationBuilderFor(decoration, this);
+    this.builder = decorationBuilderFor(spec.decoration, this);
 
     const runs = styledRunsOf(text, this.family);
     const laid = wrap
@@ -367,7 +362,6 @@ export class Word {
    * other. A decoration's own parts take their colour write from its builder.
    */
   private writePart(index: number, out: ResolvedOffset): void {
-    const part = this.parts[index] as PartInfo;
     const mesh = this.partMeshes[index] as THREE.Mesh;
 
     mesh.position.set(...out.position);
@@ -379,12 +373,10 @@ export class Word {
       return;
     }
 
-    if (part.kind === 'body') {
-      const material = mesh.material as THREE.MeshPhysicalMaterial;
-      const light = this.bodyLights[this.partSlot[index] as number];
-      if (light) material.emissive.setHex(litEmissive(light.emissive, light.hue, out.light));
-      setEmissiveIntensity(material, this.bodyBase.emissiveIntensity * out.gain);
-    }
+    const material = mesh.material as THREE.MeshPhysicalMaterial;
+    const light = this.bodyLights[this.partSlot[index] as number];
+    if (light) material.emissive.setHex(litEmissive(light.emissive, light.hue, out.light));
+    setEmissiveIntensity(material, this.bodyBase.emissiveIntensity * out.gain);
   }
 
   /**
@@ -467,7 +459,6 @@ export class Word {
       this.bodyMaterials.push(null);
       this.bodyLights.push(null);
       this.builder?.skipLetter(i);
-      this.decorMaterials.push(null);
       return;
     }
 
@@ -498,7 +489,6 @@ export class Word {
     this.bodyMeshes[i] = bodyMesh;
     sized.add(bodyMesh);
 
-    this.decorMaterials.push(null);
     this.builder?.buildLetter(i, char, sized, decorTint);
 
     if (debug?.onLetter) {
@@ -711,11 +701,6 @@ export class Word {
         const light = this.bodyLights[i];
         if (light) material.emissive.setHex(light.emissive);
       }
-      const decor = this.decorMaterials[i];
-      if (decor) {
-        decor.opacity = pose.opacity * this.decorBase.opacity;
-        setEmissiveIntensity(decor, this.decorBase.emissiveIntensity);
-      }
       this.builder?.frame(i, pose.opacity);
     }
 
@@ -727,8 +712,6 @@ export class Word {
     for (const material of this.bodyMaterials) material?.dispose();
     this.bodyMaterials.length = 0;
     this.bodyLights.length = 0;
-    for (const material of this.decorMaterials) material?.dispose();
-    this.decorMaterials.length = 0;
     this.envMaterials.length = 0;
     this.parts.length = 0;
     this.partMeshes.length = 0;

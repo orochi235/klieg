@@ -59,17 +59,22 @@ for the reason it already was.
 - [ ] **Step 1: Write the failing test**
 
 ```ts
-import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { decorationBuilderFor } from '../../../src/render/decorations/registry.js';
 import type { WordBuildContext } from '../../../src/render/decorations/registry.js';
+import { decorationBuilderFor } from '../../../src/render/decorations/registry.js';
 
 const ctx = {} as WordBuildContext;
 
 describe('decorationBuilderFor', () => {
-  it('answers a builder for each shipped kind', () => {
-    expect(() => decorationBuilderFor({ kind: 'chunks' } as never, ctx)).not.toThrow(/registered/);
-    expect(() => decorationBuilderFor({ kind: 'tube' } as never, ctx)).not.toThrow(/registered/);
+  it('has a factory registered for each shipped kind', () => {
+    // Until Tasks 2 and 3 land, reaching the factory is the most that can be asserted — it
+    // throws on construction rather than answering a builder.
+    expect(() => decorationBuilderFor({ kind: 'chunks' } as never, ctx)).toThrow(
+      'chunks builder not yet implemented',
+    );
+    expect(() => decorationBuilderFor({ kind: 'tube' } as never, ctx)).toThrow(
+      'tube builder not yet implemented',
+    );
   });
 
   it('answers null for no decoration at all', () => {
@@ -97,14 +102,19 @@ seams the switch currently spans in `word.ts`; each one names the lines it repla
 ```ts
 import type * as THREE from 'three';
 import type { PartInfo } from '../../effects/types.js';
-import type { DecorationSpec } from '../decoration.js';
 import type { LoadedFont } from '../../text/font.js';
 import type { WordCaches } from '../caches.js';
+import type { DecorationSpec } from '../decoration.js';
+import type { LightBase } from '../looks.js';
+// Type-only: word.ts imports this module in Task 2, and a type-only import is erased at
+// compile time, so this creates no runtime cycle.
+import type { WordDebugHooks } from '../word.js';
 
 /** What a builder may reach back into on the `Word` that owns it. */
 export interface WordBuildContext {
   readonly font: LoadedFont;
   readonly caches: WordCaches;
+  readonly debug?: WordDebugHooks;
   /** Letter origins in em, indexed by letter slot. Live for the word's lifetime. */
   readonly baseX: readonly number[];
   readonly baseY: readonly number[];
@@ -150,7 +160,7 @@ export interface DecorationBuilder {
   /** The live letters' union bounds, once known, so a positional gradient can be mapped. */
   applyGradientBounds(word: THREE.Box2): void;
   /** The emissive and hue this letter's lamp light resolves against, or null. */
-  lightAt(index: number): { emissive: number; hue?: number } | null;
+  lightAt(index: number): LightBase | null;
   dispose(): void;
 }
 
@@ -158,8 +168,11 @@ type BuilderFactory = (spec: never, ctx: WordBuildContext) => DecorationBuilder;
 
 const REGISTRY = new Map<string, BuilderFactory>();
 
-export function registerDecoration(kind: string, make: BuilderFactory): void {
-  REGISTRY.set(kind, make);
+export function registerDecoration<K extends DecorationSpec['kind']>(
+  kind: K,
+  make: (spec: Extract<DecorationSpec, { kind: K }>, ctx: WordBuildContext) => DecorationBuilder,
+): void {
+  REGISTRY.set(kind, make as BuilderFactory);
 }
 
 export function decorationBuilderFor(
@@ -317,6 +330,11 @@ This line is deliberately still a `kind` test — Task 3 widens it and Task 4 ch
 `leavingAt` are already private methods with the right shapes. Widen them by dropping `private`
 rather than adding forwarding methods.
 
+**`debug` has to become a field.** `WordBuildContext` carries `debug?: WordDebugHooks`, but `Word`
+currently threads `debug` as a parameter (`word.ts:244` into `word.ts:688`) and stores it nowhere.
+Add `private readonly debug?: WordDebugHooks` and seed it in the constructor. Chunks does not read
+it; Task 3's tube does, and it must be on the context before that builder is written.
+
 Call the builder where the deleted code stood: `buildLetter` in the cell build, `skipLetter` in the
 no-ink early return at `word.ts:696-699`, `collectParts` where the chunk pool was, `frame` in the
 per-frame loop, `dispose` in `dispose()`.
@@ -408,10 +426,10 @@ Move, verbatim, out of `word.ts`:
 `lightAt()` returns `null` — a run's light comes off `partBaseColor` through the run-colour buffer,
 not off a `LightBase`; `word.ts:556` reads a light only for `'chunk'` and `'body'` parts.
 
-The `debug?.tubeMaterial` hook is passed through to the builder — it is how the visual specs swap in
-a flat material to read run colours back. Its two calls (`'lit'`, `'dark'`) keep their meaning, and
-`litReadsRunColor` stays false under an override for the reason the comment at `word.ts:742-744`
-gives.
+The `debug?.tubeMaterial` hook reaches the builder as `ctx.debug` — it is how the visual specs swap
+in a flat material to read run colours back, and Task 2 put it on the context for this. Its two
+calls (`'lit'`, `'dark'`) keep their meaning, and `litReadsRunColor` stays false under an override
+for the reason the comment at `word.ts:742-744` gives.
 
 Replace the placeholder registration with
 

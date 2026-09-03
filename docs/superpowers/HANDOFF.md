@@ -5,11 +5,18 @@ learned that its design doc does not carry, and what is worth doing next.
 
 ## Branch state
 
-**`face-and-side` is pushed and level with `origin/face-and-side`**: the sequin work, the bevel
-chamfer and contour union, flatness sampling, and this document. `git log --oneline @{u}..HEAD` is
-the live answer for anything unpushed — a count written here is false the moment it is committed.
-Every suite is green — `npm run check`, `test:dist`, and 41/41 visual. The wells-and-fills teardown
-is the only open item below, and `klieg-47` holds it in `.claude/worktrees/wells-teardown`.
+**`face-and-side` and `wells-teardown` are both merged into `main`**: the sequin work, the bevel
+chamfer and contour union, flatness sampling, and the decoration registry that replaced `word.ts`'s
+`decoration.kind` switch. `git log --oneline @{u}..HEAD` is the live answer for anything unpushed —
+a count written here is false the moment it is committed. `npm run check` is green on the merge
+(1,606 tests). The visual suite has not had a clean full run *on the merge commit* — the machine has
+been at load 24 and the two runs attempted lost tests to browser starvation, never to a pixel
+comparison. The merge changed no code (`git diff wells-teardown main -- packages/ apps/` is empty)
+and `wells-teardown` itself passed 41/41 three times, so this is a missing measurement rather than a
+suspected regression. **Re-run it when the machine is quiet.** **The next open item is the plate
+cutter**, the first
+wells-and-fills slice that shows anything; see [the decoration registry](#the-decoration-registry)
+for what the seam it builds on can and cannot do.
 
 
 **Host-driven effects are merged.** `fire()` returns a `FireHandle` and takes `onPhase`,
@@ -1291,10 +1298,18 @@ failure set each run, often on `sign.spec.ts` DOM assertions or looks carrying n
 most changes cannot reach. A single worker does not save you: one run here went **38 failed / 3
 passed** at `--workers=1`, and the identical command four minutes later went **41 passed**.
 
-**The runtime is the tell.** That failing run took 1.4 minutes and the passing one 5.7 — a fast
-suite is renderers dying, not work being done. Re-run when the machine is quiet, not merely
-serially. A real regression fails the same test with the same diff every time; a pass is still
-proof, the comparison being byte-exact.
+**Read the error, not the count: did the failure reach a screenshot comparison?** Starvation kills
+the browser or times out the setup, so the failing test never gets as far as comparing an image —
+`Target page, context or browser has been closed`, or `page.addStyleTag: Test timeout of 30000ms
+exceeded`. A pixel regression looks nothing like that: it reports a diff, with a ratio and an
+artifact written under `test-results/`. **No comparison reached means no regression observed**,
+whatever the failure count says.
+
+Runtime is a weak second signal and it misleads on its own — a 10-minute run lost a test at load 21
+while a 1.4-minute run lost 38. Check `uptime`'s 5- and 15-minute averages, not the 1-minute figure,
+and re-run when the machine is quiet rather than merely serially. The tests that die first are the
+slowest ones (`lighting › sweep` does two phases of a turn), so a repeat offender is a symptom of
+load, not evidence of a real fault. A pass is still proof, the comparison being byte-exact.
 
 ## `sequin` is sewn now, and what that cost
 

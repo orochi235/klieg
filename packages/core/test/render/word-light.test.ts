@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { litEmissive } from '../../src/render/word.js';
+import { litEmissive } from '../../src/render/looks.js';
 
 describe('litEmissive', () => {
   it('leaves the base alone when no lamp reached the part', () => {

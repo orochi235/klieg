@@ -74,9 +74,6 @@ function setEmissiveIntensity(material: THREE.Material | null, value: number): v
   }
 }
 
-/** @internal exported for test; it lives in looks.ts, beside the `LightBase` it composes with. */
-export { litEmissive };
-
 /**
  * Lab-only diagnostic hooks (see debug.ts). Word owns per-letter layout and the tube pipeline,
  * so a debug view has to plug in here rather than re-deriving either outside core. `createKlieg`

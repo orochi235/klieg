@@ -567,9 +567,11 @@ working — it needs a caller-supplied `TubeSpec.gradient`.
 
 ## What is worth doing next
 
-**Open right now: the wells-and-fills teardown, and nothing else on this list.** The overnight of
-2026-09-02 closed the degenerate capitals, the face-versus-side separation, the sequin density and
-the serif-tuning question, and two later commits closed the bevel spur and the overlapping contours
+**Open right now: the plate cutter, the first slice that shows anything.** The wells-and-fills
+teardown that used to stand here is built — see [the decoration registry](#the-decoration-registry)
+below. The overnight of 2026-09-02 closed the degenerate capitals, the face-versus-side separation,
+the sequin density and the serif-tuning question, and two later commits closed the bevel spur and
+the overlapping contours
 ([above](#the-bevel-stopped-standing-off-the-outline-and-the-strokes-were-merged)); the entries below
 are what each of them learned, kept because the next person to ask will ask the same thing. Inflation
 is prototyped and its mesher is the one design decision still open.
@@ -630,11 +632,10 @@ Roughly in order of value; the items are independent of each other.
   letter is a solid volume, and the pipeline carves recesses into it rather than laying decorations
   on it — what makes a stone read as set is the seat, which nothing additive produces, and the frame
   becomes whatever metal the cutting left standing rather than a spec of its own. A hole in a plate
-  stacked on a slab is a well, so the first cutter needs no CSG. Cutters and fills are both
-  registered, which is what removes the `decoration.kind` switch spread through `word.ts` — that
-  teardown is the first slice, buys nothing visible, and has every baseline unmoved as its
-  acceptance. Diamond encrustation is the worked feature. Shipped looks stay on their current path;
-  re-expressing `tubing`, `piping` and `sequin` as fills moves baselines and is its own slice, last.
+  stacked on a slab is a well, so the first cutter needs no CSG. Diamond encrustation is the worked
+  feature. **The teardown slice is done** — see the entry below. Shipped looks stay on their current
+  path; re-expressing `tubing`, `piping` and `sequin` as fills moves baselines and is its own slice,
+  last.
 
 - ~~**Selectable text**~~ — built and merged into `main`.
 
@@ -1248,6 +1249,52 @@ reads 76.6% at 520 and 96.1% at 1040 — it measures the default face, which the
 so the shipped density is untouched. What is now different is that firing `sequin` on Cinzel samples
 a letter with 13.6% less surplus cap surface than it did, which nobody has tuned for and nobody has
 needed to.
+
+## The decoration registry
+
+A decoration kind now registers a `DecorationBuilder` (`render/decorations/registry.ts`) rather than
+being named in `word.ts`. The builder owns its per-letter geometry and materials, the parts it
+contributes to effect targeting, its per-frame and per-part writes, and its disposal; `tube.ts` and
+`chunks.ts` are the two implementations. `word.ts` went **1,127 lines to 733** and has no
+`decoration.kind` branch left. One tube-specific thing does remain there: `WordDebugHooks`
+carries a `tubeMaterial` hook, which reaches a builder as `ctx.debug` — a new kind wanting to
+override its own material will widen that interface.
+[The plan](plans/2026-09-02-decoration-registry-teardown.md) has the task-by-task detail, and the
+[design](specs/2026-09-01-wells-and-fills-design.md) says what it is for.
+
+Four things the code does not say.
+
+**A builder adds geometry to a letter's group; it cannot replace the body.** `Word` builds the body
+mesh itself and hands the builder a group to add to. The plate cutter — the next slice — replaces
+the slab rather than adding to it, so it needs a member that does not exist yet (an optional
+`bodyGeometry(char, depth)`). Purely additive to add; the cost of not knowing is finding out with a
+plate half-built. Relatedly, `WordBuildContext.glyph()` answers extruded geometry and a cutter wants
+contours, so a cached `shapes(char)` beside it is worth building in the slice that needs it.
+
+**`PartKind` is still closed** — `'run' | 'body' | 'chunk'` in `effects/types.ts`, and public, since
+effect specs target parts by it. The design moves targeting to `{ fill: 'stones' }`; that is a
+public API change nobody has made, and it was deliberately kept out of the teardown.
+
+**`collectParts()` walks "highest index written + 1", not the letter count.** Those are equal only
+because `skipLetter` is called for every letter that drew no ink. Both builders assign per-letter
+state by index rather than pushing, so a missed slot leaves a hole instead of shifting everything
+after it. `skipLetter`'s docstring states the requirement; what it cannot state is that a builder
+holding several arrays has to satisfy it in all of them, which is what the third builder gets wrong.
+Test slot alignment with one assertion **per array**, keyed on something the arrays would
+disagree about: a single assertion on the mesh array stays green while a different array is the one
+that slipped, which lands one letter's material state on its neighbour.
+
+**The visual suite lies under load, and `--workers=1` is not the remedy.** Above a load average of
+roughly 20 the renderers get starved and killed: `page.addStyleTag` "Execution context was
+destroyed", 30s/60s timeouts, "Target page, context or browser has been closed" — and a *different*
+failure set each run, often on `sign.spec.ts` DOM assertions or looks carrying no decoration, which
+most changes cannot reach. A single worker does not save you: one run here went **38 failed / 3
+passed** at `--workers=1`, and the identical command four minutes later went **41 passed**.
+
+**The runtime is the tell.** That failing run took 1.4 minutes and the passing one 5.7 — a fast
+suite is renderers dying, not work being done. Re-run when the machine is quiet, not merely
+serially. A real regression fails the same test with the same diff every time; a pass is still
+proof, the comparison being byte-exact.
 
 ## `sequin` is sewn now, and what that cost
 

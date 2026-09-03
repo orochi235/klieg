@@ -183,3 +183,13 @@ export function patchForFlakes(shader: PatchableShader, uniforms: FlakeUniforms)
     .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>${PERTURB}`)
     .replace('#include <color_fragment>', `#include <color_fragment>${TINT}`);
 }
+
+/**
+ * Offsets a material's flake field so repeated letters do not sparkle in lockstep. Every material
+ * a letter owns takes the same offset — body, tube and chunk alike — so a decoration whose look
+ * carries a flake spec breaks up along with the body it sits on.
+ */
+export function seedFlake(material: THREE.Material, i: number): void {
+  const flake = material.userData.flake as FlakeUniforms | undefined;
+  if (flake) flake.uFlakeSeed.value = i * 17.13;
+}

@@ -4,9 +4,9 @@ import type { EffectSpec, FrameCtx, PartInfo, PartKind, ResolvedOffset } from '.
 import { blankPose } from '../motion/compositor.js';
 import type { RegroupResult } from '../motion/sequence.js';
 import type { LetterInfo } from '../motion/types.js';
-import type { Pose, Vec3 } from '../pose.js';
+import type { Pose } from '../pose.js';
 import type { LoadedFont } from '../text/font.js';
-import { DEFAULT_GLYPH_OPTIONS, EM, GlyphCache, glyphToShapes } from '../text/glyphs.js';
+import { DEFAULT_GLYPH_OPTIONS, EM, glyphToShapes } from '../text/glyphs.js';
 import type { Budget, GlyphMetrics } from '../text/layout.js';
 import { LINE_HEIGHT_EM, layoutRunsForKlieg, UNBOUNDED, wrapRuns } from '../text/layout.js';
 import {
@@ -20,20 +20,9 @@ import {
 import { styledRunsOf, type TextRun } from '../text/runs.js';
 import type { Transform } from '../transform.js';
 import { WordCaches } from './caches.js';
-import {
-  type Blueprint,
-  buildChunkBlueprint,
-  buildTubeBlueprint,
-  type ChunkSpec,
-  chunkGeometry,
-  chunkGeometrySide,
-  chunkInstances,
-  type DecorationSpec,
-  poolFor,
-  type TubeBlueprint,
-  type TubeSpec,
-} from './decoration.js';
-import type { FlakeUniforms } from './flake.js';
+import type { DecorationBuilder, DecorationPart } from './decorations/registry.js';
+import { decorationBuilderFor } from './decorations/registry.js';
+import { seedFlake } from './flake.js';
 import {
   applyLook,
   createMaterial,
@@ -43,73 +32,16 @@ import {
   type Look,
   type LookSpec,
   lightBase,
+  litEmissive,
+  setEmissiveIntensity,
   specOf,
   tintMaterialOf,
 } from './looks.js';
-import { CHUNK_SHADE_ATTRIBUTE, shadeByInstance } from './shade.js';
-import { CRAWL_ATTRIBUTE, rampTexture } from './tube/gradient.js';
-import {
-  GRADIENT_BOUNDS_UNIFORM,
-  GRADIENT_ORIGIN_UNIFORM,
-  positionalDomain,
-  RUN_COLOR_ATTRIBUTE,
-  tintByRunColor,
-  tintChannelOf,
-} from './tube/tint.js';
 
 /**
- * A tube look carries its colour on the per-vertex run attribute, not on the material: the material
- * channel is set to white so the attribute multiplies out exactly. So a tint written to the
- * material is erased before the first frame, and a tint has to reach the palette the runs are
- * dealt from instead. `surfaceColors` is dropped with it — it would out-rank the palette and take
- * the tint back out.
- */
-function tintedTube(spec: TubeSpec, tint?: number): TubeSpec {
-  if (tint === undefined) return spec;
-  return { ...spec, colors: [tint], surfaceColors: undefined };
-}
-
-/**
- * Offsets a material's flake field so repeated letters do not sparkle in lockstep. Every material
- * a letter owns takes the same offset — body, tube and chunk alike — so a decoration whose look
- * carries a flake spec breaks up along with the body it sits on.
- */
-function seedFlake(material: THREE.Material, i: number): void {
-  const flake = material.userData.flake as FlakeUniforms | undefined;
-  if (flake) flake.uFlakeSeed.value = i * 17.13;
-}
-
-/**
- * The decor and dark families write their emissive through here, at construction and per frame
- * alike: those arrays are typed to the base class so a debug override can supply one without it.
- */
-function setEmissiveIntensity(material: THREE.Material | null, value: number): void {
-  if (material && 'emissiveIntensity' in material) {
-    (material as THREE.MeshPhysicalMaterial).emissiveIntensity = value;
-  }
-}
-
-const clamp255 = (n: number): number => Math.min(255, Math.max(0, Math.round(n)));
-
-/**
- * Lamp light landing on a part: `base + lamp x hue`. Multiplying by the hue is what keeps a
- * material's identity — a white lamp on gold reflects gold, and adding white reflects cream.
- * @internal exported for test; not part of the public surface.
- */
-export function litEmissive(base: number, hue: number, light: Vec3): number {
-  const [lr, lg, lb] = light;
-  if (!lr && !lg && !lb) return base;
-  // A non-finite channel contributes nothing rather than blacking the channel out: clamp255(NaN)
-  // is NaN, and NaN << 16 is 0, so the base would vanish on one channel and survive on the others.
-  const ch = (shift: number, l: number): number =>
-    clamp255(((base >> shift) & 0xff) + (Number.isFinite(l) ? l : 0) * ((hue >> shift) & 0xff));
-  return (ch(16, lr) << 16) | (ch(8, lg) << 8) | ch(0, lb);
-}
-
-/**
- * Lab-only diagnostic hooks (see debug.ts). Word owns per-letter layout and the tube pipeline,
- * so a debug view has to plug in here rather than re-deriving either outside core. `createKlieg`
- * never supplies one, so every real caller is unaffected.
+ * Lab-only diagnostic hooks (see debug.ts). `Word` owns per-letter layout and holds the decoration
+ * builder these reach, so a debug view plugs in here rather than re-deriving either outside core.
+ * `createKlieg` never supplies one, so every real caller is unaffected.
  */
 export interface WordDebugHooks {
   /** Overrides a tube decoration's lit or dark run material; undefined keeps the normal one. */
@@ -136,9 +68,9 @@ export class Word {
   /** null where the glyph drew no outline (space, U+00A0, ZWJ); the slot still holds its index. */
   private readonly letters: (THREE.Group | null)[] = [];
   /** Layout x per letter. Pose x is an OFFSET onto this — overwriting it collapses the word. */
-  private readonly baseX: number[] = [];
+  readonly baseX: number[] = [];
   /** Layout y per letter, for the same reason: pose y adds onto it, or the lines stack up. */
-  private readonly baseY: number[] = [];
+  readonly baseY: number[] = [];
   private readonly lineOf: number[] = [];
   private readonly columnOf: number[] = [];
   /** Every glyph's character, so a regroup can lay the survivors out again. */
@@ -172,66 +104,32 @@ export class Word {
   /** Indexed by letter slot, null where the glyph drew no outline. */
   private readonly bodyMaterials: (THREE.MeshPhysicalMaterial | null)[] = [];
   private readonly bodyLights: (LightBase | null)[] = [];
-  /** A debug hook may swap in a non-physical material, so these are typed to the material base. */
-  private readonly decorMaterials: (THREE.Material | null)[] = [];
-  /** A tube decoration's unlit-run material, one per letter; null for every non-tube letter. */
-  private readonly darkMaterials: (THREE.Material | null)[] = [];
   /** Indexed by letter slot; a slot whose glyph drew no outline is a hole. */
   private readonly bodyMeshes: (THREE.Mesh | null)[] = [];
-  /** A letter's whole chunk field as one instanced draw; indexed by letter slot. */
-  private readonly chunkMeshes: (THREE.InstancedMesh | null)[] = [];
-  /** The emissive and hue a chunk field's lamp light resolves against; indexed by letter slot. */
-  private readonly chunkLights: (LightBase | null)[] = [];
-  /** A tube letter's lit-run meshes in blueprint order; indexed by letter slot. */
-  private readonly litMeshes: THREE.Mesh[][] = [];
-  /**
-   * Whether a letter's lit-run material reads the run-colour attribute. A debug override brings
-   * its own material and no such contract, so writing that buffer would write into nothing.
-   */
-  private readonly litReadsRunColor: boolean[] = [];
-  /** The word-wide part pool: body parts, then run parts, then chunk parts. */
+  /** The word-wide part pool: body parts, then the decoration's own. */
   private readonly parts: PartInfo[] = [];
   private readonly partMeshes: THREE.Mesh[] = [];
-  /**
-   * A run part's own colour, so an effect composes from the base rather than from last frame. A
-   * body part gets white, which nothing reads: white is a tint's identity, so a later reader that
-   * does read it gets the body untinted rather than black.
-   */
-  private readonly partBaseColor: number[] = [];
-  /** Per part, whether `writePart` may drive it through the run-colour buffer. */
-  private readonly partReadsRunColor: boolean[] = [];
   /** Per part, the letter slot it hangs off, so a retired letter's parts can be left alone. */
   private readonly partSlot: number[] = [];
+  /** The decoration's own parts as its builder handed them over, offset by `decorFrom`. */
+  private readonly decorParts: DecorationPart[] = [];
+  /** Where the decoration's own parts start in the pool; they run to its end. */
+  private decorFrom = Number.POSITIVE_INFINITY;
   /** Planned once from the specs; holds the per-frame layer buffers. Null until built. */
   private effectFrame: EffectFrame | null = null;
-  /** One scratch colour for the whole word; `writePart` runs per targeted part per frame. */
-  private readonly partColor = new THREE.Color();
-  private readonly font: LoadedFont;
-  private readonly caches: WordCaches;
+  readonly font: LoadedFont;
+  readonly caches: WordCaches;
+  readonly debug?: WordDebugHooks;
   /** Set only where this word made its own caches, and so is the one that disposes them. */
   private readonly ownsCaches: boolean;
-  private readonly decorCache: GlyphCache<Blueprint> | null;
-  /**
-   * Tube blueprints, one per letter — a per-letter seed can't go through the char-keyed cache.
-   * Indexed by letter slot, so a hole is a letter that grew no tube.
-   */
-  private readonly tubeBlueprints: (TubeBlueprint | undefined)[] = [];
-  /** Per-letter run bounds in the letter's own 1 em space; null where the glyph drew nothing. */
-  private readonly tubeBounds: (THREE.Box2 | null)[] = [];
-  /** One ramp for the whole word: every letter's tint samples the same stops. */
-  private readonly gradientRamp: THREE.DataTexture | null;
-  private readonly chunkGeo: THREE.BufferGeometry | null;
-  /** Per-letter clones of `chunkGeo`, one per field carrying its own shade attribute. */
-  private readonly chunkGeos: THREE.BufferGeometry[] = [];
+  /** The decoration's own builder, or null where the look carries no decoration. */
+  private readonly builder: DecorationBuilder | null;
   private readonly pose = blankPose();
   /**
-   * Frame-owned bases, one per material family. `Word` is the only writer of these properties,
-   * and seeds all of them at construction: a word before its first frame is a word at rest.
+   * The body's frame-owned base. `Word` is its only writer, and seeds it at construction:
+   * a word before its first frame is a word at rest.
    */
   private readonly bodyBase: FrameOwnedBase;
-  private readonly decorBase: FrameOwnedBase;
-  /** Base of a tube's unlit runs; irrelevant to every other decoration kind. */
-  private readonly darkBase: FrameOwnedBase;
   private disposed = false;
 
   constructor(
@@ -256,30 +154,11 @@ export class Word {
     this.bodyBase = frameOwnedBase(spec);
 
     this.font = font;
+    this.debug = debug;
     this.ownsCaches = !caches;
     this.caches = caches ?? new WordCaches();
 
-    const decoration = spec.decoration;
-    this.decorBase = frameOwnedBase(decoration?.look ?? {});
-    this.darkBase = frameOwnedBase(decoration?.kind === 'tube' ? decoration.dark : {});
-    this.chunkGeo = decoration?.kind === 'chunks' ? chunkGeometry(decoration.shape) : null;
-    this.gradientRamp =
-      decoration?.kind === 'tube' && decoration.gradient
-        ? rampTexture(decoration.gradient.stops)
-        : null;
-    // A tube's runs need a per-letter seed, so two letters of the same char don't repeat the
-    // same partial-lit pattern — that can't go through a cache keyed on (char, depth) alone.
-    // Bedding places a glyph's chunks by where the glyph sits in the word, so its pool cannot be
-    // shared between two letters the way a plain scatter's can.
-    this.decorCache =
-      decoration && decoration.kind === 'chunks' && !decoration.bedding
-        ? new GlyphCache<Blueprint>((char, depth) =>
-            buildChunkBlueprint(this.glyph(char, depth), {
-              pool: poolFor(decoration),
-              faceBias: decoration.faceBias,
-            }),
-          )
-        : null;
+    this.builder = decorationBuilderFor(spec.decoration, this);
 
     const runs = styledRunsOf(text, this.family);
     const laid = wrap
@@ -317,7 +196,7 @@ export class Word {
     this.applyFit(this.fit);
 
     for (let i = 0; i < this.charOf.length; i++) {
-      this.buildCell(i, font, look, spec, decoration, tint, debug);
+      this.buildCell(i, font, look, spec, tint, debug);
     }
     this.setGradientBounds();
     this.buildParts();
@@ -344,73 +223,15 @@ export class Word {
         this.partInfo('body', n, bodies.length, i, n / bodies.length, 1 / bodies.length),
       );
       this.partMeshes.push(this.bodyMeshes[i] as THREE.Mesh);
-      this.partBaseColor.push(0xffffff);
-      this.partReadsRunColor.push(false);
       this.partSlot.push(i);
     }
 
-    const runs: {
-      slot: number;
-      mesh: THREE.Mesh;
-      length: number;
-      color: number;
-      tinted: boolean;
-    }[] = [];
-    for (let i = 0; i < this.charOf.length; i++) {
-      const blueprint = this.tubeBlueprints[i];
-      const meshes = this.litMeshes[i];
-      if (!blueprint || !meshes) continue;
-      const lit = blueprint.runs.filter((r) => r.lit);
-      // Paired by ordinal, which only holds while every lit run swept a geometry: one missing
-      // shifts every later pair, and each effect then lands on a tube it never targeted.
-      if (meshes.length !== lit.length) {
-        throw new Error(
-          `tube blueprint ${i}: ${meshes.length} lit meshes for ${lit.length} lit runs`,
-        );
-      }
-      for (let r = 0; r < meshes.length; r++) {
-        const run = lit[r] as (typeof lit)[number];
-        runs.push({
-          slot: i,
-          mesh: meshes[r] as THREE.Mesh,
-          length: run.length,
-          color: run.color,
-          tinted: this.litReadsRunColor[i] === true,
-        });
-      }
-    }
-
-    // Arc length, not ordinal: runs differ in length by an order of magnitude, and an ordinal
-    // share would put a chase's dwell somewhere other than where the glass is.
-    const total = runs.reduce((a, r) => a + r.length, 0);
-    let walked = 0;
-    for (let n = 0; n < runs.length; n++) {
-      const run = runs[n] as (typeof runs)[number];
-      const at = total > 0 ? walked / total : n / runs.length;
-      const span = total > 0 ? run.length / total : 1 / runs.length;
-      this.parts.push(
-        this.partInfo('run', n, runs.length, run.slot, at, span, this.meshInk(run.slot, run.mesh)),
-      );
-      this.partMeshes.push(run.mesh);
-      this.partBaseColor.push(run.color);
-      this.partReadsRunColor.push(run.tinted);
-      this.partSlot.push(run.slot);
-      walked += run.length;
-    }
-
-    const fields: number[] = [];
-    for (let i = 0; i < this.charOf.length; i++) {
-      if (this.chunkMeshes[i]) fields.push(i);
-    }
-    for (let n = 0; n < fields.length; n++) {
-      const i = fields[n] as number;
-      this.parts.push(
-        this.partInfo('chunk', n, fields.length, i, n / fields.length, 1 / fields.length),
-      );
-      this.partMeshes.push(this.chunkMeshes[i] as THREE.InstancedMesh);
-      this.partBaseColor.push(0xffffff);
-      this.partReadsRunColor.push(false);
-      this.partSlot.push(i);
+    this.decorFrom = this.parts.length;
+    for (const part of this.builder?.collectParts() ?? []) {
+      this.parts.push(part.info);
+      this.partMeshes.push(part.mesh);
+      this.partSlot.push(part.slot);
+      this.decorParts.push(part);
     }
   }
 
@@ -418,7 +239,7 @@ export class Word {
    * A part carries its letter's grid position: `orderKey` reads `column` to decide whether a
    * radial stagger is even possible, and a part without one silently falls back to reading order.
    */
-  private partInfo(
+  partInfo(
     kind: PartKind,
     index: number,
     count: number,
@@ -449,7 +270,7 @@ export class Word {
    * letter-local space the glyph geometry is, and carry no position of their own, so the letter's
    * origin places them the same way. Unlike the glyph's box this includes the tube's radius.
    */
-  private meshInk(slot: number, mesh: THREE.Mesh): PartInfo['ink'] {
+  meshInk(slot: number, mesh: THREE.Mesh): PartInfo['ink'] {
     const geo = mesh.geometry;
     if (!geo.boundingBox) geo.computeBoundingBox();
     const box = geo.boundingBox;
@@ -538,58 +359,24 @@ export class Word {
   /**
    * A part's own share of its family's material. Transform lands on the mesh, which is a child of
    * the letter cell the pose drives, so the two compose without either having to know about the
-   * other. Colour composes from `partBaseColor`, never from the buffer: reading back last frame's
-   * value and scaling it again compounds, and the sign fades to black in a few seconds.
+   * other. A decoration's own parts take their colour write from its builder.
    */
   private writePart(index: number, out: ResolvedOffset): void {
-    const part = this.parts[index] as PartInfo;
     const mesh = this.partMeshes[index] as THREE.Mesh;
 
     mesh.position.set(...out.position);
     mesh.rotation.set(...out.rotation);
     mesh.scale.setScalar(out.scale);
 
-    if (part.kind === 'body' || part.kind === 'chunk') {
-      const body = part.kind === 'body';
-      const material = mesh.material as THREE.MeshPhysicalMaterial;
-      const slot = this.partSlot[index] as number;
-      const light = body ? this.bodyLights[slot] : this.chunkLights[slot];
-      if (light) material.emissive.setHex(litEmissive(light.emissive, light.hue, out.light));
-      const base = body ? this.bodyBase : this.decorBase;
-      setEmissiveIntensity(material, base.emissiveIntensity * out.gain);
+    if (index >= this.decorFrom) {
+      this.builder?.writePart(this.decorParts[index - this.decorFrom] as DecorationPart, out);
       return;
     }
 
-    // A run carries its colour on a per-vertex attribute the look's shader already reads, so gain
-    // and colour are one buffer write rather than a material of this run's own.
-    if (!this.partReadsRunColor[index]) return;
-    const attribute = mesh.geometry.getAttribute(RUN_COLOR_ATTRIBUTE) as
-      | THREE.BufferAttribute
-      | undefined;
-    if (!attribute) return;
-    const base = this.partBaseColor[index] as number;
-    // Hue and emissive are the same colour here: a lamp on a run tints by what the run is showing,
-    // so a `hue` piece sweeping the base takes the lit pool with it.
-    const shown = out.color ?? base;
-    const color = this.partColor
-      .setHex(litEmissive(shown, shown, out.light))
-      .multiplyScalar(out.gain);
-    const array = attribute.array as Float32Array;
-    for (let v = 0; v < array.length; v += 3) {
-      array[v] = color.r;
-      array[v + 1] = color.g;
-      array[v + 2] = color.b;
-    }
-    attribute.needsUpdate = true;
-
-    // Only present when the look declared a gradient; without a ramp there is nothing to shift.
-    const crawl = mesh.geometry.getAttribute(CRAWL_ATTRIBUTE) as THREE.BufferAttribute | undefined;
-    if (!crawl) return;
-    const shift = out.crawl;
-    const buffer = crawl.array as Float32Array;
-    if (buffer[0] === shift) return;
-    buffer.fill(shift);
-    crawl.needsUpdate = true;
+    const material = mesh.material as THREE.MeshPhysicalMaterial;
+    const light = this.bodyLights[this.partSlot[index] as number];
+    if (light) material.emissive.setHex(litEmissive(light.emissive, light.hue, out.light));
+    setEmissiveIntensity(material, this.bodyBase.emissiveIntensity * out.gain);
   }
 
   /**
@@ -601,34 +388,25 @@ export class Word {
    * standing at, so it reads the ramp where it sits while its exit plays.
    */
   private setGradientBounds(): void {
+    const builder = this.builder;
+    if (!builder) return;
     const word = new THREE.Box2();
     const at = new THREE.Vector2();
-    for (let i = 0; i < this.tubeBounds.length; i++) {
-      const box = this.tubeBounds[i];
+    for (let i = 0; i < this.charOf.length; i++) {
+      const box = builder.boundsAt(i);
       if (!box || this.leavingAt(i)) continue;
       const dx = this.baseX[i] as number;
       const dy = this.baseY[i] as number;
       word.expandByPoint(at.set(box.min.x + dx, box.min.y + dy));
       word.expandByPoint(at.set(box.max.x + dx, box.max.y + dy));
     }
+    // An empty box is min +Infinity / max -Infinity, and handing that to the shader's bounds
+    // turns every positional gradient NaN.
     if (word.isEmpty()) return;
-
-    for (let i = 0; i < this.decorMaterials.length; i++) {
-      const data = this.decorMaterials[i]?.userData;
-      const bounds = data?.[GRADIENT_BOUNDS_UNIFORM];
-      const origin = data?.[GRADIENT_ORIGIN_UNIFORM];
-      // Set, never reassigned: the shader patch aliases these very objects into its uniforms at
-      // compile time, so a fresh one would leave a compiled letter on the pre-regroup mapping.
-      if (bounds instanceof THREE.Vector4) {
-        bounds.set(word.min.x, word.min.y, word.max.x, word.max.y);
-      }
-      if (origin instanceof THREE.Vector2) {
-        origin.set(this.baseX[i] as number, this.baseY[i] as number);
-      }
-    }
+    builder.applyGradientBounds(word);
   }
 
-  private glyph(char: string, depth: number): THREE.ExtrudeGeometry {
+  glyph(char: string, depth: number): THREE.ExtrudeGeometry {
     return this.caches.glyph(this.font, char, depth);
   }
 
@@ -640,18 +418,6 @@ export class Word {
 
   private drawsInk(char: string): boolean {
     return !!this.glyph(char, DEFAULT_GLYPH_OPTIONS.depth).attributes.position?.count;
-  }
-
-  private chunkBlueprintFor(char: string, i: number, spec: ChunkSpec): Blueprint {
-    const depth = DEFAULT_GLYPH_OPTIONS.depth;
-    if (this.decorCache) return this.decorCache.get(char, depth);
-    return buildChunkBlueprint(this.glyph(char, depth), {
-      pool: poolFor(spec),
-      faceBias: spec.faceBias,
-      bedding: spec.bedding,
-      originX: this.baseX[i] as number,
-      originY: this.baseY[i] as number,
-    });
   }
 
   /** Every glyph's bounds, or just those `pick` names, in the order a regroup re-lays them. */
@@ -672,7 +438,7 @@ export class Word {
   }
 
   /** A material carrying the studio, listed so `setEnvRotation` can turn every one of them. */
-  private studioMaterial(): THREE.MeshPhysicalMaterial {
+  studioMaterial(): THREE.MeshPhysicalMaterial {
     const material = createMaterial(this.envMap);
     this.envMaterials.push(material);
     return material;
@@ -683,7 +449,6 @@ export class Word {
     font: LoadedFont,
     look: Look,
     spec: LookSpec,
-    decoration: DecorationSpec | undefined,
     tint: number | ((letter: LetterInfo) => number | undefined) | undefined,
     debug: WordDebugHooks | undefined,
   ): void {
@@ -693,10 +458,7 @@ export class Word {
       this.letters.push(null);
       this.bodyMaterials.push(null);
       this.bodyLights.push(null);
-      this.chunkLights.push(null);
-      this.decorMaterials.push(null);
-      this.darkMaterials.push(null);
-      this.tubeBounds.push(null);
+      this.builder?.skipLetter(i);
       return;
     }
 
@@ -716,9 +478,6 @@ export class Word {
     this.bodyMaterials.push(material);
     this.bodyLights.push(lightBase(look, bodyTint));
     const decorTint = tintMaterialOf(spec) === 'decoration' ? hue : undefined;
-    this.chunkLights.push(
-      decoration?.kind === 'chunks' ? lightBase(decoration.look, decorTint) : null,
-    );
 
     const cell = new THREE.Group();
     // A run's size sits below the cell: the pose overwrites `cell.scale` every frame, and
@@ -730,130 +489,10 @@ export class Word {
     this.bodyMeshes[i] = bodyMesh;
     sized.add(bodyMesh);
 
-    let debugShapes: THREE.Shape[] | undefined;
-
-    if (decoration && decoration.kind === 'tube') {
-      const litOverride = debug?.tubeMaterial?.('lit');
-      const decorMaterial = litOverride ?? this.studioMaterial();
-      if (!litOverride) {
-        applyLook(decorMaterial as THREE.MeshPhysicalMaterial, decoration.look, decorTint);
-      }
-      this.litReadsRunColor[i] = !litOverride;
-      // Only when the look was applied: an override brings its own material and its own meaning
-      // for every channel, and has no run-colour contract with us.
-      if (!litOverride) {
-        tintByRunColor(
-          decorMaterial,
-          tintChannelOf(decoration.look),
-          decoration.gradient,
-          this.gradientRamp ?? undefined,
-          decoration.look.rim,
-        );
-        if (decoration.gradient && positionalDomain(decoration.gradient)) {
-          decorMaterial.userData[GRADIENT_BOUNDS_UNIFORM] = new THREE.Vector4(0, 0, 1, 1);
-          decorMaterial.userData[GRADIENT_ORIGIN_UNIFORM] = new THREE.Vector2(0, 0);
-        }
-      }
-      decorMaterial.transparent = true;
-      // A yawed or curved tube can turn its inside surface toward the camera; FrontSide
-      // would cull that invisible.
-      decorMaterial.side = THREE.DoubleSide;
-      seedFlake(decorMaterial, i);
-      decorMaterial.opacity = this.decorBase.opacity;
-      setEmissiveIntensity(decorMaterial, this.decorBase.emissiveIntensity);
-      this.decorMaterials.push(decorMaterial);
-
-      const darkOverride = debug?.tubeMaterial?.('dark');
-      const darkMaterial = darkOverride ?? this.studioMaterial();
-      if (!darkOverride) applyLook(darkMaterial as THREE.MeshPhysicalMaterial, decoration.dark);
-      darkMaterial.transparent = true;
-      darkMaterial.side = THREE.DoubleSide;
-      seedFlake(darkMaterial, i);
-      darkMaterial.opacity = this.darkBase.opacity;
-      setEmissiveIntensity(darkMaterial, this.darkBase.emissiveIntensity);
-      this.darkMaterials.push(darkMaterial);
-
-      const shapes = glyphToShapes(font.font, char, EM);
-      debugShapes = shapes;
-      // Keyed on the untinted decoration, whose identity is stable across fires; `tintedTube`
-      // builds a fresh object every call, so a key on that would never hit.
-      const blueprint = this.caches.takeBlueprint(
-        font,
-        decoration,
-        char,
-        DEFAULT_GLYPH_OPTIONS.depth,
-        i,
-        decorTint,
-        () =>
-          buildTubeBlueprint(
-            shapes,
-            tintedTube(decoration, decorTint),
-            DEFAULT_GLYPH_OPTIONS.depth,
-            i,
-          ),
-      );
-      this.tubeBlueprints[i] = blueprint;
-      const box = new THREE.Box2();
-      const point = new THREE.Vector2();
-      for (const run of blueprint.runs) {
-        for (const p of run.points) box.expandByPoint(point.set(p.x, p.y));
-      }
-      this.tubeBounds.push(box.isEmpty() ? null : box);
-      const litMeshes: THREE.Mesh[] = [];
-      for (const geo of blueprint.lit) {
-        const mesh = new THREE.Mesh(geo, decorMaterial);
-        litMeshes.push(mesh);
-        sized.add(mesh);
-      }
-      this.litMeshes[i] = litMeshes;
-      for (const geo of blueprint.dark) sized.add(new THREE.Mesh(geo, darkMaterial));
-    } else if (decoration && decoration.kind === 'chunks') {
-      const decorMaterial = this.studioMaterial();
-      applyLook(decorMaterial, decoration.look, decorTint);
-      decorMaterial.transparent = true;
-      if (decoration.kind === 'chunks') decorMaterial.side = chunkGeometrySide(decoration);
-      seedFlake(decorMaterial, i);
-      decorMaterial.opacity = this.decorBase.opacity;
-      setEmissiveIntensity(decorMaterial, this.decorBase.emissiveIntensity);
-      this.decorMaterials.push(decorMaterial);
-      this.darkMaterials.push(null);
-      this.tubeBounds.push(null);
-
-      const blueprint = this.chunkBlueprintFor(char, i, decoration);
-      if (blueprint.kind === 'chunks' && this.chunkGeo) {
-        const { matrices, shades } = chunkInstances(blueprint, decoration, i);
-        // An instanced attribute lives on the geometry, and every letter's field is its own, so a
-        // relief look cannot share the one chunk geometry the others do.
-        let geometry = this.chunkGeo;
-        if (decoration.relief) {
-          geometry = this.chunkGeo.clone();
-          geometry.setAttribute(
-            CHUNK_SHADE_ATTRIBUTE,
-            new THREE.InstancedBufferAttribute(shades, 1),
-          );
-          this.chunkGeos.push(geometry);
-          shadeByInstance(decorMaterial);
-        }
-        const instanced = new THREE.InstancedMesh(geometry, decorMaterial, matrices.length);
-        for (let m = 0; m < matrices.length; m++) {
-          instanced.setMatrixAt(m, matrices[m] as THREE.Matrix4);
-        }
-        instanced.instanceMatrix.needsUpdate = true;
-        this.chunkMeshes[i] = instanced;
-        sized.add(instanced);
-      }
-    } else {
-      this.decorMaterials.push(null);
-      this.darkMaterials.push(null);
-      this.tubeBounds.push(null);
-    }
+    this.builder?.buildLetter(i, char, sized, decorTint);
 
     if (debug?.onLetter) {
-      debug.onLetter(
-        cell,
-        debugShapes ?? glyphToShapes(font.font, char, EM),
-        DEFAULT_GLYPH_OPTIONS.depth,
-      );
+      debug.onLetter(cell, glyphToShapes(font.font, char, EM), DEFAULT_GLYPH_OPTIONS.depth);
     }
 
     cell.position.set(this.baseX[i] as number, this.baseY[i] as number, 0);
@@ -938,7 +577,7 @@ export class Word {
   }
 
   /** A letter a regroup already dropped: it is playing its exit and never rejoins the group. */
-  private leavingAt(i: number): boolean {
+  leavingAt(i: number): boolean {
     return !!this.frozenInfo[i];
   }
 
@@ -1062,23 +701,7 @@ export class Word {
         const light = this.bodyLights[i];
         if (light) material.emissive.setHex(light.emissive);
       }
-      const decor = this.decorMaterials[i];
-      if (decor) {
-        decor.opacity = pose.opacity * this.decorBase.opacity;
-        setEmissiveIntensity(decor, this.decorBase.emissiveIntensity);
-      }
-      // Off the field's own mesh rather than `decorMaterials`, which a tube debug override may
-      // have filled with a material carrying no emissive at all.
-      const field = this.chunkMeshes[i];
-      const fieldLight = this.chunkLights[i];
-      if (field && fieldLight) {
-        (field.material as THREE.MeshPhysicalMaterial).emissive.setHex(fieldLight.emissive);
-      }
-      const dark = this.darkMaterials[i];
-      if (dark) {
-        dark.opacity = pose.opacity * this.darkBase.opacity;
-        setEmissiveIntensity(dark, this.darkBase.emissiveIntensity);
-      }
+      this.builder?.frame(i, pose.opacity);
     }
 
     if (this.effectFrame) this.applyEffects(elapsed, ctx);
@@ -1089,31 +712,14 @@ export class Word {
     for (const material of this.bodyMaterials) material?.dispose();
     this.bodyMaterials.length = 0;
     this.bodyLights.length = 0;
-    this.chunkMeshes.length = 0;
-    this.chunkLights.length = 0;
-    for (const material of this.decorMaterials) material?.dispose();
-    this.decorMaterials.length = 0;
-    for (const material of this.darkMaterials) material?.dispose();
-    this.darkMaterials.length = 0;
     this.envMaterials.length = 0;
-    for (const blueprint of this.tubeBlueprints) {
-      if (blueprint) this.caches.releaseBlueprint(blueprint);
-    }
-    this.tubeBlueprints.length = 0;
-    this.tubeBounds.length = 0;
     this.parts.length = 0;
     this.partMeshes.length = 0;
-    this.partBaseColor.length = 0;
-    this.partReadsRunColor.length = 0;
     this.partSlot.length = 0;
+    this.decorParts.length = 0;
     this.effectFrame = null;
     this.bodyMeshes.length = 0;
-    this.litMeshes.length = 0;
-    this.gradientRamp?.dispose();
-    this.decorCache?.dispose();
-    this.chunkGeo?.dispose();
-    for (const geometry of this.chunkGeos) geometry.dispose();
-    this.chunkGeos.length = 0;
+    this.builder?.dispose();
     // An InstancedMesh owns an instanceMatrix buffer that clearing the group does not free.
     for (const cell of this.letters) {
       // Traverses rather than iterating: the meshes hang off the cell's scale node, not the cell.

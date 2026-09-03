@@ -7,6 +7,7 @@ import type { LightBase } from '../looks.js';
 // Type-only: word.ts imports this module in Task 2, and a type-only import is erased at
 // compile time, so this creates no runtime cycle.
 import type { WordDebugHooks } from '../word.js';
+import { ChunksBuilder } from './chunks.js';
 
 /** What a builder may reach back into on the `Word` that owns it. */
 export interface WordBuildContext {
@@ -28,9 +29,9 @@ export interface WordBuildContext {
     slot: number,
     at: number,
     span: number,
-    ink?: number,
+    ink?: PartInfo['ink'],
   ): PartInfo;
-  meshInk(slot: number, mesh: THREE.Mesh): number;
+  meshInk(slot: number, mesh: THREE.Mesh): PartInfo['ink'];
 }
 
 /** One part a decoration contributes to the word's pool, in the order the pool takes them. */
@@ -83,10 +84,8 @@ export function decorationBuilderFor(
   return make(spec as never, ctx);
 }
 
-// Replaced by the real builders in Tasks 2 and 3.
-registerDecoration('chunks', () => {
-  throw new Error('chunks builder not yet implemented');
-});
+registerDecoration('chunks', (spec, ctx) => new ChunksBuilder(spec, ctx));
+// Replaced by the real builder in Task 3.
 registerDecoration('tube', () => {
   throw new Error('tube builder not yet implemented');
 });

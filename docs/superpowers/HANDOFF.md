@@ -5,6 +5,12 @@ learned that its design doc does not carry, and what is worth doing next.
 
 ## Branch state
 
+**`face-and-side` is three commits ahead of `origin/face-and-side` and unpushed**, on top of the
+sequin work: the bevel chamfer and contour union, flatness sampling, and this document. Every suite
+is green — `npm run check`, `test:dist`, and 41/41 visual. **The next action is to push**, and then
+the wells-and-fills teardown, which is the only open item below.
+
+
 **Host-driven effects are merged.** `fire()` returns a `FireHandle` and takes `onPhase`,
 `dismiss` and `signal`. See the [plan](plans/2026-08-27-host-driven-effects.md) and the
 [spec](specs/2026-08-27-host-driven-effects-design.md).

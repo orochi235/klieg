@@ -6,6 +6,7 @@ import type { LetterInfo } from '../../../src/motion/types.js';
 import { WordCaches } from '../../../src/render/caches.js';
 import type {
   DecorationBuilder,
+  DecorationPart,
   WordBuildContext,
 } from '../../../src/render/decorations/registry.js';
 import { decorationBuilderFor } from '../../../src/render/decorations/registry.js';
@@ -61,11 +62,11 @@ describe('ChunksBuilder', () => {
     expect(parts[0]?.slot).toBe(1);
 
     // Slot-indexed, not push-packed: letter 1's light has to answer at slot 1 and nothing at 0.
-    const mesh = parts[0]?.mesh as THREE.InstancedMesh;
-    const material = mesh.material as THREE.MeshPhysicalMaterial;
-    builder.writePart(0, mesh, lamplight());
+    const part = parts[0] as DecorationPart;
+    const material = (part.mesh as THREE.InstancedMesh).material as THREE.MeshPhysicalMaterial;
+    builder.writePart({ ...part, slot: 0 }, lamplight());
     const unlit = material.emissive.getHex();
-    builder.writePart(1, mesh, lamplight());
+    builder.writePart(part, lamplight());
     expect(material.emissive.getHex()).not.toBe(unlit);
     builder.dispose();
   });
@@ -167,19 +168,43 @@ describe('TubeBuilder', () => {
       builder.dispose();
     });
 
-    it('drives the run-colour buffer only for the slot that carries the contract', () => {
+    it('carries the run-colour contract from the slot that drew the run', () => {
       const builder = holed();
-      const mesh = builder.collectParts()[0]?.mesh as THREE.Mesh;
-      const buffer = mesh.geometry.getAttribute(RUN_COLOR_ATTRIBUTE).array as Float32Array;
+      const part = builder.collectParts()[0] as DecorationPart;
+      const buffer = runColorBuffer(part);
       const base = [...buffer];
-      builder.writePart(0, mesh, lamplight());
-      expect([...buffer]).toEqual(base);
-      builder.writePart(1, mesh, lamplight());
+      builder.writePart(part, lamplight());
       expect([...buffer]).not.toEqual(base);
       builder.dispose();
     });
   });
+
+  /**
+   * The one failure nothing else observes: a swept geometry carries the run-colour attribute
+   * whatever material it wears, so writing it under an override that never samples it changes no
+   * pixel and throws nothing.
+   */
+  it('leaves the run-colour buffer alone under a lit-material override', () => {
+    const builder = tubeBuilder({
+      tubeMaterial: (which) => (which === 'lit' ? new THREE.MeshBasicMaterial() : undefined),
+    });
+    builder.buildLetter(0, 'A', new THREE.Group(), undefined);
+    const part = builder.collectParts()[0] as DecorationPart;
+    const buffer = runColorBuffer(part);
+    const base = [...buffer];
+
+    builder.writePart(part, lamplight());
+
+    expect([...buffer]).toEqual(base);
+    builder.dispose();
+  });
 });
+
+function runColorBuffer(part: DecorationPart): Float32Array {
+  const attribute = (part.mesh as THREE.Mesh).geometry.getAttribute(RUN_COLOR_ATTRIBUTE);
+  if (!attribute) throw new Error('a swept run carries the run-colour attribute');
+  return attribute.array as Float32Array;
+}
 
 function tubeBuilder(debug?: WordDebugHooks): DecorationBuilder {
   const builder = decorationBuilderFor(specOf('tubing').decoration, wordContext(debug));
@@ -239,8 +264,8 @@ function wordContext(debug?: WordDebugHooks): WordBuildContext {
     font,
     caches,
     debug,
-    baseX: [0, 0],
-    baseY: [0, 0],
+    baseX: [0, 0, 0],
+    baseY: [0, 0, 0],
     // `createMaterial`, not a bare physical material: `applyLook` writes flake uniforms the
     // studio's own hook installs, and a material without them throws.
     studioMaterial: () => createMaterial(null),
@@ -257,7 +282,7 @@ function wordContext(debug?: WordDebugHooks): WordBuildContext {
       line: 0,
       column: slot,
       lineCount: 1,
-      columnCount: 2,
+      columnCount: 3,
       at,
       span,
     }),
@@ -271,11 +296,11 @@ function letterInfo(slot: number): LetterInfo {
   return {
     char: 'A',
     index: slot,
-    count: 2,
+    count: 3,
     line: 0,
     column: slot,
     lineCount: 1,
-    columnCount: 2,
+    columnCount: 3,
     x: 0,
     y: 0,
   };

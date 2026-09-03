@@ -20,7 +20,7 @@ import {
 import { styledRunsOf, type TextRun } from '../text/runs.js';
 import type { Transform } from '../transform.js';
 import { WordCaches } from './caches.js';
-import type { DecorationBuilder } from './decorations/registry.js';
+import type { DecorationBuilder, DecorationPart } from './decorations/registry.js';
 import { decorationBuilderFor } from './decorations/registry.js';
 import { seedFlake } from './flake.js';
 import {
@@ -39,9 +39,9 @@ import {
 } from './looks.js';
 
 /**
- * Lab-only diagnostic hooks (see debug.ts). Word owns per-letter layout and the tube pipeline,
- * so a debug view has to plug in here rather than re-deriving either outside core. `createKlieg`
- * never supplies one, so every real caller is unaffected.
+ * Lab-only diagnostic hooks (see debug.ts). `Word` owns per-letter layout and holds the decoration
+ * builder these reach, so a debug view plugs in here rather than re-deriving either outside core.
+ * `createKlieg` never supplies one, so every real caller is unaffected.
  */
 export interface WordDebugHooks {
   /** Overrides a tube decoration's lit or dark run material; undefined keeps the normal one. */
@@ -113,6 +113,8 @@ export class Word {
   private readonly partMeshes: THREE.Mesh[] = [];
   /** Per part, the letter slot it hangs off, so a retired letter's parts can be left alone. */
   private readonly partSlot: number[] = [];
+  /** The decoration's own parts as its builder handed them over, offset by `decorFrom`. */
+  private readonly decorParts: DecorationPart[] = [];
   /** Where the decoration's own parts start in the pool; they run to its end. */
   private decorFrom = Number.POSITIVE_INFINITY;
   /** Planned once from the specs; holds the per-frame layer buffers. Null until built. */
@@ -234,6 +236,7 @@ export class Word {
       this.parts.push(part.info);
       this.partMeshes.push(part.mesh);
       this.partSlot.push(part.slot);
+      this.decorParts.push(part);
     }
   }
 
@@ -372,7 +375,7 @@ export class Word {
     mesh.scale.setScalar(out.scale);
 
     if (index >= this.decorFrom) {
-      this.builder?.writePart(this.partSlot[index] as number, mesh, out);
+      this.builder?.writePart(this.decorParts[index - this.decorFrom] as DecorationPart, out);
       return;
     }
 
@@ -730,6 +733,7 @@ export class Word {
     this.parts.length = 0;
     this.partMeshes.length = 0;
     this.partSlot.length = 0;
+    this.decorParts.length = 0;
     this.effectFrame = null;
     this.bodyMeshes.length = 0;
     this.builder?.dispose();

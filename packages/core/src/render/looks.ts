@@ -461,11 +461,10 @@ export function frameOwnedBase(look: Look): FrameOwnedBase {
 }
 
 /**
- * The decor and dark families write their emissive through here, at construction and per frame
- * alike: those arrays are typed to the base class so a debug override can supply one without it.
+ * A debug hook may supply a base `THREE.Material`, which carries no `emissiveIntensity`.
  */
-export function setEmissiveIntensity(material: THREE.Material | null, value: number): void {
-  if (material && 'emissiveIntensity' in material) {
+export function setEmissiveIntensity(material: THREE.Material, value: number): void {
+  if ('emissiveIntensity' in material) {
     (material as THREE.MeshPhysicalMaterial).emissiveIntensity = value;
   }
 }

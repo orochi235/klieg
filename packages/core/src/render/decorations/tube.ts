@@ -33,9 +33,18 @@ function tintedTube(spec: TubeSpec, tint?: number): TubeSpec {
   return { ...spec, colors: [tint], surfaceColors: undefined };
 }
 
+/** One lit run, carrying what its own effect write needs beyond the letter it hangs off. */
+interface RunPart extends DecorationPart {
+  mesh: THREE.Mesh;
+  /** The run's own colour, so an effect composes from the base rather than from last frame. */
+  color: number;
+  /** Whether this run's material reads the run-colour attribute. */
+  readsRunColor: boolean;
+}
+
 /** A letter's glyph traced as swept glass: lit runs the effects drive, and unlit ones behind them. */
 export class TubeBuilder implements DecorationBuilder {
-  private readonly base: FrameOwnedBase;
+  private readonly litBase: FrameOwnedBase;
   /** Base of a tube's unlit runs. */
   private readonly darkBase: FrameOwnedBase;
   /** One ramp for the whole word: every letter's tint samples the same stops. */
@@ -58,8 +67,6 @@ export class TubeBuilder implements DecorationBuilder {
   private readonly blueprints: (TubeBlueprint | undefined)[] = [];
   /** Per-letter run bounds in the letter's own 1 em space; null where the glyph drew nothing. */
   private readonly bounds: (THREE.Box2 | null)[] = [];
-  /** Each lit run's own colour, so an effect composes from the base rather than from last frame. */
-  private readonly runColor = new Map<THREE.Mesh, number>();
   /** One scratch colour for the whole word; `writePart` runs per targeted part per frame. */
   private readonly partColor = new THREE.Color();
 
@@ -67,7 +74,7 @@ export class TubeBuilder implements DecorationBuilder {
     private readonly spec: TubeSpec,
     private readonly ctx: WordBuildContext,
   ) {
-    this.base = frameOwnedBase(spec.look);
+    this.litBase = frameOwnedBase(spec.look);
     this.darkBase = frameOwnedBase(spec.dark);
     this.gradientRamp = spec.gradient ? rampTexture(spec.gradient.stops) : null;
   }
@@ -101,8 +108,8 @@ export class TubeBuilder implements DecorationBuilder {
     // would cull that invisible.
     decorMaterial.side = THREE.DoubleSide;
     seedFlake(decorMaterial, index);
-    decorMaterial.opacity = this.base.opacity;
-    setEmissiveIntensity(decorMaterial, this.base.emissiveIntensity);
+    decorMaterial.opacity = this.litBase.opacity;
+    setEmissiveIntensity(decorMaterial, this.litBase.emissiveIntensity);
     this.litMaterials[index] = decorMaterial;
 
     const darkOverride = ctx.debug?.tubeMaterial?.('dark');
@@ -115,7 +122,6 @@ export class TubeBuilder implements DecorationBuilder {
     setEmissiveIntensity(darkMaterial, this.darkBase.emissiveIntensity);
     this.darkMaterials[index] = darkMaterial;
 
-    const shapes = glyphToShapes(ctx.font.font, char, EM);
     // Keyed on the untinted decoration, whose identity is stable across fires; `tintedTube`
     // builds a fresh object every call, so a key on that would never hit.
     const blueprint = ctx.caches.takeBlueprint(
@@ -125,7 +131,13 @@ export class TubeBuilder implements DecorationBuilder {
       DEFAULT_GLYPH_OPTIONS.depth,
       index,
       tint,
-      () => buildTubeBlueprint(shapes, tintedTube(spec, tint), DEFAULT_GLYPH_OPTIONS.depth, index),
+      () =>
+        buildTubeBlueprint(
+          glyphToShapes(ctx.font.font, char, EM),
+          tintedTube(spec, tint),
+          DEFAULT_GLYPH_OPTIONS.depth,
+          index,
+        ),
     );
     this.blueprints[index] = blueprint;
     const box = new THREE.Box2();
@@ -153,8 +165,14 @@ export class TubeBuilder implements DecorationBuilder {
     this.bounds[index] = null;
   }
 
-  collectParts(): DecorationPart[] {
-    const runs: { slot: number; mesh: THREE.Mesh; length: number; color: number }[] = [];
+  collectParts(): RunPart[] {
+    const runs: {
+      slot: number;
+      mesh: THREE.Mesh;
+      length: number;
+      color: number;
+      readsRunColor: boolean;
+    }[] = [];
     for (let i = 0; i < this.blueprints.length; i++) {
       const blueprint = this.blueprints[i];
       const meshes = this.litMeshes[i];
@@ -174,6 +192,7 @@ export class TubeBuilder implements DecorationBuilder {
           mesh: meshes[r] as THREE.Mesh,
           length: run.length,
           color: run.color,
+          readsRunColor: this.litReadsRunColor[i] === true,
         });
       }
     }
@@ -182,7 +201,7 @@ export class TubeBuilder implements DecorationBuilder {
     // share would put a chase's dwell somewhere other than where the glass is.
     const total = runs.reduce((a, r) => a + r.length, 0);
     let walked = 0;
-    const parts: DecorationPart[] = [];
+    const parts: RunPart[] = [];
     for (let n = 0; n < runs.length; n++) {
       const run = runs[n] as (typeof runs)[number];
       const at = total > 0 ? walked / total : n / runs.length;
@@ -199,8 +218,9 @@ export class TubeBuilder implements DecorationBuilder {
         ),
         mesh: run.mesh,
         slot: run.slot,
+        color: run.color,
+        readsRunColor: run.readsRunColor,
       });
-      this.runColor.set(run.mesh, run.color);
       walked += run.length;
     }
     return parts;
@@ -209,8 +229,8 @@ export class TubeBuilder implements DecorationBuilder {
   frame(index: number, opacity: number): void {
     const lit = this.litMaterials[index];
     if (lit) {
-      lit.opacity = opacity * this.base.opacity;
-      setEmissiveIntensity(lit, this.base.emissiveIntensity);
+      lit.opacity = opacity * this.litBase.opacity;
+      setEmissiveIntensity(lit, this.litBase.emissiveIntensity);
     }
     const dark = this.darkMaterials[index];
     if (dark) {
@@ -245,17 +265,17 @@ export class TubeBuilder implements DecorationBuilder {
    * the run's own base, never from the buffer: reading back last frame's value and scaling it
    * again compounds, and the sign fades to black in a few seconds.
    */
-  writePart(slot: number, mesh: THREE.Mesh, out: ResolvedOffset): void {
-    if (!this.litReadsRunColor[slot]) return;
+  writePart(part: DecorationPart, out: ResolvedOffset): void {
+    const run = part as RunPart;
+    if (!run.readsRunColor) return;
+    const mesh = run.mesh;
     const attribute = mesh.geometry.getAttribute(RUN_COLOR_ATTRIBUTE) as
       | THREE.BufferAttribute
       | undefined;
     if (!attribute) return;
-    const base = this.runColor.get(mesh);
-    if (base === undefined) return;
     // Hue and emissive are the same colour here: a lamp on a run tints by what the run is showing,
     // so a `hue` piece sweeping the base takes the lit pool with it.
-    const shown = out.color ?? base;
+    const shown = out.color ?? run.color;
     const color = this.partColor
       .setHex(litEmissive(shown, shown, out.light))
       .multiplyScalar(out.gain);
@@ -289,7 +309,6 @@ export class TubeBuilder implements DecorationBuilder {
     this.bounds.length = 0;
     this.litMeshes.length = 0;
     this.litReadsRunColor.length = 0;
-    this.runColor.clear();
     this.gradientRamp?.dispose();
   }
 }

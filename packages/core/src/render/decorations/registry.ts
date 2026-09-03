@@ -50,8 +50,12 @@ export interface DecorationBuilder {
   collectParts(): DecorationPart[];
   /** Per-frame material writes for letter `index`; `opacity` is the pose's own. */
   frame(index: number, opacity: number): void;
-  /** The effect write for one part this decoration contributed. `Word` owns transform; this owns colour. */
-  writePart(slot: number, mesh: THREE.Mesh, out: ResolvedOffset): void;
+  /**
+   * The effect write for one part this decoration contributed, as the builder handed it over.
+   * `Word` owns transform; this owns colour. Taking the part rather than its letter slot is what
+   * lets a builder carry per-part state on its own `DecorationPart` instead of a side table.
+   */
+  writePart(part: DecorationPart, out: ResolvedOffset): void;
   /** This letter's decoration bounds in its own em space, or null. Drives the gradient span. */
   boundsAt(index: number): THREE.Box2 | null;
   /** The live letters' union bounds, once known, so a positional gradient can be mapped. */

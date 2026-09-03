@@ -129,9 +129,9 @@ export class ChunksBuilder implements DecorationBuilder {
 
   applyGradientBounds(): void {}
 
-  writePart(slot: number, mesh: THREE.Mesh, out: ResolvedOffset): void {
-    const material = mesh.material as THREE.MeshPhysicalMaterial;
-    const light = this.lights[slot];
+  writePart(part: DecorationPart, out: ResolvedOffset): void {
+    const material = part.mesh.material as THREE.MeshPhysicalMaterial;
+    const light = this.lights[part.slot];
     if (light) material.emissive.setHex(litEmissive(light.emissive, light.hue, out.light));
     material.emissiveIntensity = this.base.emissiveIntensity * out.gain;
   }

@@ -562,9 +562,10 @@ working — it needs a caller-supplied `TubeSpec.gradient`.
 
 **Open right now: the wells-and-fills teardown, and nothing else on this list.** The overnight of
 2026-09-02 closed the degenerate capitals, the face-versus-side separation, the sequin density and
-the serif-tuning question; the entries below are what each of them learned, kept because the next
-person to ask will ask the same thing. Inflation is prototyped and its mesher is the one design
-decision still open.
+the serif-tuning question, and two later commits closed the bevel spur and the overlapping contours
+([above](#the-bevel-stopped-standing-off-the-outline-and-the-strokes-were-merged)); the entries below
+are what each of them learned, kept because the next person to ask will ask the same thing. Inflation
+is prototyped and its mesher is the one design decision still open.
 
 Roughly in order of value; the items are independent of each other.
 
@@ -1097,6 +1098,22 @@ catch. When measuring these by hand, note the baselines are `scale: 'css'` at 80
 `page.screenshot()` defaults to device scale at 1600x1200 — measure against the stored size or the
 count is 4x off and compares to the wrong gate.
 
+**A vertex is always "removable" when you ask only about its own neighbours.** Testing whether a
+point sits within a tolerance of the line through the two beside it says yes for 97% of a finely
+sampled outline, because at fine sampling every consecutive triple is nearly straight — and then
+removing them does not compose, because each removal moves the next one's neighbours. Douglas-Peucker
+bounds the error of dropping a whole run and answered 36.2% on the same data. The first number was
+measured, believed for a minute, and was worthless.
+
+**A counter can enclose no area at all.** rye's `A` and `G` each draw a line out and back, 0.003 em
+long. Any preprocessing that moves points inward by more than half its length collapses the ring onto
+a point, and earcut throws `Cannot read properties of undefined` from inside `eliminateHoles` rather
+than reporting a bad ring. Rings without three corners are left alone for this reason.
+
+**`polygon-clipping`'s ESM build exports only a default; its shipped `.d.ts` declares named exports
+and no default.** A named or namespace import type-checks and then resolves to nothing under a
+bundler. Import the default — `allowSyntheticDefaultImports` is on in `tsconfig.base.json` for it.
+
 **Eliminate a cheap hypothesis about render state before an expensive one about geometry.** The tube
 vanishing when thinned was diagnosed twice as a geometry bug and was one line of render state: a
 `transparent` material still writes depth by default, so tubing's 0.08 backing was culling its own
@@ -1175,6 +1192,55 @@ highest-yield instruction was "verify this by mutation". It has held on everythi
   a fidelity problem, and the contour offset's first fix broke the outer contour instead of the
   counter it was aimed at. A number that agrees with the hypothesis is not evidence until the code
   under it has been deleted and the number moved.
+
+## The bevel stopped standing off the outline, and the strokes were merged
+
+Two faults with one symptom — geometry standing where the font drew none — and neither is the
+font's doing. Both are on `face-and-side`, above the sequin work.
+
+**three caps a runaway bevel miter at sqrt(2) units** (`getBevelVec`, "prevent crazy spikes"), so
+any corner under 90 degrees lands at 1.41 bevels along its bisector however sharp it is, with the
+bevel walls converging into that one point. Cinzel's `A` stood 0.0535 em above its own outline where
+every other seeded face keeps to 0.0380 — a nub on the apex, and another where the `N`'s diagonal
+leaves the left stem at 38.5 degrees. Corners under 60 degrees are now cut back half a bevel first,
+which leaves two corners of `90 + angle/2` that no miter can run away from, so the setback stays
+small. `node spikes/bevel-spur.mjs AN --face cinzel --svg out.svg` names each capped corner with the
+angle that caused it, and draws the offset ring against the contour.
+
+**A glyph is commonly several strokes left overlapping**, which a fill under the non-zero rule
+unions for free — so nothing downstream of a rasteriser has ever had to. Extruding each contour as
+its own solid put two coplanar caps at the same depth wherever two strokes crossed: 13.59% of
+Cinzel's `A` cap and 7.11% of its `N` cap were covered twice, which is what the diagonal seams
+across its serifs were. `glyphToShapes` unions now, and both are 0.00%; Cinzel's capitals go from
+143 contours to 32. The kernel is `polygon-clipping` — already in the tree as a transitive dev
+dependency, and exact (Shewchuk predicates) rather than epsilon-based. **Do not reach for
+`clipper2-js`**: it declares `@angular/core` as a peer, which every consumer would inherit. It does
+booleans and not offsets, so the contour inset [wells and fills](specs/2026-09-01-wells-and-fills-design.md#regions)
+needs for its bezel is still unwritten — having a clipper in the tree does not supply one.
+
+**Sample a curve by how far it bends, never to a fixed count.** The union answers in points, so
+whatever it is fed is what the glyph is left with, and 24 samples a curve spends as many points on a
+serif bracket as on a bowl. Subdividing until each chord sits within `FLATNESS` (1e-4 em, 0.028px at
+a 200px cap height) gives 5,552 points across Cinzel's capitals against 16,311. Its extrusion for
+`HAMBURGEFONS` goes 72.0ms to 24.7ms on the first fire, against 26.7ms before any of this existed —
+so the union leaves the one face that needs it cheaper than it found it, and the standalone bundle
+carries 10KB gzipped for the boolean. The other seven faces never reach it: where the union provably
+changes nothing — same polygon count, ring counts and area — the original curve-backed shapes are
+returned, so they keep their curves and their own downstream sampling.
+
+**Two routes measured and not taken.** Unioning only the contours that overlap something would leave
+**3 of Cinzel's 141** on their curves — a serif face's strokes all touch, which is the opposite of
+the intuition. Simplifying after the union removes a further 14.7% at the same tolerance, which is
+exactly the vertices the boolean adds at its own intersections, for a pass that can push a thin
+stroke through itself.
+
+**What moved, and what did not.** `look-neon` and `look-sequin` were re-recorded: the `K`'s arm and
+leg meet the stem at the one corner in the lab's word sharp enough to chamfer. The other 39 never
+moved, and neither did any of them under the sampling change. `spikes/sequin-coverage.mjs` still
+reads 76.6% at 520 and 96.1% at 1040 — it measures the default face, which the union leaves alone,
+so the shipped density is untouched. What is now different is that firing `sequin` on Cinzel samples
+a letter with 13.6% less surplus cap surface than it did, which nobody has tuned for and nobody has
+needed to.
 
 ## `sequin` is sewn now, and what that cost
 

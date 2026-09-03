@@ -19,6 +19,11 @@ Two extrusions of the same glyph, stacked:
 A well's floor is the slab's front cap, its walls are the plate's inner faces, and the plate's
 bevel runs around each well for free. No CSG, no new dependency.
 
+**Both extrusions go through `chamfered()` first**, the corner cutback `buildGlyphGeometry` already
+applies and `text/glyphs.ts` currently keeps private. Three caps a runaway miter at sqrt(2) and
+leaves a nub past the tip of a sharp letter otherwise — the bevel spur `7fcbcdb` fixed. A plate
+extruded from raw contours brings it straight back.
+
 **The two become one `BufferGeometry`, not two meshes.** `ExtrudeGeometry` is non-indexed with
 `position`, `uv` and `normal`, so merging is attribute concatenation — about fifteen lines, and no
 `BufferGeometryUtils` import. It matters because `Word` gives the body one mesh and one material:

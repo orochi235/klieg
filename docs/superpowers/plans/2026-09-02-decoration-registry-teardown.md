@@ -400,6 +400,19 @@ describe('TubeBuilder', () => {
 });
 ```
 
+**Slot alignment needs one assertion per array, not one for the builder.** `TubeBuilder` carries
+five per-letter arrays, and Task 2 showed why a single assertion is not enough: a test keyed only on
+`parts[0].slot` catches a misaligned mesh array but stays green when a *different* array is the one
+that slipped, which lands letter 0's state on letter 1. Write an assertion per array, each keyed on
+something the arrays would disagree about. Use indexed assignment (`this.x[index] = …`) rather than
+`push`, as `ChunksBuilder` does — it removes the off-by-one structurally instead of resting on
+`skipLetter` discipline.
+
+Add a **trailing** hole as well as a leading one (skip 0, build 1, skip 2). `collectParts()` iterates
+"highest index written + 1" rather than the letter count, so the trailing skip is the case that
+distinguishes them. It passes today; it is the shape most likely to break with five arrays kept by
+hand.
+
 - [ ] **Step 2: Run it and watch it fail**
 
 Run: `npx vitest run packages/core/test/render/decorations/registry.test.ts`
@@ -443,7 +456,15 @@ sign to black in seconds. The other says hue and emissive are the same colour fo
 
 **`setEmissiveIntensity` (`word.ts:70`) is module-private and you are the first outside caller.**
 It guards `'emissiveIntensity' in material` because `debug.tubeMaterial` can hand back a base
-`THREE.Material`. Export it or move it to `looks.ts` — do not copy it into `tube.ts`.
+`THREE.Material`. Export it or move it to `looks.ts` — do not copy it into `tube.ts`. (`litEmissive`
+already moved to `looks.ts` in Task 2 for the same reason; import it from there.)
+
+**Delete what the move strands — Task 4's grep will not find it.** Once `TubeBuilder` owns
+`writePart`, every run part satisfies `index >= decorFrom`, so the inline run branch becomes
+unreachable and `partBaseColor`, `partReadsRunColor` and `partColor` become write-only. Remove the
+branch, the three arrays, and the `RUN_COLOR_ATTRIBUTE` / `CRAWL_ATTRIBUTE` machinery with them.
+`DecorationPart.baseColor` and `.readsRunColor` then feed nothing — `TubeBuilder` holds `run.color`
+and `litReadsRunColor` itself — so drop those two interface members too.
 
 The `debug?.tubeMaterial` hook reaches the builder as `ctx.debug` — it is how the visual specs swap
 in a flat material to read run colours back, and Task 2 put it on the context for this. Its two
@@ -581,6 +602,14 @@ refactor. A red one means behavior moved.
 **Baselines are byte-compared and the suite derives its dev-server port from the worktree path**
 (`playwright.config.ts`) — a run here cannot be judged against another checkout's server, which is a
 trap this repo already hit and fixed.
+
+**The visual suite is load-sensitive, and its failures under load look nothing like pixel diffs.**
+Above a load average of roughly 20 the renderers get starved and killed: `page.addStyleTag` throwing
+"Execution context was destroyed", 30s/60s timeouts, "Target page, context or browser has been
+closed", and a *different* failure set every run — often on looks carrying no decoration at all,
+which the code under test cannot reach. Re-run with `--workers=1` before believing any of it. The
+tell is determinism: a real regression fails the same test with the same diff at any worker count.
+A pass is still proof, since the comparison is byte-exact.
 
 **`chunkGeos` are per-letter clones and each one must still be disposed.** They exist only when a
 look sets `relief`, so a leak here shows up on `sequin` alone.

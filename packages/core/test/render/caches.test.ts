@@ -1,4 +1,5 @@
 import type { Font } from 'opentype.js';
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { WordCaches } from '../../src/render/caches.js';
 import type { TubeBlueprint, TubeSpec } from '../../src/render/tube/index.js';
@@ -192,5 +193,34 @@ describe('WordCaches.preheat', () => {
     const caches = new WordCaches();
     caches.dispose();
     expect(() => caches.preheat(stubFont(), 'A')).toThrow('WordCaches used after dispose');
+  });
+});
+
+describe('WordCaches.shapes', () => {
+  it('answers one shared array per char, so a repeated letter cuts once', () => {
+    const caches = new WordCaches();
+    const font = stubFont();
+    expect(caches.shapes(font, 'A')).toBe(caches.shapes(font, 'A'));
+    expect(caches.shapes(font, 'B')).not.toBe(caches.shapes(font, 'A'));
+    caches.dispose();
+  });
+
+  it('answers a box for a stub glyph, in three’s y-up em space', () => {
+    const caches = new WordCaches();
+    const shapes = caches.shapes(stubFont(), 'A');
+    expect(shapes).toHaveLength(1);
+    const points = (shapes[0] as THREE.Shape).getPoints(4);
+    const box = new THREE.Box2();
+    for (const p of points) box.expandByPoint(p);
+    expect(box.min.x).toBeCloseTo(0, 5);
+    expect(box.max.x).toBeCloseTo(0.5, 5);
+    expect(box.max.y).toBeCloseTo(0.7, 5);
+    caches.dispose();
+  });
+
+  it('refuses use after dispose, as glyph() does', () => {
+    const caches = new WordCaches();
+    caches.dispose();
+    expect(() => caches.shapes(stubFont(), 'A')).toThrow('used after dispose');
   });
 });

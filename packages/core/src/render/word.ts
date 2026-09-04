@@ -410,6 +410,10 @@ export class Word {
     return this.caches.glyph(this.font, char, depth);
   }
 
+  shapes(char: string): THREE.Shape[] {
+    return this.caches.shapes(this.font, char);
+  }
+
   /** A glyph draws ink when its geometry has vertices — the same test the cell build uses. */
   /** Line ranging stays klieg's, in `placeBlock`, so weasel is asked only to place. */
   private layoutOpts() {

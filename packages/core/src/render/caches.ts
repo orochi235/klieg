@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 import type { LoadedFont } from '../text/font.js';
-import { buildGlyphGeometry, DEFAULT_GLYPH_OPTIONS, EM } from '../text/glyphs.js';
+import { buildGlyphGeometry, DEFAULT_GLYPH_OPTIONS, EM, glyphToShapes } from '../text/glyphs.js';
 import type { TubeBlueprint, TubeSpec } from './tube/index.js';
 
 /**
@@ -29,6 +29,7 @@ class Interner {
 export class WordCaches {
   private readonly interner = new Interner();
   private readonly geometries = new Map<string, THREE.ExtrudeGeometry>();
+  private readonly contours = new Map<string, THREE.Shape[]>();
   private readonly blueprints = new Map<string, { blueprint: TubeBlueprint; leased: boolean }>();
   /** Blueprints built because the cached one was already lent out; disposed on release. */
   private readonly onLoan = new Set<TubeBlueprint>();
@@ -47,6 +48,24 @@ export class WordCaches {
       this.geometries.set(key, geo);
     }
     return geo;
+  }
+
+  /**
+   * A glyph's contours, which a well cutter needs and `buildGlyphGeometry` discards. Depth is not
+   * part of the key because a contour has none.
+   *
+   * Shared and never copied — a caller adding holes must clone first, or the next letter of the
+   * same char inherits them.
+   */
+  shapes(font: LoadedFont, char: string): THREE.Shape[] {
+    if (this.disposed) throw new Error('klieg: WordCaches used after dispose');
+    const key = `${this.interner.id(font)}|${char}`;
+    let shapes = this.contours.get(key);
+    if (!shapes) {
+      shapes = glyphToShapes(font.font, char, EM);
+      this.contours.set(key, shapes);
+    }
+    return shapes;
   }
 
   /**
@@ -122,6 +141,8 @@ export class WordCaches {
   dispose(): void {
     for (const geo of this.geometries.values()) geo.dispose();
     this.geometries.clear();
+    // A `Shape` holds no GPU resource; only the map is dropped.
+    this.contours.clear();
     for (const entry of this.blueprints.values()) entry.blueprint.dispose();
     this.blueprints.clear();
     for (const spare of this.onLoan) spare.dispose();

@@ -270,6 +270,7 @@ function wordContext(debug?: WordDebugHooks): WordBuildContext {
     // studio's own hook installs, and a material without them throws.
     studioMaterial: () => createMaterial(null),
     glyph: (char, depth) => caches.glyph(font, char, depth),
+    shapes: (char) => caches.shapes(font, char),
     partInfo: (kind, index, count, slot, at, span, ink = INK) => ({
       kind,
       index,

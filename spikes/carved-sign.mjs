@@ -33,6 +33,9 @@ if (!look) throw new Error(`no such look '${LOOK}' — one of ${Object.keys(LOOK
 // different question, and it would put the control and the carved cell on different looks.
 const { decoration: _ignored, ...base } = look;
 
+// `--fill stone` seats a brilliant in every well. Without it the wells stay empty, which is the
+// path every spec written before the fill slice takes and the one that must not change.
+const FILL = arg('fill', '');
 const options = {
   look: base,
   decoration: {
@@ -43,6 +46,7 @@ const options = {
     pitch: Number(arg('pitch', '0.068')),
     size: Number(arg('size', '0.048')),
     look: {},
+    ...(FILL ? { fill: FILL, tint: Number(arg('tint', '0.5')), sink: Number(arg('sink', '0.25')) } : {}),
   },
 };
 
@@ -77,7 +81,7 @@ await page.goto(`http://127.0.0.1:${server.address().port}/`);
 await page.waitForFunction(() => window.__shot === true, null, { timeout: 60_000 });
 
 mkdirSync(OUT, { recursive: true });
-const file = resolve(OUT, `carved-${TEXT}-${LOOK}.png`);
+const file = resolve(OUT, `carved-${TEXT}-${LOOK}${FILL ? `-${FILL}` : ''}.png`);
 writeFileSync(file, await page.screenshot());
 console.log(`wrote ${file}`);
 

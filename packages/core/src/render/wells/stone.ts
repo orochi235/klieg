@@ -3,8 +3,8 @@ import { DEFAULT_GLYPH_OPTIONS } from '../../text/glyphs.js';
 import type { WellSpec } from '../decoration.js';
 import { applyLook } from '../looks.js';
 import type { Seat } from './cutters.js';
+// Types only, so `fills.ts` can import this module for value and register it without a cycle.
 import type { Fill, FillContext, Filled } from './fills.js';
-import { registerFill } from './fills.js';
 
 /** After the round brilliant: table width, crown height and pavilion depth over girdle width. */
 const TABLE = 0.53;
@@ -96,5 +96,3 @@ export const stone: Fill = (seats: readonly Seat[], ctx: FillContext, spec: Well
   const matrices = seats.map((seat) => at.clone().makeTranslation(seat.x, seat.y, 0));
   return { geometry, matrices, material };
 };
-
-registerFill('stone', stone);

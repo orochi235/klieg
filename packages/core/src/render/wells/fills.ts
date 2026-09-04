@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import type { WellSpec } from '../decoration.js';
 import type { Seat } from './cutters.js';
+import { stone } from './stone.js';
 
 /** What a fill draws: one geometry and one material for every seat on the letter. */
 export interface Filled {
@@ -35,3 +36,9 @@ export function fillFor(name: string): Fill {
   if (!fill) throw new Error(`klieg: no well fill registered for '${name}'`);
   return fill;
 }
+
+// Registered here rather than by `stone.ts` registering itself, which is how `cutters.ts` does it
+// and for the same reason: the package declares a narrow `sideEffects` list, so a module imported
+// only for its registration is dropped from the bundle. Nothing fails — the unit tests import the
+// module directly and pass — and the shipped path then cannot find the fill by name.
+registerFill('stone', stone);

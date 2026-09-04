@@ -24,6 +24,12 @@
   </div>
 </div>
 <script type="module">
+  // A sign that throws while building settles nothing, and the wait below is a race against a
+  // timeout — so without this the picture is an empty cell and the run says nothing went wrong.
+  addEventListener('unhandledrejection', (e) => {
+    console.error(`sign rejected: ${e.reason?.stack ?? e.reason}`);
+  });
+
   const opts = __OPTIONS__;
   // The same look on both sides, so the only difference in the picture is the decoration. Set as a
   // property rather than an attribute: a `LookSpec` is an object, and no shipped look names 'well'.

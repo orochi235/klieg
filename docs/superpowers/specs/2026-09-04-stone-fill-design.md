@@ -43,6 +43,13 @@ every well on the letter.
 One geometry and one material for every stone on the letter, because they differ only in where
 they sit — 61 seats on an `R` cost **90 vertices**, not 5,490.
 
+**Register a fill from the module that exports the lookup, never by having the fill register
+itself.** The package declares a narrow `sideEffects` list, so a module imported only for its
+registration is dropped from the standalone bundle: `registerFill` never runs, the name cannot be
+found, and the sign renders nothing. Every unit test still passes, because a test imports the fill
+module directly. `cutters.ts` already does it the safe way, and the only thing that catches the
+unsafe one is firing a real sign.
+
 ## The seat sets the girdle, and it is one number rather than two
 
 `ExtrudeGeometry` bevels a hole *outward* toward the face, so a well's opening is `half + bevelSize`

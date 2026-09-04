@@ -16,9 +16,6 @@ import type { Filled } from '../wells/fills.js';
 import { fillFor } from '../wells/fills.js';
 import { buildPlate, platePlanes } from '../wells/plate.js';
 import { regionOf } from '../wells/region.js';
-// Registers the `stone` fill. Imported for the side effect the way `cutters.js` registers
-// `lattice`: a fill nothing imports is a name `fillFor` cannot answer.
-import '../wells/stone.js';
 import type { DecorationBuilder, DecorationPart, WordBuildContext } from './registry.js';
 
 /**

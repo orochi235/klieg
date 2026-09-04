@@ -176,7 +176,12 @@ const centroidOf = (poly) => {
   return [cx / (3 * a), cy / (3 * a)];
 };
 
-/** Every edge pushed inward by `d`, which is an inset while the polygon stays convex. */
+/**
+ * Every edge pushed inward by `d`, which is an inset while the polygon stays convex. The line moves
+ * *against* its own outward normal: `clipHalf` keeps what is behind the line, so moving it the way
+ * the normal points grows the polygon instead — and every cell then overlaps its neighbours by
+ * the wall that was meant to separate them, which `ExtrudeGeometry` accepts without a word.
+ */
 function inset(poly, d) {
   let out = poly;
   for (let i = 0; i < poly.length && out.length >= 3; i++) {
@@ -188,7 +193,7 @@ function inset(poly, d) {
     // Outward normal for a counter-clockwise ring; `clipHalf` keeps the inward side.
     const nx = ey / len;
     const ny = -ex / len;
-    out = clipHalf(out, a[0] + nx * d, a[1] + ny * d, nx, ny);
+    out = clipHalf(out, a[0] - nx * d, a[1] - ny * d, nx, ny);
   }
   return out;
 }
@@ -306,7 +311,10 @@ function voronoiCell(i, seeds) {
 function clipped(cell) {
   if (cell.length < 3) return [];
   try {
-    const pieces = polygonClipping.intersection([cell], ...REGION.map((r) => [r]));
+    // One intersection against the region as a whole. Passing each of its polygons as a separate
+    // operand asks for the cell in *every* one of them at once, which is empty the moment a
+    // letter's inset leaves more than one piece.
+    const pieces = polygonClipping.intersection([cell], REGION);
     return (pieces ?? [])
       .map((piece) => piece[0])
       .filter((ring) => ring && ring.length >= 4)
@@ -532,7 +540,10 @@ const stones = new THREE.BufferGeometry();
 stones.setAttribute('position', new THREE.Float32BufferAttribute(stonePos, 3));
 stones.computeVertexNormals();
 
-const whole = cells.filter((c) => area(c) > WHOLE * 0.92).length;
+// Against a cell with the wall already off it, not a bare honeycomb cell — every stone is smaller
+// than the lattice pitch by construction, so the bare one counts nothing as whole.
+const SET = (PITCH - WALL) * (PITCH - WALL) * ROW;
+const whole = cells.filter((c) => area(c) > SET * 0.92).length;
 console.log(`"${LETTER}" — ${cells.length} cells at pitch ${PITCH}, wall ${WALL}, bezel ${BEZEL}`);
 console.log(
   `  edge '${EDGE}': ${pinned.length} pinned, ${free.length} laid, ${culled} culled so neighbours took the space`,

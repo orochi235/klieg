@@ -590,17 +590,17 @@ the surface, the metal is the little left between them, and the cells that do no
 shaped by the letter's outline. `spikes/pave.mjs` builds it and `spikes/hollow.mjs` is its base
 case. Neither is a cutter yet — the plate cannot yet be built at the density it needs.
 
-**The blocker, and it is not what I twice said it was.** Past somewhere between 23 and 69 wells,
-the plate extrudes as a **solid slab with nothing cut — not even the letter's own counter**. One
-well works (`hollow.mjs`), 23 work, 69 do not. It is *not* the bevel: `--bevel 0` changes nothing,
-and the claim that it did came from misreading a combined render. The counter going too is the
-tell — the extrusion is discarding every hole rather than a triangulator degrading on the last few.
+**There is no density wall. The claim was a measurement, three times over, and is retracted.**
+`spikes/hole-wall.mjs` punches N holes into an R and reads the front cap's own area: **320 are cut**,
+counter intact, bevelled or not. The two earlier "past 69 wells nothing is cut" readings came from a
+combined render; the third, a per-cell check that said 0 of 130 wells were cut, came from a
+zero-area triangle in the cap — a degenerate triangle passes a point-in-triangle sign test for every
+point in the plane. Do not re-derive this; run the spike.
 
-**Next action:** punch N holes into `hollow.mjs`'s known-good harness and find the exact N where it
-flips, body-only. Then, if count is the wall, build the plate as **one annulus per cell** — the
-Voronoi cells tile the region, so cell *i* contributes `V_i` minus its own inset, a polygon with at
-most one hole, and the union of those is exactly the plate cap with no piece needing a many-holed
-triangulation.
+**Next action: build the cells inside the well.** Asked for directly — the letter is hollowed first
+and the cells go in what is left, so whichever packing `pave.mjs` currently runs is downstream of a
+construction that no longer exists. The level machinery in `hollow.mjs` is what they sit in: a cell
+field is another level carrying many outlines, not a plate carrying many holes.
 
 **Render the body alone when checking whether a well was cut.** A stone stands proud of the plate,
 so it is visible whether or not anything was cut beneath it. An uncut plate passed for a cut one
@@ -634,20 +634,41 @@ smaller toward the edge. Also `--jitter`, `--relax`, `--pitch`, `--wall`, `--bez
 "seat" is emergent — the hole through the plate, floored by the slab. There is no contact test
 between a stone and its well, which is why the depth bugs above could be silent.
 
-**Build the plate as a stack of levels, not as one plate on one slab.** Asked for directly: this
-wants to be as customizable as it can be, and concentric or stepped wells are wanted eventually.
-The design already says stepped floors come from stacking plates, so the rebuild should take a
-**list of levels — each with its own outline and depth** — and the drinking glass is simply the
-N=1 case of it. Hard-coding slab-plus-plate now is the thing that would have to be undone.
+**`spikes/hollow.mjs` is rebuilt and is where the levels live.** A level is an outline and a depth
+— `--levels 0.05:0.20,0.09:0.09` steps a well twice, `--rim`/`--well` is the one-level drinking
+glass. Nothing is extruded: every ring is an iso-contour of the letter's own field at the level it
+sits at, and bands between rings are stitched by arc length, so the two rings need not correspond.
+`--depth`, `--outer`, `--bevel`, `--outerDrop`, `--lipDrop`, `--bevelSegments`, `--outlineSpacing`,
+`--round`, `--roundOuter` and `--resolution` are all knobs; `--plain` renders the shipped letter as
+a control.
 
-**The outer bevel on a hollowed letter is wrong, and not by a value.** `hollow.mjs` gives the slab
-the glyph's own 0.038 em bevel and the plate `--bevel`, so where the plate lands on the slab the
-outside carries a ledge — the doubled band down the left of the render. Worse, `ExtrudeGeometry`
-bevels *every* contour it is handed, so the plate's outer contour is bevelled at all; a glass wants
-the bevel on the **hole** only, with the outside running unbroken from the slab. Reaching that
-needs the plate built by hand rather than extruded whole — the same rebuild the annulus plan above
-calls for, so do them together. Wall thickness itself is parametric and is `--rim`: the hollow is
-the letter inset by it.
+**The check is that the shell is closed** — every edge walked once in each direction — because
+nothing in a render tells a missing cap from a dark one. Read that line, not the picture.
+
+**Three things about offsetting a glyph ring, each of which cost a cycle.** A marching-squares
+outline carries the field's staircase, so its per-vertex normals alternate and a miter off them
+folds at almost every vertex however small the offset; outlines are resampled and smoothed first,
+which also takes a level outline on the R from 1,964 points to 300. A vertex on a taper has no room
+for the offset it asks for — the R's leg is eaten whole by a 0.038 chamfer. And **a corner rounded
+to radius r cannot then be inset by more than r**: the offset must invert, and no clamp or fold
+repair changes that, which is why three attempts at one made it worse. Taking every ring off the
+field instead removed all three at once. Do not reintroduce a miter offset.
+
+**Rounding is a stage, and it is morphology rather than corner-finding.** `--round` fills every
+reflex corner to a radius (the junctions between strokes, the inside of a counter) and
+`--roundOuter` rounds the convex ones. Each half rebuilds the field, which is what makes the radius
+real: the distance field of a grown shape equals the original minus the radius only on the outside,
+and the inside is exactly where a filled corner changes which edge is nearest. Both default to 0.
+
+**A band whose two levels disagree on ring count is reported, not stitched.** That is a stroke
+closing up or splitting between the two levels — a deeply stepped R rounded to 0.02 leaves one. It
+is the honest failure; a guessed pairing would be a silent hole.
+
+**The ledge is gone and the two bevels are separate knobs.** `ExtrudeGeometry` bevels every contour
+it is handed at one size, which is why the letter's own 0.038 em chamfer used to land on a well's
+rim as well, and why bevelling a slab and a plate separately put a doubled band down the letter's
+side. `--outer` is the letter's chamfer and `--bevel` the bead on every rim; wall thickness is
+`--rim`, the hollow being the letter inset by it.
 
 **The stone slice did not open `PartKind`, which is what this used to say it would.** Targeting
 grew `{ fill: 'stones' }` beside `{ kind }` instead, and a stone field reports `kind: 'chunk'` —

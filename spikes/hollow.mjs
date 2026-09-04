@@ -8,6 +8,12 @@
  * above it. The drinking glass is the one-level case and concentric wells are the same construction
  * with more, so nothing here hard-codes a slab under a plate.
  *
+ *   node spikes/hollow.mjs --levels 0.05:0.09,0.075:0.10:cells --pitch 0.055
+ *
+ * A `cells` level is the pavé field: one level carrying a pocket per Voronoi cell instead of one
+ * outline. It is the same construction — rims, beads, walls, floors — with many rings on a plane
+ * rather than one, which is why it is a level and not a plate with holes punched through it.
+ *
  * Nothing is extruded. `ExtrudeGeometry` bevels every contour it is handed at one size, which is
  * both faults it used to have at once: the outside carried a ledge where two separately bevelled
  * solids met, and a well's rim could not take a bead while the letter kept its chamfer. Walls are
@@ -23,6 +29,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import opentype from 'opentype.js';
 import { chromium } from 'playwright';
+import polygonClipping from 'polygon-clipping';
 import * as THREE from 'three';
 import { isoContours, signedDistanceField } from '../packages/core/dist/render/tube/field.js';
 import {
@@ -50,6 +57,31 @@ const OUTER = Number(arg('outer', String(DEFAULT_GLYPH_OPTIONS.bevelSize)));
 /** The bead around a well's rim, on the hole only. A well wants far less than a letter does. */
 const LIP = Number(arg('bevel', '0.008'));
 const SEGS = Math.max(1, Number(arg('bevelSegments', '3')));
+
+// The cell field. Only a `cells` level reads any of these.
+/** Seed spacing, in em — with no gaps this is very nearly a cell's width. */
+const PITCH = Number(arg('pitch', '0.055'));
+/** Metal left standing between two cells, in em. Half of it comes off each cell. */
+const WALL = Number(arg('wall', '0.009'));
+/** How far a seed may wander off the lattice, as a fraction of the pitch. */
+const JITTER = Number(arg('jitter', '0'));
+/** Lloyd passes: each free seed walks to the centroid of what it owns inside the region. */
+const RELAX = Number(arg('relax', '4'));
+/** A cell smaller than this fraction of a whole one loses its seed; neighbours take the space. */
+const MIN_AREA = Number(arg('minArea', '0.18'));
+const SEED = Number(arg('seed', '7'));
+/** `absorb` cuts the interior cells to the outline; `grade` gives the boundary its own smaller ones. */
+const EDGE = arg('edge', 'absorb');
+/** How far in from the region's edge the pinned row sits, and how far behind it the lattice does. */
+const EDGE_INSET = Number(arg('edgeInset', '0.42'));
+const EDGE_STEP = Number(arg('edgeStep', '0.95'));
+const CLEARANCE = Number(arg('clearance', '0.62'));
+/** The bead around a cell's rim. Two of them meet in the wall, so it cannot be the letter's. */
+const CELL_LIP = Number(arg('cellBevel', '0.003'));
+const CELL_LIP_T = Number(arg('cellLipDrop', String(CELL_LIP)));
+if (2 * CELL_LIP >= WALL) {
+  throw new Error(`two ${CELL_LIP} em beads meet inside a ${WALL} em wall and eat it`);
+}
 /** How coarsely a level's outline is walked, in em. Below the field's own cell it is all staircase. */
 const SPACING = Number(arg('outlineSpacing', '0.006'));
 /** Radius the letter's reflex corners are rounded to, in em: the junctions and inside the counter. */
@@ -72,19 +104,35 @@ if (2 * OUTER_T >= D) throw new Error(`a chamfer falling ${OUTER_T} twice does n
 const LIP_T = Number(arg('lipDrop', String(LIP)));
 
 /**
- * `inset:depth` pairs, outermost first. Each level's outline is the glyph inset by `inset`, and its
- * floor sits `depth` below the floor above it — so a level is a step, not an absolute height.
+ * `inset:depth` pairs, outermost first, `inset:depth:cells` for the pavé field. A level's outline
+ * is the glyph inset by `inset`, and its floor sits `depth` below the floor above it — so a level
+ * is a step, not an absolute height. A `cells` level's own inset is the bezel: how much metal is left
+ * between the wall it sits in and the outermost cell.
  */
 const LEVELS = arg('levels', `${RIM}:${WELL}`)
   .split(',')
   .filter(Boolean)
   .map((spec) => {
-    const [inset, depth] = spec.split(':').map(Number);
+    const [insetText, depthText, kind] = spec.split(':');
+    const inset = Number(insetText);
+    const depth = Number(depthText);
     if (!Number.isFinite(inset) || !Number.isFinite(depth)) {
       throw new Error(`--levels wants inset:depth pairs, got '${spec}'`);
     }
-    return { inset, depth };
+    if (kind !== undefined && kind !== 'cells') {
+      throw new Error(`a level is plain or 'cells', got '${kind}'`);
+    }
+    return { inset, depth, cells: kind === 'cells' };
   });
+/** A cell field is a floor covered in pockets; there is no plane left for a level to sit under it. */
+for (let i = 0; i < LEVELS.length - 1; i++) {
+  if (LEVELS[i].cells) {
+    throw new Error(`level ${i + 1} is a cell field, so nothing can sit inside it`);
+  }
+}
+/** A level's own bead: a cell rim takes far less than a well rim, which takes less than a letter. */
+const lipOf = (level) => (level.cells ? CELL_LIP : LIP);
+const lipDropOf = (level) => (level.cells ? CELL_LIP_T : LIP_T);
 for (let i = 1; i < LEVELS.length; i++) {
   if (LEVELS[i].inset <= LEVELS[i - 1].inset) {
     throw new Error(
@@ -94,13 +142,27 @@ for (let i = 1; i < LEVELS.length; i++) {
 }
 const TOTAL = LEVELS.reduce((n, l) => n + l.depth, 0);
 if (TOTAL >= D) throw new Error(`the levels are ${TOTAL} deep and the letter is only ${D}`);
-if (LEVELS[0].inset <= OUTER + LIP) {
+if (LEVELS[0].inset <= OUTER + lipOf(LEVELS[0])) {
   throw new Error(
-    `a ${LEVELS[0].inset} em rim leaves no metal between a ${OUTER} em chamfer and a ${LIP} em bead`,
+    `a ${LEVELS[0].inset} em rim leaves no metal between a ${OUTER} em chamfer and a ` +
+      `${lipOf(LEVELS[0])} em bead`,
   );
 }
 for (const level of LEVELS) {
-  if (level.depth <= LIP_T) throw new Error(`a level ${level.depth} deep cannot hold a ${LIP_T} em bead`);
+  if (level.depth <= lipDropOf(level)) {
+    throw new Error(`a level ${level.depth} deep cannot hold a ${lipDropOf(level)} em bead`);
+  }
+}
+// The bezel: a cell reaching the wall it sits in would open a pocket into the well's own side.
+for (let i = 1; i < LEVELS.length; i++) {
+  if (!LEVELS[i].cells) continue;
+  const bezel = LEVELS[i].inset - LEVELS[i - 1].inset;
+  if (bezel <= lipOf(LEVELS[i - 1]) + CELL_LIP) {
+    throw new Error(
+      `a ${bezel.toFixed(4)} em bezel leaves no metal between the wall's ` +
+        `${lipOf(LEVELS[i - 1])} em bead and a cell's ${CELL_LIP} em one`,
+    );
+  }
 }
 
 const buf = readFileSync(resolve(ROOT, 'apps/lab/public/font.ttf'));
@@ -122,11 +184,34 @@ const signedArea = (ring) => {
   return a / 2;
 };
 
-const dedupe = (ring) =>
-  ring.filter((p, i) => {
+/**
+ * Coincident points dropped, then every point that sits on the line between its neighbours.
+ *
+ * The straight one matters as much as the duplicate: a resampled run down a flat side of the letter
+ * is exactly collinear, and `triangulateShape` filters such a point out before triangulating — so
+ * a cap's boundary skips it while the wall stitched off the same ring walks it, and the two edges
+ * cannot cancel. The face is the right shape and the shell is open all along it.
+ */
+const dedupe = (ring) => {
+  let out = ring.filter((p, i) => {
     const q = ring[(i - 1 + ring.length) % ring.length];
     return Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-9;
   });
+  for (let again = true; again && out.length > 3; ) {
+    again = false;
+    const keep = out.filter((p, i) => {
+      const a = out[(i - 1 + out.length) % out.length];
+      const b = out[(i + 1) % out.length];
+      const cross = (p[1] - a[1]) * (b[0] - p[0]) - (p[0] - a[0]) * (b[1] - p[1]);
+      return Math.abs(cross) > 1e-14;
+    });
+    if (keep.length !== out.length && keep.length >= 3) {
+      out = keep;
+      again = true;
+    }
+  }
+  return out;
+};
 
 /** `metalInside` is whether the material is enclosed by the ring or surrounds it. */
 const orient = (ring, metalInside) => {
@@ -280,6 +365,294 @@ if (ROUND_OUT > 0) {
   field = fieldOf(GLYPH);
 }
 
+// ---------------------------------------------------------------------------------------------
+// The cell field. A level whose void is many pockets rather than one, packed to fill what the level
+// above it left. Voronoi does the packing: every point belongs to its nearest seed, so there is no
+// dead space to fill — leftover only exists if a cell is deleted, which is why a cell too small
+// to set loses its seed and its neighbours grow into exactly the space it held.
+
+const area = (poly) => {
+  let a = 0;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    a += (poly[j][0] + poly[i][0]) * (poly[j][1] - poly[i][1]);
+  }
+  return Math.abs(a) / 2;
+};
+
+const centroidOf = (poly) => {
+  let cx = 0;
+  let cy = 0;
+  let a = 0;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const f = poly[j][0] * poly[i][1] - poly[i][0] * poly[j][1];
+    a += f;
+    cx += (poly[j][0] + poly[i][0]) * f;
+    cy += (poly[j][1] + poly[i][1]) * f;
+  }
+  if (Math.abs(a) < 1e-12) return poly[0];
+  return [cx / (3 * a), cy / (3 * a)];
+};
+
+/** Clip a convex polygon by the line through `(ax, ay)` with normal `(nx, ny)`, keeping behind. */
+function clipHalf(poly, ax, ay, nx, ny) {
+  const side = (p) => (p[0] - ax) * nx + (p[1] - ay) * ny;
+  const out = [];
+  for (let i = 0; i < poly.length; i++) {
+    const cur = poly[i];
+    const prev = poly[(i + poly.length - 1) % poly.length];
+    const dCur = side(cur);
+    const dPrev = side(prev);
+    if (dPrev <= 0 !== dCur <= 0) {
+      const t = dPrev / (dPrev - dCur);
+      out.push([prev[0] + (cur[0] - prev[0]) * t, prev[1] + (cur[1] - prev[1]) * t]);
+    }
+    if (dCur <= 0) out.push(cur);
+  }
+  return out;
+}
+
+/**
+ * Every edge of a convex polygon pushed in by `d`, or out by it when `d` is negative. The line is
+ * moved *against* its own outward normal because `clipHalf` keeps what is behind it: pushing it the
+ * way the normal points grows the polygon instead, which leaves neighbouring cells sharing the wall
+ * they were supposed to be separated by rather than a gap.
+ */
+function shrink(poly, d) {
+  let out = poly;
+  for (let i = 0; i < poly.length && out.length >= 3; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const ex = b[0] - a[0];
+    const ey = b[1] - a[1];
+    const len = Math.hypot(ex, ey) || 1e-12;
+    const nx = ey / len;
+    const ny = -ex / len;
+    out = clipHalf(out, a[0] - nx * d, a[1] - ny * d, nx, ny);
+  }
+  return out;
+}
+
+/** Bilinear, unlike `Field.sample`, which rounds — the inward push needs a smooth gradient. */
+function depthAt(x, y) {
+  const { data, size, emPerCell, originX, originY } = field;
+  const gx = Math.min(Math.max((x - originX) / emPerCell, 0), size - 1.0001);
+  const gy = Math.min(Math.max((y - originY) / emPerCell, 0), size - 1.0001);
+  const x0 = Math.floor(gx);
+  const y0 = Math.floor(gy);
+  const fx = gx - x0;
+  const fy = gy - y0;
+  const d00 = data[y0 * size + x0];
+  const d10 = data[y0 * size + x0 + 1];
+  const d01 = data[(y0 + 1) * size + x0];
+  const d11 = data[(y0 + 1) * size + x0 + 1];
+  return (d00 * (1 - fx) + d10 * fx) * (1 - fy) + (d01 * (1 - fx) + d11 * fx) * fy;
+}
+
+/**
+ * A point moved `dist` further inside the letter, along the field's own gradient. Off the field
+ * rather than off a ring's normal is what makes a counter behave like the outer edge: inward is
+ * wherever the metal is, and the field already knows.
+ */
+function pushInward(x, y, dist) {
+  const h = field.emPerCell;
+  const gx = (depthAt(x + h, y) - depthAt(x - h, y)) / (2 * h);
+  const gy = (depthAt(x, y + h) - depthAt(x, y - h)) / (2 * h);
+  const len = Math.hypot(gx, gy) || 1e-9;
+  return [x - (gx / len) * dist, y - (gy / len) * dist];
+}
+
+/** The glyph inset by `ins` as a multipolygon, cleaned the same way a level's outline is. */
+const regionAt = (ins) => nest(isoContours(field, -ins).map((r) => clean(xy(r))));
+
+/** Every piece of `cell` the region leaves. A cell is one pocket, so only its outer ring is kept. */
+function clipTo(cell, region) {
+  if (cell.length < 3) return [];
+  try {
+    return (polygonClipping.intersection([cell], region) ?? [])
+      .filter((piece) => piece[0] && piece[0].length >= 4)
+      .map((piece) => ({ ring: piece[0].slice(0, -1), holes: piece.length - 1 }));
+  } catch {
+    return [];
+  }
+}
+
+const ROW = Math.sqrt(3) / 2;
+/** A honeycomb cell at this pitch, and what is left of one once the wall has come off it. */
+const WHOLE_CELL = PITCH * PITCH * ROW;
+const WHOLE_SET = (PITCH - WALL) * (PITCH - WALL) * ROW;
+
+/**
+ * The cells of one level, at each of the growths its bead asks for. Every ring is re-derived from
+ * the same seeds rather than offset off the one below it: a bead step is the cell built with half a
+ * wall less taken off it, inside a region grown by the same amount. A clipped cell is not convex,
+ * so there is nothing to offset it with — but the thing it was clipped from is.
+ */
+function cellField(ins, growths) {
+  const regions = growths.map((g) => regionAt(ins - g));
+  const base = regions[0];
+  if (base.length === 0) throw new Error(`a ${ins} em bezel leaves nothing for a cell field`);
+
+  // The letter's own box, not the region's: a seed out in the bezel is culled, but while it stands
+  // it is what stops the cell beside it ballooning out to meet the outline on its own.
+  const box = new THREE.Box2();
+  for (const g of GLYPH) for (const [x, y] of g.outer) box.expandByPoint(new THREE.Vector2(x, y));
+
+  let rand = SEED;
+  const random = () => {
+    rand = (rand * 1664525 + 1013904223) % 4294967296;
+    return rand / 4294967296;
+  };
+
+  /**
+   * Seeds in two sets. `grade` lays a pinned row along the region's own edge, so the boundary is a
+   * place stones are laid rather than a place they are cut off, and the lattice behind it starts
+   * far enough back not to crowd it. `absorb` seeds the lattice alone and lets the outline do the
+   * cutting. The pinned row never relaxes — let it and it migrates inward, and the grading goes too.
+   */
+  const pinned = [];
+  const edgeStep = PITCH * EDGE_STEP;
+  for (const rings of EDGE === 'grade' ? base : []) {
+    for (const ring of rings) {
+      let carry = 0;
+      for (let i = 0; i < ring.length; i++) {
+        const a = ring[i];
+        const b = ring[(i + 1) % ring.length];
+        const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        for (let t = carry; t < seg; t += edgeStep) {
+          const u = t / seg;
+          pinned.push(
+            pushInward(a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, EDGE_INSET * PITCH),
+          );
+        }
+        carry = seg > 0 ? (((carry - seg) % edgeStep) + edgeStep) % edgeStep : carry;
+      }
+    }
+  }
+
+  const free = [];
+  const rowStep = PITCH * ROW;
+  // `grade` starts the lattice far enough back not to crowd the row pinned along the region's edge.
+  // `absorb` has nothing to clear, and takes every seed inside the metal at all.
+  const clearance = EDGE === 'grade' ? ins + EDGE_INSET * PITCH + PITCH * CLEARANCE : 0;
+  for (let r = -1; r * rowStep + box.min.y <= box.max.y + rowStep; r++) {
+    const y = box.min.y + r * rowStep;
+    const stagger = r % 2 ? PITCH / 2 : 0;
+    for (let x = box.min.x - PITCH + stagger; x <= box.max.x + PITCH; x += PITCH) {
+      const jx = x + (random() - 0.5) * PITCH * JITTER;
+      const jy = y + (random() - 0.5) * PITCH * JITTER;
+      if (depthAt(jx, jy) < -clearance) free.push([jx, jy]);
+    }
+  }
+
+  /**
+   * The Voronoi cell of `seeds[i]`, before the wall comes off it. The box it starts as reaches
+   * `2.2 * PITCH` along an axis and `√2` of that into a corner, so a seed is bisected against
+   * anything whose own box could reach it — cull a seed and its neighbours are what grow into it.
+   * A cutoff shorter than that leaves two cells overlapping wherever the lattice has a gap in it,
+   * and two pockets sharing floor is a hole in the shell rather than anything a render shows.
+   */
+  const voronoiCell = (i, seeds) => {
+    const [sx, sy] = seeds[i];
+    const r = PITCH * 2.2;
+    const reach = 2 * r * Math.SQRT2;
+    let cell = [
+      [sx - r, sy - r],
+      [sx + r, sy - r],
+      [sx + r, sy + r],
+      [sx - r, sy + r],
+    ];
+    for (let j = 0; j < seeds.length; j++) {
+      if (j === i) continue;
+      const dx = seeds[j][0] - sx;
+      const dy = seeds[j][1] - sy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < 1e-12 || d2 > reach * reach) continue;
+      const len = Math.sqrt(d2);
+      cell = clipHalf(cell, sx + dx / 2, sy + dy / 2, dx / len, dy / len);
+      if (cell.length < 3) break;
+    }
+    return cell;
+  };
+
+  // Lloyd: each free seed walks to the centroid of what it actually owns inside the region, which
+  // is what turns a lattice clipped by an outline into a field that fits it.
+  for (let pass = 0; pass < RELAX; pass++) {
+    const all = [...pinned, ...free];
+    for (let i = 0; i < free.length; i++) {
+      const pieces = clipTo(voronoiCell(pinned.length + i, all), base);
+      if (pieces.length === 0) continue;
+      const biggest = pieces.reduce((a, b) => (area(a.ring) > area(b.ring) ? a : b)).ring;
+      if (area(biggest) < WHOLE_CELL * 0.05) continue;
+      free[i] = centroidOf(biggest);
+    }
+  }
+
+  // Cull the seed, never the cell: a cell too small to set is dead space only once it is deleted.
+  // Take the seed away and every point it held goes to whichever seed is next nearest.
+  let seeds = [...pinned, ...free];
+  let culled = 0;
+  for (let pass = 0; pass < 8; pass++) {
+    const doomed = new Set();
+    for (let i = pinned.length; i < seeds.length; i++) {
+      const held = clipTo(shrink(voronoiCell(i, seeds), WALL / 2), base).reduce(
+        (n, p) => n + area(p.ring),
+        0,
+      );
+      if (held < WHOLE_CELL * MIN_AREA) doomed.add(i);
+    }
+    if (doomed.size === 0) break;
+    culled += doomed.size;
+    seeds = seeds.filter((_, i) => !doomed.has(i));
+  }
+
+  // One ring per seed per growth, or the seed is dropped. Every growth has to answer with the same
+  // rings in the same order — `pair` matches a band's two ends by count first, and a cell that
+  // arrives at one step and not the next is a band that cannot be stitched at all.
+  const rings = growths.map(() => []);
+  let split = 0;
+  let pierced = 0;
+  let dropped = 0;
+  for (let i = 0; i < seeds.length; i++) {
+    const cell = voronoiCell(i, seeds);
+    const perStep = growths.map((g, s) => {
+      const pieces = clipTo(shrink(cell, WALL / 2 - g), regions[s]);
+      if (pieces.length === 0) return null;
+      const best = pieces.reduce((a, b) => (area(a.ring) > area(b.ring) ? a : b));
+      return { ...best, extra: pieces.length - 1 };
+    });
+    if (perStep.some((p) => p === null) || area(perStep[0].ring) < WHOLE_CELL * MIN_AREA) {
+      dropped++;
+      continue;
+    }
+    if (perStep[0].extra > 0) split++;
+    if (perStep[0].holes > 0) pierced++;
+    // Symbolic perturbation, a millionth of a cell wide. A lattice puts whole rows of cells on one
+    // line — a row's floors share a y, and so do the edges two of them are cut to where the letter
+    // runs straight. Three points from two rings on one line is a zero-area ear, and the triangle
+    // earcut makes of it walks an edge between two pockets that nothing walks back, so the floor
+    // they sit in reads as open. Nudged by its own amount, no two cells have a line to share.
+    const nudge = 1 - (i + 1) * 4e-9;
+    perStep.forEach((p, s) => {
+      const c = centroidOf(p.ring);
+      const shrunk = p.ring.map(([x, y]) => [c[0] + (x - c[0]) * nudge, c[1] + (y - c[1]) * nudge]);
+      rings[s].push(orient(shrunk, false));
+    });
+  }
+  if (rings[0].length === 0) throw new Error('no cell survived — try a smaller wall or pitch');
+
+  const whole = rings[0].filter((r) => area(r) > WHOLE_SET * 0.92).length;
+  return {
+    rings,
+    report:
+      `${rings[0].length} cells at pitch ${PITCH}, wall ${WALL}, bezel ${ins}\n` +
+      `    edge '${EDGE}': ${pinned.length} pinned, ${free.length} laid, ` +
+      `${culled} culled so neighbours took the space, ${dropped} too small to set\n` +
+      `    ${whole} whole, ${rings[0].length - whole} shaped by the outline` +
+      (split > 0 ? `, ${split} broken in two by it and set as the bigger half` : '') +
+      (pierced > 0 ? `, ${pierced} closed around a standing island` : ''),
+  };
+}
+
 const OUTLINES = LEVELS.map(({ inset }, i) => {
   const poly = outlineAt(inset);
   if (poly.length === 0) {
@@ -380,7 +753,22 @@ function cap(contour, holes, z, up) {
   const faces = THREE.ShapeUtils.triangulateShape(c, hs);
   const all = [c, ...hs].flat();
   if (process.env.HOLLOW_EDGES) {
-    console.log(`    cap z ${z}: ${all.length} pts, ${hs.length} holes → ${faces.length} faces, want ${all.length + 2 * hs.length - 2}`);
+    // Area, never a face count. Earcut bridges each hole with a pair of duplicated vertices, so the
+    // triangle count is not `n + 2h - 2` and reading it as one calls a correct cap a broken one.
+    const flat = (ring) => ring.map((v) => [v.x, v.y]);
+    const want = area(flat(c)) - hs.reduce((n, h) => n + area(flat(h)), 0);
+    let got = 0;
+    for (const [ia, ib, ic] of faces) {
+      const a = all[ia];
+      const b = all[ib];
+      const d = all[ic];
+      got += Math.abs((b.x - a.x) * (d.y - a.y) - (d.x - a.x) * (b.y - a.y)) / 2;
+    }
+    const miss = want > 0 ? (1 - got / want) * 100 : 0;
+    console.log(
+      `    cap z ${z}: ${all.length} pts, ${hs.length} holes → ${faces.length} faces, ` +
+        `${miss.toFixed(2)}% of the face left uncovered`,
+    );
   }
   for (const [ia, ib, ic] of faces) {
     const a = all[ia];
@@ -483,23 +871,36 @@ const capPlane = (planeRings, z, up) => {
 /** The back face, which no level reaches. */
 capPlane(SKIN[0], 0, false);
 
-/** A well's rim: the void `LIP` wider at the ceiling, back to its own outline `LIP_T` below. */
-const LIP_STEPS = LIP > 0 && LIP_T > 0 ? bevelSteps(LIP, LIP_T, SEGS) : [{ inset: 0, dz: 0 }];
-const BEAD = LEVELS.map((level) => LIP_STEPS.map((step) => voidAt(level.inset - step.inset)));
+/**
+ * A rim: the void its own bead wider at the ceiling, back to its outline the bead's drop below. A
+ * cell field is the same thing many times over, so it differs only in where its rings come from.
+ */
+const STEPS = LEVELS.map((level) => {
+  const size = lipOf(level);
+  const drop = lipDropOf(level);
+  return size > 0 && drop > 0 ? bevelSteps(size, drop, SEGS) : [{ inset: 0, dz: 0 }];
+});
+const CELLS = LEVELS.map((level, i) =>
+  level.cells ? cellField(level.inset, STEPS[i].map((step) => step.inset)) : null,
+);
+const BEAD = LEVELS.map((level, i) =>
+  level.cells ? CELLS[i].rings : STEPS[i].map((step) => voidAt(level.inset - step.inset)),
+);
 const RIM_RINGS = BEAD.map((steps) => steps[0]);
+const last = (i) => STEPS[i].length - 1;
 
 for (let i = 0; i < LEVELS.length; i++) {
   const ceiling = i === 0 ? D : FLOORS[i - 1];
-  band([...BEAD[i]].reverse(), (k) => ceiling - LIP_STEPS[LIP_STEPS.length - 1 - k].dz);
-  for (const ring of BEAD[i][LIP_STEPS.length - 1]) {
-    stitch(ring, FLOORS[i], ring, ceiling - LIP_T);
+  band([...BEAD[i]].reverse(), (k) => ceiling - STEPS[i][last(i) - k].dz);
+  for (const ring of BEAD[i][last(i)]) {
+    stitch(ring, FLOORS[i], ring, ceiling - lipDropOf(LEVELS[i]));
   }
 }
 
 /** The letter's front, then one floor per level: what the level leaves, opened by the level below. */
 capPlane([...SKIN[0], ...RIM_RINGS[0]], D, true);
 for (let i = 0; i < LEVELS.length; i++) {
-  capPlane([...BEAD[i][LIP_STEPS.length - 1], ...(RIM_RINGS[i + 1] ?? [])], FLOORS[i], true);
+  capPlane([...BEAD[i][last(i)], ...(RIM_RINGS[i + 1] ?? [])], FLOORS[i], true);
 }
 
 const body = new THREE.BufferGeometry();
@@ -568,6 +969,7 @@ for (let i = 0; i < LEVELS.length; i++) {
     `  level ${i + 1}: inset ${LEVELS[i].inset}, floor z ${FLOORS[i].toFixed(4)}, ` +
       `${OUTLINES[i].length} region(s), ${RIM_RINGS[i].length} ring(s)`,
   );
+  if (CELLS[i]) console.log(`    ${CELLS[i].report}`);
 }
 const open = openEdges();
 if (unpaired > 0) {

@@ -587,8 +587,8 @@ pushed; `git log --oneline` is the live answer for what landed.
 The shipped `lattice` cutter places a diamond only where a whole one fits, which reads as a
 polka-dot field with gold between every stone. What is wanted instead is **pavé**: the stones are
 the surface, the metal is the little left between them, and the cells that do not fit whole are
-shaped by the letter's outline. `spikes/pave.mjs` builds it and `spikes/hollow.mjs` is its base
-case. Neither is a cutter yet — the plate cannot yet be built at the density it needs.
+shaped by the letter's outline. `spikes/hollow.mjs` builds the letter and the field it sits in;
+`spikes/pave.mjs` is where the stones themselves are. Neither is a cutter yet.
 
 **There is no density wall. The claim was a measurement, three times over, and is retracted.**
 `spikes/hole-wall.mjs` punches N holes into an R and reads the front cap's own area: **320 are cut**,
@@ -597,10 +597,46 @@ combined render; the third, a per-cell check that said 0 of 130 wells were cut, 
 zero-area triangle in the cap — a degenerate triangle passes a point-in-triangle sign test for every
 point in the plane. Do not re-derive this; run the spike.
 
-**Next action: build the cells inside the well.** Asked for directly — the letter is hollowed first
-and the cells go in what is left, so whichever packing `pave.mjs` currently runs is downstream of a
-construction that no longer exists. The level machinery in `hollow.mjs` is what they sit in: a cell
-field is another level carrying many outlines, not a plate carrying many holes.
+**The cell field is a level now, and the next thing is stones in it.** `--levels
+0.05:0.06,0.075:0.09:cells` hollows the R and pockets the floor of the hollow: `cells` marks the
+innermost level, and its own inset is the bezel between the well's wall and the outermost pocket.
+`--pitch`, `--wall`, `--jitter`, `--relax`, `--minArea`, `--seed`, `--edge absorb|grade` and
+`--cellBevel` are the knobs; the shell closes on R A S O E M W B C G K X Z, rounded or not.
+Nothing sits in the pockets yet — `pave.mjs` is where the stone geometry is, and it is still built
+against a plate.
+
+**A pocket's rings are re-derived, never offset.** A bead step is the cell built with that much less
+wall taken off it, inside the region grown by the same amount — the same generator, run again.
+Offsetting is not available: a clipped cell is not convex, so there is nothing to walk a miter
+along, but the convex thing it was clipped from is still there to rebuild from.
+
+**Every growth must answer with the same pockets in the same order.** A band is stitched between two
+rings that `pair` matches by count first, so a cell that arrives at one step and not the next is a
+band that cannot be stitched at all. Hence one ring per seed per step: the largest piece, and the
+seed is dropped outright if any step has nothing for it.
+
+**Three ways a cell field opens a shell that a well never does**, each of which cost a cycle:
+
+- **The wall was never coming off.** `clipHalf` keeps what is *behind* the line, so moving an edge
+  the way its own outward normal points grows the polygon. `pave.mjs` had the same sign and had it
+  from the start: every cell overlapped its neighbours by the wall meant to separate them, which
+  `ExtrudeGeometry` accepts without a word. Only a closed-shell check ever said so.
+
+- **A collinear vertex belongs to the triangulator, not to you.** A resampled run down a flat side
+  of a letter is exactly collinear, and `triangulateShape` filters such a point out before it
+  triangulates — so the cap's boundary skips it while the wall stitched off the same ring walks it.
+  The face is the right shape and the shell is open all along it. `dedupe` drops them at the source
+  now, which also takes the plain R from 15,858 triangles to 8,620.
+
+- **A lattice puts whole rows of cells on one line.** Three points from two rings on one line is a
+  zero-area ear — the same degenerate triangle the hole-count probe tripped over — and the one
+  earcut makes of it walks an edge between two pockets that nothing walks back. Each cell is nudged
+  in by its own millionth of a cell, so no two share a line.
+
+**Read a cap by the area it covers, not the triangles it returns.** Earcut bridges each hole with a
+pair of duplicated vertices, so `n + 2h - 2` is not the count and reading it as one calls a correct
+cap a broken one — it says a face with 104 holes is 276 triangles short when it is exact.
+`HOLLOW_EDGES=1` prints the uncovered fraction.
 
 **Render the body alone when checking whether a well was cut.** A stone stands proud of the plate,
 so it is visible whether or not anything was cut beneath it. An uncut plate passed for a cut one
@@ -613,10 +649,18 @@ the cell, and its neighbours grow into exactly the space it held. The edge fragm
 polygon clipping, which any tiling would give. With zero jitter the Voronoi of a staggered lattice
 is just a honeycomb; it earns its keep the moment seeds stop being regular.
 
-**Both edge policies are wanted as options, and so is everything else.** `--edge absorb` is the
-above; `--edge grade` seeds the boundary and relaxes the interior with Lloyd, so stones grade
-smaller toward the edge. Also `--jitter`, `--relax`, `--pitch`, `--wall`, `--bezel`, `--edgeInset`,
-`--minArea`, `--bevel`. Nothing is to be baked in.
+**Both edge policies are options and nothing is baked in.** `--edge absorb` is the above; `--edge
+grade` pins a row along the region's own boundary and relaxes the interior behind it, so the stones
+grade smaller toward the edge. A region only a stroke wide has no room for the lattice behind that
+row, and then the pinned row is the whole field — which the count says plainly.
+
+**A cell is bisected against every seed whose own box could reach it.** The cell starts as a box
+`2.2 * PITCH` across, so a cutoff shorter than twice its diagonal leaves two cells overlapping
+wherever the lattice has a gap — and culling seeds is what makes the gaps.
+
+**`pave.mjs` clipped a cell against the region one polygon at a time**, which asks for the part of
+the cell inside *all* of them at once. Any letter whose bezel leaves two pieces — an `i`, a `j` —
+produced no cells at all and said `no cell survived`.
 
 **Three rules the stone geometry has to keep**, each of which was a visible defect first:
 

@@ -17,15 +17,12 @@ A fill is registered the way a cutter is, and for the same reason: `word.ts` use
 outlines and a floor; a fill receives those and answers geometry and a material.
 
 ```ts
+/** On the cut, beside the outline it belongs to. */
 export interface Seat {
-  /** The well's centre in the glyph's own em space. */
   x: number;
   y: number;
-  /** The well's half-diagonal, and the opening's own widening across the plate's bevel. */
+  /** The well's half-diagonal, before the plate's bevel widens the opening. */
   half: number;
-  /** The plate's front face and the well's floor, in the body's z. */
-  faceZ: number;
-  floorZ: number;
 }
 
 export interface Filled {
@@ -36,8 +33,12 @@ export interface Filled {
   material: THREE.MeshPhysicalMaterial;
 }
 
-export type Fill = (seats: readonly Seat[], spec: StoneSpec) => Filled;
+export type Fill = (seats: readonly Seat[], ctx: FillContext, spec: WellSpec) => Filled;
 ```
+
+The two z planes reach the fill on its context rather than on each seat: a seat is *where* a well
+is, and how far the front face stands above the floor belongs to the plate and is the same for
+every well on the letter.
 
 One geometry and one material for every stone on the letter, because they differ only in where
 they sit — 61 seats on an `R` cost **90 vertices**, not 5,490.

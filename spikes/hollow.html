@@ -1,0 +1,60 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>a hollowed letter</title>
+<style>
+  html, body { margin: 0; background: #0a0c11; }
+  #stage { position: fixed; inset: 0; }
+  #tag {
+    position: fixed; left: 12px; top: 10px; pointer-events: none;
+    font: 500 13px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; color: #8a93a6;
+  }
+</style>
+<script type="importmap">
+  { "imports": { "three": "/three/three.module.js" } }
+</script>
+<div id="stage"></div>
+<div id="tag"></div>
+<script type="module">
+  import * as THREE from 'three';
+  import { applyLook, createMaterial, specOf } from '/klieg/render/looks.js';
+  import { Stage } from '/klieg/render/stage.js';
+
+  const params = new URLSearchParams(location.search);
+  const look = params.get('look') ?? 'gold';
+  const data = await fetch('/geometry.json').then((r) => r.json());
+
+  const stage = new Stage({ idleTimeoutMs: 3_600_000, target: document.getElementById('stage') });
+  const renderer = stage.mount();
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(data.body.position, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(data.body.normal, 3));
+
+  const metal = createMaterial(stage.environment?.texture ?? null);
+  applyLook(metal, specOf(look));
+
+  const letter = new THREE.Group();
+  stage.scene.add(letter);
+  const mesh = new THREE.Mesh(geo, metal);
+  letter.add(mesh);
+
+  const box = new THREE.Box3().setFromObject(letter);
+  const size = box.getSize(new THREE.Vector3());
+  const centre = box.getCenter(new THREE.Vector3());
+  const budget = stage.viewportBudget();
+  letter.scale.setScalar(Math.min(budget.width / size.x, budget.height / size.y) * 1.9);
+  letter.position.set(-centre.x * letter.scale.x, -centre.y * letter.scale.y, 0);
+  // Off axis: head on, a recess and a flat face are the same silhouette and differ only in shade.
+  letter.rotation.y = data.tilt;
+  letter.rotation.x = data.tilt * 0.35;
+
+  document.getElementById('tag').textContent = `${data.letter} · ${look} · hollowed`;
+
+  let frames = 0;
+  function frame() {
+    renderer.render(stage.scene, stage.camera);
+    if (++frames > 8) window.__shot = true;
+    else requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+</script>

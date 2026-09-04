@@ -15,6 +15,12 @@ export type PartKind = 'run' | 'body' | 'chunk';
  */
 export interface PartInfo {
   kind: PartKind;
+  /**
+   * Which registered fill built this part, when one did. `kind` says what shape of thing a part
+   * is and a fill says what it is made of, so a letter carrying several fills stays addressable
+   * without a part kind per fill.
+   */
+  fill?: string;
   index: number;
   count: number;
   /** The letter this part belongs to, so a piece can order by letter as well as by part. */
@@ -106,8 +112,11 @@ export type EffectName = 'flicker' | 'hue' | 'chase';
 
 export interface EffectSpec {
   piece: EffectName | EffectPiece;
-  /** Which parts, out of the word's pool of that kind. */
-  target: { kind: PartKind } & SelectSpec;
+  /**
+   * Which parts, out of the word's pool. Naming a `kind` selects every part of that shape,
+   * whether or not a fill built it — so nothing already written narrows when one does.
+   */
+  target: ({ kind: PartKind } | { fill: string }) & SelectSpec;
   /** Per-part phase spread. */
   stagger?: number | StaggerSpec;
   /** Fixes the selection so a pinned frame is reproducible. */

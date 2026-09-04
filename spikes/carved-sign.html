@@ -41,10 +41,13 @@
   // for the options, say — is enough to lose the look and the wells with it.
   await import('/klieg-sign.js');
 
-  const lit = [...document.querySelectorAll('klieg-sign')].map(
-    (el) => new Promise((done) => el.addEventListener('klieg-lit', done, { once: true })),
-  );
-  await Promise.race([Promise.all(lit), new Promise((r) => setTimeout(r, 8000))]);
+  // The `lit` attribute `element.ts` toggles, polled. This used to await a 'klieg-lit' event,
+  // which klieg has never dispatched — nothing in the package calls `dispatchEvent` — so the wait
+  // was really the 8s timeout beside it, and a sign that never lit looked the same as one that did.
+  const signs = [...document.querySelectorAll('klieg-sign')];
+  const allLit = () => signs.every((el) => el.hasAttribute('lit'));
+  for (let i = 0; i < 160 && !allLit(); i++) await new Promise((r) => setTimeout(r, 50));
+  if (!allLit()) console.error('klieg: a sign never lit');
   // Both signs settle asynchronously and a carved body takes longer to build than a cached glyph.
   await new Promise((r) => setTimeout(r, 1500));
   window.__shot = true;

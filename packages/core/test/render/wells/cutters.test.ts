@@ -1,4 +1,5 @@
 import type { Font, PathCommand } from 'opentype.js';
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { WordCaches } from '../../../src/render/caches.js';
 import { cutterFor } from '../../../src/render/wells/cutters.js';
@@ -87,5 +88,20 @@ describe('the lattice cutter', () => {
 
   it('throws on a cutter nobody registered', () => {
     expect(() => cutterFor('spiral')).toThrow(/spiral/);
+  });
+
+  // A fill needs where each well is, and the cutter is the only thing that knows without
+  // re-measuring an outline it already placed.
+  it('reports a seat per well, at the outline it cut', () => {
+    const cut = cutBox();
+    expect(cut.seats).toHaveLength(cut.wells.length);
+    for (const [i, seat] of cut.seats.entries()) {
+      const box = new THREE.Box2();
+      for (const p of (cut.wells[i] as THREE.Path).getPoints(1)) box.expandByPoint(p);
+      const centre = box.getCenter(new THREE.Vector2());
+      expect(seat.x).toBeCloseTo(centre.x, 6);
+      expect(seat.y).toBeCloseTo(centre.y, 6);
+      expect(seat.half).toBeCloseTo(SPEC.size / 2, 6);
+    }
   });
 });

@@ -14,15 +14,16 @@ a count written here is false the moment it is committed.
 and the visual suite passes **41/41** — no shipped look selects `'well'`, so every baseline is
 byte-identical.
 
-**Two branches are pushed and unmerged, neither with a PR.**
+**The stone slice and the mesher decision are both merged into `main` and their branches are
+gone.** The stone slice is seven tasks against [its plan](plans/2026-09-04-stone-fill.md): seats on
+the cut, the fill registry, the brilliant, the spec fields, the builder, fill-name targeting, and a
+stone-set sign through the shipped path. `npm run check` was green and the visual suite **41/41** on
+the merge itself, not just on the branches.
 
-`stone-fill` carries the whole stone slice, seven tasks against
-[its plan](plans/2026-09-04-stone-fill.md): seats on the cut, the fill registry, the brilliant, the
-spec fields, the builder, fill-name targeting, and a stone-set sign through the shipped path.
-`npm run check` is green (**1,648 tests**) and the visual suite passes **41/41 in 3.4 minutes**.
-
-`inflation-mesher` settles which mesher builds an inflated crown, and touches only
-`spikes/inflate.mjs` and the wells-and-fills design.
+**Everything since is spike-only** — `spikes/pave.mjs`, `spikes/hollow.mjs`, `spikes/stone-demo.mjs`
+and `spikes/stone-seat.mjs`. No `packages/` or `apps/` change, so the visual suite cannot be
+affected by it; `npm run lint` is the gate that applies. See
+[what is worth doing next](#what-is-worth-doing-next).
 
 
 **Host-driven effects are merged.** `fire()` returns a `FireHandle` and takes `onPhase`,
@@ -580,8 +581,58 @@ working — it needs a caller-supplied `TubeSpec.gradient`.
 
 ## What is worth doing next
 
-**Open right now: merging `stone-fill` and `inflation-mesher`.** Both are green and pushed and
-neither has a PR — see [branch state](#branch-state).
+**Open right now: pavé, and one construction bug blocking it.** Everything below is on `main` and
+pushed; `git log --oneline` is the live answer for what landed.
+
+The shipped `lattice` cutter places a diamond only where a whole one fits, which reads as a
+polka-dot field with gold between every stone. What is wanted instead is **pavé**: the stones are
+the surface, the metal is the little left between them, and the cells that do not fit whole are
+shaped by the letter's outline. `spikes/pave.mjs` builds it and `spikes/hollow.mjs` is its base
+case. Neither is a cutter yet — the plate cannot yet be built at the density it needs.
+
+**The blocker, and it is not what I twice said it was.** Past somewhere between 23 and 69 wells,
+the plate extrudes as a **solid slab with nothing cut — not even the letter's own counter**. One
+well works (`hollow.mjs`), 23 work, 69 do not. It is *not* the bevel: `--bevel 0` changes nothing,
+and the claim that it did came from misreading a combined render. The counter going too is the
+tell — the extrusion is discarding every hole rather than a triangulator degrading on the last few.
+
+**Next action:** punch N holes into `hollow.mjs`'s known-good harness and find the exact N where it
+flips, body-only. Then, if count is the wall, build the plate as **one annulus per cell** — the
+Voronoi cells tile the region, so cell *i* contributes `V_i` minus its own inset, a polygon with at
+most one hole, and the union of those is exactly the plate cap with no piece needing a many-holed
+triangulation.
+
+**Render the body alone when checking whether a well was cut.** A stone stands proud of the plate,
+so it is visible whether or not anything was cut beneath it. An uncut plate passed for a cut one
+twice on the strength of a combined render, and both times cost a cycle.
+
+**What Voronoi is actually for here, which is worth not re-deriving.** It is doing the *packing*,
+not the edge. Its defining property is that every point belongs to its nearest seed, so there is no
+dead space to fill — leftover only exists if you *delete a cell*. Hence: cull the **seed**, never
+the cell, and its neighbours grow into exactly the space it held. The edge fragments come from
+polygon clipping, which any tiling would give. With zero jitter the Voronoi of a staggered lattice
+is just a honeycomb; it earns its keep the moment seeds stop being regular.
+
+**Both edge policies are wanted as options, and so is everything else.** `--edge absorb` is the
+above; `--edge grade` seeds the boundary and relaxes the interior with Lloyd, so stones grade
+smaller toward the edge. Also `--jitter`, `--relax`, `--pitch`, `--wall`, `--bezel`, `--edgeInset`,
+`--minArea`, `--bevel`. Nothing is to be baked in.
+
+**Three rules the stone geometry has to keep**, each of which was a visible defect first:
+
+- **Tables are coplanar.** Deriving crown height from the cell's own width while the girdle sits at
+  a fixed depth sinks the narrow cells below the metal — worst at the edges, which is where the
+  narrow cells are.
+- **The plate's depth is not free.** A pavilion is ~0.38 of the girdle's width; too thin a plate and
+  the culet bottoms out flat on the floor, which reads as a tile in a hole. `pave.mjs` derives the
+  depth from the pitch, and a pavilion with no room shallows rather than flattens.
+- **A clipped cell is not convex.** Fanning a cap from the centroid or coning a pavilion to one apex
+  throws triangles outside the cell — that was extra gold on the R's leg. Use a sampled interior
+  point, triangulate both caps, and close the pavilion on a small ring.
+
+**Nothing models a socket.** Slab, plate-with-holes, and stones are three extruded solids; the
+"seat" is emergent — the hole through the plate, floored by the slab. There is no contact test
+between a stone and its well, which is why the depth bugs above could be silent.
 
 **The stone slice did not open `PartKind`, which is what this used to say it would.** Targeting
 grew `{ fill: 'stones' }` beside `{ kind }` instead, and a stone field reports `kind: 'chunk'` —

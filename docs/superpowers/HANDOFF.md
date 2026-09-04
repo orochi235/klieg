@@ -634,6 +634,15 @@ smaller toward the edge. Also `--jitter`, `--relax`, `--pitch`, `--wall`, `--bez
 "seat" is emergent — the hole through the plate, floored by the slab. There is no contact test
 between a stone and its well, which is why the depth bugs above could be silent.
 
+**The outer bevel on a hollowed letter is wrong, and not by a value.** `hollow.mjs` gives the slab
+the glyph's own 0.038 em bevel and the plate `--bevel`, so where the plate lands on the slab the
+outside carries a ledge — the doubled band down the left of the render. Worse, `ExtrudeGeometry`
+bevels *every* contour it is handed, so the plate's outer contour is bevelled at all; a glass wants
+the bevel on the **hole** only, with the outside running unbroken from the slab. Reaching that
+needs the plate built by hand rather than extruded whole — the same rebuild the annulus plan above
+calls for, so do them together. Wall thickness itself is parametric and is `--rim`: the hollow is
+the letter inset by it.
+
 **The stone slice did not open `PartKind`, which is what this used to say it would.** Targeting
 grew `{ fill: 'stones' }` beside `{ kind }` instead, and a stone field reports `kind: 'chunk'` —
 the kind `types.ts` already defines as a letter's whole instanced field. A `'stone'` member would

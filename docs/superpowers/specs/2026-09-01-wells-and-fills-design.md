@@ -29,22 +29,37 @@ answer is always the same one: a linear push along z with a bevel at each end. T
 stands proud. Today's flat cap is the profile `z = 0`.
 
 The field already ships. `signedDistanceField` is the tube pipeline's own, and an inflation is a
-function of it, so this needs no new geometry machinery. `node spikes/inflate.mjs` builds four
-profiles on a real glyph and renders them: `flat`, `pillow` (a circular arc), `dome` (a sine) and
-`ridge` (linear, which creases each stroke down its spine and reads as folded channel rather than
-as a cushion).
+function of it, so this needs no new geometry machinery. `node spikes/inflate.mjs` builds the
+profiles on a real glyph and renders them: `flat`, `pillow` (a circular arc), `cushion` (a
+smoothstep), `dome` (a sine) and `ridge` (linear, which creases each stroke down its spine and
+reads as folded channel rather than as a cushion).
 
-**It is affordable.** The prototype meshes the crown as a heightfield over the field's grid, and the
-grid is the entire cost: 9,143 vertices a letter at 128 cells against 83,948 at 384, with nothing to
-tell between 128 and 256 at sign size. Today's extruder spends about 6,700 a letter, so an inflated
-letter is one extra letter's worth of geometry rather than an order of magnitude — unlike a well,
-where the bevel costs six times the hole.
+**The mesher is settled: refine the extruder's own lid and displace it.** `node spikes/inflate.mjs
+--sweep` prices all three constructions across their own quality knobs. Neither of the two things
+that separate them is vertex count, where they are within a factor of two of each other.
 
-**The mesher is the open question, not the profile.** The heightfield drops any cell the outline
-crosses, so the crown stops one cell short of the silhouette and the bevel underneath shows through
-the rim; invisible at 128, and still the wrong construction to ship. The two candidates are
-subdividing the extruder's own cap and displacing it, and stacking isocontours at successive insets
-— the same profile read as rings, which also survives a stroke pinching into two.
+- **The crown has to end where the lid ends.** The heightfield drops any cell the boundary crosses,
+  so its crown stops **0.0029 em short of the lid** on a 384 grid and up to 0.017 coarser, and the
+  bevel shows through the gap all the way round. Both other constructions inherit the lid's own
+  edge and measure **exactly zero**.
+- **Stacked iso-contours terrace.** Every band is flat, so on `chrome` twenty of them read as a
+  contour map rather than as a cushion. Nothing in the error scores that: rings reach 1.26% of the
+  rise at 2,687 vertices against the refined lid's 1.44% at 2,106, and are still unshippable.
+
+**A profile must have a finite slope where it meets the cap.** That is the one constraint the
+mesher hands back to the design. Refinement is driven by how far a triangle's chord falls from the
+profile, so a vertical tangent at the rim never converges: `pillow`, a circular arc standing
+straight up off the seam, costs **117,895 vertices and still misses by 1.00% of its rise**, while
+`cushion` — the same look with the arc meeting the cap tangentially — costs **7,130 for 0.79%**.
+Sixteen times the geometry for a letter you cannot tell apart in the render.
+
+**It is affordable.** An inflated letter adds 4,700 vertices (`dome`) to 7,100 (`cushion`) over the
+extruder's 7,272 for an `R` — one extra letter's worth of geometry rather than an order of
+magnitude, unlike a well, where the bevel costs six times the hole.
+
+What is left is the medial axis. The field creases where a stroke's two sides meet, and a
+triangulation not aligned to that crease renders it as a jagged highlight — by construction on
+`ridge`, mild on `dome` and `cushion`, and not worth aligning a mesh to before a look asks for it.
 
 ## Cutting, without CSG
 

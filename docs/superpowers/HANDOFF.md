@@ -8,15 +8,13 @@ learned that its design doc does not carry, and what is worth doing next.
 **`face-and-side` and `wells-teardown` are both merged into `main`**: the sequin work, the bevel
 chamfer and contour union, flatness sampling, and the decoration registry that replaced `word.ts`'s
 `decoration.kind` switch. `git log --oneline @{u}..HEAD` is the live answer for anything unpushed —
-a count written here is false the moment it is committed. `npm run check` is green on the merge
-(1,606 tests). The visual suite has not had a clean full run *on the merge commit* — the machine has
-been at load 24 and the two runs attempted lost tests to browser starvation, never to a pixel
-comparison. The merge changed no code (`git diff wells-teardown main -- packages/ apps/` is empty)
-and `wells-teardown` itself passed 41/41 three times, so this is a missing measurement rather than a
-suspected regression. **Re-run it when the machine is quiet.** **The next open item is the plate
-cutter**, the first
-wells-and-fills slice that shows anything; see [the decoration registry](#the-decoration-registry)
-for what the seam it builds on can and cannot do.
+a count written here is false the moment it is committed.
+
+**The plate cutter is built on `plate-cutter`, branched off the merge and not yet merged itself.**
+`npm run check` is green there (1,632 tests) and the visual suite passes **41/41 in 2.9 minutes** —
+no shipped look selects `'well'`, so every baseline is byte-identical. That run also closes the
+measurement this used to record as missing for the merge commit. The next open item is the `stone`
+fill; see [what is worth doing next](#what-is-worth-doing-next).
 
 
 **Host-driven effects are merged.** `fire()` returns a `FireHandle` and takes `onPhase`,
@@ -574,9 +572,30 @@ working — it needs a caller-supplied `TubeSpec.gradient`.
 
 ## What is worth doing next
 
-**Open right now: the plate cutter, the first slice that shows anything.** The wells-and-fills
-teardown that used to stand here is built — see [the decoration registry](#the-decoration-registry)
-below. The overnight of 2026-09-02 closed the degenerate capitals, the face-versus-side separation,
+**Open right now: the `stone` fill.** The plate cutter is built — a `'well'` decoration replaces a
+letter's body with a slab plus a holed plate — and the wells it cuts are empty.
+`WellBuilder.collectParts()` answers `[]`, so nothing can target one: a fill is what gives a well
+parts, and that is the first thing the slice adds. It is where `PartKind` finally has to open, the
+design moving targeting to `{ fill: 'stones' }`.
+
+Three things the cutter's code does not say:
+
+- **The bezel is the slab's bevel, derived rather than set.** `buildPlate` caps the slab's bevel
+  with the bezel, because the slab's front cap is every well's floor and a bevelled cap ramps down
+  across its own bevel width. A sloped seat is inexpressible, and nothing should make it settable.
+
+- **A cutter tests a well's four corners, not its centre.** A count cannot show the difference; a
+  stone hanging off the letter's edge is what it looks like when the test is wrong.
+
+- **`bodyGeometry` is builder-owned and `ctx.glyph()` is cache-owned.** Neighbouring calls on the
+  same context, opposite disposal contracts — free the cache's and another word loses a geometry
+  mid-draw. `WellBuilder` holds a `GlyphCache` so its bodies are freed together.
+
+`node spikes/plate-stack.mjs --letter R --margin 0.012 --half 0.024 --pitch 0.068` drives the
+shipped cutter and assembler rather than a copy: 61 seats, 32,844 vertices against the plain
+letter's 7,272. `--sweep` re-derives the bezel table in the design.
+
+The overnight of 2026-09-02 closed the degenerate capitals, the face-versus-side separation,
 the sequin density and the serif-tuning question, and two later commits closed the bevel spur and
 the overlapping contours
 ([above](#the-bevel-stopped-standing-off-the-outline-and-the-strokes-were-merged)); the entries below
@@ -640,7 +659,8 @@ Roughly in order of value; the items are independent of each other.
   on it — what makes a stone read as set is the seat, which nothing additive produces, and the frame
   becomes whatever metal the cutting left standing rather than a spec of its own. A hole in a plate
   stacked on a slab is a well, so the first cutter needs no CSG. Diamond encrustation is the worked
-  feature. **The teardown slice is done** — see the entry below. Shipped looks stay on their current
+  feature. **The teardown and the plate cutter are both done** — see the entry below, and the one
+  opening this section. Shipped looks stay on their current
   path; re-expressing `tubing`, `piping` and `sequin` as fills moves baselines and is its own slice,
   last.
 
@@ -1271,12 +1291,10 @@ override its own material will widen that interface.
 
 Four things the code does not say.
 
-**A builder adds geometry to a letter's group; it cannot replace the body.** `Word` builds the body
-mesh itself and hands the builder a group to add to. The plate cutter — the next slice — replaces
-the slab rather than adding to it, so it needs a member that does not exist yet (an optional
-`bodyGeometry(char, depth)`). Purely additive to add; the cost of not knowing is finding out with a
-plate half-built. Relatedly, `WordBuildContext.glyph()` answers extruded geometry and a cutter wants
-contours, so a cached `shapes(char)` beside it is worth building in the slice that needs it.
+**A builder may now replace the body, not only add to the letter's group.** The plate cutter added
+the optional `bodyGeometry(char, depth)` the teardown predicted it would need, and `shapes(char)`
+beside `glyph()` for the contours a cutter reads. Both are additive: a builder that declares
+neither behaves exactly as before.
 
 **`PartKind` is still closed** — `'run' | 'body' | 'chunk'` in `effects/types.ts`, and public, since
 effect specs target parts by it. The design moves targeting to `{ fill: 'stones' }`; that is a

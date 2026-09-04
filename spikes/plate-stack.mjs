@@ -3,14 +3,9 @@
  *
  *   npm run build -w klieg && node spikes/plate-stack.mjs [--letter R] [--out dir]
  *
- * The wells-and-fills design cuts recesses without CSG by extruding the glyph twice: a full-depth
- * slab, and a shallower plate carrying the well outlines as `Shape.holes`. Nothing in the tree has
- * ever built that stack, and one detail decides the slice — `ExtrudeGeometry` bevels both ends of
- * every contour, outer and hole alike, from one setting. So the plate's back bevel and the slab's
- * front bevel meet along the letter's whole silhouette, and the bevel that seats a stone cannot be
- * asked for without also asking for that seam.
- *
- * Renders the control beside three stacks and reports each one's vertices.
+ * Drives the shipped cutter and plate assembler, so this is a regression check on them rather than
+ * a second implementation. Renders today's letter beside the carved one and reports each one's
+ * vertices; `--sweep` counts what the bezel costs in seats.
  */
 import { createServer } from 'node:http';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -19,8 +14,14 @@ import { fileURLToPath } from 'node:url';
 import opentype from 'opentype.js';
 import { chromium } from 'playwright';
 import * as THREE from 'three';
-import { signedDistanceField } from '../packages/core/dist/render/tube/field.js';
-import { DEFAULT_GLYPH_OPTIONS, glyphToShapes } from '../packages/core/dist/text/glyphs.js';
+import { cutterFor } from '../packages/core/dist/render/wells/cutters.js';
+import { buildPlate } from '../packages/core/dist/render/wells/plate.js';
+import { regionOf } from '../packages/core/dist/render/wells/region.js';
+import {
+  buildGlyphGeometry,
+  DEFAULT_GLYPH_OPTIONS,
+  glyphToShapes,
+} from '../packages/core/dist/text/glyphs.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
@@ -32,75 +33,33 @@ const LETTER = arg('letter', 'R');
 const OUT = resolve(arg('out', resolve(HERE, 'plate-stack-out')));
 /** How much of the letter's depth the plate takes; the slab keeps the rest. */
 const PLATE = Number(arg('plate', '0.09'));
-/** The bezel: how far in from the outline a well may start, in em. */
+/** The bezel: how far in from the outline a well may start, in em. Also caps the slab's bevel. */
 const MARGIN = Number(arg('margin', '0.05'));
 /** Lattice pitch and each diamond's half-diagonal, in em. */
 const PITCH = Number(arg('pitch', '0.1'));
 const HALF = Number(arg('half', '0.032'));
-const RESOLUTION = Number(arg('resolution', '256'));
-/**
- * The slab's own bevel, which is not the glyph default. A bevelled extrusion's front cap only
- * covers the shape inset by `bevelSize`, and ramps down by `bevelThickness` over that width — so
- * the slab's front face, which is every well's floor, is flat only further in than this. It is a
- * knob rather than a constant because in a stack the plate carries the letter's front bevel and
- * the slab's front bevel is buried; all it still does is decide the minimum bezel.
- */
-const SLAB_BEVEL = Number(arg('slab-bevel', String(DEFAULT_GLYPH_OPTIONS.bevelSize)));
 const D = DEFAULT_GLYPH_OPTIONS.depth;
 
 const buf = readFileSync(resolve(ROOT, 'apps/lab/public/font.ttf'));
 const font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
 
-/**
- * The region is a predicate, not a polygon. Inside is negative, so "at least `m` in from every
- * contour" is one sample — no contour offset needed, and counters are handled by the same test
- * because the field already counts them as boundary.
- */
-function regionOf(letterShapes) {
-  const polygons = [];
-  for (const shape of letterShapes) {
-    polygons.push(shape.getPoints(64).map((p) => ({ x: p.x, y: p.y })));
-    for (const hole of shape.holes) {
-      polygons.push(hole.getPoints(64).map((p) => ({ x: p.x, y: p.y })));
-    }
-  }
-  const field = signedDistanceField(polygons, { resolution: RESOLUTION, pad: 0.05 });
-  return (x, y, m) => field.sample(x, y) <= -m;
-}
-
-/** Diamond well seats on a staggered lattice, kept only where the whole diamond clears the bezel. */
-function lattice(letterShapes, insideBy, margin, half = HALF) {
-  const box = new THREE.Box2();
-  for (const s of letterShapes) for (const p of s.getPoints(24)) box.expandByPoint(p);
-  const out = [];
-  let rejected = 0;
-  const rows = Math.ceil((box.max.y - box.min.y) / (PITCH * 0.866));
-  for (let r = 0; r <= rows; r++) {
-    const y = box.min.y + r * PITCH * 0.866;
-    const stagger = r % 2 ? PITCH / 2 : 0;
-    for (let x = box.min.x + stagger; x <= box.max.x; x += PITCH) {
-      // The diamond's four corners, not just its centre: a centre that clears the bezel by less
-      // than the half-diagonal still breaks the letter's edge.
-      const corners = [
-        [x, y + half],
-        [x + half, y],
-        [x, y - half],
-        [x - half, y],
-      ];
-      if (!corners.every(([cx, cy]) => insideBy(cx, cy, margin))) {
-        rejected++;
-        continue;
-      }
-      out.push({ x, y });
-    }
-  }
-  return { seats: out, rejected };
-}
+const specWith = (bezel) => ({
+  kind: 'well',
+  cutter: 'lattice',
+  bezel,
+  floor: PLATE,
+  pitch: PITCH,
+  size: HALF * 2,
+  look: {},
+});
+const CUT_SPEC = specWith(MARGIN);
+const cutOf = (letterShapes, spec = CUT_SPEC) =>
+  cutterFor('lattice')(letterShapes, regionOf(letterShapes), spec);
 
 /**
- * How many seats survive as the slab's bevel — and with it the smallest legal bezel — is reduced.
- * The bezel cannot go below the slab's bevel, because inside that width the slab's front face is
- * a ramp rather than a floor, and a well cut over it has a sloped seat at an unpredictable depth.
+ * How many seats survive as the bezel — and with it the slab's bevel — is reduced. The bezel
+ * cannot go below the slab's bevel, because inside that width the slab's front face is a ramp
+ * rather than a floor, and a well cut over it has a sloped seat at an unpredictable depth.
  */
 if (process.argv.includes('--sweep')) {
   const LETTERS = arg('letters', 'IRHOB').split('');
@@ -112,7 +71,7 @@ if (process.argv.includes('--sweep')) {
       const s = glyphToShapes(font, letter, 1);
       // A zero bezel still has to keep the stone out of the outline itself, so the floor
       // constraint relaxes to nothing but the silhouette one does not.
-      return lattice(s, regionOf(s), Math.max(b, 1e-4)).seats.length;
+      return cutOf(s, specWith(Math.max(b, 1e-4))).wells.length;
     });
     const total = counts.reduce((a, c) => a + c, 0);
     console.log(
@@ -123,64 +82,14 @@ if (process.argv.includes('--sweep')) {
 }
 
 const shapes = glyphToShapes(font, LETTER, 1);
-const insideBy = regionOf(shapes);
-const { seats, rejected } = lattice(shapes, insideBy, MARGIN);
+const cut = cutOf(shapes);
 
-/** The glyph's shapes with a diamond hole per seat. */
-function cutPlate() {
-  const cut = shapes.map((s) => {
-    const copy = s.clone();
-    copy.holes = s.holes.map((h) => h.clone());
-    return copy;
-  });
-  for (const seat of seats) {
-    // One outline per glyph in every face here; a multi-outline glyph would need a containment
-    // test, and the field cannot say which outline a point belongs to.
-    const host = cut[0];
-    const hole = new THREE.Path();
-    hole.moveTo(seat.x, seat.y + HALF);
-    hole.lineTo(seat.x + HALF, seat.y);
-    hole.lineTo(seat.x, seat.y - HALF);
-    hole.lineTo(seat.x - HALF, seat.y);
-    hole.closePath();
-    host.holes.push(hole);
-  }
-  return cut;
-}
-
-const plateShapes = cutPlate();
-const bevelOf = (size) => ({
-  bevelThickness: (DEFAULT_GLYPH_OPTIONS.bevelThickness * size) / DEFAULT_GLYPH_OPTIONS.bevelSize,
-  bevelSize: size,
-  bevelSegments: DEFAULT_GLYPH_OPTIONS.bevelSegments,
-  bevelOffset: 0,
-});
-const extrude = (s, depth, bevelSize) =>
-  new THREE.ExtrudeGeometry(s, {
-    depth,
-    bevelEnabled: bevelSize > 0,
-    curveSegments: DEFAULT_GLYPH_OPTIONS.curveSegments,
-    ...(bevelSize > 0 ? bevelOf(bevelSize) : {}),
-  });
-
-/** A stack: a slab of `D - PLATE`, and a plate of `PLATE` sitting on its front face. */
-function stack(plate, slabBevel, plateBevel) {
-  const slabGeo = extrude(shapes, D - PLATE, slabBevel);
-  const plateGeo = extrude(plate, PLATE, plateBevel);
-  plateGeo.translate(0, 0, D - PLATE);
-  return [slabGeo, plateGeo];
-}
-
-const FULL = DEFAULT_GLYPH_OPTIONS.bevelSize;
 const VARIANTS = {
-  // Today's letter. Anything that changes here changes every shipped look.
-  today: () => [extrude(shapes, D, FULL)],
-  // The stack with no wells at all: the junction on its own.
-  stack: () => stack(shapes, FULL, FULL),
-  // The design's construction, at whatever slab bevel was asked for.
-  wells: () => stack(plateShapes, SLAB_BEVEL, FULL),
-  // The slab's bevel dropped entirely, which takes the letter's back edge with it.
-  'wells-flat-slab': () => stack(plateShapes, 0, FULL),
+  // Today's letter, built the way every shipped look builds it. Anything that changes here
+  // changes every shipped look.
+  today: () => [buildGlyphGeometry(font, LETTER, 1, DEFAULT_GLYPH_OPTIONS)],
+  // The design's construction: a slab with a holed plate on its front face.
+  wells: () => [buildPlate(shapes, cut, { depth: D, bezel: MARGIN })],
 };
 
 const dump = (geo) => ({
@@ -189,9 +98,7 @@ const dump = (geo) => ({
   index: geo.getIndex() ? [...geo.getIndex().array] : null,
 });
 
-console.log(
-  `"${LETTER}" — ${seats.length} seats placed, ${rejected} rejected by the ${MARGIN} em bezel\n`,
-);
+console.log(`"${LETTER}" — ${cut.wells.length} seats placed at a ${MARGIN} em bezel\n`);
 console.log('  variant             meshes   vertices');
 const payload = {
   letter: LETTER,

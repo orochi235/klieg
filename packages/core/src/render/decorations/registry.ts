@@ -8,6 +8,7 @@ import type { DecorationSpec } from '../decoration.js';
 import type { WordDebugHooks } from '../word.js';
 import { ChunksBuilder } from './chunks.js';
 import { TubeBuilder } from './tube.js';
+import { WellBuilder } from './well.js';
 
 /** What a builder may reach back into on the `Word` that owns it. */
 export interface WordBuildContext {
@@ -46,6 +47,15 @@ export interface DecorationBuilder {
   buildLetter(index: number, char: string, sized: THREE.Group, tint: number | undefined): void;
   /** A letter that drew no ink. Keeps every per-letter slot aligned with the letter pool. */
   skipLetter(index: number): void;
+  /**
+   * This letter's body geometry, replacing the extruded glyph. Omit it and `Word` uses the cache.
+   *
+   * Disposal is the reverse of `ctx.glyph()`'s: what this answers is the builder's own and the
+   * builder must free it in `dispose()`, where `ctx.glyph()`'s belongs to the cache and must never
+   * be freed by a builder. Keyed on the char rather than the letter slot, because a letter's wells
+   * cannot depend on its neighbours — so one geometry serves every letter of that char.
+   */
+  bodyGeometry?(char: string, depth: number): THREE.BufferGeometry;
   /** The parts this decoration contributes, once every letter is built. */
   collectParts(): DecorationPart[];
   /** Per-frame material writes for letter `index`; `opacity` is the pose's own. */
@@ -86,3 +96,4 @@ export function decorationBuilderFor(
 
 registerDecoration('chunks', (spec, ctx) => new ChunksBuilder(spec, ctx));
 registerDecoration('tube', (spec, ctx) => new TubeBuilder(spec, ctx));
+registerDecoration('well', (spec, ctx) => new WellBuilder(spec, ctx));

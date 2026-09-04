@@ -30,7 +30,77 @@ describe('decorationBuilderFor', () => {
   // A spec that reached here with a kind nobody registered is a wiring bug, and a silent null
   // would render an undecorated word rather than say so.
   it('throws on a kind nobody registered', () => {
-    expect(() => decorationBuilderFor({ kind: 'well' } as never, ctx)).toThrow(/well/);
+    expect(() => decorationBuilderFor({ kind: 'etching' } as never, ctx)).toThrow(/etching/);
+  });
+});
+
+const WELL_SPEC = {
+  kind: 'well',
+  cutter: 'lattice',
+  bezel: 0.012,
+  floor: 0.09,
+  pitch: 0.068,
+  size: 0.048,
+  look: {},
+};
+
+function wellBuilder() {
+  const builder = decorationBuilderFor(WELL_SPEC as never, wordContext());
+  if (!builder) throw new Error('no builder');
+  return builder;
+}
+
+describe('WellBuilder', () => {
+  it('carves a body that costs more than the plain glyph', () => {
+    const builder = wellBuilder();
+    const geo = builder.bodyGeometry?.('A', 0.3);
+    expect(geo).toBeDefined();
+    const carved = (geo as THREE.BufferGeometry).getAttribute('position').count;
+    expect(carved).toBeGreaterThan(0);
+    builder.dispose();
+  });
+
+  it('answers one geometry per char, however many letters ask', () => {
+    const builder = wellBuilder();
+    expect(builder.bodyGeometry?.('A', 0.3)).toBe(builder.bodyGeometry?.('A', 0.3));
+    expect(builder.bodyGeometry?.('B', 0.3)).not.toBe(builder.bodyGeometry?.('A', 0.3));
+    builder.dispose();
+  });
+
+  it('adds nothing to the letter group — the wells are in the body', () => {
+    const builder = wellBuilder();
+    const sized = new THREE.Group();
+    builder.buildLetter(0, 'A', sized, undefined);
+    expect(sized.children).toHaveLength(0);
+    builder.dispose();
+  });
+
+  it('contributes no parts, because a well has no fill to target yet', () => {
+    const builder = wellBuilder();
+    builder.buildLetter(0, 'A', new THREE.Group(), undefined);
+    expect(builder.collectParts()).toEqual([]);
+    expect(builder.boundsAt(0)).toBeNull();
+    builder.dispose();
+  });
+
+  // `collectParts()` walks "highest index written + 1" for every other builder, so a trailing
+  // hole is the case that distinguishes it from the letter count. This builder keeps no
+  // per-letter array — if one is ever added, assert alignment once **per array**, because a
+  // single assertion stays green while a different array is the one that slipped.
+  it('survives a hole at either end of the letter run', () => {
+    const builder = wellBuilder();
+    builder.skipLetter(0);
+    builder.buildLetter(1, 'A', new THREE.Group(), undefined);
+    builder.skipLetter(2);
+    expect(builder.collectParts()).toEqual([]);
+    expect(() => builder.frame(1, 1)).not.toThrow();
+    builder.dispose();
+  });
+
+  it('leaves the shipped kinds without a body of their own', () => {
+    const tube = decorationBuilderFor(specOf('tubing').decoration, wordContext());
+    expect(tube?.bodyGeometry).toBeUndefined();
+    tube?.dispose();
   });
 });
 

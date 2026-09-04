@@ -105,7 +105,7 @@ export interface ChunkBlueprint {
   dispose(): void;
 }
 
-export type DecorationSpec = TubeSpec | ChunkSpec;
+export type DecorationSpec = TubeSpec | ChunkSpec | WellSpec;
 export type Blueprint = TubeBlueprint | ChunkBlueprint;
 
 /** How many surface samples a char shares. Letters draw their own chunks from this pool. */

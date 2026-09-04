@@ -76,7 +76,9 @@ describe('the lattice cutter', () => {
   // The corners, not the centre: a centre clearing the bezel by less than the half-diagonal still
   // hangs the well off the letter's edge, and a count alone would never show it.
   it('rejects a well whose corners leave the bezel even though its centre does not', () => {
-    expect(cutBox({ size: 0.048 }).wells.length).toBeGreaterThan(cutBox({ size: 0.3 }).wells.length);
+    expect(cutBox({ size: 0.048 }).wells.length).toBeGreaterThan(
+      cutBox({ size: 0.3 }).wells.length,
+    );
   });
 
   it('places fewer wells as the bezel grows', () => {

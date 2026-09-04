@@ -52,6 +52,13 @@ const LIP = Number(arg('bevel', '0.008'));
 const SEGS = Math.max(1, Number(arg('bevelSegments', '3')));
 /** How coarsely a level's outline is walked, in em. Below the field's own cell it is all staircase. */
 const SPACING = Number(arg('outlineSpacing', '0.006'));
+/** Radius the letter's reflex corners are rounded to, in em: the junctions and inside the counter. */
+const ROUND_IN = Number(arg('round', '0'));
+/** Radius its convex corners are rounded to: the outer corners, the tips, the leg's point. */
+const ROUND_OUT = Number(arg('roundOuter', '0'));
+if (Math.max(ROUND_IN, ROUND_OUT) > 0.04) {
+  throw new Error(`a ${Math.max(ROUND_IN, ROUND_OUT)} em radius grows past the field's own 0.05 pad`);
+}
 const TILT = Number(arg('tilt', '0.5'));
 
 /** How thick the letter is, in em, before anything is taken out of it. */
@@ -127,81 +134,10 @@ const orient = (ring, metalInside) => {
   return signedArea(clean) > 0 === metalInside ? clean : clean.slice().reverse();
 };
 
-/** three's own cap on a runaway miter, which is what stops a spur at a near-reversal. */
-const MITER_CAP = Math.SQRT2;
-
-/**
- * Every vertex moved `d` toward the metal, keeping the ring's point count. Two offsets of one ring
- * therefore stitch quad for quad, which is the whole reason a wall can be built here at all — the
- * field can offset any ring but gives back a ring with no correspondence to the one it came from.
- */
-function offsetRing(ring, d) {
-  if (d === 0) return ring.map((p) => [p[0], p[1]]);
-  const n = ring.length;
-  const normals = ring.map((p, i) => {
-    const q = ring[(i + 1) % n];
-    const dx = q[0] - p[0];
-    const dy = q[1] - p[1];
-    const len = Math.hypot(dx, dy) || 1e-12;
-    // Metal is on the left of travel, so the inward normal is the left-hand normal.
-    return [-dy / len, dx / len];
-  });
-  const step = field.emPerCell * 2;
-  const moved = ring.map((p, i) => {
-    const n2 = normals[i];
-    const n1 = normals[(i - 1 + n) % n];
-    const dot = n1[0] * n2[0] + n1[1] * n2[1];
-    const denom = 1 + dot;
-    let mx;
-    let my;
-    if (denom < 1e-6) {
-      mx = n2[0] * d;
-      my = n2[1] * d;
-    } else {
-      mx = ((n1[0] + n2[0]) * d) / denom;
-      my = ((n1[1] + n2[1]) * d) / denom;
-      const len = Math.hypot(mx, my);
-      const cap = MITER_CAP * Math.abs(d);
-      if (len > cap) {
-        mx = (mx / len) * cap;
-        my = (my / len) * cap;
-      }
-    }
-    const level = depthAt(p[0], p[1]);
-    const sign = Math.sign(depthAt(p[0] + n2[0] * step, p[1] + n2[1] * step) - level) || -1;
-    return { p, m: [mx, my], t: reach(p[0], p[1], mx, my, level, sign, Math.abs(d)) };
-  });
-
-  // The field answers for one vertex at a time, so it catches a vertex overshooting its own medial
-  // axis and misses two parts of a ring closing on each other — the S's spine folds with the field
-  // never turning back. An edge that comes out pointing the other way is that fold, and is what a
-  // per-vertex test cannot be asked. Pull both its ends in until it points the right way again.
-  const at = (v) => [v.p[0] + v.m[0] * v.t, v.p[1] + v.m[1] * v.t];
-  for (let pass = 0; pass < 12; pass++) {
-    let folded = 0;
-    for (let i = 0; i < n; i++) {
-      const j = (i + 1) % n;
-      const a = moved[i];
-      const b = moved[j];
-      if (a.t === 0 && b.t === 0) continue;
-      const qa = at(a);
-      const qb = at(b);
-      const was = [b.p[0] - a.p[0], b.p[1] - a.p[1]];
-      const now = [qb[0] - qa[0], qb[1] - qa[1]];
-      if (now[0] * was[0] + now[1] * was[1] >= 0) continue;
-      a.t *= 0.5;
-      b.t *= 0.5;
-      folded++;
-    }
-    if (folded === 0) break;
-  }
-  return moved.map(at);
-}
-
 /**
  * A ring walked at a fixed spacing. An iso-contour arrives at the field's own resolution, and its
- * vertex normals alternate with the grid's staircase — a miter off those folds the ring at almost
- * every vertex however small the offset is, which is not a thing a coarser ring does.
+ * staircase is finer than any bevel or bead the letter carries — a level outline on the R goes from
+ * 1,964 points to 300 and reads the same.
  */
 function resample(ring, spacing) {
   const n = ring.length;
@@ -213,7 +149,6 @@ function resample(ring, spacing) {
   const steps = Math.max(8, Math.round(total / spacing));
   const step = total / steps;
   const out = [];
-  let at = 0;
   let carried = 0;
   let want = 0;
   for (let i = 0; i < n && out.length < steps; i++) {
@@ -226,7 +161,6 @@ function resample(ring, spacing) {
       want += step;
     }
     carried += seg;
-    at = i;
   }
   return out;
 }
@@ -280,7 +214,7 @@ function nest(loops) {
 // to work with, and it is what the shipped letter is built from anyway.
 const CH = chamfered(shapes, DEFAULT_GLYPH_OPTIONS);
 /** The glyph as regions of `{ outer, holes }`, all rings metal-on-the-left. */
-const GLYPH = CH.map((shape) => ({
+let GLYPH = CH.map((shape) => ({
   outer: orient(xy(shape.getPoints(SEGMENTS)), true),
   holes: shape.holes.map((h) => orient(xy(h.getPoints(SEGMENTS)), false)),
 }));
@@ -294,57 +228,8 @@ for (const shape of shapes) {
     rings.push(hole.getPoints(SEGMENTS).map((p) => ({ x: p.x, y: p.y })));
   }
 }
-const field = signedDistanceField(rings, { resolution: 512, pad: 0.05 });
-
-/** Bilinear, unlike `Field.sample`, which rounds — a clamped offset needs a smooth gradient. */
-function depthAt(x, y) {
-  const { data, size, emPerCell, originX, originY } = field;
-  const gx = Math.min(Math.max((x - originX) / emPerCell, 0), size - 1.0001);
-  const gy = Math.min(Math.max((y - originY) / emPerCell, 0), size - 1.0001);
-  const x0 = Math.floor(gx);
-  const y0 = Math.floor(gy);
-  const fx = gx - x0;
-  const fy = gy - y0;
-  const d00 = data[y0 * size + x0];
-  const d10 = data[y0 * size + x0 + 1];
-  const d01 = data[(y0 + 1) * size + x0];
-  const d11 = data[(y0 + 1) * size + x0 + 1];
-  return (d00 * (1 - fx) + d10 * fx) * (1 - fy) + (d01 * (1 - fx) + d11 * fx) * fy;
-}
-
-/**
- * How far along its miter a vertex may actually travel. A taper runs out of metal before a wide
- * chamfer does — the R's leg has nowhere to put 0.038 em — and a miter that does not know that
- * folds the ring through itself. Walked rather than solved: stop at the level the offset was aiming
- * for, or at the turn where the field stops deepening, whichever comes first.
- */
-function reach(px, py, mx, my, level, sign, want) {
-  const target = level + sign * want;
-  const ok = (t, from) => {
-    const z = depthAt(px + mx * t, py + my * t);
-    return sign * (z - from) >= -1e-9 && sign * (z - target) <= 1e-9 ? z : null;
-  };
-  let last = level;
-  let best = 0;
-  let k = 1;
-  for (; k <= 8; k++) {
-    const z = ok(k / 8, last);
-    if (z === null) break;
-    last = z;
-    best = k / 8;
-  }
-  if (k > 8) return 1;
-  // Bisect the step that failed. Eighths alone quantise the clamp, and a chamfer whose width jumps
-  // between two neighbouring vertices reads as a serration all the way round the counter.
-  let lo = best;
-  let hi = k / 8;
-  for (let i = 0; i < 6; i++) {
-    const mid = (lo + hi) / 2;
-    if (ok(mid, last) === null) hi = mid;
-    else lo = mid;
-  }
-  return lo;
-}
+const FIELD = { resolution: Number(arg('resolution', '512')), pad: 0.05 };
+let field = signedDistanceField(rings, FIELD);
 
 /**
  * A level's outline, as void regions. The orientation is inverted against the glyph's: a well's own
@@ -357,6 +242,43 @@ const outlineAt = (inset) =>
     outer: orient(poly[0], false),
     holes: poly.slice(1).map((h) => orient(h, true)),
   }));
+
+// ---------------------------------------------------------------------------------------------
+// Rounding, which is the field's job rather than a corner's.
+
+const fieldOf = (regions) =>
+  signedDistanceField(
+    regions.flatMap((g) => [g.outer, ...g.holes]).map((r) => r.map(([x, y]) => ({ x, y }))),
+    FIELD,
+  );
+
+/** The metal at one iso level of `f`, as regions — negative erodes it, positive grows it. */
+const metalAt = (f, level) =>
+  nest(isoContours(f, level).map((r) => clean(xy(r)))).map((poly) => ({
+    outer: orient(poly[0], true),
+    holes: poly.slice(1).map((h) => orient(h, false)),
+  }));
+
+/**
+ * A radius rolled along the outline, which is what rounds a corner without having to find one.
+ * Growing the metal and shrinking it back leaves every reflex corner filled to the radius and every
+ * convex corner where it was; doing it the other way round rounds the convex corners instead.
+ *
+ * It cannot be done by shifting one field's levels — the distance field of a grown shape is the
+ * original minus the radius only on the outside, and the inside is exactly where a filled corner
+ * changes what the nearest edge is. So each half rebuilds the field, and the radius is a real one.
+ */
+const roll = (regions, r, outward) =>
+  metalAt(fieldOf(metalAt(fieldOf(regions), outward ? r : -r)), outward ? -r : r);
+
+if (ROUND_IN > 0) {
+  GLYPH = roll(GLYPH, ROUND_IN, true);
+  field = fieldOf(GLYPH);
+}
+if (ROUND_OUT > 0) {
+  GLYPH = roll(GLYPH, ROUND_OUT, false);
+  field = fieldOf(GLYPH);
+}
 
 const OUTLINES = LEVELS.map(({ inset }, i) => {
   const poly = outlineAt(inset);
@@ -397,6 +319,57 @@ function wall(lower, zLo, upper, zHi) {
 }
 
 /**
+ * A quad strip between two rings that need not correspond. Both are walked by their own arc length
+ * and whichever is behind advances, so the strip closes whatever the point counts are.
+ *
+ * That is what lets every ring come from the field. A miter keeps the point count and so cannot
+ * survive being asked for more than a corner's own radius — past that the offset has to invert, and
+ * no amount of clamping or fold repair changes the geometry. An iso-contour never folds; it just
+ * does not correspond, and this is the correspondence.
+ */
+function stitch(lower, zLo, upper, zHi) {
+  const na = lower.length;
+  const nb = upper.length;
+  if (na < 3 || nb < 3) return;
+  const arc = (ring) => {
+    const t = [0];
+    for (let i = 1; i <= ring.length; i++) {
+      const p = ring[i - 1];
+      const q = ring[i % ring.length];
+      t.push(t[i - 1] + Math.hypot(q[0] - p[0], q[1] - p[1]));
+    }
+    return t.map((v) => v / (t[t.length - 1] || 1));
+  };
+  // Rings from two iso levels start wherever marching squares happened to start them; without this
+  // the strip is built with a twist in it and every quad crosses the letter.
+  let off = 0;
+  let best = Number.POSITIVE_INFINITY;
+  for (let k = 0; k < nb; k++) {
+    const d = Math.hypot(upper[k][0] - lower[0][0], upper[k][1] - lower[0][1]);
+    if (d < best) {
+      best = d;
+      off = k;
+    }
+  }
+  const b = upper.slice(off).concat(upper.slice(0, off));
+  const ta = arc(lower);
+  const tb = arc(b);
+  const A = (i) => [lower[i % na][0], lower[i % na][1], zLo];
+  const B = (j) => [b[j % nb][0], b[j % nb][1], zHi];
+  let i = 0;
+  let j = 0;
+  while (i < na || j < nb) {
+    if (j >= nb || (i < na && ta[i + 1] <= tb[j + 1])) {
+      tri(A(i), A(i + 1), B(j));
+      i++;
+    } else {
+      tri(A(i), B(j + 1), B(j));
+      j++;
+    }
+  }
+}
+
+/**
  * A flat face. Its facing is asserted per triangle rather than inherited from the ring order, so a
  * ring that arrives wound the other way darkens nothing — a lid facing into the solid is invisible
  * and reads as a missing cap, which is a long way to chase for a sign flip.
@@ -431,19 +404,72 @@ const bevelSteps = (size, thick, segs) =>
     return { inset: size * Math.cos((t * Math.PI) / 2), dz: thick * Math.sin((t * Math.PI) / 2) };
   });
 
-/** The letter's outer skin: chamfer up off the back face, one straight wall, chamfer in to the front. */
-const OUTER_STEPS = OUTER > 0 && OUTER_T > 0 ? bevelSteps(OUTER, OUTER_T, SEGS) : [{ inset: 0, dz: 0 }];
-const skinRing = (ring, k) => offsetRing(ring, OUTER_STEPS[k].inset);
-const GLYPH_RINGS = GLYPH.flatMap((g) => [g.outer, ...g.holes]);
-for (const ring of GLYPH_RINGS) {
-  for (let k = 0; k < OUTER_STEPS.length - 1; k++) {
-    wall(skinRing(ring, k), OUTER_STEPS[k].dz, skinRing(ring, k + 1), OUTER_STEPS[k + 1].dz);
+/**
+ * Every ring in the letter is an iso-contour of its own field, at the level that ring sits at, and
+ * every band between two of them is stitched. Nothing is offset, so nothing can fold.
+ */
+const skinAt = (inset) => metalAt(field, -inset).flatMap((g) => [g.outer, ...g.holes]);
+const voidAt = (inset) => outlineAt(inset).flatMap((r) => [r.outer, ...r.holes]);
+
+/**
+ * Which ring of one level answers which of the next. A band is between two rings, and two iso
+ * levels of the same letter run parallel — so nearest centroid pairs them, and a count that does not
+ * match is a stroke that closed up or split between the levels rather than a pairing to guess at.
+ */
+function pair(a, b) {
+  if (a.length !== b.length) return null;
+  const mid = (ring) => {
+    let x = 0;
+    let y = 0;
+    for (const p of ring) {
+      x += p[0];
+      y += p[1];
+    }
+    return [x / ring.length, y / ring.length];
+  };
+  const ma = a.map(mid);
+  const mb = b.map(mid);
+  const taken = new Set();
+  const out = [];
+  for (let i = 0; i < a.length; i++) {
+    let best = -1;
+    let d = Number.POSITIVE_INFINITY;
+    for (let j = 0; j < b.length; j++) {
+      if (taken.has(j)) continue;
+      const e = Math.hypot(ma[i][0] - mb[j][0], ma[i][1] - mb[j][1]);
+      if (e < d) {
+        d = e;
+        best = j;
+      }
+    }
+    if (best === -1) return null;
+    taken.add(best);
+    out.push([a[i], b[best]]);
   }
-  wall(skinRing(ring, OUTER_STEPS.length - 1), OUTER_T, skinRing(ring, OUTER_STEPS.length - 1), D - OUTER_T);
-  for (let k = OUTER_STEPS.length - 1; k > 0; k--) {
-    wall(skinRing(ring, k), D - OUTER_STEPS[k].dz, skinRing(ring, k - 1), D - OUTER_STEPS[k - 1].dz);
+  return out;
+}
+
+let unpaired = 0;
+/** A run of bands between successive levels, from `zAt(k)` for each step. */
+function band(rings, zAt) {
+  for (let k = 0; k < rings.length - 1; k++) {
+    const pairs = pair(rings[k], rings[k + 1]);
+    if (pairs === null) {
+      unpaired++;
+      continue;
+    }
+    for (const [lo, hi] of pairs) stitch(lo, zAt(k), hi, zAt(k + 1));
   }
 }
+
+/** The letter's outer skin: chamfer up off the back face, one straight wall, chamfer in to the front. */
+const OUTER_STEPS = OUTER > 0 && OUTER_T > 0 ? bevelSteps(OUTER, OUTER_T, SEGS) : [{ inset: 0, dz: 0 }];
+const SKIN = OUTER_STEPS.map((step) => skinAt(step.inset));
+band(SKIN, (k) => OUTER_STEPS[k].dz);
+for (const ring of SKIN[SKIN.length - 1]) {
+  stitch(ring, OUTER_T, ring, D - OUTER_T);
+}
+band([...SKIN].reverse(), (k) => D - OUTER_STEPS[OUTER_STEPS.length - 1 - k].dz);
 
 /**
  * A flat face from every ring that lands on its plane, nested by containment. A well inside a
@@ -455,38 +481,25 @@ const capPlane = (planeRings, z, up) => {
 };
 
 /** The back face, which no level reaches. */
-capPlane(GLYPH_RINGS.map((r) => offsetRing(r, OUTER)), 0, false);
+capPlane(SKIN[0], 0, false);
 
-/** A well's rim: `LIP` of metal taken off the ring at the ceiling, back to nothing `LIP_T` below. */
+/** A well's rim: the void `LIP` wider at the ceiling, back to its own outline `LIP_T` below. */
 const LIP_STEPS = LIP > 0 && LIP_T > 0 ? bevelSteps(LIP, LIP_T, SEGS) : [{ inset: 0, dz: 0 }];
-const wellRing = (ring, k) => offsetRing(ring, LIP_STEPS[k].inset);
-const RIM_RINGS = OUTLINES.map((regions) =>
-  regions.flatMap((r) => [r.outer, ...r.holes]).map((ring) => wellRing(ring, 0)),
-);
+const BEAD = LEVELS.map((level) => LIP_STEPS.map((step) => voidAt(level.inset - step.inset)));
+const RIM_RINGS = BEAD.map((steps) => steps[0]);
 
 for (let i = 0; i < LEVELS.length; i++) {
   const ceiling = i === 0 ? D : FLOORS[i - 1];
-  for (const ring of OUTLINES[i].flatMap((r) => [r.outer, ...r.holes])) {
-    for (let k = 0; k < LIP_STEPS.length - 1; k++) {
-      wall(wellRing(ring, k + 1), ceiling - LIP_STEPS[k + 1].dz, wellRing(ring, k), ceiling - LIP_STEPS[k].dz);
-    }
-    const straight = wellRing(ring, LIP_STEPS.length - 1);
-    wall(straight, FLOORS[i], straight, ceiling - LIP_T);
+  band([...BEAD[i]].reverse(), (k) => ceiling - LIP_STEPS[LIP_STEPS.length - 1 - k].dz);
+  for (const ring of BEAD[i][LIP_STEPS.length - 1]) {
+    stitch(ring, FLOORS[i], ring, ceiling - LIP_T);
   }
 }
 
 /** The letter's front, then one floor per level: what the level leaves, opened by the level below. */
-const frontRings = [...GLYPH_RINGS.map((r) => offsetRing(r, OUTER)), ...RIM_RINGS[0]];
-if (process.env.HOLLOW_EDGES) {
-  console.log(`    front rings: ${frontRings.map((r) => r.length).join(', ')}`);
-  console.log(`    nested: ${nest(frontRings).map((g) => g.map((r) => r.length).join('+')).join(' | ')}`);
-}
-capPlane(frontRings, D, true);
+capPlane([...SKIN[0], ...RIM_RINGS[0]], D, true);
 for (let i = 0; i < LEVELS.length; i++) {
-  const floor = OUTLINES[i]
-    .flatMap((r) => [r.outer, ...r.holes])
-    .map((ring) => wellRing(ring, LIP_STEPS.length - 1));
-  capPlane([...floor, ...(RIM_RINGS[i + 1] ?? [])], FLOORS[i], true);
+  capPlane([...BEAD[i][LIP_STEPS.length - 1], ...(RIM_RINGS[i + 1] ?? [])], FLOORS[i], true);
 }
 
 const body = new THREE.BufferGeometry();
@@ -541,6 +554,11 @@ function openEdges() {
 }
 
 console.log(`"${LETTER}" — ${LEVELS.length} level(s), ${TOTAL} em of ${D} em hollowed out`);
+if (ROUND_IN > 0 || ROUND_OUT > 0) {
+  console.log(
+    `  rounded: reflex corners to ${ROUND_IN || 'nothing'}, convex to ${ROUND_OUT || 'nothing'}`,
+  );
+}
 console.log(
   `  ${D} em thick, chamfer ${OUTER} falling ${OUTER_T} on the outside, ` +
     `bead ${LIP} falling ${LIP_T} on every rim, ${SEGS} segments each`,
@@ -552,6 +570,9 @@ for (let i = 0; i < LEVELS.length; i++) {
   );
 }
 const open = openEdges();
+if (unpaired > 0) {
+  console.log(`  ${unpaired} band(s) unstitched — a stroke closed up or split between two levels`);
+}
 console.log(`  body ${body.getAttribute('position').count} verts, ${pos.length / 9} triangles`);
 console.log(
   open === 0

@@ -20,8 +20,10 @@ import { fileURLToPath } from 'node:url';
 import opentype from 'opentype.js';
 import { chromium } from 'playwright';
 import * as THREE from 'three';
+import { createMaterial } from '../packages/core/dist/render/looks.js';
 import { cutterFor } from '../packages/core/dist/render/wells/cutters.js';
-import { buildPlate } from '../packages/core/dist/render/wells/plate.js';
+import { fillFor } from '../packages/core/dist/render/wells/fills.js';
+import { buildPlate, platePlanes } from '../packages/core/dist/render/wells/plate.js';
 import { regionOf } from '../packages/core/dist/render/wells/region.js';
 import { DEFAULT_GLYPH_OPTIONS, glyphToShapes } from '../packages/core/dist/text/glyphs.js';
 
@@ -45,11 +47,8 @@ const HALF = Number(arg('half', '0.024'));
 const FACETS = Number(arg('facets', '8'));
 /** How far down the well's bevel the girdle sits, 0 at the letter's face and 1 below the collar. */
 const SINK = Number(arg('sink', '0.25'));
-/** Table width and crown height as fractions of the girdle's width, after the round brilliant. */
-const TABLE = Number(arg('table', '0.53'));
-const CROWN = Number(arg('crown', '0.16'));
-/** Pavilion depth as a fraction of the girdle's width. */
-const PAVILION = Number(arg('pavilion', '0.43'));
+// The cut's own proportions — table, crown, pavilion — are the fill's and are not knobs here.
+// Taking them as flags this no longer honours would report a stone nobody can ask for.
 
 const D = DEFAULT_GLYPH_OPTIONS.depth;
 const BEVEL = DEFAULT_GLYPH_OPTIONS.bevelSize;
@@ -69,79 +68,17 @@ const spec = {
 };
 const cut = cutterFor('lattice')(shapes, regionOf(shapes), spec);
 
-/** A well's centre, which the cutter does not report — it answers outlines. */
-function centreOf(path) {
-  const points = path.getPoints(1);
-  const box = new THREE.Box2();
-  for (const p of points) box.expandByPoint(p);
-  return box.getCenter(new THREE.Vector2());
-}
-
 /**
- * The plate's front face and the slab's, in the merged body's own z. The extruder carries a
- * bevelled face `bevelThickness` past the depth it was asked for, so neither is where the depth
- * alone would put it — a stone seated at `depth` sits 0.055 em inside the letter.
+ * The planes and the stone are the shipped code's, not a second copy: `platePlanes` is what
+ * `buildPlate` itself measures against, and `fillFor('stone')` is what a `'well'` decoration
+ * seats. Anything this spike reports is therefore a reading of what ships.
  */
-const slabDepth = Math.max(D - PLATE, 0);
-const slabBevelZ = (BEVEL_Z * Math.min(BEVEL, MARGIN)) / BEVEL;
-const floorZ = slabDepth + slabBevelZ;
-const faceZ = D + BEVEL_Z;
+const { faceZ, floorZ } = platePlanes(D, PLATE, MARGIN);
 
 /** The girdle's radius follows the height it is seated at: the bevel widens the hole toward the
  * face, so the two are one number. */
 const GIRDLE_R = HALF + BEVEL * (1 - SINK);
 const GIRDLE_W = GIRDLE_R * 2;
-
-/**
- * A brilliant cut: table, crown, girdle, pavilion, flat-shaded so every facet catches its own
- * highlight. The girdle is inscribed in the well's opening at the height it is seated at.
- */
-function brilliant() {
-  const girdleR = GIRDLE_R;
-  const girdleZ = faceZ - SINK * BEVEL_Z;
-  const width = GIRDLE_W;
-  const tableZ = girdleZ + CROWN * width;
-  const culetZ = girdleZ - PAVILION * width;
-  if (culetZ < floorZ) {
-    console.log(
-      `  note: the culet reaches ${(floorZ - culetZ).toFixed(4)} em below the floor — ` +
-        `the plate is thinner than the stone's pavilion`,
-    );
-  }
-
-  // Four girdle points sit on the seat's corners. Eight alternate corner and edge midpoint, which
-  // is the largest octagon the diamond seat holds.
-  const ring = (radius, z) => {
-    const out = [];
-    for (let i = 0; i < FACETS; i++) {
-      const a = Math.PI / 2 + (i * 2 * Math.PI) / FACETS;
-      const corner = FACETS === 4 || i % 2 === 0;
-      const r = radius * (corner ? 1 : Math.SQRT1_2);
-      out.push(new THREE.Vector3(Math.cos(a) * r, Math.sin(a) * r, z));
-    }
-    return out;
-  };
-  const girdle = ring(girdleR, girdleZ);
-  const table = ring(girdleR * TABLE, tableZ);
-  const culet = new THREE.Vector3(0, 0, culetZ);
-
-  const position = [];
-  const push = (...ps) => {
-    for (const p of ps) position.push(p.x, p.y, p.z);
-  };
-  for (let i = 0; i < FACETS; i++) {
-    const j = (i + 1) % FACETS;
-    push(girdle[i], girdle[j], table[j]);
-    push(girdle[i], table[j], table[i]);
-    push(girdle[j], girdle[i], culet);
-  }
-  for (let i = 1; i + 1 < FACETS; i++) push(table[0], table[i], table[i + 1]);
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
-  geo.computeVertexNormals();
-  return geo;
-}
 
 const dump = (geo) => ({
   position: [...geo.getAttribute('position').array],
@@ -150,8 +87,13 @@ const dump = (geo) => ({
 });
 
 const body = buildPlate(shapes, cut, { depth: D, bezel: MARGIN });
-const stone = brilliant();
-const seats = cut.wells.map((w) => centreOf(w)).map((c) => [c.x, c.y]);
+const filled = fillFor('stone')(
+  cut.seats,
+  { material: () => createMaterial(null), faceZ, floorZ },
+  { ...spec, fill: 'stone', sink: SINK, facets: FACETS, tint: Number(arg('tint', '0.5')) },
+);
+const stone = filled.geometry;
+const seats = filled.matrices.map((m) => [m.elements[12], m.elements[13]]);
 const bodyVerts = body.getAttribute('position').count;
 const stoneVerts = stone.getAttribute('position').count;
 console.log(`"${LETTER}" — ${seats.length} seats at a ${MARGIN} em bezel, ${FACETS} girdle facets`);

@@ -1,0 +1,50 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>a stone-set sign, playing</title>
+<style>
+  html, body { margin: 0; background: #07080c; }
+  .stage { display: grid; place-items: center; height: 100vh; }
+  h1 { margin: 0; font-size: __SIZE__px; color: transparent; font-family: Georgia, serif; }
+</style>
+<script>
+  // Installed before the bundle so klieg never sees the real clock. Screenshotting a live
+  // animation samples it at whatever rate a loaded box allows, which plays back as stutter; this
+  // makes a frame a step rather than a moment, so the capture is the same on any machine.
+  (() => {
+    if (new URLSearchParams(location.search).get('clock') === 'live') return;
+    let now = 0;
+    let pending = [];
+    performance.now = () => now;
+    Date.now = () => now;
+    window.requestAnimationFrame = (cb) => pending.push(cb);
+    window.cancelAnimationFrame = () => {};
+    window.__step = (ms) => {
+      now += ms;
+      const due = pending;
+      pending = [];
+      for (const cb of due) cb(now);
+    };
+  })();
+</script>
+<div class="stage">
+  <!-- The sign is sized against the anchor's own box, and the framing fractions take a share of
+       that; left at their defaults a demo word sits small in the middle of the frame. -->
+  <klieg-sign id="sign" font="/font.ttf" framing-width="__FW__" framing-height="__FH__"
+    ><h1>__TEXT__</h1></klieg-sign
+  >
+</div>
+<script type="module">
+  addEventListener('unhandledrejection', (e) => {
+    console.error(`sign rejected: ${e.reason?.stack ?? e.reason}`);
+  });
+
+  const opts = __OPTIONS__;
+  const el = document.getElementById('sign');
+  el.look = opts.look;
+  el.options = opts.fire;
+
+  // Only now: defining the element upgrades it, and a sign that upgrades before its look is set
+  // fires on the default one.
+  await import('/klieg-sign.js');
+  console.log(`decoration: ${JSON.stringify(el.look?.decoration)}`);
+</script>

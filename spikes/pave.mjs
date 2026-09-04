@@ -43,6 +43,8 @@ const BEZEL = Number(arg('bezel', '0.014'));
 const JITTER = Number(arg('jitter', '0'));
 /** A clipped cell smaller than this fraction of a whole one is dropped rather than set. */
 const MIN_AREA = Number(arg('minArea', '0.18'));
+/** How far in from the letter's edge the pinned row of seeds sits, as a fraction of the pitch. */
+const EDGE_INSET = Number(arg('edgeInset', '0.42'));
 /** The plate's thickness — a well's depth — in em. */
 const PLATE = Number(arg('plate', '0.055'));
 /**
@@ -178,54 +180,163 @@ const random = () => {
   return rand / 4294967296;
 };
 
-/** A staggered lattice over the glyph's box, so the interior cells come out as a honeycomb. */
-const seeds = [];
+/** Bilinear, unlike `Field.sample`, which rounds — the inward push needs a smooth gradient. */
+function depthAt(x, y) {
+  const { data, size, emPerCell, originX, originY } = field;
+  const gx = Math.min(Math.max((x - originX) / emPerCell, 0), size - 1.0001);
+  const gy = Math.min(Math.max((y - originY) / emPerCell, 0), size - 1.0001);
+  const x0 = Math.floor(gx);
+  const y0 = Math.floor(gy);
+  const fx = gx - x0;
+  const fy = gy - y0;
+  const d00 = data[y0 * size + x0];
+  const d10 = data[y0 * size + x0 + 1];
+  const d01 = data[(y0 + 1) * size + x0];
+  const d11 = data[(y0 + 1) * size + x0 + 1];
+  return (d00 * (1 - fx) + d10 * fx) * (1 - fy) + (d01 * (1 - fx) + d11 * fx) * fy;
+}
+
+/**
+ * A point moved `dist` further inside the letter, along the field's own gradient. Doing it off the
+ * field rather than off a ring's normal is what makes a counter behave like the outer edge: inward
+ * is wherever the glyph is, and the field already knows.
+ */
+function pushInward(x, y, dist) {
+  const h = field.emPerCell;
+  const gx = (depthAt(x + h, y) - depthAt(x - h, y)) / (2 * h);
+  const gy = (depthAt(x, y + h) - depthAt(x, y - h)) / (2 * h);
+  const len = Math.hypot(gx, gy) || 1e-9;
+  return [x - (gx / len) * dist, y - (gy / len) * dist];
+}
+
+/**
+ * Seeds in two sets. A row along the letter's edge, pinned, so the boundary is a place stones are
+ * laid rather than a place they are cut off; and a lattice through what is left, free to relax.
+ *
+ * Truncating an interior cell is the crude way to fill an edge and it makes shards. A jeweller
+ * grades the stones down instead, and seeding the boundary is how that falls out: a pinned row
+ * gives the edge its own cells, and Lloyd evens out everything behind it.
+ */
+const EDGE = arg('edge', 'absorb');
+const pinned = [];
+const step = PITCH * Number(arg('edgeStep', '0.95'));
+for (const rings of EDGE === 'grade' ? REGION : []) {
+  for (const ring of rings) {
+    let carry = 0;
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i];
+      const b = ring[(i + 1) % ring.length];
+      const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      for (let t = carry; t < seg; t += step) {
+        const u = t / seg;
+        const [px, py] = pushInward(a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, EDGE_INSET * PITCH);
+        pinned.push([px, py]);
+      }
+      carry = seg > 0 ? (carry - seg) % step : carry;
+      if (carry < 0) carry += step;
+    }
+  }
+}
+
+const free = [];
 const rowStep = PITCH * ROW;
+// Deep enough that the lattice does not crowd the pinned row it sits behind. With no pinned row
+// there is nothing to clear, and a seed is kept as soon as it is inside the letter at all — its
+// cell is then whatever the outline leaves, which is the point.
+const clearance =
+  EDGE === 'grade' ? -(EDGE_INSET * PITCH + PITCH * Number(arg('clearance', '0.62'))) : 0;
 for (let r = -1; r * rowStep + box.min.y <= box.max.y + rowStep; r++) {
   const y = box.min.y + r * rowStep;
   const stagger = r % 2 ? PITCH / 2 : 0;
   for (let x = box.min.x - PITCH + stagger; x <= box.max.x + PITCH; x += PITCH) {
-    seeds.push([
-      x + (random() - 0.5) * PITCH * JITTER,
-      y + (random() - 0.5) * PITCH * JITTER,
-    ]);
+    const jx = x + (random() - 0.5) * PITCH * JITTER;
+    const jy = y + (random() - 0.5) * PITCH * JITTER;
+    if (depthAt(jx, jy) < clearance) free.push([jx, jy]);
   }
 }
 
 const WHOLE = PITCH * PITCH * ROW;
-const cells = [];
-for (const [sx, sy] of seeds) {
-  const r = PITCH * 1.6;
+
+/** The Voronoi cell of `seeds[i]`, before the wall comes off it. */
+function voronoiCell(i, seeds) {
+  const [sx, sy] = seeds[i];
+  const r = PITCH * 2.2;
   let cell = [
     [sx - r, sy - r],
     [sx + r, sy - r],
     [sx + r, sy + r],
     [sx - r, sy + r],
   ];
-  // The Voronoi cell: every bisector with a neighbour close enough to matter.
-  for (const [ox, oy] of seeds) {
-    const dx = ox - sx;
-    const dy = oy - sy;
+  for (let j = 0; j < seeds.length; j++) {
+    if (j === i) continue;
+    const dx = seeds[j][0] - sx;
+    const dy = seeds[j][1] - sy;
     const d2 = dx * dx + dy * dy;
-    if (d2 < 1e-12 || d2 > (PITCH * 2.5) ** 2) continue;
+    if (d2 < 1e-12 || d2 > (PITCH * 3) ** 2) continue;
     const len = Math.sqrt(d2);
     cell = clipHalf(cell, sx + dx / 2, sy + dy / 2, dx / len, dy / len);
     if (cell.length < 3) break;
   }
-  if (cell.length < 3) continue;
-  const walled = inset(cell, WALL / 2);
-  if (walled.length < 3) continue;
-  // Clipped to the letter, a cell may come back as several pieces, or as none.
-  let pieces;
+  return cell;
+}
+
+/** The cell as the letter leaves it: every piece of it that survives the region. */
+function clipped(cell) {
+  if (cell.length < 3) return [];
   try {
-    pieces = polygonClipping.intersection([walled], ...REGION.map((r) => [r]));
+    const pieces = polygonClipping.intersection([cell], ...REGION.map((r) => [r]));
+    return (pieces ?? [])
+      .map((piece) => piece[0])
+      .filter((ring) => ring && ring.length >= 4)
+      .map((ring) => ring.slice(0, -1));
   } catch {
-    continue;
+    return [];
   }
-  for (const piece of pieces ?? []) {
-    const ring = piece[0];
-    if (!ring || ring.length < 4) continue;
-    const poly = ring.slice(0, -1);
+}
+
+// Lloyd: each free seed walks to the centroid of what it actually owns inside the letter, which
+// is what turns a lattice clipped by an outline into a field that fits it. The pinned row does not
+// move — let it relax and it migrates inward, and the edge grading goes with it.
+const RELAX = Number(arg('relax', '4'));
+for (let pass = 0; pass < RELAX; pass++) {
+  const all = [...pinned, ...free];
+  for (let i = 0; i < free.length; i++) {
+    const pieces = clipped(voronoiCell(pinned.length + i, all));
+    if (pieces.length === 0) continue;
+    const biggest = pieces.reduce((a, b) => (area(a) > area(b) ? a : b));
+    if (area(biggest) < WHOLE * 0.05) continue;
+    free[i] = centroidOf(biggest);
+  }
+}
+
+/**
+ * Drop the seed, never the cell. A cell too small to set is dead space only if it is deleted;
+ * remove the seed that owns it and every point it held goes to whichever seed is next nearest,
+ * which is what Voronoi is for. The neighbours grow to take it and the letter stays covered.
+ *
+ * `--edge grade` is the other policy: seed the boundary as well, so the edge gets its own smaller
+ * stones instead of the interior ones reaching out to the outline.
+ */
+let seeds = [...pinned, ...free];
+let culled = 0;
+for (let pass = 0; pass < 8; pass++) {
+  const doomed = new Set();
+  for (let i = pinned.length; i < seeds.length; i++) {
+    const pieces = clipped(inset(voronoiCell(i, seeds), WALL / 2));
+    const held = pieces.reduce((n, p) => n + area(p), 0);
+    if (held < WHOLE * MIN_AREA) doomed.add(i);
+  }
+  if (doomed.size === 0) break;
+  culled += doomed.size;
+  seeds = seeds.filter((_, i) => !doomed.has(i));
+}
+
+const cells = [];
+for (let i = 0; i < seeds.length; i++) {
+  const walled = inset(voronoiCell(i, seeds), WALL / 2);
+  for (const poly of clipped(walled)) {
+    // The same bar the cull used. Letting a sliver through here is what leaves a needle of a stone
+    // in a tapering stroke, and a needle is all fan and no table.
     if (area(poly) < WHOLE * MIN_AREA) continue;
     cells.push(poly);
   }
@@ -310,19 +421,58 @@ const SINK = Number(arg('sink', '0.18'));
  * A stone shaped to its own cell: the girdle is the cell, so a fragment at the letter's edge is a
  * fragment of a stone rather than a whole one hanging over the edge.
  */
+/**
+ * A point the whole cell can be seen from, which the centroid is not once the outline has bitten a
+ * bite out of a cell. Scaling a ring toward a point outside it turns the ring inside out, and a fan
+ * drawn from one throws triangles clean outside the cell — which is what put extra gold on the
+ * bottom-right leg. Sampled rather than solved: the pole of inaccessibility to a grid's accuracy.
+ */
+function interiorPoint(poly) {
+  const c = centroidOf(poly);
+  if (inside(poly.map(([x, y]) => ({ x, y })), { x: c[0], y: c[1] })) return c;
+  const b = new THREE.Box2();
+  for (const [x, y] of poly) b.expandByPoint(new THREE.Vector2(x, y));
+  let best = poly[0];
+  let bestD = -1;
+  const N = 12;
+  for (let i = 1; i < N; i++) {
+    for (let j = 1; j < N; j++) {
+      const x = b.min.x + ((b.max.x - b.min.x) * i) / N;
+      const y = b.min.y + ((b.max.y - b.min.y) * j) / N;
+      if (!inside(poly.map(([px, py]) => ({ x: px, y: py })), { x, y })) continue;
+      let d = Number.POSITIVE_INFINITY;
+      for (let k = 0, l = poly.length - 1; k < poly.length; l = k++) {
+        const ax = poly[l][0];
+        const ay = poly[l][1];
+        const ex = poly[k][0] - ax;
+        const ey = poly[k][1] - ay;
+        const len2 = ex * ex + ey * ey || 1e-24;
+        const t = Math.min(Math.max(((x - ax) * ex + (y - ay) * ey) / len2, 0), 1);
+        d = Math.min(d, Math.hypot(x - (ax + t * ex), y - (ay + t * ey)));
+      }
+      if (d > bestD) {
+        bestD = d;
+        best = [x, y];
+      }
+    }
+  }
+  return best;
+}
+
 const stonePos = [];
 for (const poly of cells) {
-  const c = centroidOf(poly);
+  const c = interiorPoint(poly);
   const width = Math.sqrt(area(poly));
   const girdleZ = faceZ - SINK * PLATE;
   const tableZ = girdleZ + CROWN * width;
-  const culet = new THREE.Vector3(c[0], c[1], Math.max(girdleZ - PAVILION * width, floorZ + 0.002));
-  const girdle = poly.map(([x, y]) => new THREE.Vector3(x, y, girdleZ));
-  const table = poly.map(([x, y]) => new THREE.Vector3(
-    c[0] + (x - c[0]) * TABLE,
-    c[1] + (y - c[1]) * TABLE,
-    tableZ,
-  ));
+  const culetZ = Math.max(girdleZ - PAVILION * width, floorZ + 0.002);
+  const toward = (k, z) =>
+    poly.map(([x, y]) => new THREE.Vector3(c[0] + (x - c[0]) * k, c[1] + (y - c[1]) * k, z));
+  const girdle = toward(1, girdleZ);
+  const table = toward(TABLE, tableZ);
+  // The pavilion closes on a small ring rather than on a point: a cone from one apex is only ever
+  // inside a cell the apex can see all of, and a clipped cell is not that.
+  const culet = toward(0.12, culetZ);
   const push = (...ps) => {
     for (const p of ps) stonePos.push(p.x, p.y, p.z);
   };
@@ -330,11 +480,18 @@ for (const poly of cells) {
     const j = (i + 1) % poly.length;
     push(girdle[i], girdle[j], table[j]);
     push(girdle[i], table[j], table[i]);
-    push(girdle[j], girdle[i], culet);
+    push(girdle[j], girdle[i], culet[i]);
+    push(girdle[j], culet[i], culet[j]);
   }
-  // The table, fanned from the first vertex: a cell clipped to the letter can be non-convex, and a
-  // fan spans it well enough at this size.
-  for (let i = 1; i + 1 < poly.length; i++) push(table[0], table[i], table[i + 1]);
+  // Both caps triangulated rather than fanned, for the same reason the apex moved.
+  const cap = THREE.ShapeUtils.triangulateShape(
+    poly.map(([x, y]) => new THREE.Vector2(x, y)),
+    [],
+  );
+  for (const [a, b, d] of cap) {
+    push(table[a], table[b], table[d]);
+    push(culet[d], culet[b], culet[a]);
+  }
 }
 const stones = new THREE.BufferGeometry();
 stones.setAttribute('position', new THREE.Float32BufferAttribute(stonePos, 3));
@@ -342,7 +499,10 @@ stones.computeVertexNormals();
 
 const whole = cells.filter((c) => area(c) > WHOLE * 0.92).length;
 console.log(`"${LETTER}" — ${cells.length} cells at pitch ${PITCH}, wall ${WALL}, bezel ${BEZEL}`);
-console.log(`  ${whole} whole, ${cells.length - whole} cut to the letter's edge`);
+console.log(
+  `  edge '${EDGE}': ${pinned.length} pinned, ${free.length} laid, ${culled} culled so neighbours took the space`,
+);
+console.log(`  ${whole} whole, ${cells.length - whole} shaped by the outline`);
 console.log(`  body ${body.getAttribute('position').count} vertices, stones ${stones.getAttribute('position').count}`);
 
 const dump = (geo) => ({

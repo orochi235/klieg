@@ -96,6 +96,23 @@ export interface WellSpec {
   /** A well's full diagonal, in em. */
   size: number;
   look: MaterialSpec;
+  /** Which registered fill occupies the wells. Omitted leaves them empty, as the cutter does. */
+  fill?: 'stone';
+  /**
+   * How far down the well's bevel the girdle sits, 0 at the letter's face and 1 below the collar.
+   * Not independent of the stone's width — the bevel widens the opening toward the face, so this
+   * sets both.
+   */
+  sink?: number;
+  /**
+   * Transmission thickness as a fraction of the girdle's width, which is what the stone's colour
+   * actually is: a look's own thickness is in world units and tuned for a letter-sized volume.
+   */
+  tint?: number;
+  /** Girdle points. Four fills a diamond seat corner to corner; eight inscribes an octagon in it. */
+  facets?: number;
+  /** The stone's own look, rather than the plate's. Defaults to `gem`. */
+  stone?: MaterialSpec;
 }
 
 export interface ChunkBlueprint {

@@ -1,15 +1,16 @@
 /**
- * Can a letter be hollowed into a shallow dish, with stacked plates and nothing else?
+ * Hollow a letterform out as a stack of levels, and prove the outside stays unbroken.
  *
- *   npm run build -w klieg && node spikes/hollow.mjs [--letter R] [--rim 0.05]
+ *   npm run build -w klieg && node spikes/hollow.mjs [--letter R] [--rim 0.05] [--well 0.16]
+ *   node spikes/hollow.mjs --levels 0.05:0.10,0.09:0.06        # a stepped well
  *
- * The smallest possible case of the construction everything else here is built on: a slab, and one
- * plate on top of it with a single hole. No cells, no stones, no fill — if this does not hold,
- * nothing stacked on it can.
+ * A level is an outline and a depth. The letter is a stack of layers between their floors: solid
+ * below the deepest, and above each floor the letter with that level's outline taken out of it.
+ * The drinking glass is the one-level case; concentric wells are the same construction with more.
  *
- * The plate is not "the letter with the inset as a hole". For a letter with a counter, subtracting
- * the inset leaves TWO rings with holes — a band round the outside and a band round the counter —
- * so it takes a real polygon difference rather than pushing one hole onto one shape.
+ * No layer is bevelled. Every layer's outer contour is the glyph's own, at the same x and y, so the
+ * outside is one unbroken wall — bevelling the layers separately is what put a ledge down the side.
+ * A bevel belongs on the hole, and comes later.
  *
  * Renders the body alone. A stone standing proud of a plate is visible whether or not a well was
  * ever cut, which is exactly how an uncut plate passed for a cut one.
@@ -36,14 +37,34 @@ const LETTER = arg('letter', 'R');
 const OUT = resolve(arg('out', resolve(HERE, 'hollow-out')));
 /** How wide the wall of the glass is, in em: the letter inset by this is the hollow. */
 const RIM = Number(arg('rim', '0.05'));
-/** How deep the hollow goes, in em. The slab keeps the rest of the letter's depth. */
+/** How deep the hollow goes, in em. The letter keeps the rest of its depth below the floor. */
 const WELL = Number(arg('well', '0.16'));
-/** The bevel around the plate's contours. */
-const BEVEL = Number(arg('bevel', '0.01'));
 /** Turned off axis so a recess reads as a recess rather than as a darker shade of gold. */
 const TILT = Number(arg('tilt', '0.5'));
 
 const D = DEFAULT_GLYPH_OPTIONS.depth;
+
+/**
+ * `inset:depth` pairs, outermost first. Each level's outline is the glyph inset by `inset`, and its
+ * floor sits `depth` below the floor above it — so a level is a step, not an absolute height.
+ */
+const LEVELS = arg('levels', `${RIM}:${WELL}`)
+  .split(',')
+  .filter(Boolean)
+  .map((spec) => {
+    const [inset, depth] = spec.split(':').map(Number);
+    if (!Number.isFinite(inset) || !Number.isFinite(depth)) {
+      throw new Error(`--levels wants inset:depth pairs, got '${spec}'`);
+    }
+    return { inset, depth };
+  });
+for (let i = 1; i < LEVELS.length; i++) {
+  if (LEVELS[i].inset <= LEVELS[i - 1].inset) {
+    throw new Error(`level ${i + 1} must sit inside level ${i}: ${LEVELS[i].inset} is not past ${LEVELS[i - 1].inset}`);
+  }
+}
+const TOTAL = LEVELS.reduce((n, l) => n + l.depth, 0);
+if (TOTAL >= D) throw new Error(`the levels are ${TOTAL} deep and the letter is only ${D}`);
 
 const buf = readFileSync(resolve(ROOT, 'apps/lab/public/font.ttf'));
 const font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
@@ -89,8 +110,8 @@ function nest(loops) {
     .map(({ loop, i }) => [loop, ...loops.filter((_, j) => depth[j] % 2 === 1 && parent[j] === i)]);
 }
 
-// The hollow: the letter eroded by the rim, off the distance field the tube pipeline already
-// builds. A counter erodes outward and the outline inward, and the field knows both.
+// Every level's outline is an iso-contour of the letter's own distance field. A counter erodes
+// outward and the outline inward, and the field knows both — which a ring offset does not.
 const rings = [];
 for (const shape of shapes) {
   rings.push(shape.getPoints(SEGMENTS).map((p) => ({ x: p.x, y: p.y })));
@@ -99,11 +120,24 @@ for (const shape of shapes) {
   }
 }
 const field = signedDistanceField(rings, { resolution: 512, pad: 0.05 });
-const HOLLOW = nest(isoContours(field, -RIM).map((r) => xy(r)));
-if (HOLLOW.length === 0) throw new Error(`a ${RIM} em rim leaves no hollow on '${LETTER}'`);
+const outlineAt = (inset) => nest(isoContours(field, -inset).map((r) => xy(r)));
 
-// The plate is what is left of the letter once the hollow is taken out of it.
-const PLATE_POLY = polygonClipping.difference(LETTER_POLY, HOLLOW);
+const OUTLINES = LEVELS.map(({ inset }, i) => {
+  const poly = outlineAt(inset);
+  if (poly.length === 0) throw new Error(`level ${i + 1}'s ${inset} em inset leaves nothing on '${LETTER}'`);
+  return poly;
+});
+
+/**
+ * The floor of each level, measured down from the letter's top face. Descending, so `FLOORS.at(-1)`
+ * is the bottom of the deepest well and everything below it is solid letter.
+ */
+const FLOORS = [];
+let running = D;
+for (const { depth } of LEVELS) {
+  running -= depth;
+  FLOORS.push(running);
+}
 
 /** A multipolygon as `THREE.Shape`s, each with its own holes. */
 const toShapes = (multi) =>
@@ -123,23 +157,27 @@ const toShapes = (multi) =>
     return shape;
   });
 
-function extrude(polys, depth, bevelSize) {
-  const full = DEFAULT_GLYPH_OPTIONS.bevelSize;
-  return new THREE.ExtrudeGeometry(polys, {
+const extrude = (multi, depth) =>
+  new THREE.ExtrudeGeometry(toShapes(multi), {
     depth,
     curveSegments: DEFAULT_GLYPH_OPTIONS.curveSegments,
-    bevelEnabled: bevelSize > 0,
-    bevelSize,
-    bevelThickness: (DEFAULT_GLYPH_OPTIONS.bevelThickness * bevelSize) / full,
-    bevelSegments: 3,
-    bevelOffset: 0,
+    bevelEnabled: false,
   });
-}
 
-const slabDepth = Math.max(D - WELL, 0);
-const slab = extrude(toShapes(LETTER_POLY), slabDepth, Math.min(DEFAULT_GLYPH_OPTIONS.bevelSize, RIM));
-const plate = extrude(toShapes(PLATE_POLY), WELL, BEVEL);
-plate.translate(0, 0, slabDepth);
+/**
+ * The stack, bottom up: solid letter below the deepest floor, then one layer per level holding the
+ * letter with that level's outline taken out of it. Every layer shares the glyph's outer contour.
+ */
+const layers = [];
+const base = extrude(LETTER_POLY, FLOORS.at(-1));
+layers.push({ name: 'base', z: 0, top: FLOORS.at(-1), poly: LETTER_POLY, geo: base });
+for (let i = LEVELS.length - 1; i >= 0; i--) {
+  const top = i === 0 ? D : FLOORS[i - 1];
+  const poly = polygonClipping.difference(LETTER_POLY, OUTLINES[i]);
+  const geo = extrude(poly, top - FLOORS[i]);
+  geo.translate(0, 0, FLOORS[i]);
+  layers.push({ name: `level ${i + 1}`, z: FLOORS[i], top, poly, geo });
+}
 
 const merge = (parts) => {
   const out = new THREE.BufferGeometry();
@@ -156,16 +194,48 @@ const merge = (parts) => {
   }
   return out;
 };
-const body = merge([slab, plate]);
+const body = merge(layers.map((l) => l.geo));
 
-console.log(`"${LETTER}" — rim ${RIM}, well ${WELL} deep`);
+/**
+ * The ledge check, which a render cannot make: every layer has to still carry the glyph's own outer
+ * ring, point for point. A layer whose outline moved by so much as a bevel width steps the outside.
+ *
+ * Asked of the glyph's points, not of the layer's: subtracting a hollow leaves a second polygon
+ * around the counter, whose own outer ring is nowhere near the letter's and never was.
+ */
+const GLYPH_RING = LETTER_POLY[0][0];
+const ledgeOf = (multi) => {
+  const pts = multi.flat(2);
+  let worst = 0;
+  for (const [gx, gy] of GLYPH_RING) {
+    let near = Number.POSITIVE_INFINITY;
+    for (const [x, y] of pts) near = Math.min(near, Math.hypot(gx - x, gy - y));
+    worst = Math.max(worst, near);
+  }
+  return worst;
+};
+const ledge = Math.max(...layers.map((l) => ledgeOf(l.poly)));
+
+console.log(`"${LETTER}" — ${LEVELS.length} level(s), ${TOTAL} em of ${D} em hollowed out`);
 console.log(`  letter: ${LETTER_POLY.length} polygon(s), ${LETTER_POLY[0].length - 1} counter(s)`);
-console.log(`  hollow: ${HOLLOW.length} region(s), rings ${HOLLOW.map((h) => h.length).join('+')}`);
+for (let i = 0; i < LEVELS.length; i++) {
+  console.log(
+    `  level ${i + 1}: inset ${LEVELS[i].inset}, floor z ${FLOORS[i].toFixed(4)}, ` +
+      `${OUTLINES[i].length} region(s), rings ${OUTLINES[i].map((o) => o.length).join('+')}`,
+  );
+}
+for (const l of layers) {
+  console.log(
+    `  ${l.name.padEnd(8)} z ${l.z.toFixed(4)} → ${l.top.toFixed(4)}, ` +
+      `${l.poly.length} polygon(s), ${l.geo.getAttribute('position').count} verts`,
+  );
+}
+console.log(`  body ${body.getAttribute('position').count} verts`);
 console.log(
-  `  plate:  ${PLATE_POLY.length} polygon(s), rings ${PLATE_POLY.map((p) => p.length).join('+')}`,
+  ledge < 1e-9
+    ? '  outer contour: every layer carries the glyph ring point for point — no ledge'
+    : `  outer contour: a layer misses the glyph ring by ${ledge.toFixed(5)} em — that is a ledge`,
 );
-console.log(`  slab ${slab.getAttribute('position').count} verts, plate ${plate.getAttribute('position').count}`);
-console.log(`  floor z ${slabDepth.toFixed(4)}, rim top z ${(slabDepth + WELL).toFixed(4)}`);
 
 const dump = (geo) => ({
   position: [...geo.getAttribute('position').array],
@@ -200,14 +270,14 @@ const server = createServer((req, res) => {
   res.writeHead(404).end();
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
-const base = `http://127.0.0.1:${server.address().port}`;
+const base_ = `http://127.0.0.1:${server.address().port}`;
 
 const browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 900, height: 900 }, deviceScaleFactor: 2 });
 page.on('pageerror', (e) => console.log(`  [pageerror] ${e.message}`));
 page.on('console', (m) => m.type() === 'error' && console.log(`  [console] ${m.text()}`));
 for (const look of arg('looks', 'gold').split(',')) {
-  await page.goto(`${base}/?look=${look}`);
+  await page.goto(`${base_}/?look=${look}`);
   await page.waitForFunction(() => window.__shot === true, null, { timeout: 120_000 });
   const file = resolve(OUT, `hollow-${LETTER}-${look}.png`);
   writeFileSync(file, await page.screenshot());

@@ -1,0 +1,45 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>a carved word through the shipped path</title>
+<style>
+  html, body { margin: 0; background: #06070b; color: #7d8694;
+    font: 14px/1.4 ui-monospace, monospace; }
+  .row { display: flex; align-items: center; justify-content: center; gap: 40px; height: 420px; }
+  .cell { text-align: center; }
+  /* Transparent rather than hidden: the anchor's box is what the sign is sized and placed against,
+     so removing the text would collapse the thing the canvas is measured from. */
+  .cell h1 { margin: 0; font-size: 150px; color: transparent; font-family: Georgia, serif; }
+  .cell p { margin: 8px 0 0; letter-spacing: 0.08em; }
+</style>
+<!-- The word is substituted into the markup rather than written from script: the element takes its
+     text from the anchor as it upgrades, and a word set afterwards fires an empty sign. -->
+<div class="row">
+  <div class="cell">
+    <klieg-sign id="plain" font="/font.ttf"><h1>__TEXT__</h1></klieg-sign>
+    <p>__LOOK__ — today</p>
+  </div>
+  <div class="cell">
+    <klieg-sign id="carved" font="/font.ttf"><h1>__TEXT__</h1></klieg-sign>
+    <p>__LOOK__ + wells</p>
+  </div>
+</div>
+<script type="module">
+  const opts = __OPTIONS__;
+  // The same look on both sides, so the only difference in the picture is the decoration. Set as a
+  // property rather than an attribute: a `LookSpec` is an object, and no shipped look names 'well'.
+  document.getElementById('plain').look = opts.look;
+  document.getElementById('carved').look = { ...opts.look, decoration: opts.decoration };
+
+  // Imported dynamically, and only now: defining the element upgrades it, and a sign that upgrades
+  // before its look is set fires on the default one. An `await` anywhere above this line — a fetch
+  // for the options, say — is enough to lose the look and the wells with it.
+  await import('/klieg-sign.js');
+
+  const lit = [...document.querySelectorAll('klieg-sign')].map(
+    (el) => new Promise((done) => el.addEventListener('klieg-lit', done, { once: true })),
+  );
+  await Promise.race([Promise.all(lit), new Promise((r) => setTimeout(r, 8000))]);
+  // Both signs settle asynchronously and a carved body takes longer to build than a cached glyph.
+  await new Promise((r) => setTimeout(r, 1500));
+  window.__shot = true;
+</script>

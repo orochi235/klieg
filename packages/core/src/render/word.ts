@@ -489,7 +489,10 @@ export class Word {
     const sized = new THREE.Group();
     sized.scale.setScalar(this.sizeOf?.(i) ?? 1);
     cell.add(sized);
-    const bodyMesh = new THREE.Mesh(geo, material);
+    // The builder's own geometry when it has one, the cache's otherwise. Asked before the builder
+    // builds its letter, so a body-replacing kind never sees a half-built cell.
+    const body = this.builder?.bodyGeometry?.(char, DEFAULT_GLYPH_OPTIONS.depth) ?? geo;
+    const bodyMesh = new THREE.Mesh(body, material);
     this.bodyMeshes[i] = bodyMesh;
     sized.add(bodyMesh);
 

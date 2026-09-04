@@ -500,6 +500,31 @@ describe('Word', () => {
     expect(drawn(groups(word)[0] as THREE.Group).children.length).toBeGreaterThan(1);
   });
 
+  const wordWith = (decoration: LookSpec['decoration']) =>
+    new Word('A', stubFont(), { opacity: 1, decoration }, ROOMY);
+
+  it('draws the body from the builder when the decoration supplies one', () => {
+    const carved = wordWith({
+      kind: 'well',
+      cutter: 'lattice',
+      bezel: 0.012,
+      floor: 0.09,
+      pitch: 0.068,
+      size: 0.048,
+      look: {},
+    });
+    const plain = wordWith(undefined);
+
+    const bodyOf = (word: Word) =>
+      ((groups(word)[0] as THREE.Group).children[0] as THREE.Group).children[0] as THREE.Mesh;
+
+    expect(bodyOf(carved).geometry.getAttribute('position').count).not.toBe(
+      bodyOf(plain).geometry.getAttribute('position').count,
+    );
+    carved.dispose();
+    plain.dispose();
+  });
+
   it('drives body and decoration from one pose', () => {
     const word = new Word('A', stubFont(), TUBE, ROOMY);
     const cell = groups(word)[0] as THREE.Group;

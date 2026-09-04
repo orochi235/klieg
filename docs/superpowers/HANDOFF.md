@@ -634,6 +634,12 @@ smaller toward the edge. Also `--jitter`, `--relax`, `--pitch`, `--wall`, `--bez
 "seat" is emergent — the hole through the plate, floored by the slab. There is no contact test
 between a stone and its well, which is why the depth bugs above could be silent.
 
+**Build the plate as a stack of levels, not as one plate on one slab.** Asked for directly: this
+wants to be as customizable as it can be, and concentric or stepped wells are wanted eventually.
+The design already says stepped floors come from stacking plates, so the rebuild should take a
+**list of levels — each with its own outline and depth** — and the drinking glass is simply the
+N=1 case of it. Hard-coding slab-plus-plate now is the thing that would have to be undone.
+
 **The outer bevel on a hollowed letter is wrong, and not by a value.** `hollow.mjs` gives the slab
 the glyph's own 0.038 em bevel and the plate `--bevel`, so where the plate lands on the slab the
 outside carries a ledge — the doubled band down the left of the render. Worse, `ExtrudeGeometry`

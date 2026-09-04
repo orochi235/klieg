@@ -109,35 +109,72 @@ await page.waitForSelector('klieg-sign[lit]', { timeout: 60_000 });
 const dir = resolve(OUT, 'frames');
 rmSync(dir, { recursive: true, force: true });
 mkdirSync(dir, { recursive: true });
+let shot = 0;
 for (let f = 0; f < FRAMES; f++) {
   await step();
   writeFileSync(resolve(dir, `f${String(f).padStart(4, '0')}.png`), await page.screenshot());
-  if ((f + 1) % 10 === 0) console.log(`  ${f + 1}/${FRAMES} frames`);
+  shot = f + 1;
+  if (shot % 10 === 0) console.log(`  ${shot}/${FRAMES} frames`);
+  // The sign puts its own light out when the effect has played through and it goes idle. Running
+  // to the frame budget instead records the empty stage after it: a clip that ends in a second of
+  // background, loops through a black flash, and shows nothing at all as its poster frame.
+  if (!(await page.$('klieg-sign[lit]'))) {
+    console.log(`  the sign went out at frame ${shot}`);
+    break;
+  }
 }
 await browser.close();
 server.close();
 
+/** Fraction of the frame above a lit threshold. A mean cannot tell an empty frame from a full one
+ * when the background fills both. */
+const inkOf = (file) =>
+  Number(
+    execFileSync('magick', [file, '-colorspace', 'gray', '-threshold', '20%', '-format', '%[fx:mean]', 'info:'])
+      .toString()
+      .trim(),
+  );
+
+// An enter starts from nothing, so the opening frames carry no ink either. Trim from both ends
+// rather than assuming how many: `none` draws on frame one and `spin` takes several.
+const names = Array.from({ length: shot }, (_, f) => `f${String(f).padStart(4, '0')}.png`);
+let head = 0;
+while (head < names.length - 1 && inkOf(resolve(dir, names[head])) < 1e-4) head++;
+let tail = names.length - 1;
+while (tail > head && inkOf(resolve(dir, names[tail])) < 1e-4) tail--;
+const kept = names.slice(head, tail + 1);
+if (kept.length !== names.length) {
+  console.log(`  trimmed ${head} empty frames at the head and ${names.length - 1 - tail} at the tail`);
+}
+const seq = resolve(OUT, 'clip');
+rmSync(seq, { recursive: true, force: true });
+mkdirSync(seq, { recursive: true });
+kept.forEach((name, i) => {
+  writeFileSync(resolve(seq, `c${String(i).padStart(4, '0')}.png`), readFileSync(resolve(dir, name)));
+});
+
 // Two passes: one palette for the whole clip, so a gem's highlights do not swim between frames.
 const stem = `stone-${TEXT.replace(/[^\w]/g, '')}-${LOOK}`;
-const palette = resolve(dir, 'palette.png');
+const palette = resolve(seq, 'palette.png');
 const gif = resolve(OUT, `${stem}.gif`);
 const mp4 = resolve(OUT, `${stem}.mp4`);
 const ff = (args) => execFileSync('ffmpeg', ['-y', '-loglevel', 'error', ...args]);
-ff(['-i', resolve(dir, 'f%04d.png'), '-vf', 'palettegen=stats_mode=diff', palette]);
+ff(['-i', resolve(seq, 'c%04d.png'), '-vf', 'palettegen=stats_mode=diff', palette]);
 ff([
   '-framerate', String(FPS),
-  '-i', resolve(dir, 'f%04d.png'),
+  '-i', resolve(seq, 'c%04d.png'),
   '-i', palette,
   '-lavfi', `scale=${Math.round(WIDTH * 0.72)}:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=sierra2_4a`,
   gif,
 ]);
 ff([
   '-framerate', String(FPS),
-  '-i', resolve(dir, 'f%04d.png'),
+  '-i', resolve(seq, 'c%04d.png'),
   '-pix_fmt', 'yuv420p',
   '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
   mp4,
 ]);
+console.log(`  ${kept.length} frames, ${(kept.length / FPS).toFixed(1)}s`);
 console.log(`wrote ${gif}`);
 console.log(`wrote ${mp4}`);
 process.exit(0);

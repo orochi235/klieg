@@ -10,11 +10,19 @@ chamfer and contour union, flatness sampling, and the decoration registry that r
 `decoration.kind` switch. `git log --oneline @{u}..HEAD` is the live answer for anything unpushed —
 a count written here is false the moment it is committed.
 
-**The plate cutter is built on `plate-cutter`, branched off the merge and not yet merged itself.**
-`npm run check` is green there (1,632 tests) and the visual suite passes **41/41 in 2.9 minutes** —
-no shipped look selects `'well'`, so every baseline is byte-identical. That run also closes the
-measurement this used to record as missing for the merge commit. The next open item is the `stone`
-fill; see [what is worth doing next](#what-is-worth-doing-next).
+**The plate cutter is merged and pushed to `main`.** `npm run check` is green (1,632 tests there)
+and the visual suite passes **41/41** — no shipped look selects `'well'`, so every baseline is
+byte-identical.
+
+**Two branches are pushed and unmerged, neither with a PR.**
+
+`stone-fill` carries the whole stone slice, seven tasks against
+[its plan](plans/2026-09-04-stone-fill.md): seats on the cut, the fill registry, the brilliant, the
+spec fields, the builder, fill-name targeting, and a stone-set sign through the shipped path.
+`npm run check` is green (**1,648 tests**) and the visual suite passes **41/41 in 3.4 minutes**.
+
+`inflation-mesher` settles which mesher builds an inflated crown, and touches only
+`spikes/inflate.mjs` and the wells-and-fills design.
 
 
 **Host-driven effects are merged.** `fire()` returns a `FireHandle` and takes `onPhase`,
@@ -572,11 +580,27 @@ working — it needs a caller-supplied `TubeSpec.gradient`.
 
 ## What is worth doing next
 
-**Open right now: the `stone` fill.** The plate cutter is built — a `'well'` decoration replaces a
-letter's body with a slab plus a holed plate — and the wells it cuts are empty.
-`WellBuilder.collectParts()` answers `[]`, so nothing can target one: a fill is what gives a well
-parts, and that is the first thing the slice adds. It is where `PartKind` finally has to open, the
-design moving targeting to `{ fill: 'stones' }`.
+**Open right now: merging `stone-fill` and `inflation-mesher`.** Both are green and pushed and
+neither has a PR — see [branch state](#branch-state).
+
+**The stone slice did not open `PartKind`, which is what this used to say it would.** Targeting
+grew `{ fill: 'stones' }` beside `{ kind }` instead, and a stone field reports `kind: 'chunk'` —
+the kind `types.ts` already defines as a letter's whole instanced field. A `'stone'` member would
+have been a second way to say what `fill` says, and the fill after it would have wanted a third.
+The reasoning is in [the design](specs/2026-09-04-stone-fill-design.md).
+
+**Two traps the slice found, both of which cost a cycle:**
+
+- **A fill that registers itself vanishes from the standalone bundle.** The package declares a
+  narrow `sideEffects` list, so a module imported only for its registration is tree-shaken away:
+  `registerFill` never runs, the sign renders nothing, and every unit test still passes because a
+  test imports the module directly. Register from the module that exports the lookup, as
+  `cutters.ts` does. Only firing a real sign catches this.
+
+- **A look's `thickness` is in world units and does not survive being reused at a different
+  scale.** `gem` ships 1.4 em for a letter-sized volume; a stone is a twentieth of that, so
+  inheriting it absorbs nearly everything and a pavé field renders as black holes in the plate.
+  `attenuationDistance` and `iridescenceThicknessRange` carry the same hazard.
 
 Three things the cutter's code does not say:
 
@@ -604,14 +628,18 @@ is prototyped and its mesher is the one design decision still open.
 
 Roughly in order of value; the items are independent of each other.
 
-- **Inflation is designed and prototyped; what is open is the mesher.** It is a profile over the
-  distance field the tube pipeline already builds, and `node spikes/inflate.mjs` renders four of
-  them on a real glyph — `flat` is today, `ridge` creases each stroke and reads as folded channel
-  rather than a cushion. The section is in
-  [the wells-and-fills design](specs/2026-09-01-wells-and-fills-design.md#inflating-the-solid);
-  it carries the cost (9,143 vertices a letter at a 128 grid, against the extruder's 6,700) and the
-  two candidate constructions. Look at the `chrome` shot rather than `gold`: the profiles separate
-  far more clearly on it.
+- **Inflation is designed, prototyped and its mesher is settled — nothing is open but building it.**
+  The crown is the extruder's own lid, refined where a chord misses the profile and displaced;
+  `node spikes/inflate.mjs --sweep` prices all three candidates and the renders decide between
+  them. The section is in
+  [the wells-and-fills design](specs/2026-09-01-wells-and-fills-design.md#inflating-the-solid), on
+  `inflation-mesher`.
+
+  **The one thing that constrains the design rather than the code: a profile needs a finite slope
+  where it meets the cap.** `pillow` — a circular arc standing straight up off the seam — never
+  converges, costing 117,895 vertices and still missing by 1.00% of its rise where `cushion` costs
+  7,130 for 0.79%. Look at the `chrome` shot rather than `gold`: the profiles separate far more
+  clearly on it, and ring banding is invisible on anything rougher.
 
 - **A letter's face is now separated from its sides, and `sequin` reads.** `ChunkSpec.relief`
   darkens a chunk by the surface normal the blueprint already carried — a cosine off the studio's

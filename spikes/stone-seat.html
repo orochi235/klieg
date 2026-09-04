@@ -1,0 +1,79 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>stones in cut wells</title>
+<style>
+  html, body { margin: 0; background: #0a0c11; }
+  #stage { position: fixed; inset: 0; }
+  #tag {
+    position: fixed; left: 12px; top: 10px; pointer-events: none;
+    font: 500 13px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; color: #8a93a6;
+  }
+</style>
+<script type="importmap">
+  { "imports": { "three": "/three/three.module.js" } }
+</script>
+<div id="stage"></div>
+<div id="tag"></div>
+<script type="module">
+  import * as THREE from 'three';
+  import { applyLook, createMaterial, specOf } from '/klieg/render/looks.js';
+  import { Stage } from '/klieg/render/stage.js';
+
+  const params = new URLSearchParams(location.search);
+  const look = params.get('look') ?? 'gold';
+  const fill = params.get('fill') ?? 'gem';
+  const data = await fetch('/geometry.json').then((r) => r.json());
+
+  const stage = new Stage({ idleTimeoutMs: 3_600_000, target: document.getElementById('stage') });
+  const renderer = stage.mount();
+
+  const build = (dump) => {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(dump.position, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(dump.normal, 3));
+    if (dump.index) geo.setIndex(dump.index);
+    return geo;
+  };
+
+  const metal = createMaterial(stage.environment?.texture ?? null);
+  applyLook(metal, specOf(look));
+  const gem = createMaterial(stage.environment?.texture ?? null);
+  applyLook(gem, specOf(fill));
+  // `transmission` attenuates over `thickness` in world units, and the shipped looks are tuned for
+  // a volume the size of a letter. A stone is a twentieth of that, so inheriting the look's own
+  // thickness absorbs almost everything and the gem reads as dark enamel in a hole.
+  if (params.has('thickness')) gem.thickness = Number(params.get('thickness'));
+  if (params.has('rough')) gem.roughness = Number(params.get('rough'));
+
+  const letter = new THREE.Group();
+  stage.scene.add(letter);
+  letter.add(new THREE.Mesh(build(data.body), metal));
+
+  // One draw for every stone on the letter: they share a geometry and a material, and the seat is
+  // the only thing that differs between them.
+  const stones = new THREE.InstancedMesh(build(data.stone), gem, data.seats.length);
+  const at = new THREE.Matrix4();
+  data.seats.forEach(([x, y], i) => stones.setMatrixAt(i, at.makeTranslation(x, y, 0)));
+  stones.instanceMatrix.needsUpdate = true;
+  letter.add(stones);
+
+  const box = new THREE.Box3().setFromObject(letter);
+  const size = box.getSize(new THREE.Vector3());
+  const centre = box.getCenter(new THREE.Vector3());
+  const budget = stage.viewportBudget();
+  letter.scale.setScalar(Math.min(budget.width / size.x, budget.height / size.y) * 2.2);
+  letter.position.set(-centre.x * letter.scale.x, -centre.y * letter.scale.y, 0);
+
+  document.getElementById('tag').textContent =
+    `${data.letter} · ${look} plate · ${fill} stones · ${data.seats.length} seats`;
+
+  // No bloom: a transmissive stone is judged on what it does to the light behind it, and a bloom
+  // pass lays the same white over a set stone and a hole.
+  let frames = 0;
+  function frame() {
+    renderer.render(stage.scene, stage.camera);
+    if (++frames > 8) window.__shot = true;
+    else requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+</script>

@@ -31,9 +31,10 @@ export function planEffects(
   return specs.map((spec) => {
     // Pool positions carry their index into `parts`: a part's `index` numbers its own kind, and
     // the two differ for every run part.
-    const pool = parts
-      .map((part, index) => ({ part, index }))
-      .filter(({ part }) => part.kind === spec.target.kind);
+    const target = spec.target;
+    const matches = (part: PartInfo) =>
+      'fill' in target ? part.fill === target.fill : part.kind === target.kind;
+    const pool = parts.map((part, index) => ({ part, index })).filter(({ part }) => matches(part));
     const chosen = selectIndices(
       pool.map(({ part }) => ({ index: part.index, length: part.span })),
       spec.target,

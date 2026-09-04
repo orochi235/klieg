@@ -31,6 +31,8 @@ export interface WordBuildContext {
     at: number,
     span: number,
     ink?: PartInfo['ink'],
+    /** Which registered fill built this part, when one did. */
+    fill?: string,
   ): PartInfo;
   meshInk(slot: number, mesh: THREE.Mesh): PartInfo['ink'];
 }

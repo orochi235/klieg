@@ -8,10 +8,24 @@ const CONTOUR_SEGMENTS = 24;
 /** Row pitch as a fraction of column pitch, so a staggered lattice is equilateral. */
 const ROW = Math.sqrt(3) / 2;
 
-/** What one cut produces: the well outlines, and the one floor they share. */
+/**
+ * Where one well sits, for whatever fills it. The cutter is the only thing that knows this without
+ * measuring an outline it has already placed.
+ */
+export interface Seat {
+  /** The well's centre in the glyph's own em space. */
+  x: number;
+  y: number;
+  /** The well's half-diagonal, in em. */
+  half: number;
+}
+
+/** What one cut produces: the well outlines, where each sits, and the one floor they share. */
 export interface Cut {
   /** Closed well outlines in the glyph's own em space. */
   wells: THREE.Path[];
+  /** One per well, in the same order. */
+  seats: Seat[];
   /** How far below the plate's front face the floor sits, in em. */
   floor: number;
 }
@@ -38,6 +52,7 @@ const lattice: Cutter = (shapes, region, spec) => {
   }
   const half = spec.size / 2;
   const wells: THREE.Path[] = [];
+  const seats: Seat[] = [];
   const rowStep = spec.pitch * ROW;
   const rows = Math.ceil((box.max.y - box.min.y) / rowStep);
   for (let r = 0; r <= rows; r++) {
@@ -61,9 +76,10 @@ const lattice: Cutter = (shapes, region, spec) => {
       path.lineTo(x - half, y);
       path.closePath();
       wells.push(path);
+      seats.push({ x, y, half });
     }
   }
-  return { wells, floor: spec.floor };
+  return { wells, seats, floor: spec.floor };
 };
 
 registerCutter('lattice', lattice);

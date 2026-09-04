@@ -100,7 +100,11 @@ describe('buildPlate', () => {
 
   it('cuts nothing when the cutter found no room', () => {
     const shapes = new WordCaches().shapes(stubFont(), 'A');
-    const empty = buildPlate(shapes, { wells: [], floor: 0.09 }, { depth: 0.3, bezel: 0.012 });
+    const empty = buildPlate(
+      shapes,
+      { wells: [], seats: [], floor: 0.09 },
+      { depth: 0.3, bezel: 0.012 },
+    );
     expect(empty.getAttribute('position').count).toBeGreaterThan(0);
   });
 
@@ -112,7 +116,11 @@ describe('buildPlate', () => {
     spike.lineTo(1, 0);
     spike.lineTo(0.02, 0.06);
     spike.closePath();
-    const geo = buildPlate([spike], { wells: [], floor: 0.09 }, { depth: 0.3, bezel: 0.012 });
+    const geo = buildPlate(
+      [spike],
+      { wells: [], seats: [], floor: 0.09 },
+      { depth: 0.3, bezel: 0.012 },
+    );
     geo.computeBoundingBox();
     // Chamfered this tip reaches 1.020; unchamfered the miter runs it to 1.054, which is as far
     // as three's sqrt(2) cap allows. A looser bound than that passes either way.

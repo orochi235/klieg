@@ -95,17 +95,33 @@ function extrude(shapes: THREE.Shape[], depth: number, bevelSize: number): THREE
  * unpredictable depth. Deriving it makes that inexpressible. In a stack the plate carries the
  * letter's front bevel anyway, so the slab's only other job is the back edge.
  */
+/**
+ * The two planes a fill has to sit between: the plate's front face and the well's floor.
+ *
+ * Neither is where the depth alone would put it. `ExtrudeGeometry` carries a bevelled face
+ * `bevelThickness` past the depth it was asked for, so a stone placed at `depth` sits that far
+ * inside the letter — and the slab's own bevel is capped by the bezel, which lifts the floor.
+ */
+export function platePlanes(depth: number, floor: number, bezel: number) {
+  const slabDepth = Math.max(depth - floor, 0);
+  const slabBevel = Math.min(DEFAULT_GLYPH_OPTIONS.bevelSize, bezel);
+  const slabBevelZ =
+    (DEFAULT_GLYPH_OPTIONS.bevelThickness * slabBevel) / DEFAULT_GLYPH_OPTIONS.bevelSize;
+  return {
+    slabDepth,
+    slabBevel,
+    floorZ: slabDepth + slabBevelZ,
+    faceZ: slabDepth + floor + DEFAULT_GLYPH_OPTIONS.bevelThickness,
+  };
+}
+
 export function buildPlate(
   shapes: readonly THREE.Shape[],
   cut: Cut,
   opts: PlateOptions,
 ): THREE.BufferGeometry {
-  const slabDepth = Math.max(opts.depth - cut.floor, 0);
-  const slab = extrude(
-    shapes as THREE.Shape[],
-    slabDepth,
-    Math.min(DEFAULT_GLYPH_OPTIONS.bevelSize, opts.bezel),
-  );
+  const { slabDepth, slabBevel } = platePlanes(opts.depth, cut.floor, opts.bezel);
+  const slab = extrude(shapes as THREE.Shape[], slabDepth, slabBevel);
   const plate = extrude(withWells(shapes, cut.wells), cut.floor, DEFAULT_GLYPH_OPTIONS.bevelSize);
   plate.translate(0, 0, slabDepth);
   const merged = mergeNonIndexed([slab, plate]);

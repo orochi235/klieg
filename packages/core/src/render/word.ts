@@ -247,9 +247,11 @@ export class Word {
     at: number,
     span: number,
     ink: PartInfo['ink'] = this.inkOf(slot),
+    fill?: string,
   ): PartInfo {
     return {
       kind,
+      fill,
       index,
       count,
       letter: this.letterInfo(slot),

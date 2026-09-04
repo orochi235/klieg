@@ -66,6 +66,28 @@ describe('planEffects', () => {
     );
     expect(effect?.parts).toEqual([]);
   });
+
+  it('selects by fill name, across kinds', () => {
+    const parts = pool(0, 2);
+    (parts[1] as PartInfo).fill = 'stone';
+    const [effect] = planEffects(
+      [{ piece: HALF, target: { fill: 'stone', by: 'index', amount: 1 } }],
+      parts,
+    );
+    expect(effect?.parts).toEqual([1]);
+  });
+
+  // The guard on the whole change: a `kind` target must keep reaching a part a fill built, or
+  // every shipped look's effects narrow the moment a fill exists.
+  it('leaves a kind target selecting by kind, filled or not', () => {
+    const parts = pool(0, 2);
+    (parts[1] as PartInfo).fill = 'stone';
+    const [effect] = planEffects(
+      [{ piece: HALF, target: { kind: 'body', by: 'index', amount: 1 } }],
+      parts,
+    );
+    expect(effect?.parts).toEqual([0, 1]);
+  });
 });
 
 describe('EffectFrame', () => {

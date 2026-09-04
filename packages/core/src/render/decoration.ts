@@ -80,6 +80,24 @@ export interface ChunkSpec {
   look: MaterialSpec;
 }
 
+export interface WellSpec {
+  kind: 'well';
+  /** Which registered cutter places the wells. A second cutter makes this a discriminant. */
+  cutter: 'lattice';
+  /**
+   * How far in from every contour a well stays, in em. Also caps the slab's bevel, because the
+   * slab's front face is every well's floor and a bevelled cap ramps across its own bevel width.
+   */
+  bezel: number;
+  /** How deep a well is — the plate's thickness — in em. */
+  floor: number;
+  /** Lattice pitch, in em. */
+  pitch: number;
+  /** A well's full diagonal, in em. */
+  size: number;
+  look: MaterialSpec;
+}
+
 export interface ChunkBlueprint {
   kind: 'chunks';
   position: Float32Array;

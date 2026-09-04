@@ -345,7 +345,7 @@ function chamferRing(ring: THREE.Vector2[], setback: number): THREE.Vector2[] {
  * and uses nothing else — with sharp corners cut. Sampling here first is what lets the cut be
  * expressed as points; a line curve re-samples to its own endpoints, so nothing else moves.
  */
-function chamfered(shapes: THREE.Shape[], opts: GlyphOptions): THREE.Shape[] {
+export function chamfered(shapes: THREE.Shape[], opts: GlyphOptions): THREE.Shape[] {
   const setback = opts.bevelSize * CHAMFER_SETBACK;
   return shapes.map((source) => {
     const points = source.extractPoints(opts.curveSegments);

@@ -45,8 +45,30 @@ const JITTER = Number(arg('jitter', '0'));
 const MIN_AREA = Number(arg('minArea', '0.18'));
 /** How far in from the letter's edge the pinned row of seeds sits, as a fraction of the pitch. */
 const EDGE_INSET = Number(arg('edgeInset', '0.42'));
-/** The plate's thickness — a well's depth — in em. */
-const PLATE = Number(arg('plate', '0.055'));
+/**
+ * The plate's thickness — a well's depth — in em, derived from the pitch unless given.
+ *
+ * It is not a free choice: a brilliant's pavilion is about 0.38 of its girdle, the girdle sits
+ * `sink` below the face, and the slab's own bevel lifts the floor. Too thin a plate and every
+ * full-size stone bottoms out on the floor, which reads as a flat tile in a hole rather than as a
+ * stone with a point. The shipped 0.09 happens to be deep enough for a 0.048 em diamond and is far
+ * too thin for a cell three times that wide.
+ */
+const PITCH_FOR_PLATE = Number(arg('pitch', '0.055'));
+const AUTO_PLATE = (() => {
+  const width = PITCH_FOR_PLATE * Math.sqrt(Math.sqrt(3) / 2);
+  const slabBevelZ =
+    (DEFAULT_GLYPH_OPTIONS.bevelThickness *
+      Math.min(DEFAULT_GLYPH_OPTIONS.bevelSize, Number(arg('bezel', '0.014')))) /
+    DEFAULT_GLYPH_OPTIONS.bevelSize;
+  const plateBevelZ =
+    (DEFAULT_GLYPH_OPTIONS.bevelThickness * Number(arg('bevel', '0.004'))) /
+    DEFAULT_GLYPH_OPTIONS.bevelSize;
+  const sink = Number(arg('sink', '0.18'));
+  const need = Number(arg('pavilion', '0.38')) * width + slabBevelZ - plateBevelZ + 0.003;
+  return Math.round((need / (1 - sink)) * 1e4) / 1e4;
+})();
+const PLATE = Number(arg('plate', String(AUTO_PLATE)));
 /**
  * The bevel around each well. The shipped plate uses the glyph's own 0.038 em, which is most of a
  * cell at this pitch: neighbouring wells' bevels then eat the wall between them and the plate comes
@@ -416,6 +438,9 @@ const CROWN = Number(arg('crown', '0.15'));
 const PAVILION = Number(arg('pavilion', '0.38'));
 /** How far below the plate's face the girdle sits, as a fraction of the plate. */
 const SINK = Number(arg('sink', '0.18'));
+/** How far every table stands above the plate's face, in em. Constant, so the tables are coplanar. */
+const PROUD = Number(arg('proud', '0.006'));
+let clamped = 0;
 
 /**
  * A stone shaped to its own cell: the girdle is the cell, so a fragment at the letter's edge is a
@@ -463,9 +488,19 @@ const stonePos = [];
 for (const poly of cells) {
   const c = interiorPoint(poly);
   const width = Math.sqrt(area(poly));
+  // Every table on one plane, standing `PROUD` above the metal. Deriving the crown from the cell's
+  // own width instead — the obvious reading of a brilliant's proportions — sinks the small stones:
+  // the girdle sits at a fixed depth, so a narrow cell's crown is too short to reach the surface
+  // and its table ends up below the plate. That is what the edges were doing.
   const girdleZ = faceZ - SINK * PLATE;
-  const tableZ = girdleZ + CROWN * width;
-  const culetZ = Math.max(girdleZ - PAVILION * width, floorZ + 0.002);
+  const tableZ = faceZ + PROUD;
+  // A pavilion deeper than the well gets shallower, never flatter. Clamping the culet to the floor
+  // instead lands every big stone on one plane, and a stone with a flat bottom sitting on the
+  // floor of its own well is a tile in a hole — which is what the wide cells were reading as.
+  const room = (girdleZ - floorZ) * 0.92;
+  const drop = Math.min(PAVILION * width, room);
+  if (PAVILION * width > room) clamped++;
+  const culetZ = girdleZ - drop;
   const toward = (k, z) =>
     poly.map(([x, y]) => new THREE.Vector3(c[0] + (x - c[0]) * k, c[1] + (y - c[1]) * k, z));
   const girdle = toward(1, girdleZ);
@@ -503,6 +538,16 @@ console.log(
   `  edge '${EDGE}': ${pinned.length} pinned, ${free.length} laid, ${culled} culled so neighbours took the space`,
 );
 console.log(`  ${whole} whole, ${cells.length - whole} shaped by the outline`);
+console.log(
+  `  plate ${PLATE} deep, floor z ${floorZ.toFixed(4)}, face z ${faceZ.toFixed(4)}, ` +
+    `tables at ${(faceZ + PROUD).toFixed(4)}`,
+);
+if (clamped > 0) {
+  console.log(
+    `  ${clamped} of ${cells.length} stones cut shallower than a brilliant — their cell is wider ` +
+      `than the plate is deep. They still come to a culet; a deeper plate makes them proper.`,
+  );
+}
 console.log(`  body ${body.getAttribute('position').count} vertices, stones ${stones.getAttribute('position').count}`);
 
 const dump = (geo) => ({

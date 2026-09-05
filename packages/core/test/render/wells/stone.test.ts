@@ -4,7 +4,7 @@ import type { WellSpec } from '../../../src/render/decoration.js';
 import { createMaterial } from '../../../src/render/looks.js';
 import type { FillContext } from '../../../src/render/wells/fills.js';
 import { fillFor } from '../../../src/render/wells/fills.js';
-import { platePlanes } from '../../../src/render/wells/plate.js';
+import { shellPlanes } from '../../../src/render/wells/shell.js';
 import { girdleWidth, stone } from '../../../src/render/wells/stone.js';
 
 const SPEC = {
@@ -18,7 +18,7 @@ const SPEC = {
   fill: 'stone',
 } as const satisfies WellSpec;
 
-const PLANES = platePlanes(0.3, SPEC.floor, SPEC.bezel);
+const PLANES = shellPlanes(0.3, SPEC.floor, SPEC.bezel);
 // `createMaterial`, not a bare `MeshPhysicalMaterial`: `applyLook` writes flake uniforms that only
 // the former installs, and this is what `studioMaterial()` hands a builder.
 const ctx: FillContext = {

@@ -14,8 +14,8 @@ import type { Cut } from '../wells/cutters.js';
 import { cutterFor } from '../wells/cutters.js';
 import type { Filled } from '../wells/fills.js';
 import { fillFor } from '../wells/fills.js';
-import { buildPlate, platePlanes } from '../wells/plate.js';
 import { regionOf } from '../wells/region.js';
+import { buildShell, DEFAULT_SHELL, shellPlanes } from '../wells/shell.js';
 import type { DecorationBuilder, DecorationPart, WordBuildContext } from './registry.js';
 
 /**
@@ -43,7 +43,15 @@ export class WellBuilder implements DecorationBuilder {
   ) {
     this.base = frameOwnedBase(spec.stone ?? 'gem');
     this.bodies = new GlyphCache<THREE.BufferGeometry>((char, depth) =>
-      buildPlate(ctx.shapes(char), this.cutOf(char), { depth, bezel: spec.bezel }),
+      buildShell(ctx.shapes(char), this.cutOf(char), {
+        ...DEFAULT_SHELL,
+        depth,
+        bezel: spec.bezel,
+        rimBevel: spec.rimBevel ?? DEFAULT_SHELL.rimBevel,
+        rimDrop: spec.rimDrop ?? spec.rimBevel ?? DEFAULT_SHELL.rimDrop,
+        round: spec.round ?? 0,
+        roundOuter: spec.roundOuter ?? 0,
+      }),
     );
   }
 
@@ -74,7 +82,7 @@ export class WellBuilder implements DecorationBuilder {
     if (cut.seats.length === 0) return;
 
     // The depth the body is built at, so the fill sits against the plate this letter actually got.
-    const planes = platePlanes(this.depth, cut.floor, this.spec.bezel);
+    const planes = shellPlanes(this.depth, cut.floor, this.spec.bezel);
     const filled = fillFor(this.spec.fill)(
       cut.seats,
       {

@@ -83,7 +83,7 @@ export interface ChunkSpec {
 export interface WellSpec {
   kind: 'well';
   /** Which registered cutter places the wells. A second cutter makes this a discriminant. */
-  cutter: 'lattice';
+  cutter: 'lattice' | 'pave';
   /**
    * How far in from every contour a well stays, in em. Also caps the slab's bevel, because the
    * slab's front face is every well's floor and a bevelled cap ramps across its own bevel width.
@@ -95,6 +95,18 @@ export interface WellSpec {
   pitch: number;
   /** A well's full diagonal, in em. */
   size: number;
+  /**
+   * The bead around a well's rim, in em, and how far it falls. Separate from the letter's own
+   * chamfer, which is the whole reason the body is stitched rather than extruded: one
+   * `ExtrudeGeometry` bevels the outer contour and every hole at the same size, and a letter's
+   * chamfer folds a pocket this small through itself.
+   */
+  rimBevel?: number;
+  rimDrop?: number;
+  /** Radius the reflex corners are rounded to, in em: stroke junctions and inside a counter. */
+  round?: number;
+  /** Radius the convex corners are rounded to: outer corners, tips, a leg's point. */
+  roundOuter?: number;
   look: MaterialSpec;
   /** Which registered fill occupies the wells. Omitted leaves them empty, as the cutter does. */
   fill?: 'stone';

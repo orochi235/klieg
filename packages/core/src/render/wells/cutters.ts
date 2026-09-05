@@ -24,6 +24,12 @@ export interface Seat {
 export interface Cut {
   /** Closed well outlines in the glyph's own em space. */
   wells: THREE.Path[];
+  /**
+   * Per well, the rings its rim bead steps through — widest at the face, the well's own outline
+   * last. A cutter that can re-derive its pockets supplies these; one whose pockets are convex may
+   * leave it out, and the shell shrinks them instead.
+   */
+  bead?: THREE.Path[][];
   /** One per well, in the same order. */
   seats: Seat[];
   /** How far below the plate's front face the floor sits, in em. */

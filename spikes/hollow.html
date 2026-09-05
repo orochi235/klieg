@@ -38,6 +38,38 @@
   const mesh = new THREE.Mesh(geo, metal);
   letter.add(mesh);
 
+  // A stone per gem, not per pocket: one material each, and one mesh carrying every stone cut from
+  // it. Transmission is what makes them read as stones rather than as coloured plastic, and it
+  // costs a render target per material — so the whole point of grouping is that there are twenty of
+  // those and not a hundred and twenty.
+  const env = stage.environment?.texture ?? null;
+  const gems = [];
+  for (const { spec, position } of data.stones ?? []) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
+    g.computeVertexNormals();
+    const m = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color(spec.color),
+      metalness: 0,
+      roughness: spec.roughness ?? 0.05,
+      ior: spec.ior ?? 1.5,
+      transmission: spec.transmission ?? 0,
+      clearcoat: spec.clearcoat ?? 0,
+      clearcoatRoughness: 0.04,
+      iridescence: spec.iridescence ?? 0,
+      iridescenceIOR: 1.8,
+      envMap: env,
+      envMapIntensity: 2.2,
+      // A real stone is lit by light that enters its table and bounces off the pavilion facets from
+      // the inside. Nothing here traces that, and the pocket behind the stone is opaque metal, so
+      // the back faces are what stands in for it: without them the dark gems render as holes.
+      side: THREE.DoubleSide,
+    });
+    if (spec.attenuation) m.attenuationColor = new THREE.Color(spec.attenuation);
+    gems.push({ material: m, distance: spec.distance ?? 0 });
+    letter.add(new THREE.Mesh(g, m));
+  }
+
   const box = new THREE.Box3().setFromObject(letter);
   const size = box.getSize(new THREE.Vector3());
   const centre = box.getCenter(new THREE.Vector3());
@@ -48,7 +80,18 @@
   letter.rotation.y = data.tilt;
   letter.rotation.x = data.tilt * 0.35;
 
-  document.getElementById('tag').textContent = `${data.letter} · ${look} · hollowed`;
+  // Both are path lengths through the glass, so they are in world units and have to follow the
+  // scale the letter was just fitted to the viewport with.
+  const k = letter.scale.x;
+  for (const { material, distance } of gems) {
+    material.thickness = 0.02 * k;
+    if (distance > 0) material.attenuationDistance = distance * 3 * k;
+  }
+  if ('transmissionResolutionScale' in renderer) renderer.transmissionResolutionScale = 0.5;
+
+  const set = (data.stones ?? []).length;
+  document.getElementById('tag').textContent =
+    `${data.letter} · ${look} · hollowed${set > 0 ? ` · ${set} kinds of stone` : ''}`;
 
   let frames = 0;
   function frame() {

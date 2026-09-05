@@ -597,7 +597,20 @@ combined render; the third, a per-cell check that said 0 of 130 wells were cut, 
 zero-area triangle in the cap — a degenerate triangle passes a point-in-triangle sign test for every
 point in the plane. Do not re-derive this; run the spike.
 
-**The cell field is a level now, and the next thing is stones in it.** `cells` marks the innermost
+**The stones are in.** A cut is a profile over the pocket — a list of rings scaled toward an
+interior point, at fractions of the crown's height and the pavilion's depth — so it is stitched by
+the same machinery every other pair of rings here is, and the cell's own outline is the girdle.
+Seven cuts (`brilliant`, `step`, `rose`, `cabochon`, `briolette`, `sugarloaf`, `table`) and twenty
+stones, picked per pocket off `--stoneSeed`; `--cuts` and `--gems` take `all` or a comma list, so
+`--gems diamond --cuts brilliant` is classic pavé. A flat-backed cut is a pavilion of `k: 1`, which
+runs the stone straight down to sit on the floor of its pocket.
+
+**One material per stone, not per pocket**, because transmission costs a render target each.
+Transmission is also why the gems are drawn `DoubleSide`: nothing traces the light that enters a
+table and bounces off the pavilion facets, and behind the stone is opaque metal, so without back
+faces every dark gem renders as a hole.
+
+**The cell field is a level, and the pockets it cuts are what the stones sit in.** `cells` marks the innermost
 level and gives it a pocket per Voronoi cell instead of one outline. `--pitch`, `--wall`,
 `--jitter`, `--relax`, `--minArea`, `--seed`, `--edge absorb|grade` and `--cellBevel` are the knobs;
 the shell closes on R A S O E M W B C G K X Z, rounded or not. Nothing sits in the pockets yet —
@@ -616,9 +629,10 @@ because it changes the letter's weight as well as its consistency.
 takes 31% where 0.038 on the stem would be 35%. Ratios hold either way; only the calibration
 shifts, and `--outer` is the knob for it.
 
-**Both `--look` settings are wanted, and `flush` is the one asked for.** It puts the pockets in the
-letter's face with no well, so only the chamfer frames them; `bezel` sinks the same field in a well
-whose wall reads as a border. Any flat metal between the two is a land a bead sits in, so a look is
+**Both `--setting` values are wanted, and `flush` is the one asked for.** Named for the settings
+they imitate: `flush` puts the pockets in the letter's face with no well, so only the chamfer frames
+them; `bezel` sinks the same field in a well whose wall stands around them. It is not `--looks`,
+which is what the render is made of. Any flat metal between the two is a land a bead sits in, so a look is
 computed from `--outer`, `--bevel` and `--cellBevel` plus `--lookClearance`, never written down as
 an inset. A flat band wide enough to notice means the numbers were typed, not derived.
 

@@ -8,13 +8,13 @@
  * above it. The drinking glass is the one-level case and concentric wells are the same construction
  * with more, so nothing here hard-codes a slab under a plate.
  *
- *   node spikes/hollow.mjs --look flush        # pockets run to the chamfer, no well
- *   node spikes/hollow.mjs --look bezel        # the same field sunk in a well that frames it
+ *   node spikes/hollow.mjs --setting flush     # pockets run to the chamfer, no well
+ *   node spikes/hollow.mjs --setting bezel     # the same field sunk in a well that frames it
  *
  * A `cells` level is the pavé field: one level carrying a pocket per Voronoi cell instead of one
  * outline. It is the same construction — rims, beads, walls, floors — with many rings on a plane
  * rather than one, which is why it is a level and not a plate with holes punched through it.
- * `--look` is two settings of `--levels`, computed against the beads rather than written down;
+ * `--setting` is two settings of `--levels`, computed against the beads rather than written down;
  * `--levels 0.05:0.09,0.075:0.10:cells` still says it by hand.
  *
  * Nothing is extruded. `ExtrudeGeometry` bevels every contour it is handed at one size, which is
@@ -109,20 +109,21 @@ const LIP_T = Number(arg('lipDrop', String(LIP)));
 /** Metal left past what a bead strictly needs, in em. The guards below reject anything less. */
 const SLACK = Number(arg('lookClearance', '0.004'));
 /**
- * Two settings the pavé is wanted at, each packing the field as close to the letter's edge as its
- * beads allow. `flush` has no well: the cells are the face, and the chamfer alone frames them.
- * `bezel` sinks them in one, whose wall reads as a border. `--levels` overrides either.
+ * How the stones sit in the metal, both named for the setting they imitate. `flush` has no well:
+ * the cells are the face, and the letter's own chamfer alone frames them. `bezel` sinks them in a
+ * well whose wall stands around them. Each packs as close to the letter's edge as its beads allow,
+ * and `--levels` overrides either. Not `--looks`, which is what the render is made of.
  */
-const LOOK = arg('look', '');
-function look() {
-  if (LOOK === 'flush') return `${(OUTER + CELL_LIP + SLACK).toFixed(4)}:${WELL}:cells`;
-  if (LOOK === 'bezel') {
+const SETTING = arg('setting', '');
+function setting() {
+  if (SETTING === 'flush') return `${(OUTER + CELL_LIP + SLACK).toFixed(4)}:${WELL}:cells`;
+  if (SETTING === 'bezel') {
     const rim = OUTER + LIP + SLACK;
     const field = rim + LIP + CELL_LIP + SLACK;
     const [wall, floor] = [WELL * 0.4, WELL * 0.6];
     return `${rim.toFixed(4)}:${wall.toFixed(4)},${field.toFixed(4)}:${floor.toFixed(4)}:cells`;
   }
-  if (LOOK) throw new Error(`--look is 'flush' or 'bezel', got '${LOOK}'`);
+  if (SETTING) throw new Error(`--setting is 'flush' or 'bezel', got '${SETTING}'`);
   return `${RIM}:${WELL}`;
 }
 
@@ -132,7 +133,7 @@ function look() {
  * is a step, not an absolute height. A `cells` level's own inset is the bezel: how much metal is left
  * between the wall it sits in and the outermost cell.
  */
-const LEVELS = arg('levels', look())
+const LEVELS = arg('levels', setting())
   .split(',')
   .filter(Boolean)
   .map((spec) => {
@@ -1123,7 +1124,256 @@ const dump = (geo) => ({
   position: [...geo.getAttribute('position').array],
   normal: [...geo.getAttribute('normal').array],
 });
-const payload = { letter: LETTER, body: dump(plain ?? body), tilt: TILT };
+// ---------------------------------------------------------------------------------------------
+// The stones. A pocket is a ring and a floor, and a cut is a profile over it: a list of rings
+// scaled toward an interior point, stitched the way every other pair of rings here is. The cell's
+// own outline is the girdle, so a stone at the letter's edge is a fragment of a stone rather than
+// a whole one hanging over it, and every facet around the perimeter is one of the cell's edges.
+
+/**
+ * `k` is how far a ring is scaled toward the interior point, `t` how far it is along the crown's
+ * height or the pavilion's depth. `zig` pulls alternate vertices in and out, which is what turns a
+ * plain cone into crown facets. A pavilion of `k: 1` is a flat back: the stone runs straight down
+ * to the floor of its own pocket and sits on it.
+ */
+const CUTS = {
+  brilliant: {
+    crown: [{ k: 0.78, t: 0.42, zig: 0.1 }, { k: 0.56, t: 1 }],
+    pavilion: [{ k: 0.62, t: 0.45, zig: 0.08 }, { k: 0.12, t: 1 }],
+  },
+  step: {
+    crown: [{ k: 0.86, t: 0.34 }, { k: 0.72, t: 0.67 }, { k: 0.58, t: 1 }],
+    pavilion: [{ k: 0.74, t: 0.34 }, { k: 0.46, t: 0.67 }, { k: 0.12, t: 1 }],
+  },
+  rose: {
+    crown: [{ k: 0.72, t: 0.44, zig: 0.12 }, { k: 0.4, t: 0.78 }, { k: 0.13, t: 1 }],
+    pavilion: [{ k: 1, t: 1 }],
+  },
+  cabochon: {
+    crown: [
+      { k: 0.97, t: 0.26 },
+      { k: 0.87, t: 0.5 },
+      { k: 0.71, t: 0.71 },
+      { k: 0.5, t: 0.87 },
+      { k: 0.26, t: 0.97 },
+      { k: 0.06, t: 1 },
+    ],
+    pavilion: [{ k: 1, t: 1 }],
+  },
+  briolette: {
+    crown: [{ k: 0.87, t: 0.5 }, { k: 0.5, t: 0.87 }, { k: 0.09, t: 1 }],
+    pavilion: [{ k: 0.87, t: 0.5 }, { k: 0.5, t: 0.87 }, { k: 0.09, t: 1 }],
+  },
+  sugarloaf: {
+    crown: [{ k: 0.66, t: 0.45 }, { k: 0.34, t: 0.79 }, { k: 0.08, t: 1 }],
+    pavilion: [{ k: 0.6, t: 0.5 }, { k: 0.12, t: 1 }],
+  },
+  table: {
+    crown: [{ k: 0.88, t: 1 }],
+    pavilion: [{ k: 0.66, t: 0.42 }, { k: 0.12, t: 1 }],
+  },
+};
+
+/**
+ * Colour, and what the material does with light. `transmission` and `ior` are what make a gem read
+ * as one rather than as painted plastic; `attenuation` is the colour light picks up on its way
+ * through, which is where the depth of a ruby actually comes from. The opaque ones are opaque on
+ * purpose — onyx, pearl and turquoise are not transparent stones.
+ */
+const GEMS = {
+  diamond: { color: '#fbfcff', ior: 2.42, transmission: 1, roughness: 0.02, attenuation: '#f2f6ff', distance: 0.6 },
+  ruby: { color: '#c4082f', ior: 1.77, transmission: 0.95, roughness: 0.03, attenuation: '#7c0016', distance: 0.09 },
+  sapphire: { color: '#12439c', ior: 1.77, transmission: 0.95, roughness: 0.03, attenuation: '#04173f', distance: 0.09 },
+  emerald: { color: '#0b7d51', ior: 1.58, transmission: 0.92, roughness: 0.05, attenuation: '#023a24', distance: 0.1 },
+  amethyst: { color: '#7d43ac', ior: 1.54, transmission: 0.95, roughness: 0.03, attenuation: '#3d1a5c', distance: 0.12 },
+  citrine: { color: '#e0a022', ior: 1.55, transmission: 0.95, roughness: 0.03, attenuation: '#8a5504', distance: 0.14 },
+  topaz: { color: '#37a9d1', ior: 1.62, transmission: 0.95, roughness: 0.03, attenuation: '#0a5d7c', distance: 0.14 },
+  peridot: { color: '#93c01f', ior: 1.65, transmission: 0.93, roughness: 0.04, attenuation: '#4c6b05', distance: 0.13 },
+  garnet: { color: '#8a1424', ior: 1.79, transmission: 0.9, roughness: 0.04, attenuation: '#480009', distance: 0.08 },
+  aquamarine: { color: '#79d4e4', ior: 1.58, transmission: 0.97, roughness: 0.03, attenuation: '#2b8fa4', distance: 0.2 },
+  morganite: { color: '#f2ada6', ior: 1.58, transmission: 0.96, roughness: 0.03, attenuation: '#b96f68', distance: 0.2 },
+  tanzanite: { color: '#4a3fc0', ior: 1.7, transmission: 0.94, roughness: 0.03, attenuation: '#1e1466', distance: 0.1 },
+  tourmaline: { color: '#d8477e', ior: 1.62, transmission: 0.94, roughness: 0.04, attenuation: '#7a1340', distance: 0.11 },
+  spinel: { color: '#e8546f', ior: 1.71, transmission: 0.93, roughness: 0.03, attenuation: '#8c1330', distance: 0.11 },
+  moonstone: { color: '#dbe6f5', ior: 1.52, transmission: 0.72, roughness: 0.16, attenuation: '#9fb4d4', distance: 0.3 },
+  opal: { color: '#d5eae4', ior: 1.45, transmission: 0.6, roughness: 0.2, attenuation: '#8fc3bb', distance: 0.25, iridescence: 1 },
+  onyx: { color: '#111318', ior: 1.5, transmission: 0, roughness: 0.07 },
+  pearl: { color: '#f6efe2', ior: 1.53, transmission: 0, roughness: 0.22, clearcoat: 1 },
+  turquoise: { color: '#33b3ad', ior: 1.62, transmission: 0, roughness: 0.3 },
+  jade: { color: '#3f9c6d', ior: 1.66, transmission: 0.45, roughness: 0.18, attenuation: '#134d30', distance: 0.06 },
+};
+
+/** A named list, `all` for every one of them, in the order the table gives. */
+function chosen(what, table, flag) {
+  if (what === 'all') return Object.keys(table);
+  const names = what.split(',').filter(Boolean);
+  for (const name of names) {
+    if (!table[name]) throw new Error(`--${flag} does not know '${name}'; it has ${Object.keys(table).join(', ')}`);
+  }
+  if (names.length === 0) throw new Error(`--${flag} was given nothing`);
+  return names;
+}
+
+const CUT_NAMES = chosen(arg('cuts', 'all'), CUTS, 'cuts');
+const GEM_NAMES = chosen(arg('gems', 'all'), GEMS, 'gems');
+/** How far every table stands above the metal, in em. Constant, so the tables are coplanar. */
+const PROUD = Number(arg('proud', '0.005'));
+/** A pavilion as a fraction of the stone's own width, and how much of the pocket it may use. */
+const PAVILION = Number(arg('pavilion', '0.42'));
+const STONE_SEED = Number(arg('stoneSeed', '11'));
+const PARTS = arg('parts', 'all');
+if (PARTS !== 'all' && PARTS !== 'body') {
+  throw new Error(`--parts is 'all' or 'body', got '${PARTS}'`);
+}
+
+const signed = (poly) => {
+  let a = 0;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    a += poly[j][0] * poly[i][1] - poly[i][0] * poly[j][1];
+  }
+  return a / 2;
+};
+
+/**
+ * A point the whole cell can be seen from, which the centroid is not once the outline has taken a
+ * bite out of it. Scaling a ring toward a point outside it turns the ring inside out, and a cap
+ * drawn from one throws triangles clean outside the cell.
+ */
+function interiorPoint(poly) {
+  const c = centroidOf(poly);
+  if (inside(poly, c[0], c[1])) return c;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [x, y] of poly) {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  let best = poly[0];
+  let bestD = -1;
+  const N = 14;
+  for (let i = 1; i < N; i++) {
+    for (let j = 1; j < N; j++) {
+      const x = minX + ((maxX - minX) * i) / N;
+      const y = minY + ((maxY - minY) * j) / N;
+      if (!inside(poly, x, y)) continue;
+      let d = Infinity;
+      for (let k = 0, l = poly.length - 1; k < poly.length; l = k++) {
+        const [ax, ay] = poly[l];
+        const ex = poly[k][0] - ax;
+        const ey = poly[k][1] - ay;
+        const len2 = ex * ex + ey * ey || 1e-24;
+        const t = Math.min(Math.max(((x - ax) * ex + (y - ay) * ey) / len2, 0), 1);
+        d = Math.min(d, Math.hypot(x - (ax + t * ex), y - (ay + t * ey)));
+      }
+      if (d > bestD) {
+        bestD = d;
+        best = [x, y];
+      }
+    }
+  }
+  return best;
+}
+
+const byGem = new Map();
+const cutCount = new Map();
+let flattened = 0;
+let unset = 0;
+
+/** One stone in one pocket: the girdle where the pocket's wall goes vertical, the table above it. */
+function setStone(poly, girdleZ, floorZ, cut, gem) {
+  if (poly.length < 3) return false;
+  const ring = signed(poly) < 0 ? [...poly].reverse() : poly;
+  const c = interiorPoint(ring);
+  if (!inside(ring, c[0], c[1])) return false;
+  const width = Math.sqrt(area(ring));
+  const crownH = PROUD + (girdleZ < D ? D - girdleZ : 0);
+  // A pavilion with no room shallows rather than flattens: a stone with a flat bottom sitting on
+  // the floor of its own pocket is a tile in a hole, which is what the wide cells used to read as.
+  const room = (girdleZ - floorZ) * 0.94;
+  const want = PAVILION * width;
+  if (want > room) flattened++;
+  const drop = Math.min(want, room);
+
+  const at = (k, z, zig = 0) =>
+    ring.map(([x, y], n) => {
+      const s = zig ? k * (1 + (n % 2 ? zig : -zig)) : k;
+      return [c[0] + (x - c[0]) * s, c[1] + (y - c[1]) * s, z];
+    });
+  const up = [at(1, girdleZ), ...cut.crown.map((r) => at(r.k, girdleZ + r.t * crownH, r.zig))];
+  const down = [at(1, girdleZ), ...cut.pavilion.map((r) => at(r.k, girdleZ - r.t * drop, r.zig))];
+
+  const out = byGem.get(gem) ?? [];
+  const push = (...ps) => {
+    for (const p of ps) out.push(p[0], p[1], p[2]);
+  };
+  for (const [lower, upper] of up.slice(0, -1).map((r, n) => [r, up[n + 1]])) {
+    for (let i = 0; i < ring.length; i++) {
+      const j = (i + 1) % ring.length;
+      push(lower[i], lower[j], upper[j]);
+      push(lower[i], upper[j], upper[i]);
+    }
+  }
+  for (const [upper, lower] of down.slice(0, -1).map((r, n) => [r, down[n + 1]])) {
+    for (let i = 0; i < ring.length; i++) {
+      const j = (i + 1) % ring.length;
+      push(upper[j], upper[i], lower[i]);
+      push(upper[j], lower[i], lower[j]);
+    }
+  }
+  // Both caps triangulated rather than fanned, for the same reason the apex is a ring and not a
+  // point: a clipped cell is not convex, and a fan from one vertex leaves the cell.
+  const faces = THREE.ShapeUtils.triangulateShape(
+    ring.map(([x, y]) => new THREE.Vector2(x, y)),
+    [],
+  );
+  const top = up.at(-1);
+  const base = down.at(-1);
+  for (const [a, b, d] of faces) {
+    push(top[a], top[b], top[d]);
+    push(base[d], base[b], base[a]);
+  }
+  byGem.set(gem, out);
+  return true;
+}
+
+if (PARTS === 'all') {
+  let rand = STONE_SEED;
+  const random = () => {
+    rand = (rand * 1664525 + 1013904223) % 4294967296;
+    return rand / 4294967296;
+  };
+  for (let i = 0; i < LEVELS.length; i++) {
+    if (!CELLS[i]) continue;
+    const ceiling = i === 0 ? D : FLOORS[i - 1];
+    const girdleZ = ceiling - lipDropOf(LEVELS[i]);
+    for (const poly of CELLS[i].rings[last(i)]) {
+      const cut = CUT_NAMES[Math.floor(random() * CUT_NAMES.length)];
+      const gem = GEM_NAMES[Math.floor(random() * GEM_NAMES.length)];
+      if (setStone(poly, girdleZ, FLOORS[i], CUTS[cut], gem)) {
+        cutCount.set(cut, (cutCount.get(cut) ?? 0) + 1);
+      } else unset++;
+    }
+  }
+}
+
+const SET = [...byGem].map(([gem, position]) => ({ gem, spec: GEMS[gem], position }));
+if (SET.length > 0) {
+  const total = [...cutCount.values()].reduce((n, c) => n + c, 0);
+  console.log(`  ${total} stones set, in ${byGem.size} of ${GEM_NAMES.length} kinds of stone`);
+  console.log(
+    `    ${[...cutCount].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(', ')}`,
+  );
+  if (flattened > 0) {
+    console.log(`    ${flattened} pavilion(s) shallowed to stay off the floor of the pocket`);
+  }
+  if (unset > 0) console.log(`    ${unset} pocket(s) too ragged to seat a stone in`);
+}
+
+const payload = { letter: LETTER, body: dump(plain ?? body), tilt: TILT, stones: SET };
 if (has('no-render')) process.exit(0);
 
 mkdirSync(OUT, { recursive: true });

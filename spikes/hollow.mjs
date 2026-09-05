@@ -8,11 +8,14 @@
  * above it. The drinking glass is the one-level case and concentric wells are the same construction
  * with more, so nothing here hard-codes a slab under a plate.
  *
- *   node spikes/hollow.mjs --levels 0.05:0.09,0.075:0.10:cells --pitch 0.055
+ *   node spikes/hollow.mjs --look flush        # pockets run to the chamfer, no well
+ *   node spikes/hollow.mjs --look bezel        # the same field sunk in a well that frames it
  *
  * A `cells` level is the pavé field: one level carrying a pocket per Voronoi cell instead of one
  * outline. It is the same construction — rims, beads, walls, floors — with many rings on a plane
  * rather than one, which is why it is a level and not a plate with holes punched through it.
+ * `--look` is two settings of `--levels`, computed against the beads rather than written down;
+ * `--levels 0.05:0.09,0.075:0.10:cells` still says it by hand.
  *
  * Nothing is extruded. `ExtrudeGeometry` bevels every contour it is handed at one size, which is
  * both faults it used to have at once: the outside carried a ledge where two separately bevelled
@@ -103,13 +106,33 @@ if (2 * OUTER_T >= D) throw new Error(`a chamfer falling ${OUTER_T} twice does n
 /** How far a rim's bead falls as it narrows. Square by default, which is a 45 degree bead. */
 const LIP_T = Number(arg('lipDrop', String(LIP)));
 
+/** Metal left past what a bead strictly needs, in em. The guards below reject anything less. */
+const SLACK = Number(arg('lookClearance', '0.004'));
+/**
+ * Two settings the pavé is wanted at, each packing the field as close to the letter's edge as its
+ * beads allow. `flush` has no well: the cells are the face, and the chamfer alone frames them.
+ * `bezel` sinks them in one, whose wall reads as a border. `--levels` overrides either.
+ */
+const LOOK = arg('look', '');
+function look() {
+  if (LOOK === 'flush') return `${(OUTER + CELL_LIP + SLACK).toFixed(4)}:${WELL}:cells`;
+  if (LOOK === 'bezel') {
+    const rim = OUTER + LIP + SLACK;
+    const field = rim + LIP + CELL_LIP + SLACK;
+    const [wall, floor] = [WELL * 0.4, WELL * 0.6];
+    return `${rim.toFixed(4)}:${wall.toFixed(4)},${field.toFixed(4)}:${floor.toFixed(4)}:cells`;
+  }
+  if (LOOK) throw new Error(`--look is 'flush' or 'bezel', got '${LOOK}'`);
+  return `${RIM}:${WELL}`;
+}
+
 /**
  * `inset:depth` pairs, outermost first, `inset:depth:cells` for the pavé field. A level's outline
  * is the glyph inset by `inset`, and its floor sits `depth` below the floor above it — so a level
  * is a step, not an absolute height. A `cells` level's own inset is the bezel: how much metal is left
  * between the wall it sits in and the outermost cell.
  */
-const LEVELS = arg('levels', `${RIM}:${WELL}`)
+const LEVELS = arg('levels', look())
   .split(',')
   .filter(Boolean)
   .map((spec) => {

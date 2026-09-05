@@ -597,13 +597,17 @@ combined render; the third, a per-cell check that said 0 of 130 wells were cut, 
 zero-area triangle in the cap — a degenerate triangle passes a point-in-triangle sign test for every
 point in the plane. Do not re-derive this; run the spike.
 
-**The cell field is a level now, and the next thing is stones in it.** `--levels
-0.05:0.06,0.075:0.09:cells` hollows the R and pockets the floor of the hollow: `cells` marks the
-innermost level, and its own inset is the bezel between the well's wall and the outermost pocket.
-`--pitch`, `--wall`, `--jitter`, `--relax`, `--minArea`, `--seed`, `--edge absorb|grade` and
-`--cellBevel` are the knobs; the shell closes on R A S O E M W B C G K X Z, rounded or not.
-Nothing sits in the pockets yet — `pave.mjs` is where the stone geometry is, and it is still built
-against a plate.
+**The cell field is a level now, and the next thing is stones in it.** `cells` marks the innermost
+level and gives it a pocket per Voronoi cell instead of one outline. `--pitch`, `--wall`,
+`--jitter`, `--relax`, `--minArea`, `--seed`, `--edge absorb|grade` and `--cellBevel` are the knobs;
+the shell closes on R A S O E M W B C G K X Z, rounded or not. Nothing sits in the pockets yet —
+`pave.mjs` is where the stone geometry is, and it is still built against a plate.
+
+**Both `--look` settings are wanted, and `flush` is the one asked for.** It puts the pockets in the
+letter's face with no well, so only the chamfer frames them; `bezel` sinks the same field in a well
+whose wall reads as a border. Any flat metal between the two is a land a bead sits in, so a look is
+computed from `--outer`, `--bevel` and `--cellBevel` plus `--lookClearance`, never written down as
+an inset. A flat band wide enough to notice means the numbers were typed, not derived.
 
 **A pocket's rings are re-derived, never offset.** A bead step is the cell built with that much less
 wall taken off it, inside the region grown by the same amount — the same generator, run again.

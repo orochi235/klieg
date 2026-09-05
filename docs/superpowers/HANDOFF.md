@@ -655,6 +655,13 @@ rings that `pair` matches by count first, so a cell that arrives at one step and
 band that cannot be stitched at all. Hence one ring per seed per step: the largest piece, and the
 seed is dropped outright if any step has nothing for it.
 
+**Concentric rings defeat a centroid, and an O is how you find out.** `pair` decides which ring of
+one level answers which of the next, and an O's outline and its counter share a centre — so
+whichever was marginally closer won, and the outline of one level was stitched to the counter of the
+next. That is a sheet of quads across the counter, and it filled every O, Q and 0 while the shell
+stayed closed and every edge still walked once. Size and winding are in the cost now, and pairs are
+taken cheapest first.
+
 **Three ways a cell field opens a shell that a well never does**, each of which cost a cycle:
 
 - **The wall was never coming off.** `clipHalf` keeps what is *behind* the line, so moving an edge

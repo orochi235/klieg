@@ -624,10 +624,19 @@ measures it off the field's ridge. Proportional scales every inset — chamfer, 
 region alike — by the local stroke width, so each keeps the same fraction. It is not the default,
 because it changes the letter's weight as well as its consistency.
 
-**The reference is the widest point, which on most letters is a junction.** So the nominal
-`--outer` lands there and every stroke is thinner than the uniform chamfer would make it — an R
-takes 31% where 0.038 on the stem would be 35%. Ratios hold either way; only the calibration
-shifts, and `--outer` is the knob for it.
+**The width has to be snapped to the letter's actual stroke widths, or straight edges bow.** The
+pointwise value climbs wherever a stroke runs into a wider one, and an inset that follows it eats a
+straight edge unevenly — the first version turned the R's counter from a rounded rectangle into a
+lopsided lens. Ridge values are clustered into the two or three widths the letter really has, each
+cell snaps to the nearest, and only then is the step smoothed into a ramp at the junctions. Along a
+stroke the width is now constant, so the offset stays parallel to the edge.
+
+**`spikes/word.mjs` lays set letters out as words, one word per line.** It shells out to
+`hollow.mjs --dump` per letter, places them on the font's own advances and merges everything into
+one body and one mesh per gem, so `hollow.html` renders it unchanged. Letters are cached under
+`word-out/cache`, keyed by the build arguments and by `hollow.mjs`'s own mtime. Geometry is not
+what a run costs: twelve letters take about twenty seconds, and the browser takes about the same
+again on transmissive gems.
 
 **Both `--setting` values are wanted, and `flush` is the one asked for.** Named for the settings
 they imitate: `flush` puts the pockets in the letter's face with no well, so only the chamfer frames

@@ -428,8 +428,33 @@ function widthField(f, smoothEm) {
     w[i] = parent === -1 ? depth[i] : w[parent];
   }
 
-  // Two strokes of different widths meet at a junction, where the width jumps. Smoothed, the jump
-  // becomes a ramp and the chamfer runs into its neighbour instead of stepping.
+  // Snapped to the letter's actual stroke widths, because a straight edge only stays straight if
+  // the width is constant along it. The pointwise value is not: it climbs wherever a stroke runs
+  // into a wider one, and an inset that follows it eats a straight edge unevenly and bows it —
+  // which is what a proportional R's counter did. A corner's own inflated ridge snaps back to the
+  // stroke it belongs to for the same reason.
+  const peaks = [];
+  for (const i of inside) if (w[i] === depth[i]) peaks.push(depth[i]);
+  peaks.sort((a, b) => a - b);
+  const classes = [];
+  for (const d of peaks) {
+    const run = classes.at(-1);
+    if (run && d - run.at(-1) <= Math.max(3 * emPerCell, 0.03 * d)) run.push(d);
+    else classes.push([d]);
+  }
+  const widths = classes
+    .filter((run) => run.length >= Math.max(3, 0.004 * peaks.length))
+    .map((run) => run[Math.floor(run.length / 2)]);
+  if (widths.length > 0) {
+    for (const i of inside) {
+      let best = widths[0];
+      for (const v of widths) if (Math.abs(v - w[i]) < Math.abs(best - w[i])) best = v;
+      w[i] = best;
+    }
+  }
+
+  // A snapped width steps at a junction. Smoothed, the step becomes a short ramp and the chamfer
+  // runs into its neighbour instead of jumping.
   const s = Math.max(0, smoothEm) / emPerCell;
   const passes = Math.min(400, Math.round(1.5 * s * s));
   let cur = w;
@@ -458,9 +483,10 @@ function widthField(f, smoothEm) {
 
   let max = 0;
   for (const i of inside) max = Math.max(max, cur[i]);
+  const named = widths.length > 0 ? widths : [max];
   // Outside the metal there is no stroke to be a fraction of, so it scales with the thickest one.
   for (let i = 0; i < n; i++) if (depth[i] <= 0) cur[i] = max;
-  return { width: cur, max };
+  return { width: cur, max, widths: named };
 }
 
 const INSETS = arg('insets', 'uniform');
@@ -472,6 +498,8 @@ const PROPORTIONAL = INSETS === 'proportional';
 const WIDTH_SMOOTH = Number(arg('widthSmooth', '0.02'));
 
 let WMAX = 1;
+/** The stroke half-widths the letter turned out to have, which every inset is snapped to. */
+let STROKES = [];
 /**
  * The field divided by the local half-width, so its levels run 0 at the outline to -1 at the ridge
  * whatever a stroke's width. A nominal inset `c` is level `-c / WMAX`, which is `c` on the thickest
@@ -479,11 +507,25 @@ let WMAX = 1;
  */
 let scaled = null;
 if (PROPORTIONAL) {
-  const { width, max } = widthField(field, WIDTH_SMOOTH);
+  const { width, max, widths } = widthField(field, WIDTH_SMOOTH);
   WMAX = max;
+  STROKES = widths;
   const data = new Float64Array(field.data.length);
   for (let i = 0; i < data.length; i++) data[i] = field.data[i] / width[i];
-  scaled = { ...field, data, sample: (x, y) => field.sample(x, y) / max };
+  const { size, emPerCell, originX, originY } = field;
+  scaled = {
+    data,
+    size,
+    emPerCell,
+    originX,
+    originY,
+    sample(x, y) {
+      const gx = Math.round((x - originX) / emPerCell);
+      const gy = Math.round((y - originY) / emPerCell);
+      if (gx < 0 || gy < 0 || gx >= size || gy >= size) return Number.POSITIVE_INFINITY;
+      return data[gy * size + gx];
+    },
+  };
 }
 
 /** The level that cuts `inset` off the thickest stroke, on whichever field is doing the cutting. */
@@ -1098,8 +1140,8 @@ console.log(
 if (PROPORTIONAL) {
   console.log(
     `  insets proportional: every one is ${((100 * OUTER) / WMAX).toFixed(0)}% of the stroke it ` +
-      `cuts, being ${OUTER} at the letter's widest point (half-width ${WMAX.toFixed(4)}, which on ` +
-      `most letters is a junction rather than a stroke)`,
+      `cuts, being ${OUTER} at the widest of its ${STROKES.length} stroke width(s) ` +
+      `(${STROKES.map((v) => (2 * v).toFixed(3)).join(', ')} em)`,
   );
 }
 for (let i = 0; i < LEVELS.length; i++) {
@@ -1138,8 +1180,8 @@ const dump = (geo) => ({
  */
 const CUTS = {
   brilliant: {
-    crown: [{ k: 0.78, t: 0.42, zig: 0.1 }, { k: 0.56, t: 1 }],
-    pavilion: [{ k: 0.62, t: 0.45, zig: 0.08 }, { k: 0.12, t: 1 }],
+    crown: [{ k: 0.78, t: 0.42, zig: 0.17 }, { k: 0.56, t: 1 }],
+    pavilion: [{ k: 0.62, t: 0.45, zig: 0.13 }, { k: 0.12, t: 1 }],
   },
   step: {
     crown: [{ k: 0.86, t: 0.34 }, { k: 0.72, t: 0.67 }, { k: 0.58, t: 1 }],
@@ -1374,6 +1416,13 @@ if (SET.length > 0) {
 }
 
 const payload = { letter: LETTER, body: dump(plain ?? body), tilt: TILT, stones: SET };
+const DUMP = arg('dump', '');
+if (DUMP) {
+  mkdirSync(dirname(resolve(DUMP)), { recursive: true });
+  writeFileSync(resolve(DUMP), JSON.stringify(payload));
+  console.log(`  wrote ${resolve(DUMP)}`);
+  process.exit(0);
+}
 if (has('no-render')) process.exit(0);
 
 mkdirSync(OUT, { recursive: true });

@@ -346,7 +346,7 @@ let field = signedDistanceField(rings, FIELD);
  */
 const clean = (ring) => smooth(resample(ring, SPACING), 3);
 const outlineAt = (inset) =>
-  nest(isoContours(field, -inset).map((r) => clean(xy(r)))).map((poly) => ({
+  nest(isoContours(cutting(), cutAt(inset)).map((r) => clean(xy(r)))).map((poly) => ({
     outer: orient(poly[0], false),
     holes: poly.slice(1).map((h) => orient(h, true)),
   }));
@@ -386,6 +386,113 @@ if (ROUND_IN > 0) {
 if (ROUND_OUT > 0) {
   GLYPH = roll(GLYPH, ROUND_OUT, false);
   field = fieldOf(GLYPH);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Proportional insets. A uniform inset takes the same absolute amount off both sides of every
+// stroke, so a thin stroke loses a larger fraction of itself than a thick one and the letter's own
+// contrast is exaggerated — on this R, 1.26 on the glyph reads as 1.47 on the top face. Scaling
+// each inset by the local stroke width instead leaves every stroke the same fraction of itself.
+
+/**
+ * The half-width of the stroke each cell belongs to. A ridge cell — a local maximum of the depth —
+ * sits equidistant from both sides of its stroke, so its depth is that stroke's half-width; every
+ * other cell inherits from its steepest uphill neighbour, which is the ridge it drains to.
+ */
+function widthField(f, smoothEm) {
+  const { data, size, emPerCell } = f;
+  const n = size * size;
+  const depth = new Float64Array(n);
+  for (let i = 0; i < n; i++) depth[i] = Math.max(0, -data[i]);
+
+  const inside = [];
+  for (let i = 0; i < n; i++) if (depth[i] > 0) inside.push(i);
+  inside.sort((a, b) => depth[b] - depth[a]);
+
+  const w = new Float64Array(n);
+  for (const i of inside) {
+    const ix = i % size;
+    const iy = (i - ix) / size;
+    let parent = -1;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const jx = ix + dx;
+        const jy = iy + dy;
+        if (jx < 0 || jy < 0 || jx >= size || jy >= size) continue;
+        const j = jy * size + jx;
+        if (depth[j] > depth[i] && (parent === -1 || depth[j] > depth[parent])) parent = j;
+      }
+    }
+    w[i] = parent === -1 ? depth[i] : w[parent];
+  }
+
+  // Two strokes of different widths meet at a junction, where the width jumps. Smoothed, the jump
+  // becomes a ramp and the chamfer runs into its neighbour instead of stepping.
+  const s = Math.max(0, smoothEm) / emPerCell;
+  const passes = Math.min(400, Math.round(1.5 * s * s));
+  let cur = w;
+  for (let p = 0; p < passes; p++) {
+    const next = new Float64Array(cur);
+    for (const i of inside) {
+      const ix = i % size;
+      const iy = (i - ix) / size;
+      let sum = 0;
+      let count = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const jx = ix + dx;
+          const jy = iy + dy;
+          if (jx < 0 || jy < 0 || jx >= size || jy >= size) continue;
+          const j = jy * size + jx;
+          if (depth[j] <= 0) continue;
+          sum += cur[j];
+          count++;
+        }
+      }
+      if (count > 0) next[i] = sum / count;
+    }
+    cur = next;
+  }
+
+  let max = 0;
+  for (const i of inside) max = Math.max(max, cur[i]);
+  // Outside the metal there is no stroke to be a fraction of, so it scales with the thickest one.
+  for (let i = 0; i < n; i++) if (depth[i] <= 0) cur[i] = max;
+  return { width: cur, max };
+}
+
+const INSETS = arg('insets', 'uniform');
+if (INSETS !== 'uniform' && INSETS !== 'proportional') {
+  throw new Error(`--insets is 'uniform' or 'proportional', got '${INSETS}'`);
+}
+const PROPORTIONAL = INSETS === 'proportional';
+/** How far a width jump at a junction is spread, in em. */
+const WIDTH_SMOOTH = Number(arg('widthSmooth', '0.02'));
+
+let WMAX = 1;
+/**
+ * The field divided by the local half-width, so its levels run 0 at the outline to -1 at the ridge
+ * whatever a stroke's width. A nominal inset `c` is level `-c / WMAX`, which is `c` on the thickest
+ * stroke and the same fraction of every thinner one.
+ */
+let scaled = null;
+if (PROPORTIONAL) {
+  const { width, max } = widthField(field, WIDTH_SMOOTH);
+  WMAX = max;
+  const data = new Float64Array(field.data.length);
+  for (let i = 0; i < data.length; i++) data[i] = field.data[i] / width[i];
+  scaled = { ...field, data, sample: (x, y) => field.sample(x, y) / max };
+}
+
+/** The level that cuts `inset` off the thickest stroke, on whichever field is doing the cutting. */
+const cutAt = (inset) => (PROPORTIONAL ? -inset / WMAX : -inset);
+const cutting = () => (PROPORTIONAL ? scaled : field);
+if (PROPORTIONAL && LEVELS.at(-1).inset >= WMAX) {
+  throw new Error(
+    `a ${LEVELS.at(-1).inset} em inset eats the thickest stroke, whose half-width is ` +
+      `${WMAX.toFixed(4)}`,
+  );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -485,7 +592,7 @@ function pushInward(x, y, dist) {
 }
 
 /** The glyph inset by `ins` as a multipolygon, cleaned the same way a level's outline is. */
-const regionAt = (ins) => nest(isoContours(field, -ins).map((r) => clean(xy(r))));
+const regionAt = (ins) => nest(isoContours(cutting(), cutAt(ins)).map((r) => clean(xy(r))));
 
 /** Every piece of `cell` the region leaves. A cell is one pocket, so only its outer ring is kept. */
 function clipTo(cell, region) {
@@ -819,7 +926,7 @@ const bevelSteps = (size, thick, segs) =>
  * Every ring in the letter is an iso-contour of its own field, at the level that ring sits at, and
  * every band between two of them is stitched. Nothing is offset, so nothing can fold.
  */
-const skinAt = (inset) => metalAt(field, -inset).flatMap((g) => [g.outer, ...g.holes]);
+const skinAt = (inset) => metalAt(cutting(), cutAt(inset)).flatMap((g) => [g.outer, ...g.holes]);
 const voidAt = (inset) => outlineAt(inset).flatMap((r) => [r.outer, ...r.holes]);
 
 /**
@@ -987,6 +1094,13 @@ console.log(
   `  ${D} em thick, chamfer ${OUTER} falling ${OUTER_T} on the outside, ` +
     `bead ${LIP} falling ${LIP_T} on every rim, ${SEGS} segments each`,
 );
+if (PROPORTIONAL) {
+  console.log(
+    `  insets proportional: every one is ${((100 * OUTER) / WMAX).toFixed(0)}% of the stroke it ` +
+      `cuts, being ${OUTER} at the letter's widest point (half-width ${WMAX.toFixed(4)}, which on ` +
+      `most letters is a junction rather than a stroke)`,
+  );
+}
 for (let i = 0; i < LEVELS.length; i++) {
   console.log(
     `  level ${i + 1}: inset ${LEVELS[i].inset}, floor z ${FLOORS[i].toFixed(4)}, ` +

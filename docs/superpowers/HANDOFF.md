@@ -603,6 +603,19 @@ level and gives it a pocket per Voronoi cell instead of one outline. `--pitch`, 
 the shell closes on R A S O E M W B C G K X Z, rounded or not. Nothing sits in the pockets yet —
 `pave.mjs` is where the stone geometry is, and it is still built against a plate.
 
+**A uniform inset exaggerates a letter's contrast, and `--insets proportional` is the fix.** It
+takes the same absolute amount off both sides of every stroke, so a thin stroke loses a larger
+fraction of itself: on this R the thick:thin ratio is 1.26 on the glyph and 1.47 on the top face,
+which is the horizontals reading narrower than the font drew them. `spikes/stroke-widths.mjs`
+measures it off the field's ridge. Proportional scales every inset — chamfer, rim, bezel, cell
+region alike — by the local stroke width, so each keeps the same fraction. It is not the default,
+because it changes the letter's weight as well as its consistency.
+
+**The reference is the widest point, which on most letters is a junction.** So the nominal
+`--outer` lands there and every stroke is thinner than the uniform chamfer would make it — an R
+takes 31% where 0.038 on the stem would be 35%. Ratios hold either way; only the calibration
+shifts, and `--outer` is the knob for it.
+
 **Both `--look` settings are wanted, and `flush` is the one asked for.** It puts the pockets in the
 letter's face with no well, so only the chamfer frames them; `bezel` sinks the same field in a well
 whose wall reads as a border. Any flat metal between the two is a land a bead sits in, so a look is

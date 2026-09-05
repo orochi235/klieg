@@ -26,7 +26,6 @@
  * Renders the body alone. A stone standing proud of a plate is visible whether or not a well was
  * ever cut, which is exactly how an uncut plate passed for a cut one.
  */
-import { createServer } from 'node:http';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -973,41 +972,52 @@ const skinAt = (inset) => metalAt(cutting(), cutAt(inset)).flatMap((g) => [g.out
 const voidAt = (inset) => outlineAt(inset).flatMap((r) => [r.outer, ...r.holes]);
 
 /**
- * Which ring of one level answers which of the next. A band is between two rings, and two iso
- * levels of the same letter run parallel — so nearest centroid pairs them, and a count that does not
- * match is a stroke that closed up or split between the levels rather than a pairing to guess at.
+ * Which ring of one level answers which of the next. Two iso levels of the same letter run
+ * parallel, so a ring is answered by the one nearest it that is also about the same size and going
+ * the same way round — a hole and an outline wind opposite ways and can never be each other.
+ *
+ * Centroid alone is not enough, and an O is why: its outline and its counter share a centre, so
+ * whichever came out marginally closer won, and the outline of one level got stitched to the
+ * counter of the next. That is a sheet of quads drawn straight across the counter, which is exactly
+ * what it looked like. Cheapest pair first rather than in ring order, so one ring's near miss
+ * cannot push every ring after it onto the wrong partner.
  */
 function pair(a, b) {
   if (a.length !== b.length) return null;
-  const mid = (ring) => {
+  const of = (ring) => {
     let x = 0;
     let y = 0;
-    for (const p of ring) {
-      x += p[0];
-      y += p[1];
+    let area = 0;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      x += ring[i][0];
+      y += ring[i][1];
+      area += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
     }
-    return [x / ring.length, y / ring.length];
+    return { x: x / ring.length, y: y / ring.length, area: area / 2 };
   };
-  const ma = a.map(mid);
-  const mb = b.map(mid);
-  const taken = new Set();
-  const out = [];
+  const ma = a.map(of);
+  const mb = b.map(of);
+  /** As a radius, so it is in em and adds to a distance rather than dwarfing it. */
+  const radius = (m) => Math.sqrt(Math.abs(m.area) / Math.PI);
+  const costs = [];
   for (let i = 0; i < a.length; i++) {
-    let best = -1;
-    let d = Number.POSITIVE_INFINITY;
     for (let j = 0; j < b.length; j++) {
-      if (taken.has(j)) continue;
-      const e = Math.hypot(ma[i][0] - mb[j][0], ma[i][1] - mb[j][1]);
-      if (e < d) {
-        d = e;
-        best = j;
-      }
+      const turn = Math.sign(ma[i].area) !== Math.sign(mb[j].area) ? 1e3 : 0;
+      const gap = Math.hypot(ma[i].x - mb[j].x, ma[i].y - mb[j].y);
+      costs.push([gap + Math.abs(radius(ma[i]) - radius(mb[j])) + turn, i, j]);
     }
-    if (best === -1) return null;
-    taken.add(best);
-    out.push([a[i], b[best]]);
   }
-  return out;
+  costs.sort((p, q) => p[0] - q[0]);
+  const from = new Set();
+  const to = new Set();
+  const out = [];
+  for (const [cost, i, j] of costs) {
+    if (from.has(i) || to.has(j) || cost >= 1e3) continue;
+    from.add(i);
+    to.add(j);
+    out.push([a[i], b[j]]);
+  }
+  return out.length === a.length ? out : null;
 }
 
 let unpaired = 0;
@@ -1434,36 +1444,43 @@ const FILES = {
   '/': [readFileSync(resolve(HERE, 'hollow.html')), 'text/html'],
   '/geometry.json': [Buffer.from(JSON.stringify(payload)), 'application/json'],
 };
-const server = createServer((req, res) => {
-  const path = req.url.split('?')[0];
-  const hit = FILES[path];
-  if (hit) return res.writeHead(200, { 'content-type': hit[1] }).end(hit[0]);
-  for (const [prefix, dir] of Object.entries(TREES)) {
-    if (!path.startsWith(prefix)) continue;
-    const file = resolve(dir, path.slice(prefix.length));
-    if (!file.startsWith(dir)) return res.writeHead(403).end();
-    try {
-      return res.writeHead(200, { 'content-type': 'text/javascript' }).end(readFileSync(file));
-    } catch {
-      return res.writeHead(404).end();
+
+
+// Served by intercepting the page's own requests rather than over a socket: the page has to fetch
+// its modules over http because `import` does not work from `file://`, but nothing about that
+// needs a listening port — and a loopback that intermittently answers EADDRNOTAVAIL was failing
+// runs after all the geometry was built.
+const ORIGIN = 'http://klieg.spike';
+async function serve(page) {
+  await page.route('**/*', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const hit = FILES[path];
+    if (hit) return route.fulfill({ body: hit[0], contentType: hit[1] });
+    for (const [prefix, dir] of Object.entries(TREES)) {
+      if (!path.startsWith(prefix)) continue;
+      const file = resolve(dir, path.slice(prefix.length));
+      if (!file.startsWith(dir)) return route.fulfill({ status: 403, body: '' });
+      try {
+        return route.fulfill({ body: readFileSync(file), contentType: 'text/javascript' });
+      } catch {
+        return route.fulfill({ status: 404, body: '' });
+      }
     }
-  }
-  res.writeHead(404).end();
-});
-await new Promise((r) => server.listen(0, '127.0.0.1', r));
-const origin = `http://127.0.0.1:${server.address().port}`;
+    return route.fulfill({ status: 404, body: '' });
+  });
+}
 
 const browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 900, height: 900 }, deviceScaleFactor: 2 });
 page.on('pageerror', (e) => console.log(`  [pageerror] ${e.message}`));
 page.on('console', (m) => m.type() === 'error' && console.log(`  [console] ${m.text()}`));
+await serve(page);
 for (const look of arg('looks', 'gold').split(',')) {
-  await page.goto(`${origin}/?look=${look}`);
+  await page.goto(`${ORIGIN}/?look=${look}`);
   await page.waitForFunction(() => window.__shot === true, null, { timeout: 120_000 });
   const file = resolve(OUT, `hollow-${LETTER}-${look}.png`);
   writeFileSync(file, await page.screenshot());
   console.log(`  wrote ${file}`);
 }
 await browser.close();
-server.close();
 process.exit(0);

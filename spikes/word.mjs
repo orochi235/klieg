@@ -12,7 +12,6 @@
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { createServer } from 'node:http';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -145,24 +144,31 @@ const FILES = {
   '/': [readFileSync(resolve(HERE, 'hollow.html')), 'text/html'],
   '/geometry.json': [Buffer.from(JSON.stringify(payload)), 'application/json'],
 };
-const server = createServer((req, res) => {
-  const path = req.url.split('?')[0];
-  const hit = FILES[path];
-  if (hit) return res.writeHead(200, { 'content-type': hit[1] }).end(hit[0]);
-  for (const [prefix, dir] of Object.entries(TREES)) {
-    if (!path.startsWith(prefix)) continue;
-    const file = resolve(dir, path.slice(prefix.length));
-    if (!file.startsWith(dir)) return res.writeHead(403).end();
-    try {
-      return res.writeHead(200, { 'content-type': 'text/javascript' }).end(readFileSync(file));
-    } catch {
-      return res.writeHead(404).end();
+
+
+// Served by intercepting the page's own requests rather than over a socket: the page has to fetch
+// its modules over http because `import` does not work from `file://`, but nothing about that
+// needs a listening port — and a loopback that intermittently answers EADDRNOTAVAIL was failing
+// runs after all the geometry was built.
+const ORIGIN = 'http://klieg.spike';
+async function serve(page) {
+  await page.route('**/*', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const hit = FILES[path];
+    if (hit) return route.fulfill({ body: hit[0], contentType: hit[1] });
+    for (const [prefix, dir] of Object.entries(TREES)) {
+      if (!path.startsWith(prefix)) continue;
+      const file = resolve(dir, path.slice(prefix.length));
+      if (!file.startsWith(dir)) return route.fulfill({ status: 403, body: '' });
+      try {
+        return route.fulfill({ body: readFileSync(file), contentType: 'text/javascript' });
+      } catch {
+        return route.fulfill({ status: 404, body: '' });
+      }
     }
-  }
-  res.writeHead(404).end();
-});
-await new Promise((r) => server.listen(0, '127.0.0.1', r));
-const origin = `http://127.0.0.1:${server.address().port}`;
+    return route.fulfill({ status: 404, body: '' });
+  });
+}
 
 const browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({
@@ -171,14 +177,14 @@ const page = await browser.newPage({
 });
 page.on('pageerror', (e) => console.log(`  [pageerror] ${e.message}`));
 page.on('console', (m) => m.type() === 'error' && console.log(`  [console] ${m.text()}`));
+await serve(page);
 const slug = TEXT.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 for (const look of LOOKS.split(',')) {
-  await page.goto(`${origin}/?look=${look}`);
+  await page.goto(`${ORIGIN}/?look=${look}`);
   await page.waitForFunction(() => window.__shot === true, null, { timeout: 300_000 });
   const file = resolve(OUT, `${slug}-${look}.png`);
   writeFileSync(file, await page.screenshot());
   console.log(`  wrote ${file}`);
 }
 await browser.close();
-server.close();
 process.exit(0);

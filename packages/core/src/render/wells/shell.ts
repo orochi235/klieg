@@ -412,7 +412,7 @@ export function buildShell(
  */
 function pocketBeads(cut: Cut, bead: Step[]): Ring[][] {
   const ring = (path: THREE.Path) => orient(fromPoints(path.getPoints(SEGMENTS)), false);
-  if (cut.bead) return cut.bead.map((rings) => rings.map(ring));
+  if (cut.bead) return cut.bead(bead.map((step) => step.out)).map((rings) => rings.map(ring));
   const out: Ring[][] = [];
   for (const well of cut.wells) {
     // Shrunk while wound metal-inside, because `shrink` reads its normals off the winding; a

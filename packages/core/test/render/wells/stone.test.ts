@@ -25,6 +25,7 @@ const ctx: FillContext = {
   material: () => createMaterial(null),
   faceZ: PLANES.faceZ,
   floorZ: PLANES.floorZ,
+  girdleZ: PLANES.faceZ - 0.008,
 };
 const seat = (x: number, y: number) => ({ x, y, half: SPEC.size / 2 });
 

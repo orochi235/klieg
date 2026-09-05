@@ -32,7 +32,7 @@ export class WellBuilder implements DecorationBuilder {
   private readonly cuts = new Map<string, Cut>();
   /** Per letter slot, so an effect can reach one letter's stones without moving its neighbours'. */
   private readonly filled: (Filled | null)[] = [];
-  private readonly meshes: (THREE.InstancedMesh | null)[] = [];
+  private readonly meshes: (THREE.Mesh | THREE.InstancedMesh | null)[] = [];
   private readonly lights: (LightBase | null)[] = [];
   private readonly base: FrameOwnedBase;
   private depth = DEFAULT_GLYPH_OPTIONS.depth;
@@ -89,6 +89,7 @@ export class WellBuilder implements DecorationBuilder {
         material: () => this.ctx.studioMaterial(),
         faceZ: planes.faceZ,
         floorZ: planes.floorZ,
+        girdleZ: planes.faceZ - (this.spec.rimDrop ?? this.spec.rimBevel ?? DEFAULT_SHELL.rimDrop),
       },
       this.spec,
     );
@@ -97,11 +98,21 @@ export class WellBuilder implements DecorationBuilder {
     filled.material.opacity = this.base.opacity;
     filled.material.emissiveIntensity = this.base.emissiveIntensity;
 
-    const mesh = new THREE.InstancedMesh(filled.geometry, filled.material, filled.matrices.length);
-    for (let m = 0; m < filled.matrices.length; m++) {
-      mesh.setMatrixAt(m, filled.matrices[m] as THREE.Matrix4);
+    let mesh: THREE.Mesh | THREE.InstancedMesh;
+    if (filled.placed) {
+      mesh = new THREE.Mesh(filled.geometry, filled.material);
+    } else {
+      const instanced = new THREE.InstancedMesh(
+        filled.geometry,
+        filled.material,
+        filled.matrices.length,
+      );
+      for (let m = 0; m < filled.matrices.length; m++) {
+        instanced.setMatrixAt(m, filled.matrices[m] as THREE.Matrix4);
+      }
+      instanced.instanceMatrix.needsUpdate = true;
+      mesh = instanced;
     }
-    mesh.instanceMatrix.needsUpdate = true;
     this.filled[index] = filled;
     this.meshes[index] = mesh;
     this.lights[index] = lightBase(this.spec.stone ?? 'gem', tint);
@@ -131,7 +142,7 @@ export class WellBuilder implements DecorationBuilder {
         undefined,
         this.spec.fill,
       ),
-      mesh: this.meshes[slot] as THREE.InstancedMesh,
+      mesh: this.meshes[slot] as THREE.Mesh,
       slot,
     }));
   }

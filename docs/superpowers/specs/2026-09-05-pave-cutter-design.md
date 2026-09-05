@@ -22,8 +22,9 @@ So the body is stitched by hand.
 
 ## The shell
 
-`shell.ts` replaces `buildPlate` behind the same signature, so `WellBuilder`, `GlyphCache` and
-`platePlanes` do not move.
+`shell.ts` replaces `buildPlate` behind the same signature, so `WellBuilder` and `GlyphCache` do not
+move. `platePlanes` becomes `shellPlanes` and keeps the front face and the floor exactly where they
+were, so a fill written against the old planes still lands.
 
 A letter is a stack of levels. Every ring in it is an iso-contour of the letter's own signed
 distance field at the level that ring sits at — `signedDistanceField` and `isoContours` from
@@ -46,15 +47,18 @@ rather than inherited from ring order.
 export interface Cut {
   wells: THREE.Path[];
   /**
-   * Per well, the rings its rim bead steps through — widest first, the well's own outline last.
-   * A cutter that can re-derive its pockets supplies these; one whose pockets are convex may omit
-   * it and let the shell shrink them.
+   * Every well re-derived at each of the growths its rim bead asks for — one entry per well, and
+   * inside it one ring per growth. A cutter whose pockets are convex leaves this out and the shell
+   * shrinks them instead.
    */
-  bead?: THREE.Path[][];
+  bead?: (growths: readonly number[]) => THREE.Path[][];
   seats: Seat[];
   floor: number;
 }
 ```
+
+A function rather than fixed rings, because the shell owns the bead profile: how many steps and how
+wide is `rimBevel` and `segments`, which the cutter has no business duplicating.
 
 `lattice` omits `bead`: a diamond is convex, so pushing every edge in by the bead width is exact.
 `pave` supplies it, because a clipped cell is not convex and there is nothing to walk a miter along.
@@ -62,8 +66,13 @@ export interface Cut {
 ### The check
 
 A hand-built shell is closed or it is not, and no render distinguishes a missing cap from a dark
-one. `openEdges` counts every directed edge and reports the ones walked only one way; it ships as a
-test helper, and every shell test asserts zero.
+one. `openEdges` counts every directed edge and reports the ones walked only one way, and every
+shell test asserts zero.
+
+It quantises to a micro-em rather than printing coordinates. `1 - Math.cos(PI / 2)` is not 1, so the
+plane where the back chamfer meets the wall arrives as -1e-18 from one side and 0 from the other —
+and `toFixed` keeps that sign, so every edge across the plane hashes two ways and 144 of them read
+as open on a letter that is closed.
 
 Read a cap by the **area** it covers, never its triangle count: earcut bridges each hole with a pair
 of duplicated vertices, so `n + 2h - 2` is not the count and reading it as one calls a correct cap
@@ -75,12 +84,14 @@ All default to what ships today, so no existing spec changes what it renders:
 
 - `rimBevel` — the bead around a well's rim, separate from the letter's chamfer. The point of the
   whole exercise.
+- `rimDrop` — how far that bead falls. Square by default, which is a 45 degree bead.
 - `round` / `roundOuter` — a radius rolled along the outline. Growing the metal and shrinking it
   back fills every reflex corner to the radius; the other order rounds the convex ones. Each half
   rebuilds the field, which is what makes the radius real.
-- `insets: 'uniform' | 'proportional'` — proportional scales every inset by the local stroke width,
-  so a thin stroke keeps the same fraction of itself as a thick one. Not the default: it changes the
-  letter's weight as well as its consistency.
+
+**`--insets proportional` is not here.** Scaling every inset by the local stroke width needs the
+width field and the stroke-width snapping that `spikes/hollow.mjs` carries, and it is a separate
+change on top of this one.
 
 ## The `pave` cutter
 
@@ -114,8 +125,8 @@ row is then the whole field.
 ## The stone fill
 
 `Seat` grows an optional `outline`. When a seat carries one, the cell is the girdle: each stone is
-its own geometry and they are merged into one buffer with the `mergeNonIndexed` already in
-`plate.ts`, so a letter still costs one draw. `lattice` leaves `outline` unset and keeps its
+its own geometry and they are merged into one buffer with `mergeNonIndexed`, so a letter still costs
+one draw. `Filled.placed` says so, and `WellBuilder` then draws a plain `Mesh`. `lattice` leaves `outline` unset and keeps its
 `InstancedMesh` path unchanged.
 
 Three rules the stone geometry keeps, each a visible defect first:
@@ -129,12 +140,25 @@ Three rules the stone geometry keeps, each a visible defect first:
   throws triangles outside the cell. Use a sampled interior point, triangulate both caps, and close
   the pavilion on a small ring.
 
-## Two things that will change
+## What the shipped wells looked like, which is worth not re-deriving
 
-The outer silhouette shifts slightly on every well render: a field-derived contour rounds a sharp
-tip where three's miter cuts it back. Nothing currently catches this — every one of the 22 snapshots
-in `apps/lab/test/looks.spec.ts-snapshots` is an uncut letter. A `look-well` baseline lands with the
-shell and a `look-pave` baseline with the cutter.
+The lattice's bevel already folded through every pocket. Extruding a 0.048 em diamond hole with the
+letter's 0.038 em chamfer, the hole runs 0.024 wide at the cap, inverts to 0.0074, and opens back to
+0.0297 in the straight section — the offset overshoots and the miter turns inside out. That fold is
+what the field read as a dimple, and it is why `stone.ts` needed `sink`: `girdleR = half +
+bevel * (1 - sink)` models a taper the geometry never had.
+
+So there was no correct well silhouette to preserve, and the shell changes every well render.
+
+## One thing that will change
+
+The outer silhouette shifts slightly: a field-derived contour rounds a sharp tip where three's
+miter cuts it back. Nothing currently catches this — every one of the 22 snapshots in
+`apps/lab/test/looks.spec.ts-snapshots` is an uncut letter.
+
+`spikes/pave-render.test.ts` rasterises the shipped cutter and shell without a browser (`npx vitest
+run --config spikes/vitest.render.config.ts`, `PAVE_CUTTER=lattice` and `PAVE_LETTER` to steer it).
+On an R at pitch 0.055: pavé cuts 126 pockets against the lattice's 68, and both shells close.
 
 `pair` refuses rather than guesses when two levels disagree on ring count — a stroke closing up or
 splitting between them. It throws, naming the level and the two counts. A guessed pairing would be a

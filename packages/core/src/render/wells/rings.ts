@@ -189,5 +189,27 @@ export function shrink(poly: Ring, d: number): Ring {
   return out;
 }
 
+export const area = (ring: Ring): number => Math.abs(signedArea(ring));
+
+/** Area-weighted, so a long thin tail cannot drag it the way a vertex average does. */
+export function centroid(ring: Ring): Point {
+  let a = 0;
+  let x = 0;
+  let y = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const p = ring[i] as Point;
+    const q = ring[j] as Point;
+    const cross = q[0] * p[1] - p[0] * q[1];
+    a += cross;
+    x += (q[0] + p[0]) * cross;
+    y += (q[1] + p[1]) * cross;
+  }
+  if (Math.abs(a) < 1e-18) {
+    const n = ring.length || 1;
+    return [ring.reduce((s, p) => s + p[0], 0) / n, ring.reduce((s, p) => s + p[1], 0) / n];
+  }
+  return [x / (3 * a), y / (3 * a)];
+}
+
 export const toPoints = (ring: Ring): Point2[] => ring.map(([x, y]) => ({ x, y }));
 export const fromPoints = (points: readonly Point2[]): Ring => points.map((p): Point => [p.x, p.y]);

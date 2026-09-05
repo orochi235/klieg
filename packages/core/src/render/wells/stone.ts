@@ -5,6 +5,8 @@ import { applyLook } from '../looks.js';
 import type { Seat } from './cutters.js';
 // Types only, so `fills.ts` can import this module for value and register it without a cycle.
 import type { Fill, FillContext, Filled } from './fills.js';
+import { interiorPoint } from './pave.js';
+import { area, insideRing } from './rings.js';
 
 /** After the round brilliant: table width, crown height and pavilion depth over girdle width. */
 const TABLE = 0.53;
@@ -79,7 +81,89 @@ export function girdleWidth(half: number, sink: number): number {
   return (half + DEFAULT_GLYPH_OPTIONS.bevelSize * (1 - sink)) * 2;
 }
 
+/** How far a stone's table stands proud of the letter's own face, in em. */
+const PROUD = 0.006;
+/** How much of the room between girdle and floor a pavilion may use before it shallows. */
+const ROOM = 0.94;
+
+/**
+ * One stone shaped by its own pocket, in the letter's space.
+ *
+ * Three rules, each a visible defect first. The crown's height is measured from the letter's face
+ * rather than from the girdle, so every table lands on one plane however deep its own pocket sits —
+ * deriving it from the cell's width instead sinks the narrow cells below the metal, and the narrow
+ * cells are the ones at the edges. A pavilion with no room shallows rather than flattens, because a
+ * stone sitting flat on its own floor reads as a tile in a hole. And both caps are triangulated
+ * rather than fanned, from a sampled interior point rather than the centroid: a clipped cell is not
+ * convex, so a fan from one vertex throws triangles clean outside it.
+ */
+function setStone(seat: Seat, ctx: FillContext, into: number[]): boolean {
+  const outline = seat.outline;
+  if (!outline || outline.length < 3) return false;
+  const ring = outline.map(([x, y]): [number, number] => [x + seat.x, y + seat.y]);
+  const c = interiorPoint(ring);
+  if (!insideRing(ring, c[0], c[1])) return false;
+
+  const width = Math.sqrt(area(ring));
+  const crown = PROUD + Math.max(ctx.faceZ - ctx.girdleZ, 0);
+  const drop = Math.min(PAVILION * width, (ctx.girdleZ - ctx.floorZ) * ROOM);
+
+  const at = (k: number, z: number) =>
+    ring.map(([x, y]) => [c[0] + (x - c[0]) * k, c[1] + (y - c[1]) * k, z]);
+  const girdle = at(1, ctx.girdleZ);
+  const table = at(TABLE, ctx.girdleZ + crown);
+  // A ring, not a point: the same reason the caps are triangulated.
+  const culet = at(0.06, ctx.girdleZ - drop);
+
+  const push = (...ps: number[][]) => {
+    for (const p of ps) into.push(p[0] as number, p[1] as number, p[2] as number);
+  };
+  for (const [lower, upper] of [
+    [girdle, table],
+    [culet, girdle],
+  ] as const) {
+    for (let i = 0; i < ring.length; i++) {
+      const j = (i + 1) % ring.length;
+      push(lower[i] as number[], lower[j] as number[], upper[j] as number[]);
+      push(lower[i] as number[], upper[j] as number[], upper[i] as number[]);
+    }
+  }
+  const faces = THREE.ShapeUtils.triangulateShape(
+    ring.map(([x, y]) => new THREE.Vector2(x, y)),
+    [],
+  );
+  for (const [a, b, d] of faces) {
+    push(
+      table[a as number] as number[],
+      table[b as number] as number[],
+      table[d as number] as number[],
+    );
+    push(
+      culet[d as number] as number[],
+      culet[b as number] as number[],
+      culet[a as number] as number[],
+    );
+  }
+  return true;
+}
+
 export const stone: Fill = (seats: readonly Seat[], ctx: FillContext, spec: WellSpec): Filled => {
+  // A pocket the cutter shaped is its own stone's girdle, so there is nothing to instance: every
+  // stone differs, and they are merged into one buffer instead. Still one draw call.
+  if (seats[0]?.outline) {
+    const position: number[] = [];
+    for (const seat of seats) setStone(seat, ctx, position);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
+    geometry.computeVertexNormals();
+    geometry.computeBoundingBox();
+    const material = ctx.material();
+    applyLook(material, spec.stone ?? 'gem');
+    const width = seats.reduce((n, s) => n + s.half, 0) / (seats.length || 1);
+    material.thickness = (spec.tint ?? TINT) * width * 2;
+    return { geometry, matrices: [], material, placed: true };
+  }
+
   const sink = spec.sink ?? SINK;
   const facets = spec.facets ?? FACETS;
   const half = spec.size / 2;

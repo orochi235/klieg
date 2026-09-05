@@ -91,8 +91,23 @@ export interface WellSpec {
   bezel: number;
   /** How deep a well is — the plate's thickness — in em. */
   floor: number;
-  /** Lattice pitch, in em. */
+  /** Lattice pitch — with pavé and no gaps, very nearly a cell's width — in em. */
   pitch: number;
+  /** Metal left standing between two pavé cells, in em. Half of it comes off each cell. */
+  wall?: number;
+  /** How far a pavé seed may wander off the lattice, as a fraction of the pitch. */
+  jitter?: number;
+  /** Lloyd passes: each free seed walks to the centroid of what it owns inside the region. */
+  relax?: number;
+  /** A pavé cell holding less than this fraction of a whole one loses its seed. */
+  minArea?: number;
+  seed?: number;
+  /**
+   * How a pavé field meets the region's edge. `absorb` lets the outline cut the interior cells;
+   * `grade` pins a row along the boundary and relaxes the interior behind it, so the stones grade
+   * smaller toward the edge.
+   */
+  edge?: 'absorb' | 'grade';
   /** A well's full diagonal, in em. */
   size: number;
   /**

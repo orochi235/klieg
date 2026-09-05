@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { WellSpec } from '../decoration.js';
+import { pave } from './pave.js';
 import type { Region } from './region.js';
 
 /** How finely a contour is sampled when measuring the glyph's extent. */
@@ -18,6 +19,12 @@ export interface Seat {
   y: number;
   /** The well's half-diagonal, in em. */
   half: number;
+  /**
+   * The pocket's own outline relative to `(x, y)`, when the cutter cut a shape rather than placed
+   * one. A pavé cell is the girdle of the stone that sits in it, so every stone differs and a fill
+   * cannot instance one geometry across the field. `lattice` leaves this unset.
+   */
+  outline?: [number, number][];
 }
 
 /** What one cut produces: the well outlines, where each sits, and the one floor they share. */
@@ -25,11 +32,13 @@ export interface Cut {
   /** Closed well outlines in the glyph's own em space. */
   wells: THREE.Path[];
   /**
-   * Per well, the rings its rim bead steps through — widest at the face, the well's own outline
-   * last. A cutter that can re-derive its pockets supplies these; one whose pockets are convex may
-   * leave it out, and the shell shrinks them instead.
+   * Every well re-derived at each of the growths its rim bead asks for, one entry per well and
+   * inside it one ring per growth. A bead step is the pocket built that much wider, not the pocket
+   * offset — offsetting is not available, because a clipped cell is not convex and there is nothing
+   * to walk a miter along. A cutter whose pockets *are* convex leaves this out and the shell
+   * shrinks them instead.
    */
-  bead?: THREE.Path[][];
+  bead?: (growths: readonly number[]) => THREE.Path[][];
   /** One per well, in the same order. */
   seats: Seat[];
   /** How far below the plate's front face the floor sits, in em. */
@@ -89,3 +98,6 @@ const lattice: Cutter = (shapes, region, spec) => {
 };
 
 registerCutter('lattice', lattice);
+// Registered here rather than by `pave.ts` registering itself: the package declares a narrow
+// `sideEffects` list, so a module imported only for its registration is dropped from the bundle.
+registerCutter('pave', pave);

@@ -9,6 +9,13 @@ export interface Filled {
   /** Where each seat puts that geometry, in the same order the seats came in. */
   matrices: THREE.Matrix4[];
   material: THREE.MeshPhysicalMaterial;
+  /**
+   * Whether the geometry already holds every stone in the letter's own space, which a field of
+   * differently-shaped pockets has to: a pavé cell is its stone's girdle, so there is no one
+   * geometry to instance. `matrices` is then empty and the field draws as a plain mesh — still one
+   * draw call, because the stones are merged.
+   */
+  placed?: boolean;
 }
 
 /**
@@ -21,6 +28,8 @@ export interface FillContext {
   /** The plate's front face, and the well's floor, in the body's own z. */
   faceZ: number;
   floorZ: number;
+  /** Where a pocket's wall goes vertical — the face less the rim bead's drop. */
+  girdleZ: number;
 }
 
 export type Fill = (seats: readonly Seat[], ctx: FillContext, spec: WellSpec) => Filled;

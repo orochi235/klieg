@@ -1,5 +1,5 @@
 import type * as THREE from 'three';
-import { type Point2, signedDistanceField } from '../tube/field.js';
+import { type Field, type Point2, signedDistanceField } from '../tube/field.js';
 
 /**
  * Grid cells per side. At a letter's scale this puts a cell at about 0.003 em, an order finer than
@@ -16,6 +16,11 @@ const CONTOUR_SEGMENTS = 64;
 export interface Region {
   /** Whether `(x, y)` in em sits at least `clearance` em inside every contour of the glyph. */
   contains(x: number, y: number, clearance: number): boolean;
+  /**
+   * The glyph's own distance field. A cutter that lays out a field of cells needs more than a
+   * containment test: which way is further in, and where the metal at a given inset actually is.
+   */
+  field: Field;
 }
 
 /**
@@ -39,5 +44,6 @@ export function regionOf(shapes: readonly THREE.Shape[]): Region {
     // Inside is negative, so "at least `clearance` in" is one comparison. A point off the grid
     // samples +Infinity, which fails for every clearance.
     contains: (x, y, clearance) => field.sample(x, y) <= -clearance,
+    field,
   };
 }

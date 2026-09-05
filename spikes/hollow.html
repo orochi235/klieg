@@ -70,15 +70,20 @@
     letter.add(new THREE.Mesh(g, m));
   }
 
+  // Off axis: head on, a recess and a flat face are the same silhouette and differ only in shade.
+  // Turned before it is measured, because turning a wide block is what changes how wide it is —
+  // measuring first fits the silhouette the render never shows.
+  letter.rotation.y = data.tilt;
+  letter.rotation.x = data.tilt * 0.35;
+  letter.updateMatrixWorld(true);
+
   const box = new THREE.Box3().setFromObject(letter);
   const size = box.getSize(new THREE.Vector3());
   const centre = box.getCenter(new THREE.Vector3());
   const budget = stage.viewportBudget();
-  letter.scale.setScalar(Math.min(budget.width / size.x, budget.height / size.y) * 1.9);
+  const fill = data.fill ?? 1.9;
+  letter.scale.setScalar(Math.min(budget.width / size.x, budget.height / size.y) * fill);
   letter.position.set(-centre.x * letter.scale.x, -centre.y * letter.scale.y, 0);
-  // Off axis: head on, a recess and a flat face are the same silhouette and differ only in shade.
-  letter.rotation.y = data.tilt;
-  letter.rotation.x = data.tilt * 0.35;
 
   // Both are path lengths through the glass, so they are in world units and have to follow the
   // scale the letter was just fitted to the viewport with.
@@ -91,7 +96,9 @@
 
   const set = (data.stones ?? []).length;
   document.getElementById('tag').textContent =
-    `${data.letter} · ${look} · hollowed${set > 0 ? ` · ${set} kinds of stone` : ''}`;
+    data.tag === false
+      ? ''
+      : `${data.letter} · ${look} · hollowed${set > 0 ? ` · ${set} kinds of stone` : ''}`;
 
   let frames = 0;
   function frame() {

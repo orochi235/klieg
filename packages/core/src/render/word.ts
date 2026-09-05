@@ -23,6 +23,7 @@ import { WordCaches } from './caches.js';
 import type { DecorationBuilder, DecorationPart } from './decorations/registry.js';
 import { decorationBuilderFor } from './decorations/registry.js';
 import { seedFlake } from './flake.js';
+import type { InflateOptions } from './inflate.js';
 import {
   applyLook,
   createMaterial,
@@ -124,6 +125,8 @@ export class Word {
   private readonly ownsCaches: boolean;
   /** The decoration's own builder, or null where the look carries no decoration. */
   private readonly builder: DecorationBuilder | null;
+  /** The letter's own shape, where the look asks for one other than flat. */
+  private readonly inflate: Partial<InflateOptions> | undefined;
   private readonly pose = blankPose();
   /**
    * The body's frame-owned base. `Word` is its only writer, and seeds it at construction:
@@ -158,6 +161,7 @@ export class Word {
     this.ownsCaches = !caches;
     this.caches = caches ?? new WordCaches();
 
+    this.inflate = spec.inflate;
     this.builder = decorationBuilderFor(spec.decoration, this);
 
     const runs = styledRunsOf(text, this.family);
@@ -408,8 +412,8 @@ export class Word {
     builder.applyGradientBounds(word);
   }
 
-  glyph(char: string, depth: number): THREE.ExtrudeGeometry {
-    return this.caches.glyph(this.font, char, depth);
+  glyph(char: string, depth: number): THREE.BufferGeometry {
+    return this.caches.glyph(this.font, char, depth, this.inflate);
   }
 
   shapes(char: string): THREE.Shape[] {

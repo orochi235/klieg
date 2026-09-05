@@ -9,8 +9,10 @@ import * as THREE from 'three';
 import { it } from 'vitest';
 import { WordCaches } from '../packages/core/src/render/caches.js';
 import { createMaterial } from '../packages/core/src/render/looks.js';
+import { chamfered, DEFAULT_GLYPH_OPTIONS as DEFAULT_GLYPH } from '../packages/core/src/text/glyphs.js';
 import { cutterFor } from '../packages/core/src/render/wells/cutters.js';
 import { fillFor } from '../packages/core/src/render/wells/fills.js';
+import { DEFAULT_INFLATE, inflate } from '../packages/core/src/render/inflate.js';
 import { regionOf } from '../packages/core/src/render/wells/region.js';
 import { buildShell, DEFAULT_SHELL, openEdges, shellPlanes } from '../packages/core/src/render/wells/shell.js';
 
@@ -32,7 +34,10 @@ function loadFont() {
 }
 
 /** Flat-shaded orthographic z-buffer. One key light, a little fill, no reflections. */
-function raster(parts: { pos: Float32Array; rgb: [number, number, number] }[], out: string) {
+function raster(
+  parts: { pos: Float32Array; nrm?: Float32Array; rgb: [number, number, number] }[],
+  out: string,
+) {
   const box = new THREE.Box3();
   for (const part of parts) {
     for (let i = 0; i < part.pos.length; i += 3) {
@@ -51,12 +56,21 @@ function raster(parts: { pos: Float32Array; rgb: [number, number, number] }[], o
   for (const part of parts) {
     for (let t = 0; t < part.pos.length; t += 9) {
       const p = [0, 3, 6].map((k) => new THREE.Vector3(part.pos[t + k], part.pos[t + k + 1], part.pos[t + k + 2]));
-      const n = new THREE.Vector3()
+      const face = new THREE.Vector3()
         .subVectors(p[1] as THREE.Vector3, p[0] as THREE.Vector3)
         .cross(new THREE.Vector3().subVectors(p[2] as THREE.Vector3, p[0] as THREE.Vector3))
         .normalize();
-      if (n.z < 0) continue;
-      const lam = Math.max(n.dot(key), 0) * 0.82 + 0.18 * Math.max(n.z, 0) + 0.06;
+      if (face.z < 0) continue;
+      // Gouraud off the geometry's own normals where it has them: shading a smooth crown off face
+      // normals renders every triangle it is made of, which is not what the mesh looks like.
+      const vn = part.nrm
+        ? [0, 3, 6].map((k) =>
+            new THREE.Vector3(part.nrm?.[t + k], part.nrm?.[t + k + 1], part.nrm?.[t + k + 2]),
+          )
+        : [face, face, face];
+      const shade = (n: THREE.Vector3) =>
+        Math.max(n.dot(key), 0) * 0.82 + 0.18 * Math.max(n.z, 0) + 0.06;
+      const lum = vn.map(shade);
       const sx = p.map((v) => v.x * scale + ox);
       const sy = p.map((v) => oy - v.y * scale);
       const minX = Math.max(0, Math.floor(Math.min(...sx)));
@@ -77,6 +91,7 @@ function raster(parts: { pos: Float32Array; rgb: [number, number, number] }[], o
           const at = y * W + x;
           if (z <= (depth[at] as number)) continue;
           depth[at] = z;
+          const lam = w0 * (lum[0] as number) + w1 * (lum[1] as number) + w2 * (lum[2] as number);
           for (let c = 0; c < 3; c++) rgb[at * 3 + c] = Math.min(1, (part.rgb[c] as number) * lam);
         }
       }
@@ -87,6 +102,30 @@ function raster(parts: { pos: Float32Array; rgb: [number, number, number] }[], o
   for (let i = 0; i < W * H * 3; i++) bytes[i] = Math.round(255 * (rgb[i] as number) ** (1 / 2.2));
   writeFileSync(out, Buffer.concat([Buffer.from(`P6\n${W} ${H}\n255\n`), bytes]));
 }
+
+it('renders an inflated letter', () => {
+  const shapes = new WordCaches().shapes(loadFont(), LETTER);
+  const top = DEFAULT_GLYPH.depth + DEFAULT_GLYPH.bevelThickness;
+  const flat = new THREE.ExtrudeGeometry(chamfered(shapes, DEFAULT_GLYPH), {
+    depth: DEFAULT_GLYPH.depth,
+    bevelEnabled: true,
+    bevelThickness: DEFAULT_GLYPH.bevelThickness,
+    bevelSize: DEFAULT_GLYPH.bevelSize,
+    bevelOffset: 0,
+    bevelSegments: DEFAULT_GLYPH.bevelSegments,
+    curveSegments: DEFAULT_GLYPH.curveSegments,
+  });
+  flat.computeVertexNormals();
+  const profile = (process.env.PAVE_PROFILE ?? 'cushion') as 'cushion';
+  const out = inflate(flat, top, { ...DEFAULT_INFLATE, profile });
+  const pos = (out.geometry.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
+  console.log(
+    `${LETTER} ${profile} — lid ${out.before} to ${out.after} tris, ` +
+      `body ${pos.length / 9} tris, converged=${out.converged}`,
+  );
+  const nrm = (out.geometry.getAttribute('normal') as THREE.BufferAttribute).array as Float32Array;
+  raster([{ pos, nrm, rgb: [1.0, 0.78, 0.34] }], `/tmp/inflate-${LETTER}-${profile}.ppm`);
+});
 
 it('renders a paved letter', () => {
   const shapes = new WordCaches().shapes(loadFont(), LETTER);

@@ -20,7 +20,7 @@ export interface WordBuildContext {
   readonly baseY: readonly number[];
   /** A fresh material carrying the studio's environment settings. */
   studioMaterial(): THREE.MeshPhysicalMaterial;
-  glyph(char: string, depth: number): THREE.ExtrudeGeometry;
+  glyph(char: string, depth: number): THREE.BufferGeometry;
   /** This glyph's contours, shared and cached. Clone before mutating. */
   shapes(char: string): THREE.Shape[];
   partInfo(

@@ -61,6 +61,28 @@ What is left is the medial axis. The field creases where a stroke's two sides me
 triangulation not aligned to that crease renders it as a jagged highlight — by construction on
 `ridge`, mild on `dome` and `cushion`, and not worth aligning a mesh to before a look asks for it.
 
+### Two things the build corrected
+
+**Green closure is not part of the hierarchy, and the prices above were measured as if it were.**
+A face split into two is not nested — its children's edges do not lie inside its own — so a green
+child refined again in a later pass leaves a hanging node on the edge it was cut from, and the
+neighbour across never sees it. Refining the four-way mesh only, and closing green at output,
+`cushion` on an `R` costs **16,053 lid triangles** against the 101 it starts from. The earlier
+figure was cheaper because the mesh it measured was torn.
+
+Two rules keep it conforming, and each was a T-junction first: faces are marked by their **own**
+error rather than by edges — marking edges and promoting any face holding one cascades across the
+whole letter, while promoting only where two already hang leaves a coarse mesh stuck, since a face
+there almost always has exactly one edge over tolerance. And refinement is **balanced by level**:
+once an edge is bisected the coarse face still holds `(u, v)` while its neighbours hold `(u, m)`
+and `(m, v)`, so the two sides stop matching at exactly the moment their levels diverge. Each half
+is pointed back at its parent, and a face may not split past a neighbour more than one level coarse.
+
+**Crown normals are averaged over the indexed mesh, not the soup.** `computeVertexNormals` on a
+triangle soup gives every face one constant normal, and a cushion made of visible triangles is not
+a cushion. The walls keep the normals the extruder gave them: recomputing those welds the bevel's
+own crease into a smooth ramp, and the bevel highlight is what every look reads by.
+
 ## Cutting, without CSG
 
 `ExtrudeGeometry` cannot make a blind recess. It can make a **hole**, which is how the counter in a

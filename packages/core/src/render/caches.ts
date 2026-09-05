@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import type { LoadedFont } from '../text/font.js';
 import { buildGlyphGeometry, DEFAULT_GLYPH_OPTIONS, EM, glyphToShapes } from '../text/glyphs.js';
+import { DEFAULT_INFLATE, type InflateOptions, inflate } from './inflate.js';
 import type { TubeBlueprint, TubeSpec } from './tube/index.js';
 
 /**
@@ -28,7 +29,7 @@ class Interner {
  */
 export class WordCaches {
   private readonly interner = new Interner();
-  private readonly geometries = new Map<string, THREE.ExtrudeGeometry>();
+  private readonly geometries = new Map<string, THREE.BufferGeometry>();
   private readonly contours = new Map<string, THREE.Shape[]>();
   private readonly blueprints = new Map<string, { blueprint: TubeBlueprint; leased: boolean }>();
   /** Blueprints built because the cached one was already lent out; disposed on release. */
@@ -39,12 +40,30 @@ export class WordCaches {
     return this.geometries.size;
   }
 
-  glyph(font: LoadedFont, char: string, depth: number): THREE.ExtrudeGeometry {
+  /**
+   * A letter's body. `inflate` is part of the key, not applied after: the crown is refined from the
+   * lid it displaces, so two profiles are two meshes rather than one mesh moved.
+   */
+  glyph(
+    font: LoadedFont,
+    char: string,
+    depth: number,
+    puff?: Partial<InflateOptions>,
+  ): THREE.BufferGeometry {
     if (this.disposed) throw new Error('klieg: WordCaches used after dispose');
-    const key = `${this.interner.id(font)}|${char}|${depth}`;
+    const opts = puff ? { ...DEFAULT_INFLATE, ...puff } : null;
+    const shape = opts ? `${opts.profile}|${opts.rise}|${opts.reach}|${opts.tolerance}` : 'flat';
+    const key = `${this.interner.id(font)}|${char}|${depth}|${shape}`;
     let geo = this.geometries.get(key);
     if (!geo) {
-      geo = buildGlyphGeometry(font.font, char, EM, { ...DEFAULT_GLYPH_OPTIONS, depth });
+      const flat = buildGlyphGeometry(font.font, char, EM, { ...DEFAULT_GLYPH_OPTIONS, depth });
+      if (!opts || opts.profile === 'flat') {
+        geo = flat;
+      } else {
+        flat.computeVertexNormals();
+        geo = inflate(flat, depth + DEFAULT_GLYPH_OPTIONS.bevelThickness, opts).geometry;
+        if (geo !== flat) flat.dispose();
+      }
       this.geometries.set(key, geo);
     }
     return geo;

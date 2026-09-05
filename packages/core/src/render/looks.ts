@@ -9,6 +9,7 @@ import {
   patchForFlakes,
   writeFlakeUniforms,
 } from './flake.js';
+import type { InflateOptions } from './inflate.js';
 
 export type LookName =
   | 'gold'
@@ -359,6 +360,12 @@ export interface LookSpec extends Partial<LookParams> {
   /** Which material `tint` recolors. Default 'body'. */
   tintTo?: 'body' | 'decoration';
   decoration?: DecorationSpec;
+  /**
+   * The shape of the solid itself, rather than what is carved out of it: how far the letter's front
+   * face stands proud of the flat cap, as a profile over its own distance field. Absent is flat,
+   * which is what every letter is today.
+   */
+  inflate?: Partial<InflateOptions>;
   /** Appearance driven over time, below the level of a letter. Absent or empty renders statically. */
   effects?: EffectSpec[];
 }

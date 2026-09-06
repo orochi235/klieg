@@ -152,6 +152,29 @@ the tube pipeline's own and counts inside as negative, so "at least `bezel` in f
 is one sample — counters included, because the field already treats them as boundary. Nothing
 offsets a contour. See [the plate cutter](2026-09-03-plate-cutter-design.md).
 
+**A uniform bezel exaggerates a letter's contrast**, because it takes the same absolute amount off
+both sides of every stroke and a thin stroke loses a larger fraction of itself. It is not cosmetic
+here: the bezel decides how much of a stroke a cutter may fill, so a thin one reads as bare metal
+beside a stem packed with stones. `insets: 'proportional'` names the amount for the **thickest**
+stroke and takes the same fraction off every thinner one — an `E` at a 0.028 em bezel goes from
+109 pockets covering 0.159 em² to 115 covering 0.170. It is not the default, because it changes
+where the metal is as well as how even the field looks.
+
+**A stroke's width is a watershed, snapped to the widths the letter really has.** A ridge cell sits
+equidistant from both sides of its stroke, so its own depth is that stroke's half-width and every
+other cell inherits from its steepest uphill neighbour. The snap is what keeps a straight edge
+straight: the raw value climbs wherever a stroke runs into a wider one, and an inset that follows it
+bows the edge — an `R`'s counter came out a lopsided lens.
+
+**Divide the field through by that width and the region needs no second code path.** Its levels then
+run 0 at the outline to -1 at the ridge whatever a stroke is worth, so a bezel of `c` is the level
+`-c / widest` on whichever field the region is measuring. Both cutters read `levelFor`, so a
+proportional bezel reaches the Voronoi field as well as the lattice's containment test.
+
+**Most of a monolinear face will not move, and that is correct.** On the lab's own font only `R`,
+`M` and `E` measure a thick-to-thin ratio above 1 (1.44, 1.39, 1.34); `A`, `K`, `S` and `O` come
+back at 1.00 and render byte-identical either way.
+
 ## Filling
 
 A **fill** receives a well — its outline, floor and normal — and answers with geometry or instances

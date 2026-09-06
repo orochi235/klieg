@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { rng } from '../rng.js';
 import type { LookSpec } from './looks.js';
 import type { TubeBlueprint, TubeSpec } from './tube/index.js';
+import type { Insets } from './wells/region.js';
 
 /** A decoration's own material, in the same plain numbers a look takes. */
 export type MaterialSpec = Omit<LookSpec, 'decoration' | 'bloom'> & {
@@ -89,6 +90,12 @@ export interface WellSpec {
    * slab's front face is every well's floor and a bevelled cap ramps across its own bevel width.
    */
   bezel: number;
+  /**
+   * How `bezel` is measured. `uniform` takes the same amount off every stroke, so a thin one loses
+   * a larger fraction of itself and ends up holding far fewer stones than its width says it should.
+   * `proportional` takes that amount off the thickest stroke and the same fraction off the rest.
+   */
+  insets?: Insets;
   /** How deep a well is — the plate's thickness — in em. */
   floor: number;
   /** Lattice pitch — with pavé and no gaps, very nearly a cell's width — in em. */

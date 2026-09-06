@@ -152,6 +152,13 @@ export type Crown = (x: number, y: number) => number;
 export function crownOf(rings: readonly (readonly Point[])[], opts: InflateOptions): Crown | null {
   if (opts.profile === 'flat' || opts.rise === 0 || rings.length === 0) return null;
   const profile = PROFILES[opts.profile];
+  // Named, the way an unregistered cutter or fill is. `profile` is typed, but klieg ships to
+  // JavaScript too, and `profile is not a function` names neither the value nor where it came from.
+  if (!profile) {
+    throw new Error(
+      `klieg: no inflation profile named '${opts.profile}' — one of ${Object.keys(PROFILES).join(', ')}`,
+    );
+  }
   const field = signedDistanceField(
     rings.map((ring) => ring.map((p) => ({ x: p.x, y: p.y }))),
     { resolution: opts.resolution, pad: 0.05 },

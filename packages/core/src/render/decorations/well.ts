@@ -65,7 +65,7 @@ export class WellBuilder implements DecorationBuilder {
     let cut = this.cuts.get(char);
     if (!cut) {
       const shapes = this.ctx.shapes(char);
-      cut = cutterFor(this.spec.cutter)(shapes, regionOf(shapes), this.spec);
+      cut = cutterFor(this.spec.cutter)(shapes, regionOf(shapes, this.spec.insets), this.spec);
       this.cuts.set(char, cut);
     }
     return cut;

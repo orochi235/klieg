@@ -1,5 +1,5 @@
 import type { Font, PathCommand } from 'opentype.js';
-import type * as THREE from 'three';
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { WordCaches } from '../../../src/render/caches.js';
 import { createMaterial } from '../../../src/render/looks.js';
@@ -216,5 +216,44 @@ describe('the stone fill over paved cells', () => {
     let low = Number.POSITIVE_INFINITY;
     for (let i = 2; i < pos.length; i += 3) low = Math.min(low, pos[i] as number);
     expect(low).toBeGreaterThan(c.floorZ);
+  });
+});
+
+// The payoff for a proportional bezel, and the reason it is not only about the outline: a uniform
+// one eats most of a thin stroke before a cell is placed, so the stroke reads as bare metal beside
+// a stem packed with stones.
+describe('a proportional bezel', () => {
+  /** A thick stem and a thin one, as far apart as the stub font's box lets them be. */
+  const bars = (): THREE.Shape[] => {
+    const shape = (x0: number, x1: number) => {
+      const s = new THREE.Shape();
+      s.moveTo(x0, 0);
+      s.lineTo(x1, 0);
+      s.lineTo(x1, 0.6);
+      s.lineTo(x0, 0.6);
+      s.closePath();
+      return s;
+    };
+    return [shape(0, 0.24), shape(0.44, 0.52)];
+  };
+
+  const seats = (insets: 'uniform' | 'proportional') => {
+    const shapes = bars();
+    const spec = { ...SPEC, bezel: 0.024, pitch: 0.03, size: 0.028 } as never;
+    const cut = cutterFor('pave')(shapes, regionOf(shapes, insets), spec);
+    return {
+      thick: cut.seats.filter((seat) => seat.x < 0.4).length,
+      thin: cut.seats.filter((seat) => seat.x > 0.4).length,
+    };
+  };
+
+  it('reaches the cell field, not only the containment test', () => {
+    const uniform = seats('uniform');
+    const scaled = seats('proportional');
+    // The thin bar is 0.08 em across against the thick one's 0.24, and a 0.024 em bezel is 60% of
+    // it against 20% of the other.
+    expect(scaled.thin).toBeGreaterThan(uniform.thin * 1.5);
+    // The bezel is named for the thickest stroke, so the thickest stroke does not move.
+    expect(scaled.thick).toBe(uniform.thick);
   });
 });

@@ -185,7 +185,11 @@ export const pave: Cutter = (shapes, region, spec): Cut => {
 
   /** The glyph inset by `ins`, cleaned the way a level's outline is, as a multipolygon. */
   const regionAt = (ins: number): Ring[][] =>
-    nest(isoContours(field, -ins).map((r) => smooth(resample(fromPoints(r), SPACING), 3)));
+    nest(
+      isoContours(field, region.levelFor(ins)).map((r) =>
+        smooth(resample(fromPoints(r), SPACING), 3),
+      ),
+    );
 
   const base = regionAt(spec.bezel);
   if (base.length === 0) {

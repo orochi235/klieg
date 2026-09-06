@@ -38,11 +38,13 @@ function raster(
   parts: { pos: Float32Array; nrm?: Float32Array; rgb: [number, number, number] }[],
   out: string,
 ) {
+  // Framed on the first part alone — the body — so two renders of the same letter are at the same
+  // scale and can be laid side by side. Framing on everything lets a fill that reaches a hair
+  // further shrink the whole letter, and the difference being looked for is smaller than that.
   const box = new THREE.Box3();
-  for (const part of parts) {
-    for (let i = 0; i < part.pos.length; i += 3) {
-      box.expandByPoint(new THREE.Vector3(part.pos[i], part.pos[i + 1], part.pos[i + 2]));
-    }
+  const frame = parts[0] as { pos: Float32Array };
+  for (let i = 0; i < frame.pos.length; i += 3) {
+    box.expandByPoint(new THREE.Vector3(frame.pos[i], frame.pos[i + 1], frame.pos[i + 2]));
   }
   const size = box.getSize(new THREE.Vector3());
   const scale = Math.min((W * 0.86) / size.x, (H * 0.86) / size.y);
@@ -140,7 +142,13 @@ it('renders a paved letter', () => {
     look: {},
   } as never;
 
-  const cut = cutterFor((spec as { cutter: string }).cutter)(shapes, regionOf(shapes), spec);
+  // `PAVE_INSETS=proportional` scales the bezel by the stroke it cuts.
+  const insets = (process.env.PAVE_INSETS ?? 'uniform') as 'uniform';
+  const cut = cutterFor((spec as { cutter: string }).cutter)(
+    shapes,
+    regionOf(shapes, insets),
+    spec,
+  );
   // `PAVE_CROWN=cushion:0.05:0.12` — profile, rise and reach — carves and inflates at once.
   const asked = (process.env.PAVE_CROWN || undefined)?.split(':');
   const puff = asked
@@ -176,7 +184,7 @@ it('renders a paved letter', () => {
 
   console.log(
     `${LETTER} ${puff ? `${puff.profile} ${puff.rise}/${puff.reach}` : 'flat'} — ` +
-      `${cut.wells.length} pockets, body ${bodyPos.length / 9} tris, ` +
+      `${insets} — ${cut.wells.length} pockets, body ${bodyPos.length / 9} tris, ` +
       `stones ${stonePos.length / 9} tris, shell ${openEdges(bodyPos) === 0 ? 'closed' : 'OPEN'}`,
   );
   raster(
@@ -184,6 +192,6 @@ it('renders a paved letter', () => {
       { pos: bodyPos, nrm: bodyNrm, rgb: [1.0, 0.78, 0.34] },
       ...(filled.placed ? [{ pos: stonePos, rgb: [0.72, 0.86, 1.0] as [number, number, number] }] : []),
     ],
-    `/tmp/pave-${LETTER}-${(spec as { cutter: string }).cutter}-${puff ? puff.profile : 'flat'}.ppm`,
+    `/tmp/pave-${LETTER}-${(spec as { cutter: string }).cutter}-${puff ? puff.profile : 'flat'}-${insets}.ppm`,
   );
 });

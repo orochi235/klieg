@@ -54,6 +54,12 @@ describe('the profiles', () => {
 });
 
 describe('inflate', () => {
+  it('names an inflation profile it does not have', () => {
+    expect(() =>
+      inflate(slab(), TOP, { ...DEFAULT_INFLATE, profile: 'pillow' as 'cushion' }),
+    ).toThrow(/no inflation profile named 'pillow'/);
+  });
+
   it('hands the geometry straight back for a flat profile', () => {
     const geo = slab();
     const out = inflate(geo, TOP, { ...DEFAULT_INFLATE, profile: 'flat' });

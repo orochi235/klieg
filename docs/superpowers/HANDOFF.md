@@ -20,9 +20,10 @@ the cut, the fill registry, the brilliant, the spec fields, the builder, fill-na
 stone-set sign through the shipped path. `npm run check` was green and the visual suite **41/41** on
 the merge itself, not just on the branches.
 
-**Everything since is spike-only** — `spikes/pave.mjs`, `spikes/hollow.mjs`, `spikes/stone-demo.mjs`
-and `spikes/stone-seat.mjs`. No `packages/` or `apps/` change, so the visual suite cannot be
-affected by it; `npm run lint` is the gate that applies. See
+**The pavé cutter, the stitched shell, the inflated solid, a crown a carved letter rides, and a
+proportional bezel are all on `main` and pushed.** `main` is green at **1,694 tests**. The visual
+suite is unmoved by any of it and cannot be: no shipped look selects `'well'` or asks for
+`inflate`, so every one of the 22 snapshots is still an uncut, flat letter. See
 [what is worth doing next](#what-is-worth-doing-next).
 
 
@@ -581,14 +582,20 @@ working — it needs a caller-supplied `TubeSpec.gradient`.
 
 ## What is worth doing next
 
-**Open right now: pavé, and one construction bug blocking it.** Everything below is on `main` and
-pushed; `git log --oneline` is the live answer for what landed.
+**Open right now: nothing in `render/wells/` is half-built.** The remaining item on the pipeline is
+the one its design has always put last — re-expressing `tubing`, `piping` and `sequin` as fills.
+That one moves visual baselines and is judged on its own renders, so it wants somebody at a screen
+rather than a session running unattended. Everything below is on `main` and pushed;
+`git log --oneline` is the live answer for what landed.
 
-The shipped `lattice` cutter places a diamond only where a whole one fits, which reads as a
-polka-dot field with gold between every stone. What is wanted instead is **pavé**: the stones are
-the surface, the metal is the little left between them, and the cells that do not fit whole are
-shaped by the letter's outline. `spikes/hollow.mjs` builds the letter and the field it sits in;
-`spikes/pave.mjs` is where the stones themselves are. Neither is a cutter yet.
+**Nothing in the library selects any of it, and that is the next real decision.** There is no
+shipped look with `decoration: { kind: 'well' }` and none with `inflate`, so the whole cutter /
+fill / shell / crown line is reachable only from `spikes/pave-render.test.ts`. What ships as a
+named look — and what its numbers are — has not been chosen.
+
+`spikes/pave.mjs` and `spikes/hollow.mjs` are where this was worked out and are still the fastest
+place to try a shape; `--insets proportional` in `hollow.mjs` is wider than what `region.ts` took
+from it, because the shell has no inward inset but the bezel.
 
 **There is no density wall. The claim was a measurement, three times over, and is retracted.**
 `spikes/hole-wall.mjs` punches N holes into an R and reads the front cap's own area: **320 are cut**,

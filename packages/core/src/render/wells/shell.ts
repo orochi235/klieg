@@ -12,6 +12,7 @@ import {
 import { type Field, isoContours, signedDistanceField } from '../tube/field.js';
 import type { Cut } from './cutters.js';
 import {
+  area,
   fromPoints,
   type Nested,
   nest,
@@ -20,6 +21,7 @@ import {
   type Ring,
   resample,
   shrink,
+  signedArea,
   smooth,
   toPoints,
 } from './rings.js';
@@ -98,9 +100,21 @@ function fieldOf(rings: Ring[]): Field {
   return signedDistanceField(rings.map(toPoints), { resolution: RESOLUTION, pad: PAD });
 }
 
-/** The metal at one iso level, as regions — negative erodes it, positive grows it. */
+/**
+ * The metal at one iso level, as regions — negative erodes it, positive grows it.
+ *
+ * Rings smaller than a few of the field's own cells are dropped. Where a gap between two strokes
+ * pinches shut at the level being read, marching squares answers with a loop of no area — an `M`
+ * grown by its own chamfer comes back as three rings of which two are zero, and a `4` as
+ * twenty-three of which twenty-one are. They are not features of the letter, they are the level
+ * passing exactly through a pinch, and left in they make every band above disagree on ring count.
+ */
 function metalAt(field: Field, level: number): Nested[] {
-  return nest(isoContours(field, level).map((r) => clean(fromPoints(r)))).map((poly) => ({
+  const floor = 4 * field.emPerCell * field.emPerCell;
+  const rings = isoContours(field, level)
+    .map((r) => clean(fromPoints(r)))
+    .filter((r) => r.length >= 3 && area(r) > floor);
+  return nest(rings).map((poly) => ({
     outer: orient(poly[0] as Ring, true),
     holes: poly.slice(1).map((h) => orient(h, false)),
   }));
@@ -308,6 +322,17 @@ function capFaces(contour: Ring, holes: Ring[], up: boolean): [Point3, Point3, P
 }
 
 /**
+ * What a band between two levels is made of: the rings that answer each other, and the rings that
+ * do not. A ring with no answer is where a gap between two strokes closes over — the level passed
+ * through the pinch — and it is closed with a lid rather than stitched to something it is not.
+ */
+export interface Bands {
+  pairs: [Ring, Ring][];
+  loneLower: Ring[];
+  loneUpper: Ring[];
+}
+
+/**
  * Which ring of one level answers which of the next.
  *
  * Two iso levels of the same letter run parallel, so a ring is answered by the one nearest it that
@@ -317,8 +342,7 @@ function capFaces(contour: Ring, holes: Ring[], up: boolean): [Point3, Point3, P
  * level was stitched to the counter of the next, which is a sheet of quads across the counter.
  * Cheapest pair first, so one ring's near miss cannot push every ring after it onto the wrong one.
  */
-export function pair(a: Ring[], b: Ring[]): [Ring, Ring][] | null {
-  if (a.length !== b.length) return null;
+export function pair(a: Ring[], b: Ring[]): Bands {
   const of = (ring: Ring) => {
     let x = 0;
     let y = 0;
@@ -349,14 +373,38 @@ export function pair(a: Ring[], b: Ring[]): [Ring, Ring][] | null {
   costs.sort((p, q) => p[0] - q[0]);
   const from = new Set<number>();
   const to = new Set<number>();
-  const out: [Ring, Ring][] = [];
+  const pairs: [Ring, Ring][] = [];
   for (const [cost, i, j] of costs) {
     if (from.has(i) || to.has(j) || cost >= 1e3) continue;
     from.add(i);
     to.add(j);
-    out.push([a[i] as Ring, b[j] as Ring]);
+    pairs.push([a[i] as Ring, b[j] as Ring]);
   }
-  return out.length === a.length ? out : null;
+  return {
+    pairs,
+    loneLower: a.filter((_, i) => !from.has(i)),
+    loneUpper: b.filter((_, j) => !to.has(j)),
+  };
+}
+
+/**
+ * A lid over each ring the band could not answer, at the level the ring itself sits on.
+ *
+ * Which way it faces follows from what the ring is and which side it was left on. A ring wound
+ * metal-inside is a piece of the letter, so one that runs out going up is the top of an island and
+ * faces up; one that only appears above is an island's underside and faces down. A ring wound
+ * metal-outside is a void, and both readings invert: a gap that closes over is a ceiling, a gap
+ * that opens is a floor.
+ *
+ * This is where a stroke closing up between two levels lands, and it is the honest surface rather
+ * than a guess — the alternative is stitching a ring to one it is not, which is a sheet of quads
+ * across the letter. What it approximates is the pinch itself: a gap that closes to a line gets a
+ * flat lid a few thousandths of an em across instead of coming to a true edge. Seven of thirty-six
+ * glyphs in the lab's own font need it, `G`, `S` and four digits among them.
+ */
+function capLone(skin: Skin, band: Bands, zLo: number, zHi: number): void {
+  for (const ring of band.loneLower) skin.cap(ring, [], zLo, signedArea(ring) > 0);
+  for (const ring of band.loneUpper) skin.cap(ring, [], zHi, signedArea(ring) <= 0);
 }
 
 /**
@@ -438,14 +486,9 @@ export function buildShell(shapes: readonly THREE.Shape[], cut: Cut, opts: Shell
 
   const run = (levels: Ring[][], zAt: (k: number) => number) => {
     for (let k = 0; k < levels.length - 1; k++) {
-      const pairs = pair(levels[k] as Ring[], levels[k + 1] as Ring[]);
-      if (pairs === null) {
-        throw new Error(
-          `klieg: a shell band has ${(levels[k] as Ring[]).length} ring(s) below and ` +
-            `${(levels[k + 1] as Ring[]).length} above — a stroke closed up or split between them`,
-        );
-      }
-      for (const [lo, hi] of pairs) skin.stitch(lo, zAt(k), hi, zAt(k + 1));
+      const band = pair(levels[k] as Ring[], levels[k + 1] as Ring[]);
+      for (const [lo, hi] of band.pairs) skin.stitch(lo, zAt(k), hi, zAt(k + 1));
+      capLone(skin, band, zAt(k), zAt(k + 1));
     }
   };
 
@@ -453,9 +496,9 @@ export function buildShell(shapes: readonly THREE.Shape[], cut: Cut, opts: Shell
   run(backRings, (k) => planes.backZ + (back[k] as Step).dz);
   const wall = backRings[backRings.length - 1] as Ring[];
   const top = frontRings[frontRings.length - 1] as Ring[];
-  const pairsUp = pair(wall, top);
-  if (pairsUp === null) throw new Error('klieg: the letter’s two chamfers disagree on rings');
-  for (const [lo, hi] of pairsUp) skin.stitch(lo, wallLo, hi, wallHi);
+  const straight = pair(wall, top);
+  for (const [lo, hi] of straight.pairs) skin.stitch(lo, wallLo, hi, wallHi);
+  capLone(skin, straight, wallLo, wallHi);
   run([...frontRings].reverse(), (k) => planes.faceZ - (front[front.length - 1 - k] as Step).dz);
 
   // The wells: the rim bead narrowing away from the face, then a straight wall down to the floor.

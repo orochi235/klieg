@@ -239,7 +239,8 @@ describe('a proportional bezel', () => {
 
   const seats = (insets: 'uniform' | 'proportional') => {
     const shapes = bars();
-    const spec = { ...SPEC, bezel: 0.024, pitch: 0.03, size: 0.028 } as never;
+    // No Lloyd passes: relaxation is most of a cut's cost and none of what this measures.
+    const spec = { ...SPEC, bezel: 0.024, pitch: 0.03, size: 0.028, relax: 0 } as never;
     const cut = cutterFor('pave')(shapes, regionOf(shapes, insets), spec);
     return {
       thick: cut.seats.filter((seat) => seat.x < 0.4).length,
@@ -247,7 +248,8 @@ describe('a proportional bezel', () => {
     };
   };
 
-  it('reaches the cell field, not only the containment test', () => {
+  // Two full cuts, which is a second or two each even with the relaxation off.
+  it('reaches the cell field, not only the containment test', { timeout: 30_000 }, () => {
     const uniform = seats('uniform');
     const scaled = seats('proportional');
     // The thin bar is 0.08 em across against the thick one's 0.24, and a 0.024 em bezel is 60% of

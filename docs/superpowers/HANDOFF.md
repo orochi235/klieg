@@ -758,9 +758,11 @@ reflex corner to a radius (the junctions between strokes, the inside of a counte
 real: the distance field of a grown shape equals the original minus the radius only on the outside,
 and the inside is exactly where a filled corner changes which edge is nearest. Both default to 0.
 
-**A band whose two levels disagree on ring count is reported, not stitched.** That is a stroke
-closing up or splitting between the two levels — a deeply stepped R rounded to 0.02 leaves one. It
-is the honest failure; a guessed pairing would be a silent hole.
+**A band whose two levels disagree on ring count is lidded, not refused.** That is a stroke closing
+up or splitting between the two levels, and it is common rather than exotic — seven of the lab
+font's thirty-six glyphs did it at the shipped chamfer and could not be built at all until the lid
+went in. `npx vitest run --config spikes/vitest.render.config.ts -t sweep` re-derives the count; the
+[pavé design](specs/2026-09-05-pave-cutter-design.md) has which way a lid faces and why.
 
 **The ledge is gone and the two bevels are separate knobs.** `ExtrudeGeometry` bevels every contour
 it is handed at one size, which is why the letter's own 0.038 em chamfer used to land on a well's

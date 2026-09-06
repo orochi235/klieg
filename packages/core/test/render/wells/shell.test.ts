@@ -100,10 +100,14 @@ describe('pair', () => {
     return ccw ? ring : ring.reverse();
   };
 
-  it('refuses two levels that disagree on ring count', () => {
-    expect(
-      pair([square(0, 0, 1, true)], [square(0, 0, 1, true), square(5, 5, 1, true)]),
-    ).toBeNull();
+  // A stroke closing up between two levels, which the shell lids rather than stitching a ring to
+  // one it is not. Naming the leftover is what lets it be lidded on the right side.
+  it('names the ring a level has no answer for rather than forcing a pairing', () => {
+    const band = pair([square(0, 0, 1, true)], [square(0, 0, 1, true), square(5, 5, 1, true)]);
+    expect(band.pairs).toHaveLength(1);
+    expect(band.loneLower).toHaveLength(0);
+    expect(band.loneUpper).toHaveLength(1);
+    expect((band.loneUpper[0] as number[][])[0]?.[0]).toBeCloseTo(4, 6);
   });
 
   // An O's outline and its counter share a centre, so a centroid alone picks whichever came out
@@ -111,9 +115,10 @@ describe('pair', () => {
   it('answers a concentric outline and counter by size and winding, not by centre', () => {
     const lower = [square(0, 0, 1, true), square(0, 0, 0.4, false)];
     const upper = [square(0, 0, 0.95, true), square(0, 0, 0.45, false)];
-    const pairs = pair(lower, upper);
-    expect(pairs).not.toBeNull();
-    for (const [lo, hi] of pairs as [number[][], number[][]][]) {
+    const { pairs, loneLower, loneUpper } = pair(lower, upper);
+    expect(loneLower).toHaveLength(0);
+    expect(loneUpper).toHaveLength(0);
+    for (const [lo, hi] of pairs) {
       const span = (r: number[][]) => Math.max(...r.map((p) => p[0] as number));
       // Each ring keeps its own scale: the big one answers the big one.
       expect(Math.abs(span(lo) - span(hi))).toBeLessThan(0.2);
@@ -201,6 +206,35 @@ describe('buildShell', () => {
     // Chamfered this tip reaches 1.020; unchamfered the miter runs it to 1.054, which is as far
     // as three's sqrt(2) cap allows. A looser bound than that passes either way.
     expect((geo.boundingBox as THREE.Box3).max.x).toBeLessThan(1.03);
+  });
+
+  // A `C`'s gap, narrower than twice the letter's own chamfer: growing the metal closes it, so the
+  // grown level has a counter the ungrown one does not and the band has a ring with no answer.
+  // Seven of the lab font's thirty-six glyphs do this — `G`, `M`, `S` and four digits — and
+  // refusing them is refusing to set GOLD.
+  it('lids a counter the chamfer closes over rather than refusing the letter', () => {
+    const c = new THREE.Shape();
+    // A square ring opened on the right by a 0.06 em slot, against a 0.038 em chamfer either side.
+    for (const [x, y] of [
+      [0, 0],
+      [0.5, 0],
+      [0.5, 0.22],
+      [0.35, 0.22],
+      [0.35, 0.15],
+      [0.15, 0.15],
+      [0.15, 0.35],
+      [0.35, 0.35],
+      [0.35, 0.28],
+      [0.5, 0.28],
+      [0.5, 0.5],
+      [0, 0.5],
+    ] as [number, number][]) {
+      if (x === 0 && y === 0) c.moveTo(x, y);
+      else c.lineTo(x, y);
+    }
+    c.closePath();
+    const geo = buildShell([c], { wells: [], seats: [], floor: 0.09 }, OPTS).geometry;
+    expect(openEdges(positionsOf(geo))).toBe(0);
   });
 
   it('costs more than a letter with nothing cut out of it', () => {

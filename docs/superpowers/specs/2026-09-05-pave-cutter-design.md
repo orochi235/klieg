@@ -160,6 +160,21 @@ miter cuts it back. Nothing currently catches this — every one of the 22 snaps
 run --config spikes/vitest.render.config.ts`, `PAVE_CUTTER=lattice` and `PAVE_LETTER` to steer it).
 On an R at pitch 0.055: pavé cuts 126 pockets against the lattice's 68, and both shells close.
 
-`pair` refuses rather than guesses when two levels disagree on ring count — a stroke closing up or
-splitting between them. It throws, naming the level and the two counts. A guessed pairing would be a
-silent hole.
+**A ring one level has and the next has not is lidded, not stitched to something it is not.** That
+is a stroke closing up between the two levels, and it is not rare: the letter's own 0.038 em chamfer
+closes a gap on **seven of the lab font's thirty-six glyphs** — `G`, `M`, `S` and the digits `4`,
+`5`, `6` and `9` — so refusing them is refusing to set GOLD. `pair` names what it could not answer
+and the shell lids each one at the level it sits on, facing out of the solid: a ring wound
+metal-inside that runs out going up is the top of an island, one wound metal-outside is the ceiling
+of a gap that has closed, and both readings invert for a ring that only appears above. What it
+approximates is the pinch — a gap that closes to a line gets a flat lid a few thousandths of an em
+across instead of a true edge.
+
+**Two of those seven were not pinches at all but rings of no area.** Where a level passes exactly
+through a pinch, marching squares answers with a degenerate loop — an `M` grown by its chamfer comes
+back as three rings of which two are zero, a `4` as twenty-three of which twenty-one are. `metalAt`
+drops anything smaller than a few of the field's own cells, which is four orders below the smallest
+real counter it sees.
+
+`npx vitest run --config spikes/vitest.render.config.ts -t sweep` is the survey: every glyph, its
+pockets, its triangles, and whether its shell closed.

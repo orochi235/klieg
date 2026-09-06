@@ -48,7 +48,7 @@ export const DEFAULT_INFLATE: InflateOptions = {
 /** How many refinement passes before the mesh is taken as good as it gets. */
 const PASSES = 12;
 
-interface Point {
+export interface Point {
   x: number;
   y: number;
 }
@@ -79,8 +79,8 @@ function splitLid(geo: THREE.BufferGeometry, top: number) {
   return { lid, rest, restNormal };
 }
 
-/** Every edge used by exactly one triangle, chained into closed rings. */
-function boundaryRings(points: Point[], faces: number[][]): Point[][] {
+/** Every edge used by exactly one triangle, chained into closed rings of vertex ids. */
+export function boundaryRings(faces: readonly number[][]): number[][] {
   const seen = new Map<string, [number, number]>();
   for (const face of faces) {
     const [a, b, c] = face as [number, number, number];
@@ -96,15 +96,15 @@ function boundaryRings(points: Point[], faces: number[][]): Point[][] {
   }
   const next = new Map<number, number>();
   for (const [u, v] of seen.values()) next.set(u, v);
-  const rings: Point[][] = [];
+  const rings: number[][] = [];
   const done = new Set<number>();
   for (const start of next.keys()) {
     if (done.has(start)) continue;
-    const ring: Point[] = [];
+    const ring: number[] = [];
     let at = start;
     while (!done.has(at)) {
       done.add(at);
-      ring.push(points[at] as Point);
+      ring.push(at);
       const to = next.get(at);
       if (to === undefined) break;
       at = to;
@@ -140,30 +140,31 @@ export interface Inflated {
 }
 
 /**
- * A letter's flat lid refined where it misses the profile, then displaced into a crown.
+ * How far a point stands above the flat cap, and zero on the rings it was measured from.
  *
- * Refining the extruder's own lid rather than meshing the field afresh, because **the crown has to
- * end where the lid ends**. A heightfield drops any cell the boundary crosses, so its crown stops
- * short of the lid — 0.0029 em on a 384 grid — and the bevel shows through the gap all the way
- * round. Inheriting the lid's own edge measures exactly zero. Stacked iso-contours have the edge
- * but terrace: every band is flat, and twenty of them read as a contour map rather than a cushion.
- *
- * The field is built from the **lid's** rings, not the glyph's outline. The lid is the outline
- * inset by the bevel, so measuring from the outline lifts the crown's rim off the bevel it is
- * supposed to meet — a step all the way around the letter.
+ * The rings are the **lid's**, never the glyph's outline. The lid is the outline inset by the
+ * bevel, so measuring from the outline lifts the crown's rim off the bevel it is supposed to meet —
+ * a step all the way around the letter.
  */
-export function inflate(
-  geo: THREE.BufferGeometry,
-  top: number,
-  opts: InflateOptions = DEFAULT_INFLATE,
-): Inflated {
-  const profile = PROFILES[opts.profile];
-  const { lid: lidTris, rest, restNormal } = splitLid(geo, top);
-  if (lidTris.length === 0 || opts.profile === 'flat' || opts.rise === 0) {
-    return { geometry: geo, converged: true, before: lidTris.length, after: lidTris.length };
-  }
+export type Crown = (x: number, y: number) => number;
 
-  // Welded into an indexed mesh, so an edge is split once for both the faces that share it.
+/** Nothing to displace: a flat profile, no rise, or no boundary to measure from. */
+export function crownOf(rings: readonly (readonly Point[])[], opts: InflateOptions): Crown | null {
+  if (opts.profile === 'flat' || opts.rise === 0 || rings.length === 0) return null;
+  const profile = PROFILES[opts.profile];
+  const field = signedDistanceField(
+    rings.map((ring) => ring.map((p) => ({ x: p.x, y: p.y }))),
+    { resolution: opts.resolution, pad: 0.05 },
+  );
+  return (x, y) =>
+    opts.rise * profile(Math.min(Math.max(-depthAt(field, x, y) / opts.reach, 0), 1));
+}
+
+/** A triangle soup welded into an indexed mesh, so an edge is split once for both its faces. */
+export function weld(tris: readonly (readonly Point[])[]): {
+  points: Point[];
+  faces: number[][];
+} {
   const points: Point[] = [];
   const ids = new Map<string, number>();
   const idOf = (p: Point) => {
@@ -176,20 +177,48 @@ export function inflate(
     }
     return id;
   };
-  let faces = lidTris.map((tri) => tri.map(idOf));
+  const faces = tris.map((tri) => tri.map(idOf));
+  return { points, faces };
+}
 
-  const rings = boundaryRings(points, faces);
-  if (rings.length === 0) {
-    return { geometry: geo, converged: true, before: lidTris.length, after: lidTris.length };
-  }
-  const field = signedDistanceField(
-    rings.map((ring) => ring.map((p) => ({ x: p.x, y: p.y }))),
-    { resolution: opts.resolution, pad: 0.05 },
-  );
-  const z = (p: Point) =>
-    top + opts.rise * profile(Math.min(Math.max(-depthAt(field, p.x, p.y) / opts.reach, 0), 1));
-
+/**
+ * The lid refined where a triangle's chord falls further from the profile than `tolerance`.
+ *
+ * `points` is grown in place with every midpoint the refinement introduces, and the faces that
+ * replace the ones handed in are returned. `freeze` withholds the boundary: an edge no second face
+ * walks is shared with a surface this does not own, and bisecting it leaves that surface facing a
+ * vertex it has no vertex for. `inflate` leaves it open, because its lid's rim meets the bevel on a
+ * plane where the crown is flat and a collinear extra vertex is invisible; a shell cannot, because
+ * a shell is closed or it is not.
+ */
+export function refineCap(
+  points: Point[],
+  input: readonly number[][],
+  z: (p: Point) => number,
+  tolerance: number,
+  freeze = false,
+): { faces: number[][]; converged: boolean } {
+  let faces = input as number[][];
   const ek = (u: number, v: number) => (u < v ? `${u},${v}` : `${v},${u}`);
+  const held = new Set<string>();
+  if (freeze) {
+    const walked = new Map<string, number>();
+    for (const f of input) {
+      const [a, b, c] = f as [number, number, number];
+      for (const [u, v] of [
+        [a, b],
+        [b, c],
+        [c, a],
+      ] as [number, number][]) {
+        walked.set(ek(u, v), (walked.get(ek(u, v)) ?? 0) + 1);
+      }
+    }
+    for (const [k, n] of walked) if (n === 1) held.add(k);
+  }
+  const frozen = (f: number[]) => {
+    const [a, b, c] = f as [number, number, number];
+    return held.has(ek(a, b)) || held.has(ek(b, c)) || held.has(ek(c, a));
+  };
 
   /**
    * Every edge already bisected, and where. Refinement only ever splits a face into four, whose
@@ -238,12 +267,13 @@ export function inflate(
      */
     const split = new Set<number>();
     for (let i = 0; i < faces.length; i++) {
+      if (frozen(faces[i] as number[])) continue;
       for (const [u, v] of edgesOf(faces[i] as number[])) {
-        if (bisected.has(ek(u, v))) continue;
+        if (bisected.has(ek(u, v)) || held.has(ek(u, v))) continue;
         const p = points[u] as Point;
         const q = points[v] as Point;
         const mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
-        if (Math.abs(z(mid) - (z(p) + z(q)) / 2) > opts.tolerance) {
+        if (Math.abs(z(mid) - (z(p) + z(q)) / 2) > tolerance) {
           split.add(i);
           break;
         }
@@ -293,19 +323,42 @@ export function inflate(
           for (const j of across(k)) {
             if (j === i || split.has(j)) continue;
             if ((level[j] as number) >= (level[i] as number)) continue;
+            if (frozen(faces[j] as number[])) continue;
             split.add(j);
             grew = true;
           }
         }
       }
       for (let i = 0; i < faces.length; i++) {
-        if (split.has(i)) continue;
+        if (split.has(i) || frozen(faces[i] as number[])) continue;
         const on = edgesOf(faces[i] as number[]).filter(([u, v]) => hanging.has(ek(u, v))).length;
         if (on < 2) continue;
         split.add(i);
         grew = true;
       }
     }
+
+    /**
+     * A frozen face can never catch up, so the face beside it stops where it is. Growth only adds
+     * and this only removes, so the pair terminates; what it leaves satisfies the balance rule
+     * however the set was reached, and the closure below answers one, two or three hanging nodes
+     * alike.
+     */
+    for (let shrank = true; shrank; ) {
+      shrank = false;
+      for (const i of split) {
+        const coarser = edgesOf(faces[i] as number[]).some(([u, v]) =>
+          across(ek(u, v)).some(
+            (j) => !split.has(j) && (level[j] as number) < (level[i] as number),
+          ),
+        );
+        if (!coarser) continue;
+        split.delete(i);
+        shrank = true;
+      }
+    }
+    // Not converged: everything still over tolerance is held by a boundary and cannot move.
+    if (split.size === 0) break;
 
     const out: number[][] = [];
     const depth: number[] = [];
@@ -372,15 +425,19 @@ export function inflate(
     }
   }
   faces = closed;
+  return { faces, converged };
+}
 
-  /**
-   * Crown normals are averaged over the indexed mesh and only then expanded, because
-   * `computeVertexNormals` on a triangle soup gives every face one constant normal — the crown
-   * comes back faceted, and a cushion made of visible triangles is not a cushion. The walls keep
-   * the normals the extruder gave them: recomputing those welds the bevel's own crease into a
-   * smooth ramp, and the bevel highlight is what every look reads by.
-   */
-  const height = points.map(z);
+/**
+ * Crown normals averaged over the indexed mesh, before it is expanded. `computeVertexNormals` on a
+ * triangle soup gives every face one constant normal — the crown comes back faceted, and a cushion
+ * made of visible triangles is not a cushion.
+ */
+export function capNormals(
+  points: readonly Point[],
+  faces: readonly number[][],
+  height: readonly number[],
+): Float64Array {
   const vn = new Float64Array(points.length * 3);
   for (const face of faces) {
     const [i, j, k] = face as [number, number, number];
@@ -404,7 +461,53 @@ export function inflate(
     }
   }
 
-  // Back to a soup, because the rest of the body is one and the two are concatenated.
+  return vn;
+}
+
+/**
+ * A letter's flat lid refined where it misses the profile, then displaced into a crown.
+ *
+ * Refining the extruder's own lid rather than meshing the field afresh, because **the crown has to
+ * end where the lid ends**. A heightfield drops any cell the boundary crosses, so its crown stops
+ * short of the lid — 0.0029 em on a 384 grid — and the bevel shows through the gap all the way
+ * round. Inheriting the lid's own edge measures exactly zero. Stacked iso-contours have the edge
+ * but terrace: every band is flat, and twenty of them read as a contour map rather than a cushion.
+ *
+ * The field is built from the **lid's** rings, not the glyph's outline. The lid is the outline
+ * inset by the bevel, so measuring from the outline lifts the crown's rim off the bevel it is
+ * supposed to meet — a step all the way around the letter.
+ */
+export function inflate(
+  geo: THREE.BufferGeometry,
+  top: number,
+  opts: InflateOptions = DEFAULT_INFLATE,
+): Inflated {
+  const { lid: lidTris, rest, restNormal } = splitLid(geo, top);
+  const flat = (): Inflated => ({
+    geometry: geo,
+    converged: true,
+    before: lidTris.length,
+    after: lidTris.length,
+  });
+  if (lidTris.length === 0) return flat();
+
+  const { points, faces: coarse } = weld(lidTris);
+  const crown = crownOf(
+    boundaryRings(coarse).map((ring) => ring.map((id) => points[id] as Point)),
+    opts,
+  );
+  if (!crown) return flat();
+  const z = (p: Point) => top + crown(p.x, p.y);
+
+  // The rim is left open: the lid's boundary meets the bevel on a plane where the crown is flat, so
+  // a vertex the wall does not share is collinear and invisible. A shell freezes it instead.
+  const { faces, converged } = refineCap(points, coarse, z, opts.tolerance);
+  const height = points.map(z);
+  const vn = capNormals(points, faces, height);
+
+  // Back to a soup, because the rest of the body is one and the two are concatenated. The walls
+  // keep the normals the extruder gave them: recomputing those welds the bevel's own crease into a
+  // smooth ramp, and the bevel highlight is what every look reads by.
   const position = [...rest];
   const normal = [...restNormal];
   for (const face of faces) {
@@ -421,12 +524,6 @@ export function inflate(
   const built = new THREE.BufferGeometry();
   built.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
   built.setAttribute('normal', new THREE.Float32BufferAttribute(normal, 3));
-
   built.computeBoundingBox();
-  return {
-    geometry: built,
-    converged,
-    before: lidTris.length,
-    after: faces.length,
-  };
+  return { geometry: built, converged, before: lidTris.length, after: faces.length };
 }

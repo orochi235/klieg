@@ -83,6 +83,35 @@ triangle soup gives every face one constant normal, and a cushion made of visibl
 a cushion. The walls keep the normals the extruder gave them: recomputing those welds the bevel's
 own crease into a smooth ramp, and the bevel highlight is what every look reads by.
 
+### A carved letter rides the same crown
+
+A look may carve the solid and inflate it at once.
+
+**A crown is a displacement of the letter's front side, and everything set into that side rides
+it.** It is zero at the letter's own contour and outside it, so applying it to every vertex the
+shell writes leaves both chamfers, the straight wall and the back cap exactly where they were,
+while the front cap, every pocket's bead, its wall and its floor lift together and each pocket
+keeps its own depth.
+
+**The shell hands the crown back beside the geometry**, because the stones have to be set into the
+face the metal actually got. A fill that rebuilt the crown off a field of its own would disagree
+in the third decimal place, and a stone half a bead out of its pocket is what that looks like.
+
+**A stone's girdle takes the crown point by point; its own crown and pavilion ride the plane
+fitted through those heights.** Flush with the metal whatever the metal is doing, and rigid.
+Displacing every vertex of a gem by the field instead smears it: at the default cushion the crown
+climbs 0.08 em across a 0.048 em cell, and the stone in it is 0.03 em tall.
+
+**The front cap's boundary is frozen — refinement may not bisect an edge no second triangle
+walks.** Those edges are shared with the bands stitched to the same rings, and a vertex introduced
+on one is a vertex the band has no answer for. Letting the boundary move and re-stitching the bands
+onto the ring refinement handed back is the obvious alternative, and it is worse on every axis: on
+an `R` it costs 11,664 triangles against 8,644 for a chord error of 0.00094 em against 0.00038, a
+0.002 em budget either way. The rings arrive resampled far finer than the crown's own reach, so
+what freezing withholds was already inside tolerance. It also has a trap in it — `orient` runs
+`dedupe`, which strips exactly the collinear midpoints refinement adds, so the refined ring silently
+arrives as the ring that went in.
+
 ## Cutting, without CSG
 
 `ExtrudeGeometry` cannot make a blind recess. It can make a **hole**, which is how the counter in a
@@ -192,8 +221,10 @@ own collar remains the answer for a CSG cutter, which has no bevel to inherit.
 `render/decorations/registry.ts`, which owns its per-letter geometry and materials, the parts it
 contributes to effect targeting, its per-frame and per-part writes, and its disposal. `tube.ts` and
 `chunks.ts` are the two implementations, and `word.ts` has no `decoration.kind` branch left — bar
-one tube-specific debug hook a new kind will want to widen. Next is the plate cutter and regions;
-then `stone` and the lattice; then, separately and last, the migration of the three shipped looks.
+one tube-specific debug hook a new kind will want to widen. The plate cutter and regions, `stone`
+and the lattice, the pavé cutter and the stitched shell, and the inflated solid are all built; what
+is left is the migration of the three shipped looks, which moves visual baselines and is judged on
+its own renders.
 
 **A builder adds geometry to a letter's group — it cannot replace the body.** `Word` builds the body
 mesh itself and hands the builder a group to add to. The plate cutter replaces the slab rather than

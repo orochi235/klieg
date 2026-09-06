@@ -30,6 +30,12 @@ export interface FillContext {
   floorZ: number;
   /** Where a pocket's wall goes vertical — the face less the rim bead's drop. */
   girdleZ: number;
+  /**
+   * How far the metal at a point stands above the flat face, when the look inflated the solid.
+   * The three planes above are the flat letter's; this is what the pocket at a given place
+   * actually did, and a stone that ignores it is set into a face that has moved out from under it.
+   */
+  lift?: (x: number, y: number) => number;
 }
 
 export type Fill = (seats: readonly Seat[], ctx: FillContext, spec: WellSpec) => Filled;

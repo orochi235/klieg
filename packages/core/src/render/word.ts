@@ -126,7 +126,7 @@ export class Word {
   /** The decoration's own builder, or null where the look carries no decoration. */
   private readonly builder: DecorationBuilder | null;
   /** The letter's own shape, where the look asks for one other than flat. */
-  private readonly inflate: Partial<InflateOptions> | undefined;
+  readonly inflate: Partial<InflateOptions> | undefined;
   private readonly pose = blankPose();
   /**
    * The body's frame-owned base. `Word` is its only writer, and seeds it at construction:

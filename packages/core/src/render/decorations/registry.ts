@@ -3,6 +3,7 @@ import type { PartInfo, ResolvedOffset } from '../../effects/types.js';
 import type { LoadedFont } from '../../text/font.js';
 import type { WordCaches } from '../caches.js';
 import type { DecorationSpec } from '../decoration.js';
+import type { InflateOptions } from '../inflate.js';
 // Type-only, and must stay so: word.ts imports this module for real, so a value import here
 // would close the cycle. A type-only one is erased at compile time.
 import type { WordDebugHooks } from '../word.js';
@@ -15,6 +16,11 @@ export interface WordBuildContext {
   readonly font: LoadedFont;
   readonly caches: WordCaches;
   readonly debug?: WordDebugHooks;
+  /**
+   * The shape of the solid the look asked for. `ctx.glyph()` already answers it; a builder that
+   * replaces the body through `bodyGeometry` has to apply it itself or the look is silently flat.
+   */
+  readonly inflate?: Partial<InflateOptions>;
   /** Letter origins in em, indexed by letter slot. Live for the word's lifetime. */
   readonly baseX: readonly number[];
   readonly baseY: readonly number[];

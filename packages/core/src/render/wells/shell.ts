@@ -1,5 +1,14 @@
 import * as THREE from 'three';
 import { chamfered, DEFAULT_GLYPH_OPTIONS } from '../../text/glyphs.js';
+import {
+  type Crown,
+  capNormals,
+  crownOf,
+  DEFAULT_INFLATE,
+  type InflateOptions,
+  refineCap,
+  weld,
+} from '../inflate.js';
 import { type Field, isoContours, signedDistanceField } from '../tube/field.js';
 import type { Cut } from './cutters.js';
 import {
@@ -40,6 +49,11 @@ export interface ShellOptions {
   round: number;
   /** Radius the convex corners are rounded to — outer corners, tips, a leg's point. */
   roundOuter: number;
+  /**
+   * The shape of the solid itself: how far the letter's front face stands proud of the flat cap,
+   * as a profile over its own distance field. Absent is flat, which is what every shell was.
+   */
+  inflate?: Partial<InflateOptions>;
 }
 
 export const DEFAULT_SHELL: Omit<ShellOptions, 'depth' | 'bezel'> = {
@@ -136,22 +150,28 @@ export function openEdges(position: Float32Array): number {
   return open;
 }
 
-/** Accumulates triangles; every face in the shell is pushed through one of the three writers. */
+/**
+ * Accumulates triangles; every face in the shell is pushed through one of the writers.
+ *
+ * A crown is applied here rather than at each writer, and that is the whole of what makes a carved
+ * letter ride one: the displacement is zero at the letter's own contour and outside it, so both
+ * chamfers, the straight wall and the back cap stand exactly where they did, while the front cap,
+ * every pocket's bead, its wall and its floor lift by however far the metal above them did.
+ */
 class Skin {
   readonly pos: number[] = [];
+  /** Where the crowned face starts in `pos`, and the normals it computed for itself. */
+  crownAt = -1;
+  readonly crownNormals: number[] = [];
+
+  constructor(private readonly lift: Crown | null = null) {}
 
   tri(a: readonly number[], b: readonly number[], c: readonly number[]): void {
-    this.pos.push(
-      a[0] as number,
-      a[1] as number,
-      a[2] as number,
-      b[0] as number,
-      b[1] as number,
-      b[2] as number,
-      c[0] as number,
-      c[1] as number,
-      c[2] as number,
-    );
+    for (const p of [a, b, c]) {
+      const x = p[0] as number;
+      const y = p[1] as number;
+      this.pos.push(x, y, (p[2] as number) + (this.lift ? this.lift(x, y) : 0));
+    }
   }
 
   /**
@@ -213,24 +233,11 @@ class Skin {
     }
   }
 
-  /**
-   * A flat face. Its facing is asserted per triangle rather than inherited from ring order: a lid
-   * facing into the solid is invisible and reads as a missing cap, which is a long way to chase
-   * for a sign flip.
-   */
+  /** A flat face, on one plane. */
   cap(contour: Ring, holes: Ring[], z: number, up: boolean): void {
-    const c = contour.map(([x, y]) => new THREE.Vector2(x, y));
-    const hs = holes.map((h) => h.map(([x, y]) => new THREE.Vector2(x, y)));
-    const faces = THREE.ShapeUtils.triangulateShape(c, hs);
-    const all = [c, ...hs].flat();
-    for (const face of faces) {
-      const a = all[face[0] as number] as THREE.Vector2;
-      const b = all[face[1] as number] as THREE.Vector2;
-      const d = all[face[2] as number] as THREE.Vector2;
-      const ccw = (b.x - a.x) * (d.y - a.y) - (d.x - a.x) * (b.y - a.y) > 0;
-      const p = (v: THREE.Vector2) => [v.x, v.y, z];
-      if (ccw === up) this.tri(p(a), p(b), p(d));
-      else this.tri(p(d), p(b), p(a));
+    for (const tri of capFaces(contour, holes, up)) {
+      const [a, b, c] = tri as [Point3, Point3, Point3];
+      this.tri([a.x, a.y, z], [b.x, b.y, z], [c.x, c.y, z]);
     }
   }
 
@@ -238,6 +245,66 @@ class Skin {
   capPlane(rings: Ring[], z: number, up: boolean): void {
     for (const group of nest(rings)) this.cap(group[0] as Ring, group.slice(1), z, up);
   }
+
+  /**
+   * The front face, refined where a triangle's chord falls off the crown and displaced onto it,
+   * with its own averaged normals — a crown made of visible triangles is not a crown.
+   *
+   * The boundary is frozen: every edge of this face no second triangle walks is shared with the
+   * band stitched to the same ring, and a vertex introduced on one is a vertex that band has no
+   * answer for, which is an open shell. The rings arrive resampled at 0.006 em against a reach
+   * measured in tenths, so what refinement is withheld along them is already inside tolerance —
+   * measured on an `R`, freezing costs 0.0004 em of chord against a 0.002 em budget and spends a
+   * quarter fewer triangles than letting the boundary move and re-stitching the bands to it.
+   */
+  crownFace(rings: Ring[], z: number, lift: Crown, tolerance: number): void {
+    const tris: [Point3, Point3, Point3][] = [];
+    for (const group of nest(rings)) {
+      tris.push(...capFaces(group[0] as Ring, group.slice(1), true));
+    }
+    const { points, faces: coarse } = weld(tris);
+    const { faces } = refineCap(points, coarse, (p) => lift(p.x, p.y), tolerance, true);
+    const height = points.map((p) => lift(p.x, p.y));
+    const vn = capNormals(points, faces, height);
+    this.crownAt = this.pos.length;
+    for (const face of faces) {
+      for (const id of face) {
+        const p = points[id] as Point3;
+        this.pos.push(p.x, p.y, z + (height[id] as number));
+        const nx = vn[id * 3] as number;
+        const ny = vn[id * 3 + 1] as number;
+        const nz = vn[id * 3 + 2] as number;
+        const len = Math.hypot(nx, ny, nz) || 1;
+        this.crownNormals.push(nx / len, ny / len, nz / len);
+      }
+    }
+  }
+}
+
+/** A point the refinement can weld and displace; `Ring`'s own pairs carry no names. */
+interface Point3 {
+  x: number;
+  y: number;
+}
+
+/**
+ * A flat face, triangulated with holes and its facing asserted per triangle rather than inherited
+ * from ring order: a lid facing into the solid is invisible and reads as a missing cap, which is a
+ * long way to chase for a sign flip.
+ */
+function capFaces(contour: Ring, holes: Ring[], up: boolean): [Point3, Point3, Point3][] {
+  const c = contour.map(([x, y]) => new THREE.Vector2(x, y));
+  const hs = holes.map((h) => h.map(([x, y]) => new THREE.Vector2(x, y)));
+  const all = [c, ...hs].flat();
+  const out: [Point3, Point3, Point3][] = [];
+  for (const face of THREE.ShapeUtils.triangulateShape(c, hs)) {
+    const a = all[face[0] as number] as THREE.Vector2;
+    const b = all[face[1] as number] as THREE.Vector2;
+    const d = all[face[2] as number] as THREE.Vector2;
+    const ccw = (b.x - a.x) * (d.y - a.y) - (d.x - a.x) * (b.y - a.y) > 0;
+    out.push(ccw === up ? [a, b, d] : [d, b, a]);
+  }
+  return out;
 }
 
 /**
@@ -315,6 +382,17 @@ export function shellPlanes(depth: number, floor: number, bezel: number) {
 }
 
 /**
+ * A carved letter, and the crown its front side was displaced onto — `null` where the look asked
+ * for none. Whatever is set into that side has to ride the same one, so the shell hands it back
+ * rather than leaving a fill to rebuild it off a field of its own and disagree in the third
+ * decimal place.
+ */
+export interface Shell {
+  geometry: THREE.BufferGeometry;
+  crown: Crown | null;
+}
+
+/**
  * A letter carved with wells, stitched ring by ring rather than extruded.
  *
  * Every ring in the outer skin is an iso-contour of the letter's own distance field at the level
@@ -322,14 +400,9 @@ export function shellPlanes(depth: number, floor: number, bezel: number) {
  * because only it knows where they are; their rim beads come from the cutter too when it can
  * re-derive them, and are shrunk here when it cannot.
  */
-export function buildShell(
-  shapes: readonly THREE.Shape[],
-  cut: Cut,
-  opts: ShellOptions,
-): THREE.BufferGeometry {
+export function buildShell(shapes: readonly THREE.Shape[], cut: Cut, opts: ShellOptions): Shell {
   const full = DEFAULT_GLYPH_OPTIONS.bevelSize;
   const planes = shellPlanes(opts.depth, cut.floor, opts.bezel);
-  const skin = new Skin();
 
   let rings: Ring[] = [];
   for (const shape of chamfered(shapes as THREE.Shape[], DEFAULT_GLYPH_OPTIONS)) {
@@ -350,6 +423,15 @@ export function buildShell(
   const skinAt = (out: number) => flatten(metalAt(field, out));
 
   const frontRings = front.map((s) => skinAt(s.out));
+  // Measured from the face's own ring, so the crown is zero exactly where the chamfer takes over.
+  const puff = opts.inflate ? { ...DEFAULT_INFLATE, ...opts.inflate } : null;
+  const lift = puff
+    ? crownOf(
+        (frontRings[0] as Ring[]).map((ring) => ring.map(([x, y]) => ({ x, y }))),
+        puff,
+      )
+    : null;
+  const skin = new Skin(lift);
   const backRings = back.map((s) => skinAt(full - planes.slabBevel + s.out));
   const wallLo = planes.backZ + planes.slabBevelZ;
   const wallHi = planes.faceZ - (front[front.length - 1] as Step).dz;
@@ -395,14 +477,25 @@ export function buildShell(
   for (const ring of seat) skin.stitch(ring, planes.floorZ, ring, seatZ);
 
   skin.capPlane(backRings[0] as Ring[], planes.backZ, false);
-  skin.capPlane([...(frontRings[0] as Ring[]), ...rim], planes.faceZ, true);
+  const face = [...(frontRings[0] as Ring[]), ...rim];
+  if (lift && puff) skin.crownFace(face, planes.faceZ, lift, puff.tolerance);
+  else skin.capPlane(face, planes.faceZ, true);
   skin.capPlane(seat, planes.floorZ, true);
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(skin.pos), 3));
   geo.computeVertexNormals();
+  // The crown's own, over the range it wrote. `computeVertexNormals` on a soup gives every face one
+  // constant normal, and the rest of the shell wants exactly that — the bevel highlight is what
+  // every look reads by, and welding its crease smooth is what takes it away.
+  if (skin.crownAt >= 0) {
+    const normal = geo.getAttribute('normal') as THREE.BufferAttribute;
+    const into = normal.array as Float32Array;
+    into.set(skin.crownNormals, skin.crownAt);
+    normal.needsUpdate = true;
+  }
   geo.computeBoundingBox();
-  return geo;
+  return { geometry: geo, crown: lift };
 }
 
 /**

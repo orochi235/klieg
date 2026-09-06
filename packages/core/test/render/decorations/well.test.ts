@@ -53,16 +53,17 @@ const SPEC = {
   look: {},
 } as const satisfies WellSpec;
 
-function context(): WordBuildContext {
+function context(inflate?: { profile: 'cushion'; rise: number; reach: number }): WordBuildContext {
   const caches = new WordCaches();
   const font = stubFont();
   return {
     font,
     caches,
+    inflate,
     baseX: [0, 1],
     baseY: [0, 0],
     studioMaterial: () => createMaterial(null),
-    glyph: (char, depth) => caches.glyph(font, char, depth),
+    glyph: (char, depth) => caches.glyph(font, char, depth, inflate),
     shapes: (char) => caches.shapes(font, char),
     partInfo: (kind, index, count, slot, at, span, ink, fill) => ({
       kind,
@@ -110,6 +111,41 @@ describe('WellBuilder', () => {
     expect(group.children).toHaveLength(0);
     expect(builder.collectParts()).toEqual([]);
     builder.dispose();
+  });
+
+  // A look may say what shape the solid is as well as what is carved out of it. The builder
+  // replaces the body outright, so it has to apply the crown itself or the look is silently flat.
+  it('crowns the body it replaces when the look asked for one', () => {
+    const crown = { profile: 'cushion' as const, rise: 0.06, reach: 0.08 };
+    const flat = new WellBuilder(SPEC, context()).bodyGeometry('A', 0.3);
+    const rode = new WellBuilder(SPEC, context(crown)).bodyGeometry('A', 0.3);
+    const top = (geo: THREE.BufferGeometry) => (geo.boundingBox as THREE.Box3).max.z;
+    expect(top(rode)).toBeCloseTo(top(flat) + crown.rise, 3);
+  });
+
+  // A stone left on the flat plane is a stone the metal has risen over.
+  it('sets its stones into the face the crown left, not the flat one', () => {
+    const crown = { profile: 'cushion' as const, rise: 0.06, reach: 0.08 };
+    const spec = { ...SPEC, fill: 'stone' } as const;
+    const zOf = (ctx: WordBuildContext) => {
+      const builder = new WellBuilder(spec, ctx);
+      builder.bodyGeometry('A', 0.3);
+      const group = new THREE.Group();
+      builder.buildLetter(0, 'A', group, undefined);
+      const mesh = group.children[0] as THREE.InstancedMesh;
+      const at = new THREE.Matrix4();
+      const zs: number[] = [];
+      for (let i = 0; i < mesh.count; i++) {
+        mesh.getMatrixAt(i, at);
+        zs.push(at.elements[14] as number);
+      }
+      builder.dispose();
+      return zs;
+    };
+    const flat = zOf(context());
+    const rode = zOf(context(crown));
+    expect(flat.every((z) => z === 0)).toBe(true);
+    expect(Math.max(...rode)).toBeCloseTo(crown.rise, 3);
   });
 
   it('still answers a carved body whether or not a fill was named', () => {

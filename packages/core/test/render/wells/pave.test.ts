@@ -144,7 +144,7 @@ describe('the pave cutter', () => {
 describe('a paved shell', () => {
   it('closes over a field of cells', () => {
     const { shapes, cut } = cutOf();
-    const geo = buildShell(shapes, cut, { ...OPTS, rimBevel: 0.003, rimDrop: 0.003 });
+    const geo = buildShell(shapes, cut, { ...OPTS, rimBevel: 0.003, rimDrop: 0.003 }).geometry;
     const pos = (geo.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
     expect(cut.wells.length).toBeGreaterThan(20);
     expect(openEdges(pos)).toBe(0);
@@ -152,7 +152,7 @@ describe('a paved shell', () => {
 
   it('floors the cells it cut', () => {
     const { shapes, cut } = cutOf();
-    const geo = buildShell(shapes, cut, { ...OPTS, rimBevel: 0.003, rimDrop: 0.003 });
+    const geo = buildShell(shapes, cut, { ...OPTS, rimBevel: 0.003, rimDrop: 0.003 }).geometry;
     const planes = shellPlanes(OPTS.depth, SPEC.floor, SPEC.bezel);
     const pos = (geo.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
     let floor = 0;

@@ -76,6 +76,48 @@ function brilliant(
   return geo;
 }
 
+/**
+ * The plane a stone rides, fitted to what the crown did at each of its girdle's own points. Least
+ * squares rather than a tangent at the centre, so a cell clipped to a stroke's edge is not tipped
+ * by the one sample that happens to be furthest up the slope.
+ */
+function ride(
+  ring: readonly (readonly [number, number])[],
+  lift: ((x: number, y: number) => number) | undefined,
+): ((x: number, y: number) => number) & { at: number[] } {
+  const at = ring.map(([x, y]) => (lift ? lift(x, y) : 0));
+  if (!lift) return Object.assign(() => 0, { at });
+  const n = ring.length;
+  let cx = 0;
+  let cy = 0;
+  for (const [x, y] of ring) {
+    cx += x / n;
+    cy += y / n;
+  }
+  let sxx = 0;
+  let sxy = 0;
+  let syy = 0;
+  let sxz = 0;
+  let syz = 0;
+  let sz = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = (ring[i] as readonly [number, number])[0] - cx;
+    const dy = (ring[i] as readonly [number, number])[1] - cy;
+    const dz = at[i] as number;
+    sxx += dx * dx;
+    sxy += dx * dy;
+    syy += dy * dy;
+    sxz += dx * dz;
+    syz += dy * dz;
+    sz += dz / n;
+  }
+  const det = sxx * syy - sxy * sxy;
+  // A degenerate ring — every point on one line — has no plane; it rides flat at its own mean.
+  const gx = Math.abs(det) < 1e-18 ? 0 : (sxz * syy - syz * sxy) / det;
+  const gy = Math.abs(det) < 1e-18 ? 0 : (syz * sxx - sxz * sxy) / det;
+  return Object.assign((x: number, y: number) => sz + gx * (x - cx) + gy * (y - cy), { at });
+}
+
 /** The girdle's width, which the stone's own transmission thickness is scaled against. */
 export function girdleWidth(half: number, sink: number): number {
   return (half + DEFAULT_GLYPH_OPTIONS.bevelSize * (1 - sink)) * 2;
@@ -108,9 +150,20 @@ function setStone(seat: Seat, ctx: FillContext, into: number[]): boolean {
   const crown = PROUD + Math.max(ctx.faceZ - ctx.girdleZ, 0);
   const drop = Math.min(PAVILION * width, (ctx.girdleZ - ctx.floorZ) * ROOM);
 
+  /**
+   * How far a crowned face carried this pocket. The girdle takes it point by point, so it is flush
+   * with the metal whatever the metal is doing; the crown and the pavilion ride the plane through
+   * those heights instead, because a gem sheared to follow a curve is a smear, not a stone.
+   */
+  const rode = ride(ring, ctx.lift);
+
   const at = (k: number, z: number) =>
-    ring.map(([x, y]) => [c[0] + (x - c[0]) * k, c[1] + (y - c[1]) * k, z]);
-  const girdle = at(1, ctx.girdleZ);
+    ring.map(([x, y]) => [
+      c[0] + (x - c[0]) * k,
+      c[1] + (y - c[1]) * k,
+      z + rode(c[0] + (x - c[0]) * k, c[1] + (y - c[1]) * k),
+    ]);
+  const girdle = ring.map(([x, y], i) => [x, y, ctx.girdleZ + (rode.at[i] as number)]);
   const table = at(TABLE, ctx.girdleZ + crown);
   // A ring, not a point: the same reason the caps are triangulated.
   const culet = at(0.06, ctx.girdleZ - drop);
@@ -176,7 +229,34 @@ export const stone: Fill = (seats: readonly Seat[], ctx: FillContext, spec: Well
   // absorbs nearly everything and the field renders as black holes in the plate.
   material.thickness = (spec.tint ?? TINT) * girdleWidth(half, sink);
 
-  const at = new THREE.Matrix4();
-  const matrices = seats.map((seat) => at.clone().makeTranslation(seat.x, seat.y, 0));
+  // A whole diamond is rigid, so it rides its seat's own tangent plane: lifted by what the crown
+  // did there, and sheared by the slope, which keeps the girdle in the metal on both sides.
+  const step = half / 2;
+  const matrices = seats.map((seat) => {
+    const to = new THREE.Matrix4().makeTranslation(seat.x, seat.y, 0);
+    if (!ctx.lift) return to;
+    const lift = ctx.lift;
+    const gx = (lift(seat.x + step, seat.y) - lift(seat.x - step, seat.y)) / (2 * step);
+    const gy = (lift(seat.x, seat.y + step) - lift(seat.x, seat.y - step)) / (2 * step);
+    const tilt = new THREE.Matrix4().set(
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      gx,
+      gy,
+      1,
+      lift(seat.x, seat.y),
+      0,
+      0,
+      0,
+      1,
+    );
+    return to.multiply(tilt);
+  });
   return { geometry, matrices, material };
 };

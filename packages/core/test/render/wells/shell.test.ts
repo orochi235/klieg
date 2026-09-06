@@ -71,7 +71,7 @@ function shellOf(overrides: Partial<typeof OPTS> = {}, specOverrides = {}) {
     ...SPEC,
     ...specOverrides,
   } as never);
-  return { cut, geo: buildShell(shapes, cut, { ...OPTS, ...overrides }) };
+  return { cut, geo: buildShell(shapes, cut, { ...OPTS, ...overrides }).geometry };
 }
 
 const positionsOf = (geo: THREE.BufferGeometry) =>
@@ -197,7 +197,7 @@ describe('buildShell', () => {
     spike.lineTo(1, 0);
     spike.lineTo(0.02, 0.06);
     spike.closePath();
-    const geo = buildShell([spike], { wells: [], seats: [], floor: 0.09 }, OPTS);
+    const geo = buildShell([spike], { wells: [], seats: [], floor: 0.09 }, OPTS).geometry;
     // Chamfered this tip reaches 1.020; unchamfered the miter runs it to 1.054, which is as far
     // as three's sqrt(2) cap allows. A looser bound than that passes either way.
     expect((geo.boundingBox as THREE.Box3).max.x).toBeLessThan(1.03);
@@ -207,5 +207,67 @@ describe('buildShell', () => {
     const plain = shellOf({}, { bezel: 0.4 }).geo;
     const carved = shellOf().geo;
     expect(positionsOf(carved).length).toBeGreaterThan(positionsOf(plain).length);
+  });
+});
+
+// A look may ask for the shape of the solid and for what is carved out of it at once. The crown is
+// zero at the letter's own contour and outside it, so the walls, both chamfers and the back cap
+// stand exactly where they did and only the front side rides.
+describe('a crowned shell', () => {
+  const CROWN = { profile: 'cushion' as const, rise: 0.06, reach: 0.08 };
+  const planes = shellPlanes(OPTS.depth, SPEC.floor, SPEC.bezel);
+
+  it('stands the front face proud by the rise it was given, and no further', () => {
+    const { geo } = shellOf({ inflate: CROWN });
+    const box = geo.boundingBox as THREE.Box3;
+    expect(box.max.z).toBeCloseTo(planes.faceZ + CROWN.rise, 3);
+    expect(box.min.z).toBeCloseTo(planes.backZ, 3);
+  });
+
+  it('leaves the letter’s own edge exactly where it was', () => {
+    const flat = (shellOf().geo.boundingBox as THREE.Box3).clone();
+    const crowned = shellOf({ inflate: CROWN }).geo.boundingBox as THREE.Box3;
+    expect(crowned.min.x).toBeCloseTo(flat.min.x, 6);
+    expect(crowned.max.x).toBeCloseTo(flat.max.x, 6);
+    expect(crowned.min.y).toBeCloseTo(flat.min.y, 6);
+    expect(crowned.max.y).toBeCloseTo(flat.max.y, 6);
+  });
+
+  it('stays closed', () => {
+    const { cut, geo } = shellOf({ inflate: CROWN });
+    expect(cut.wells.length).toBeGreaterThan(0);
+    expect(openEdges(positionsOf(geo))).toBe(0);
+  });
+
+  it('closes over a letter with nothing cut out of it', () => {
+    const { geo } = shellOf({ inflate: CROWN }, { bezel: 0.4 });
+    expect(openEdges(positionsOf(geo))).toBe(0);
+  });
+
+  // A pocket that did not ride would be swallowed: the metal rises by the rise and the rim stays,
+  // so the deepest well on the letter would be the shallowest place on it.
+  it('carries every pocket up with the metal, keeping its own depth', () => {
+    const { geo } = shellOf({ inflate: CROWN });
+    const pos = positionsOf(geo);
+    let deepest = Number.NEGATIVE_INFINITY;
+    let shallowest = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < pos.length; i += 9) {
+      // A pocket's own floor: three vertices on one plane, below the letter's flat face.
+      const zs = [pos[i + 2], pos[i + 5], pos[i + 8]] as number[];
+      const z = zs[0] as number;
+      if (zs.some((v) => Math.abs(v - z) > 1e-6)) continue;
+      if (z < planes.floorZ - 1e-6 || z > planes.faceZ - 1e-3) continue;
+      deepest = Math.max(deepest, z);
+      shallowest = Math.min(shallowest, z);
+    }
+    // No floor sinks, and the ones under the middle of a stroke ride the full rise.
+    expect(shallowest).toBeGreaterThanOrEqual(planes.floorZ - 1e-6);
+    expect(deepest).toBeCloseTo(planes.floorZ + CROWN.rise, 4);
+  });
+
+  it('refines the crown rather than facetting one triangle across the letter', () => {
+    const flat = positionsOf(shellOf({}, { bezel: 0.4 }).geo).length;
+    const crowned = positionsOf(shellOf({ inflate: CROWN }, { bezel: 0.4 }).geo).length;
+    expect(crowned).toBeGreaterThan(flat * 1.5);
   });
 });

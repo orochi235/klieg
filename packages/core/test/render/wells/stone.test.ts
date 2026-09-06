@@ -79,3 +79,58 @@ describe('the stone fill', () => {
     expect(geometry.getAttribute('position').count).toBe(42);
   });
 });
+
+// A look may inflate the solid as well as carve it, and then the pocket a stone sits in is not
+// where the flat planes say. Riding the crown is what keeps the girdle in the metal.
+describe('a stone set into a crowned face', () => {
+  /** A ridge along x, so a stone's own width spans a real slope. */
+  const lift = (x: number, _y: number) => 0.4 * x;
+  const cell: [number, number][] = [
+    [-0.02, -0.02],
+    [0.02, -0.02],
+    [0.02, 0.02],
+    [-0.02, 0.02],
+  ];
+
+  const zOf = (geometry: THREE.BufferGeometry) => {
+    const pos = geometry.getAttribute('position') as THREE.BufferAttribute;
+    return Array.from({ length: pos.count }, (_, i) => ({
+      x: pos.getX(i),
+      y: pos.getY(i),
+      z: pos.getZ(i),
+    }));
+  };
+
+  it('rides a placed stone’s girdle on the metal, point by point', () => {
+    const at = { ...seat(0.3, 0.1), outline: cell };
+    const { geometry } = stone([at], { ...ctx, lift }, { ...SPEC, cutter: 'pave' });
+    // The girdle is the cell itself: every one of its corners sits exactly on the crowned face.
+    for (const corner of cell) {
+      const [x, y] = [at.x + corner[0], at.y + corner[1]];
+      const want = ctx.girdleZ + lift(x, y);
+      const on = zOf(geometry).filter((p) => Math.abs(p.x - x) < 1e-6 && Math.abs(p.y - y) < 1e-6);
+      expect(on.length).toBeGreaterThan(0);
+      expect(Math.min(...on.map((p) => Math.abs(p.z - want)))).toBeLessThan(1e-6);
+    }
+  });
+
+  // Take the crown back off every vertex and a tilted stone is the stone it was; a stone that
+  // only translated is left leaning by the slope across its own width.
+  it('tilts a placed stone with the metal rather than only lifting it', () => {
+    const at = { ...seat(0.3, 0.1), outline: cell };
+    const flat = zOf(stone([at], ctx, { ...SPEC, cutter: 'pave' }).geometry);
+    const rode = zOf(stone([at], { ...ctx, lift }, { ...SPEC, cutter: 'pave' }).geometry);
+    expect(rode).toHaveLength(flat.length);
+    for (let i = 0; i < flat.length; i++) {
+      const p = rode[i] as { x: number; y: number; z: number };
+      expect(p.z - lift(p.x, p.y)).toBeCloseTo((flat[i] as { z: number }).z, 6);
+    }
+  });
+
+  it('lifts an instanced stone onto the crown', () => {
+    const { matrices } = stone([seat(0.3, 0.1)], { ...ctx, lift }, SPEC);
+    const at = (matrices[0] as THREE.Matrix4).elements;
+    // Column-major: the translation is 12..14.
+    expect(at[14]).toBeCloseTo(lift(0.3, 0.1), 6);
+  });
+});

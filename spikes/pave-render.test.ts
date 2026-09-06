@@ -141,9 +141,24 @@ it('renders a paved letter', () => {
   } as never;
 
   const cut = cutterFor((spec as { cutter: string }).cutter)(shapes, regionOf(shapes), spec);
-  const opts = { ...DEFAULT_SHELL, depth: 0.3, bezel: 0.028, rimBevel: 0.003, rimDrop: 0.003 };
-  const body = buildShell(shapes, cut, opts);
-  const bodyPos = (body.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
+  // `PAVE_CROWN=cushion:0.05:0.12` — profile, rise and reach — carves and inflates at once.
+  const asked = (process.env.PAVE_CROWN || undefined)?.split(':');
+  const puff = asked
+    ? { profile: asked[0] as 'cushion', rise: Number(asked[1]), reach: Number(asked[2]) }
+    : undefined;
+  const opts = {
+    ...DEFAULT_SHELL,
+    depth: 0.3,
+    bezel: 0.028,
+    rimBevel: 0.003,
+    rimDrop: 0.003,
+    inflate: puff,
+  };
+  const shell = buildShell(shapes, cut, opts);
+  const bodyPos = (shell.geometry.getAttribute('position') as THREE.BufferAttribute)
+    .array as Float32Array;
+  const bodyNrm = (shell.geometry.getAttribute('normal') as THREE.BufferAttribute)
+    .array as Float32Array;
 
   const planes = shellPlanes(0.3, 0.07, 0.028);
   const filled = fillFor('stone')(
@@ -153,20 +168,22 @@ it('renders a paved letter', () => {
       faceZ: planes.faceZ,
       floorZ: planes.floorZ,
       girdleZ: planes.faceZ - 0.003,
+      lift: shell.crown ?? undefined,
     } as never,
     spec,
   );
   const stonePos = (filled.geometry.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
 
   console.log(
-    `${LETTER} — ${cut.wells.length} pockets, body ${bodyPos.length / 9} tris, ` +
+    `${LETTER} ${puff ? `${puff.profile} ${puff.rise}/${puff.reach}` : 'flat'} — ` +
+      `${cut.wells.length} pockets, body ${bodyPos.length / 9} tris, ` +
       `stones ${stonePos.length / 9} tris, shell ${openEdges(bodyPos) === 0 ? 'closed' : 'OPEN'}`,
   );
   raster(
     [
-      { pos: bodyPos, rgb: [1.0, 0.78, 0.34] },
+      { pos: bodyPos, nrm: bodyNrm, rgb: [1.0, 0.78, 0.34] },
       ...(filled.placed ? [{ pos: stonePos, rgb: [0.72, 0.86, 1.0] as [number, number, number] }] : []),
     ],
-    `/tmp/pave-${LETTER}-${(spec as { cutter: string }).cutter}.ppm`,
+    `/tmp/pave-${LETTER}-${(spec as { cutter: string }).cutter}-${puff ? puff.profile : 'flat'}.ppm`,
   );
 });

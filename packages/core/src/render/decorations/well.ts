@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { ResolvedOffset } from '../../effects/types.js';
 import { DEFAULT_GLYPH_OPTIONS, GlyphCache } from '../../text/glyphs.js';
 import type { WellSpec } from '../decoration.js';
+import type { Crown } from '../inflate.js';
 import {
   applyLook,
   type FrameOwnedBase,
@@ -30,6 +31,8 @@ export class WellBuilder implements DecorationBuilder {
   private readonly bodies: GlyphCache<THREE.BufferGeometry>;
   /** One cut per char, shared by the body and the fill so they cannot disagree about the wells. */
   private readonly cuts = new Map<string, Cut>();
+  /** The crown the body was built on, per char, so a fill sets its stones into the face it got. */
+  private readonly crowns = new Map<string, Crown | null>();
   /** Per letter slot, so an effect can reach one letter's stones without moving its neighbours'. */
   private readonly filled: (Filled | null)[] = [];
   private readonly meshes: (THREE.Mesh | THREE.InstancedMesh | null)[] = [];
@@ -42,8 +45,8 @@ export class WellBuilder implements DecorationBuilder {
     private readonly ctx: WordBuildContext,
   ) {
     this.base = frameOwnedBase(spec.stone ?? 'gem');
-    this.bodies = new GlyphCache<THREE.BufferGeometry>((char, depth) =>
-      buildShell(ctx.shapes(char), this.cutOf(char), {
+    this.bodies = new GlyphCache<THREE.BufferGeometry>((char, depth) => {
+      const shell = buildShell(ctx.shapes(char), this.cutOf(char), {
         ...DEFAULT_SHELL,
         depth,
         bezel: spec.bezel,
@@ -51,8 +54,11 @@ export class WellBuilder implements DecorationBuilder {
         rimDrop: spec.rimDrop ?? spec.rimBevel ?? DEFAULT_SHELL.rimDrop,
         round: spec.round ?? 0,
         roundOuter: spec.roundOuter ?? 0,
-      }),
-    );
+        inflate: ctx.inflate,
+      });
+      this.crowns.set(char, shell.crown);
+      return shell.geometry;
+    });
   }
 
   private cutOf(char: string): Cut {
@@ -63,6 +69,16 @@ export class WellBuilder implements DecorationBuilder {
       this.cuts.set(char, cut);
     }
     return cut;
+  }
+
+  /**
+   * The crown this letter's body was built on. `Word` asks for the body first, so it is already
+   * there; deriving it on demand is what keeps a caller that did not from setting stones into a
+   * face that has since moved out from under them.
+   */
+  private crownOf(char: string): Crown | null {
+    if (!this.crowns.has(char)) this.bodies.get(char, this.depth);
+    return this.crowns.get(char) ?? null;
   }
 
   bodyGeometry(char: string, depth: number): THREE.BufferGeometry {
@@ -90,6 +106,7 @@ export class WellBuilder implements DecorationBuilder {
         faceZ: planes.faceZ,
         floorZ: planes.floorZ,
         girdleZ: planes.faceZ - (this.spec.rimDrop ?? this.spec.rimBevel ?? DEFAULT_SHELL.rimDrop),
+        lift: this.crownOf(char) ?? undefined,
       },
       this.spec,
     );

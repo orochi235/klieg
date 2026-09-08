@@ -590,8 +590,9 @@ rather than a session running unattended. Everything below is on `main` and push
 
 **Nothing in the library selects any of it, and that is the next real decision.** There is no
 shipped look with `decoration: { kind: 'well' }` and none with `inflate`, so the whole cutter /
-fill / shell / crown line is reachable only from `spikes/pave-render.test.ts`. What ships as a
-named look — and what its numbers are — has not been chosen.
+fill / shell / crown line is reached only by a caller writing that `decoration` itself —
+`registry.ts` registers the builder and `word.ts` dispatches to it, so the public path is live,
+just unselected. What ships as a named look — and what its numbers are — has not been chosen.
 
 `spikes/pave.mjs` and `spikes/hollow.mjs` are where this was worked out and are still the fastest
 place to try a shape; `--insets proportional` in `hollow.mjs` is wider than what `region.ts` took

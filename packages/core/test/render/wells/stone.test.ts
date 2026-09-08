@@ -28,6 +28,8 @@ const ctx: FillContext = {
   girdleZ: PLANES.faceZ - 0.008,
 };
 const seat = (x: number, y: number) => ({ x, y, half: SPEC.size / 2 });
+/** What `SPEC` gets from the shell: no `rimBevel` on it, so the shipped default bead. */
+const RIM = { bevel: 0.008, drop: 0.008 };
 
 describe('the stone fill', () => {
   it('registers itself under its own name', () => {
@@ -39,8 +41,22 @@ describe('the stone fill', () => {
   it('seats the girdle in the opening at the height it sits at', () => {
     const { geometry } = stone([seat(0, 0)], ctx, SPEC);
     const box = geometry.boundingBox as THREE.Box3;
-    expect(box.max.x).toBeCloseTo(0.024 + 0.038 * 0.75, 5);
-    expect(box.max.x - box.min.x).toBeCloseTo(girdleWidth(0.024, 0.25), 5);
+    // Written out rather than through `girdleWidth`, which is what the geometry itself uses:
+    // asserting one against the other passes whatever both agree on.
+    expect(box.max.x).toBeCloseTo(0.024 + 0.008 * 0.75, 5);
+    expect(box.max.x - box.min.x).toBeCloseTo(0.06, 5);
+    expect(girdleWidth(0.024, 0.25, RIM)).toBeCloseTo(0.06, 5);
+  });
+
+  // The shell's rim bead is the only bevel a pocket has. Sizing the girdle against the letter's
+  // own 0.038 em chamfer — which is what `ExtrudeGeometry` used to put on every hole — makes a
+  // stone nearly twice the width of the pocket, so it caps the well and sits on the metal.
+  it('keeps the girdle inside the pocket the shell actually cut', () => {
+    const { geometry } = stone([seat(0, 0)], ctx, SPEC);
+    const box = geometry.boundingBox as THREE.Box3;
+    // The opening at the face: the well's own width plus the bead either side of it.
+    const opening = SPEC.size + 2 * 0.008;
+    expect(box.max.x - box.min.x).toBeLessThanOrEqual(opening);
   });
 
   // A crown under the letter's own surface is a dimple, not a stone. `depth` is not the front
@@ -56,13 +72,13 @@ describe('the stone fill', () => {
     const { material } = stone([seat(0, 0)], ctx, SPEC);
     // `gem` ships 1.4 em, tuned for a volume the size of a letter; at that thickness a stone this
     // size absorbs almost everything and renders black.
-    expect(material.thickness).toBeCloseTo(0.5 * girdleWidth(0.024, 0.25), 6);
+    expect(material.thickness).toBeCloseTo(0.5 * girdleWidth(0.024, 0.25, RIM), 6);
     expect(material.thickness).toBeLessThan(0.1);
   });
 
   it('takes its tint from the spec', () => {
     const pale = stone([seat(0, 0)], ctx, { ...SPEC, tint: 0.12 });
-    expect(pale.material.thickness).toBeCloseTo(0.12 * girdleWidth(0.024, 0.25), 6);
+    expect(pale.material.thickness).toBeCloseTo(0.12 * girdleWidth(0.024, 0.25, RIM), 6);
   });
 
   it('costs one geometry whatever the seat count, and a matrix per seat', () => {

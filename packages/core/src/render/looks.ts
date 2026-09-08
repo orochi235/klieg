@@ -337,6 +337,11 @@ export const LOOKS: Record<LookName, LookSpec> = {
       rimBevel: 0.003,
       rimDrop: 0.003,
       look: {},
+      // The shell is one soup, so every triangle carries its own normal. That is right on a
+      // bevel's broad quads and a stripe per triangle wherever a band runs to slivers — which is
+      // most of a curved edge, where the chamfer's inner ring has lost length the outer one keeps.
+      // 40 averages a bevel's own steps and leaves the face-to-chamfer crease hard.
+      crease: 40,
       fill: 'stone',
       sink: 0.25,
       facets: 8,
@@ -369,6 +374,7 @@ export const LOOKS: Record<LookName, LookSpec> = {
       rimBevel: 0.008,
       rimDrop: 0.008,
       look: {},
+      crease: 40,
       fill: 'stone',
       sink: 0.3,
       // Eight, not four: a four-point girdle inscribes the seat corner to corner, and from head on
@@ -407,6 +413,7 @@ export const LOOKS: Record<LookName, LookSpec> = {
       rimBevel: 0.006,
       rimDrop: 0.006,
       look: {},
+      crease: 40,
     },
   },
   tiara: {
@@ -433,6 +440,7 @@ export const LOOKS: Record<LookName, LookSpec> = {
       rimBevel: 0.003,
       rimDrop: 0.003,
       look: {},
+      crease: 40,
       fill: 'stone',
       sink: 0.25,
       facets: 8,

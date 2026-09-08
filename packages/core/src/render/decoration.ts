@@ -129,6 +129,13 @@ export interface WellSpec {
   round?: number;
   /** Radius the convex corners are rounded to: outer corners, tips, a leg's point. */
   roundOuter?: number;
+  /**
+   * Faces meeting at less than this many degrees share an averaged normal. The shell is one soup,
+   * so every triangle carries its own normal — right on the broad quads of a bevel, and a stripe
+   * per triangle wherever a band runs to slivers, which reads as stretch marks down a curved edge.
+   * Absent or 0 is the flat shell. 40 keeps the crease between face and bevel hard.
+   */
+  crease?: number;
   look: MaterialSpec;
   /** Which registered fill occupies the wells. Omitted leaves them empty, as the cutter does. */
   fill?: 'stone';

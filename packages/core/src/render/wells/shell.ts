@@ -52,6 +52,11 @@ export interface ShellOptions {
   /** Radius the convex corners are rounded to — outer corners, tips, a leg's point. */
   roundOuter: number;
   /**
+   * Faces meeting at less than this many degrees share an averaged normal. 0 leaves the shell flat,
+   * which is what it has always been. See `creaseSmooth`.
+   */
+  crease: number;
+  /**
    * The shape of the solid itself: how far the letter's front face stands proud of the flat cap,
    * as a profile over its own distance field. Absent is flat, which is what every shell was.
    */
@@ -64,6 +69,7 @@ export const DEFAULT_SHELL: Omit<ShellOptions, 'depth' | 'bezel'> = {
   segments: 3,
   round: 0,
   roundOuter: 0,
+  crease: 0,
 };
 
 /**
@@ -448,6 +454,79 @@ export interface Shell {
  * because only it knows where they are; their rim beads come from the cutter too when it can
  * re-derive them, and are shrunk here when it cannot.
  */
+/**
+ * Average the normals of faces meeting at a vertex where they meet at less than `crease` degrees.
+ *
+ * The shell is one soup, so `computeVertexNormals` gives every triangle its own constant normal.
+ * On the broad quads of a bevel that is what the look reads by; on a band of slivers — where a
+ * chamfer's inner ring has lost length that its outer ring still has — it is a stripe per triangle,
+ * which reads as stretch marks down a curved edge. An angle limit keeps both: the crease between
+ * face and bevel is far past any sane threshold and stays hard, while a bevel's own steps average.
+ *
+ * Positions are untouched and the buffer stays non-indexed, so nothing downstream sees a change.
+ * Vertices at or past `crownFrom` keep the normals the crown fitted for them.
+ */
+function creaseSmooth(geo: THREE.BufferGeometry, crease: number, crownFrom: number): void {
+  const position = (geo.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
+  const normal = (geo.getAttribute('normal') as THREE.BufferAttribute).array as Float32Array;
+  const faces = position.length / 9;
+  const faceN = new Float32Array(faces * 3);
+  const ab = new THREE.Vector3();
+  const ac = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  for (let f = 0; f < faces; f++) {
+    const t = f * 9;
+    ab.set(
+      (position[t + 3] as number) - (position[t] as number),
+      (position[t + 4] as number) - (position[t + 1] as number),
+      (position[t + 5] as number) - (position[t + 2] as number),
+    );
+    ac.set(
+      (position[t + 6] as number) - (position[t] as number),
+      (position[t + 7] as number) - (position[t + 1] as number),
+      (position[t + 8] as number) - (position[t + 2] as number),
+    );
+    n.crossVectors(ab, ac).normalize();
+    faceN.set([n.x, n.y, n.z], f * 3);
+  }
+
+  // A grid quantised well below the ring spacing: two rings that meet along an edge were built
+  // from the same points, so they land in the same bucket without a tolerance search.
+  const GRID = 1e5;
+  const at = new Map<string, number[]>();
+  const vertices = position.length / 3;
+  for (let v = 0; v < vertices; v++) {
+    const k = `${Math.round((position[v * 3] as number) * GRID)},${Math.round((position[v * 3 + 1] as number) * GRID)},${Math.round((position[v * 3 + 2] as number) * GRID)}`;
+    const list = at.get(k);
+    if (list) list.push(v);
+    else at.set(k, [v]);
+  }
+
+  const limit = Math.cos((crease * Math.PI) / 180);
+  const sum = new THREE.Vector3();
+  const own = new THREE.Vector3();
+  for (const group of at.values()) {
+    for (const v of group) {
+      // The crown fitted its own; leaving them is what keeps a domed face from picking up the
+      // chamfer it meets.
+      if (crownFrom >= 0 && v * 3 >= crownFrom) continue;
+      const f = Math.floor(v / 3) * 3;
+      own.set(faceN[f] as number, faceN[f + 1] as number, faceN[f + 2] as number);
+      sum.set(0, 0, 0);
+      for (const w of group) {
+        if (crownFrom >= 0 && w * 3 >= crownFrom) continue;
+        const g = Math.floor(w / 3) * 3;
+        n.set(faceN[g] as number, faceN[g + 1] as number, faceN[g + 2] as number);
+        if (n.dot(own) >= limit) sum.add(n);
+      }
+      if (sum.lengthSq() === 0) sum.copy(own);
+      sum.normalize();
+      normal.set([sum.x, sum.y, sum.z], v * 3);
+    }
+  }
+  (geo.getAttribute('normal') as THREE.BufferAttribute).needsUpdate = true;
+}
+
 export function buildShell(shapes: readonly THREE.Shape[], cut: Cut, opts: ShellOptions): Shell {
   const full = DEFAULT_GLYPH_OPTIONS.bevelSize;
   const planes = shellPlanes(opts.depth, cut.floor, opts.bezel);
@@ -528,6 +607,7 @@ export function buildShell(shapes: readonly THREE.Shape[], cut: Cut, opts: Shell
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(skin.pos), 3));
   geo.computeVertexNormals();
+  if (opts.crease > 0) creaseSmooth(geo, opts.crease, skin.crownAt);
   // The crown's own, over the range it wrote. `computeVertexNormals` on a soup gives every face one
   // constant normal, and the rest of the shell wants exactly that — the bevel highlight is what
   // every look reads by, and welding its crease smooth is what takes it away.

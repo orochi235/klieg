@@ -124,6 +124,49 @@ function drawInto(
   }
 }
 
+/**
+ * Weld coincident vertices and average their normals below a crease angle. The shell is
+ * non-indexed, so `computeVertexNormals` gives every triangle its own normal and a band of thin
+ * quads reads as stripes however smooth the surface under it is. `LOOK_SMOOTH=<degrees>`.
+ */
+function smoothed(pos: Float32Array, crease: number): Float32Array {
+  const key = (i: number) =>
+    `${Math.round((pos[i] as number) * 1e5)},${Math.round((pos[i + 1] as number) * 1e5)},${Math.round((pos[i + 2] as number) * 1e5)}`;
+  const faceN: THREE.Vector3[] = [];
+  for (let t = 0; t < pos.length; t += 9) {
+    const p = [0, 3, 6].map((k) => new THREE.Vector3(pos[t + k], pos[t + k + 1], pos[t + k + 2]));
+    faceN.push(
+      new THREE.Vector3()
+        .subVectors(p[1] as THREE.Vector3, p[0] as THREE.Vector3)
+        .cross(new THREE.Vector3().subVectors(p[2] as THREE.Vector3, p[0] as THREE.Vector3))
+        .normalize(),
+    );
+  }
+  const at = new Map<string, number[]>();
+  for (let v = 0; v < pos.length / 3; v++) {
+    const k = key(v * 3);
+    const list = at.get(k);
+    if (list) list.push(v);
+    else at.set(k, [v]);
+  }
+  const cos = Math.cos((crease * Math.PI) / 180);
+  const out = new Float32Array(pos.length);
+  for (const group of at.values()) {
+    for (const v of group) {
+      const own = faceN[Math.floor(v / 3)] as THREE.Vector3;
+      const sum = new THREE.Vector3();
+      for (const w of group) {
+        const n = faceN[Math.floor(w / 3)] as THREE.Vector3;
+        if (n.dot(own) >= cos) sum.add(n);
+      }
+      if (sum.lengthSq() === 0) sum.copy(own);
+      sum.normalize();
+      out.set([sum.x, sum.y, sum.z], v * 3);
+    }
+  }
+  return out;
+}
+
 const hexRgb = (hex: number): [number, number, number] => [
   ((hex >> 16) & 255) / 255,
   ((hex >> 8) & 255) / 255,
@@ -161,7 +204,12 @@ it('draws a contact sheet of the well looks', () => {
       };
       const bodyPos = (body.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
       const bodyNrm = (body.getAttribute('normal') as THREE.BufferAttribute).array as Float32Array;
-      parts.push({ pos: shift(bodyPos), nrm: bodyNrm, rgb: hexRgb(spec.color ?? 0xffffff) });
+      const crease = Number(process.env.LOOK_SMOOTH ?? 0);
+      parts.push({
+        pos: shift(bodyPos),
+        nrm: crease > 0 ? smoothed(bodyPos, crease) : bodyNrm,
+        rgb: hexRgb(spec.color ?? 0xffffff),
+      });
       // Nothing in a render tells a missing cap from a dark one, so this is the line to read.
       open += openEdges(bodyPos);
 

@@ -247,6 +247,52 @@ describe('buildShell', () => {
 // A look may ask for the shape of the solid and for what is carved out of it at once. The crown is
 // zero at the letter's own contour and outside it, so the walls, both chamfers and the back cap
 // stand exactly where they did and only the front side rides.
+describe('crease smoothing', () => {
+  const normalsOf = (geo: THREE.BufferGeometry) =>
+    (geo.getAttribute('normal') as THREE.BufferAttribute).array as Float32Array;
+  /** Triangles whose three vertices disagree about the normal — i.e. that shade smoothly. */
+  const smoothTris = (n: Float32Array) => {
+    let count = 0;
+    for (let t = 0; t < n.length; t += 9) {
+      const same =
+        Math.abs((n[t] as number) - (n[t + 3] as number)) < 1e-6 &&
+        Math.abs((n[t + 1] as number) - (n[t + 4] as number)) < 1e-6 &&
+        Math.abs((n[t + 2] as number) - (n[t + 5] as number)) < 1e-6;
+      if (!same) count++;
+    }
+    return count;
+  };
+
+  it('leaves the shell flat at 0, which is what it has always been', () => {
+    expect(smoothTris(normalsOf(shellOf({ crease: 0 }).geo))).toBe(0);
+  });
+
+  it('smooths a bevel at 40 and moves not one vertex', () => {
+    const flat = shellOf({ crease: 0 }).geo;
+    const soft = shellOf({ crease: 40 }).geo;
+    expect(smoothTris(normalsOf(soft))).toBeGreaterThan(0);
+    // The whole claim: this is a shading pass. A geometry change here would move a baseline.
+    expect(positionsOf(soft)).toEqual(positionsOf(flat));
+  });
+
+  // The crease between a letter's face and its chamfer is a right angle at the cap; averaging
+  // across it rounds the letter's own edge off, which is what the flat shell was protecting.
+  it('keeps a face-to-bevel crease hard', () => {
+    const n = normalsOf(shellOf({ crease: 40 }).geo);
+    const pos = positionsOf(shellOf({ crease: 40 }).geo);
+    let flatFacing = 0;
+    for (let t = 0; t < pos.length; t += 9) {
+      // A triangle lying in the front cap points straight down +z; if the crease leaked, its
+      // normal would tilt toward the chamfer beside it.
+      const isCap =
+        Math.abs((pos[t + 2] as number) - (pos[t + 5] as number)) < 1e-9 &&
+        Math.abs((pos[t + 2] as number) - (pos[t + 8] as number)) < 1e-9;
+      if (isCap && (n[t + 2] as number) > 0.999) flatFacing++;
+    }
+    expect(flatFacing).toBeGreaterThan(0);
+  });
+});
+
 describe('a crowned shell', () => {
   const CROWN = { profile: 'cushion' as const, rise: 0.06, reach: 0.08 };
   const planes = shellPlanes(OPTS.depth, SPEC.floor, SPEC.bezel);

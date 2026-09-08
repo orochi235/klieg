@@ -58,6 +58,10 @@ const NAMES: LookName[] = [
   'tubing',
   'piping',
   'sequin',
+  'pave',
+  'bezel',
+  'carved',
+  'tiara',
 ];
 
 function snapshot(material: THREE.MeshPhysicalMaterial): Record<string, unknown> {
@@ -299,6 +303,10 @@ describe('decorated looks', () => {
       'tubing',
       'piping',
       'sequin',
+      'pave',
+      'bezel',
+      'carved',
+      'tiara',
     ]);
   });
 

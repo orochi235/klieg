@@ -23,7 +23,11 @@ export type LookName =
   | 'leather'
   | 'tubing'
   | 'piping'
-  | 'sequin';
+  | 'sequin'
+  | 'pave'
+  | 'bezel'
+  | 'carved'
+  | 'tiara';
 
 /**
  * A literal union rather than `Extract<keyof THREE.MeshPhysicalMaterial, …>`. The emitted `.d.ts`
@@ -301,6 +305,143 @@ export const LOOKS: Record<LookName, LookSpec> = {
         jitter: 0.2,
       },
       look: { color: 0xffd9c0, metalness: 1, roughness: 0.18, clearcoat: 1 },
+    },
+  },
+
+  /**
+   * Four candidates for what the wells line ships as. Each is one point in `WellSpec`'s space,
+   * not a variation on the last: `pave` and `tiara` differ only in whether the solid is inflated,
+   * `bezel` swaps the cutter, and `carved` names no fill at all.
+   */
+  pave: {
+    color: 0xffc44d,
+    metalness: 1,
+    roughness: 0.16,
+    clearcoatRoughness: 0.08,
+    // "Make it red" should recolour the stones, not the gold they are set in.
+    tintTo: 'decoration',
+    decoration: {
+      kind: 'well',
+      cutter: 'pave',
+      // A uniform bezel takes the same absolute amount off a thin stroke as a thick one, so the
+      // horizontals come back holding fewer stones than their width says they should.
+      insets: 'proportional',
+      bezel: 0.026,
+      floor: 0.07,
+      pitch: 0.05,
+      wall: 0.008,
+      relax: 4,
+      edge: 'absorb',
+      // Read by `lattice` alone; `pave` cuts cells and takes its size from the pitch.
+      size: 0.048,
+      rimBevel: 0.003,
+      rimDrop: 0.003,
+      look: {},
+      fill: 'stone',
+      sink: 0.25,
+      facets: 8,
+      stone: {
+        color: 0xffffff,
+        roughness: 0.04,
+        transmission: 1,
+        ior: 2.4,
+        dispersion: 5,
+        attenuationColor: 0xfff6ea,
+        clearcoatRoughness: 0.02,
+      },
+    },
+  },
+  bezel: {
+    color: 0xf2f5fa,
+    metalness: 1,
+    roughness: 0.08,
+    clearcoatRoughness: 0.04,
+    tintTo: 'decoration',
+    decoration: {
+      kind: 'well',
+      cutter: 'lattice',
+      bezel: 0.032,
+      floor: 0.085,
+      // Twice `size`, so every stone stands in metal of its own width rather than in a field.
+      pitch: 0.12,
+      size: 0.06,
+      // The bead is the setting here rather than a rim, so it is the shipped shell default.
+      rimBevel: 0.008,
+      rimDrop: 0.008,
+      look: {},
+      fill: 'stone',
+      sink: 0.3,
+      // Eight, not four: a four-point girdle inscribes the seat corner to corner, and from head on
+      // its table is a flat square that reads as a painted diamond rather than a cut stone.
+      facets: 8,
+      stone: {
+        color: 0xffffff,
+        roughness: 0.05,
+        transmission: 1,
+        ior: 2.2,
+        dispersion: 4,
+        attenuationColor: 0xd4143c,
+        attenuationDistance: 0.6,
+        clearcoatRoughness: 0.03,
+        tintSpecular: true,
+      },
+    },
+  },
+  carved: {
+    color: 0xb8bcc4,
+    metalness: 1,
+    roughness: 0.22,
+    clearcoatRoughness: 0.1,
+    decoration: {
+      kind: 'well',
+      cutter: 'pave',
+      insets: 'proportional',
+      bezel: 0.03,
+      floor: 0.055,
+      pitch: 0.062,
+      wall: 0.012,
+      relax: 4,
+      edge: 'absorb',
+      size: 0.048,
+      // No stone to hide the rim, so the bead is what the pockets read by.
+      rimBevel: 0.006,
+      rimDrop: 0.006,
+      look: {},
+    },
+  },
+  tiara: {
+    color: 0xffc44d,
+    metalness: 1,
+    roughness: 0.16,
+    clearcoatRoughness: 0.08,
+    tintTo: 'decoration',
+    inflate: { profile: 'cushion', rise: 0.08, reach: 0.1 },
+    decoration: {
+      kind: 'well',
+      cutter: 'pave',
+      insets: 'proportional',
+      bezel: 0.028,
+      floor: 0.06,
+      pitch: 0.052,
+      wall: 0.008,
+      relax: 4,
+      edge: 'grade',
+      size: 0.048,
+      rimBevel: 0.003,
+      rimDrop: 0.003,
+      look: {},
+      fill: 'stone',
+      sink: 0.25,
+      facets: 8,
+      stone: {
+        color: 0xffffff,
+        roughness: 0.04,
+        transmission: 1,
+        ior: 2.4,
+        dispersion: 5,
+        attenuationColor: 0xfff6ea,
+        clearcoatRoughness: 0.02,
+      },
     },
   },
 };

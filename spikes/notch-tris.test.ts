@@ -24,7 +24,9 @@ function loadFont() {
 it('measures the fan', () => {
   const shapes = new WordCaches().shapes(loadFont(), 'R');
   const spec = LOOKS.carved.decoration as WellSpec;
-  const cut = cutterFor(spec.cutter)(shapes, regionOf(shapes, spec.insets), spec);
+  const cut = process.env.NO_WELLS
+    ? { wells: [], seats: [], floor: spec.floor }
+    : cutterFor(spec.cutter)(shapes, regionOf(shapes, spec.insets), spec);
   const shell = buildShell(shapes, cut, {
     ...DEFAULT_SHELL, depth: GLYPH.depth, bezel: spec.bezel,
     rimBevel: spec.rimBevel ?? DEFAULT_SHELL.rimBevel, rimDrop: spec.rimDrop ?? DEFAULT_SHELL.rimDrop,
@@ -42,6 +44,43 @@ it('measures the fan', () => {
     const b = new THREE.Vector3(nrm[t + 3], nrm[t + 4], nrm[t + 5]);
     if (a.distanceTo(b) < 1e-6) flat++;
   }
+
+  // Degenerate triangles anywhere in the shell. A zero-area triangle passes a point-in-triangle
+  // sign test for every point in the plane, which is how a per-cell well probe once read 0 of 130.
+  let zero = 0;
+  let tiny = 0;
+  for (let t = 0; t < pos.length; t += 9) {
+    const p = [0, 3, 6].map((k) => new THREE.Vector3(pos[t + k], pos[t + k + 1], pos[t + k + 2]));
+    const a = new THREE.Vector3()
+      .subVectors(p[1] as THREE.Vector3, p[0] as THREE.Vector3)
+      .cross(new THREE.Vector3().subVectors(p[2] as THREE.Vector3, p[0] as THREE.Vector3))
+      .length() / 2;
+    if (a === 0) zero++;
+    else if (a < 1e-10) tiny++;
+  }
+  // Which kind matters for whether they can simply be dropped. A triangle with two coincident
+  // vertices contributes a->b and b->a, which cancel inside itself, so removing it keeps every
+  // edge paired. Three distinct collinear points contribute three edges that do not.
+  let coincident = 0;
+  let collinear = 0;
+  for (let t = 0; t < pos.length; t += 9) {
+    const p = [0, 3, 6].map((k) => new THREE.Vector3(pos[t + k], pos[t + k + 1], pos[t + k + 2]));
+    const a = new THREE.Vector3()
+      .subVectors(p[1] as THREE.Vector3, p[0] as THREE.Vector3)
+      .cross(new THREE.Vector3().subVectors(p[2] as THREE.Vector3, p[0] as THREE.Vector3))
+      .length() / 2;
+    if (a !== 0) continue;
+    const dup =
+      (p[0] as THREE.Vector3).equals(p[1] as THREE.Vector3) ||
+      (p[1] as THREE.Vector3).equals(p[2] as THREE.Vector3) ||
+      (p[2] as THREE.Vector3).equals(p[0] as THREE.Vector3);
+    if (dup) coincident++;
+    else collinear++;
+  }
+  console.log(
+    `degenerate: ${zero} of exactly zero area, ${tiny} under 1e-10 em^2\n` +
+      `  ${coincident} with a coincident pair (self-cancelling), ${collinear} distinct-but-collinear`,
+  );
 
   // The notch, read off the render: the sharp reflex corner on the R's right side.
   const NX = 0.60;

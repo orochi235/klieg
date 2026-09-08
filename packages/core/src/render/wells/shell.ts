@@ -230,8 +230,6 @@ class Skin {
       }
     }
     const b = upper.slice(off).concat(upper.slice(0, off));
-    const ta = arc(lower);
-    const tb = arc(b);
     const A = (i: number) => {
       const p = lower[i % na] as Point;
       return [p[0], p[1], zLo];
@@ -240,16 +238,56 @@ class Skin {
       const p = b[j % nb] as Point;
       return [p[0], p[1], zHi];
     };
-    let i = 0;
+
+    /**
+     * Where each vertex of `lower` meets `upper`: the nearest point on it, taken with a pointer
+     * that only ever moves forward, so the map is monotone and every edge of both rings is still
+     * walked exactly once.
+     *
+     * Arc length is what this used to be, and it is a *global* fraction — each ring divided by its
+     * own perimeter. Two iso levels of the same field do not lose length evenly: a corner closes
+     * up while the straight runs beside it barely move, so the two parameters drift apart and the
+     * quads skew along the band instead of spanning it. That is the stretch marks down a curved
+     * edge, and the fan where a corner has closed. Nearest-point cannot drift, because it is not
+     * measured along the ring at all.
+     */
+    const map = new Int32Array(na + 1);
+    const d2 = (i: number, j: number): number => {
+      const p = lower[i % na] as Point;
+      const q = b[j % nb] as Point;
+      const dx = q[0] - p[0];
+      const dy = q[1] - p[1];
+      return dx * dx + dy * dy;
+    };
+    // Argmin over a forward window rather than "advance while the next one is closer". One-step
+    // lookahead stalls for good the moment distance ticks up before it comes down — and a pointer
+    // that never moves fans a whole ring off one vertex, which collapses the strip into the plane.
+    const window = Math.max(8, Math.ceil((2 * nb) / na) + 4);
     let j = 0;
-    while (i < na || j < nb) {
-      if (j >= nb || (i < na && (ta[i + 1] as number) <= (tb[j + 1] as number))) {
-        this.tri(A(i), A(i + 1), B(j));
-        i++;
-      } else {
-        this.tri(A(i), B(j + 1), B(j));
-        j++;
+    for (let i = 0; i < na; i++) {
+      let best = d2(i, j);
+      let at = j;
+      const limit = Math.min(j + window, nb);
+      for (let k = j + 1; k <= limit; k++) {
+        const d = d2(i, k);
+        if (d < best) {
+          best = d;
+          at = k;
+        }
       }
+      j = at;
+      map[i] = j;
+    }
+    // The last vertex is the first one come round again, and it has to land on `nb` however the
+    // search left the pointer — otherwise the wedge of `upper` past it is never walked and the
+    // strip is open along its own seam.
+    map[na] = nb;
+
+    for (let i = 0; i < na; i++) {
+      const from = map[i] as number;
+      const to = map[i + 1] as number;
+      this.tri(A(i), A(i + 1), B(from));
+      for (let k = from; k < to; k++) this.tri(A(i + 1), B(k + 1), B(k));
     }
   }
 

@@ -425,7 +425,10 @@ export const LOOKS: Record<LookName, LookSpec> = {
       pitch: 0.052,
       wall: 0.008,
       relax: 4,
-      edge: 'grade',
+      // Not `grade`: pinning a row on the region's own boundary needs room for a lattice behind
+      // it, and a stroke this narrow has none — the pinned row becomes the whole field, stretched
+      // into slivers all round the outline. On a G that took it from 141 clean cells to 203.
+      edge: 'absorb',
       size: 0.048,
       rimBevel: 0.003,
       rimDrop: 0.003,

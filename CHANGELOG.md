@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### An anchored sign's glow is no longer cut at its own edge
+
+The canvas was the anchor's box exactly, and `align: 'start'` puts the painted left edge of the
+type on that box's left edge — so on a `tubing` masthead the tube's own swell and the bloom halo
+around the leading letter were cut off flat against the page's text edge, while the trailing end
+kept whatever `framing` had left unspent. There was no way to have both: room for the glow meant
+padding the anchor, and padding the anchor moved the line the type was aligned to.
+
+The canvas now reaches past the anchor by **`bleed`**, a share of the tallest the type may be,
+defaulting to 0.5 and never less than the blur's own reach. The framing fractions and the aligned
+edge go on measuring the anchor, so nothing moves: a sign meets the page's text edge exactly where
+it did, with its halo falling off instead of stopping. A host that had been padding its anchor for
+this can drop the padding.
+
+The room is real canvas, and it reaches over whatever the anchor sits beside. An anchor under an
+`overflow: hidden` ancestor has it clipped away again and wants padding instead, and a page that
+scrolls to its own right edge can gain a few pixels of overflow. `bleed: 0` is the previous
+behavior exactly.
+
 ### `sequin` fills its letters
 
 The field was painting 77% of a letter at its shipped count and the near-black body read through

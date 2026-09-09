@@ -22,6 +22,7 @@ import {
 } from './render/lighting.js';
 import { LOOKS, type Look, type LookName, type LookSpec, specOf } from './render/looks.js';
 import {
+  type Framing,
   type Placement,
   prefersReducedMotion,
   Stage as SceneStage,
@@ -207,31 +208,24 @@ export interface KliegOptions {
   warmLook?: Look;
   /** How much of the viewport the type may fill. The default leaves room for the page underneath. */
   framing?: Framing;
-}
-
-/**
- * The share of the viewport the type is allowed to fill on each axis, as a fraction of what the
- * camera sees at the word's depth. An omitted axis keeps its default; 1 runs the type to that edge.
- * Height stays the tighter of the two by default because turning the word swings it taller.
- * The fractions cap the type's size; `align` is what places it in the box.
- */
-export interface Framing {
-  /** Defaults to 0.62. */
-  width?: number;
-  /** Defaults to 0.3. */
-  height?: number;
   /**
-   * Where the word sits in the box, in reading order — `'start'` is the left edge of an `ltr` box
-   * and the right edge of an `rtl` one. An element placement defaults to `'start'`, because the
-   * page it sits in has a text edge and meeting it is usually the point of anchoring; an overlay
-   * has no edge to meet and defaults to `'center'`. The word is placed at whatever size the
-   * fractions above chose, so aligning never resizes it, and what meets the edge is the painted
-   * silhouette — bevel included.
+   * How far the canvas reaches past its anchor, as a share of the tallest the type may be — room
+   * for a glow, a bevel highlight or a bloom halo to fall off in. Without it the canvas is the
+   * anchor exactly, and everything a look paints outside the type's own box is cut at the edge the
+   * type is aligned against, which on `align: 'start'` is the leading letter's own stem.
+   *
+   * The bleed never moves the type: the framing fractions and the aligned edge go on measuring the
+   * anchor. Sized against the type rather than the box, and never below the blur's own reach, so a
+   * small word in a large anchor does not pay for one. `0` pins the canvas back to the anchor.
+   *
+   * It costs a wider canvas: the extra reaches over whatever the anchor sits beside, and a page
+   * that scrolls to its own right edge can gain a few pixels of overflow. An anchor under an
+   * `overflow: hidden` ancestor clips it away, and wants the room as padding instead.
    */
-  align?: Align;
+  bleed?: number;
 }
 
-export type { Placement } from './render/stage.js';
+export type { Framing, Placement } from './render/stage.js';
 export type { Align } from './text/layout.js';
 export type { TextRun } from './text/runs.js';
 
@@ -442,6 +436,8 @@ export function createKlieg(options: KliegOptions): Klieg {
     target: options.target,
     idleTimeoutMs: options.idleTimeoutMs ?? 8000,
     placement,
+    ...(options.framing ? { framing: options.framing } : {}),
+    ...(options.bleed === undefined ? {} : { bleed: options.bleed }),
   });
 
   const caches = new WordCaches();

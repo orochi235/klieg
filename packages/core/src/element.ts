@@ -51,6 +51,7 @@ class KliegSign extends HTMLElement {
     'tint',
     'framing-width',
     'framing-height',
+    'bleed',
     'align',
     'lighting',
     'bloom',
@@ -165,6 +166,9 @@ class KliegSign extends HTMLElement {
     // align would silently right-align.
     const lighting = (this.getAttribute('lighting') as SignOptions['lighting']) ?? undefined;
     const bloom = this.getAttribute('bloom');
+    // Through `fraction` for the reason it exists: an empty `bleed` must not read as 0 and pin
+    // the canvas to the anchor.
+    const bleed = fraction(this.getAttribute('bleed'));
 
     return {
       font,
@@ -172,6 +176,7 @@ class KliegSign extends HTMLElement {
       ...optional('look', look),
       ...optional('tint', this.getAttribute('tint') ?? undefined),
       ...(Object.keys(framing).length ? { framing } : {}),
+      ...optional('bleed', bleed),
       ...optional('lighting', lighting),
       ...optional('effects', this.effects),
       ...optional('bloom', bloom === null ? undefined : bloom !== 'false'),

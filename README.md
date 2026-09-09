@@ -358,6 +358,14 @@ unspent. `shimmer`'s few degrees of yaw survive most framings; a bob like `float
 real room. If it clips, *lower* the `framing` share — raising it fits a bigger word into the same
 box and leaves less.
 
+A glow is not geometry, and it is not cropped: the canvas reaches past the anchor by `bleed` so a
+halo, a bevel highlight or the tube a `tubing` look swells to has pixels to fall off in. That room
+sits outside everything the type is measured against, so it never moves the word — a sign asked to
+meet the page's text edge still meets it, glow and all. The cost is a canvas wider than the element
+it hangs in: an anchor under an `overflow: hidden` ancestor has the room clipped away again and
+wants it as padding instead, and a page that scrolls to its own right edge can gain a few pixels of
+overflow. `bleed: 0` pins the canvas back to the anchor.
+
 ## Stages
 
 An effect can exit part of its word and lay the survivors out again as a word of their own — a
@@ -510,6 +518,7 @@ const bounce = transition(700, { from: { scale: 0 }, ease: easeElasticOut });
 | `idleTimeoutMs` | `8000` | idle milliseconds before the GL context is torn down; the next fire brings it back |
 | `warmLook` | `'gold'` | the look whose shader programs are linked on an idle callback after construction, so the first fire does not pay for them. The link is the driver's and lands per look: a page that only fires `neon` should say so, or the warm buys it nothing |
 | `framing` | `{ width: 0.62, height: 0.3 }` | share of the box the type may fill, per axis — the viewport, or the anchor under an element `placement`; raise it on a page that is nothing but the type. `align: 'start' \| 'center' \| 'end'` places the word in the box at that size, in reading order: an anchored word meets the page's own text edge by default, an overlay stays centred |
+| `bleed` | `0.5` | how far the canvas reaches past an element `placement`, as a share of the tallest the type may be, so a glow is not cut at the edge the type is aligned against. Never less than the blur's own reach, so a small word in a large anchor does not pay for one; `0` pins the canvas to the anchor. Ignored by a fullscreen overlay, which has nothing outside the viewport to reach into |
 | `placement` | `{ kind: 'fullscreen' }` | fullscreen overlay, or `{ kind: 'element', el }` to anchor the type inside one element; fixed for the instance's lifetime |
 
 `warm(look?)` links a look's shader programs and returns a promise. The instance already does this
@@ -581,7 +590,7 @@ transparent }`, where `[lit]` lands on the element and `data-klieg-fallback` on 
 supplied. Being layered, that rule loses to *any* unlayered author rule — a plain `color` on your
 heading leaves it standing over the lit sign, so put your own rule in a layer too.
 
-Attributes: `font`, `text`, `look`, `tint`, `framing-width`, `framing-height`, `align`,
+Attributes: `font`, `text`, `look`, `tint`, `framing-width`, `framing-height`, `bleed`, `align`,
 `lighting`, `bloom`. `tint` takes any CSS color, `currentColor` and `var(--x)` included, resolved
 against the element, so a sign inherits your palette rather than repeating it. `bloom="false"` is
 off and anything else, the bare attribute included, is on. Removing an attribute unsets what it

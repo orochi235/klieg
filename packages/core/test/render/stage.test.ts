@@ -1,10 +1,12 @@
 import type * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { BLOOM_REACH_PX } from '../../src/render/bloom.js';
 import {
   BASE_FOV,
   BASE_Z,
   canHoldCanvas,
   canvasCss,
+  DEFAULT_BLEED,
   edgeFor,
   layerCss,
   lensFor,
@@ -457,5 +459,141 @@ describe('the lens against a wide anchor', () => {
 
     expect(budget.width / (frustumHeight(strip) * strip.camera.aspect)).toBeCloseTo(0.94, 12);
     expect(budget.height / frustumHeight(strip)).toBeCloseTo(0.66, 12);
+  });
+});
+
+describe('the canvas past the anchor', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** Enough renderer for `resize` to run: it sizes a drawing buffer this test never reads. */
+  function sized(el: HTMLElement, opts: { bleed?: number; height?: number } = {}): Stage {
+    const stage = new Stage({
+      idleTimeoutMs: 1000,
+      placement: { kind: 'element', el },
+      ...(opts.bleed === undefined ? {} : { bleed: opts.bleed }),
+      ...(opts.height === undefined ? {} : { framing: { height: opts.height } }),
+    });
+    stage.renderer = {
+      getPixelRatio: () => globalThis.devicePixelRatio,
+      setPixelRatio: () => {},
+      setSize: () => {},
+    } as unknown as THREE.WebGLRenderer;
+    stage.resize();
+    return stage;
+  }
+
+  /** The canvas box `resize` wrote, back out of the aspect and the anchor it grew from. */
+  function canvasHeight(stage: Stage, el: { clientWidth: number; clientHeight: number }): number {
+    const bleed =
+      (stage.camera.aspect * el.clientHeight - el.clientWidth) / (2 - 2 * stage.camera.aspect);
+    return el.clientHeight + 2 * bleed;
+  }
+
+  /** A world measure back in the CSS pixels it covers on the canvas. */
+  function px(stage: Stage, world: number, el: { clientWidth: number; clientHeight: number }) {
+    return (world * canvasHeight(stage, el)) / frustumHeight(stage);
+  }
+
+  it('reaches past the anchor by a share of the tallest the type may be', () => {
+    vi.stubGlobal('devicePixelRatio', 2);
+    const el = anchor(800, 120);
+    const stage = sized(el, { height: 0.66 });
+
+    // 0.5 of 0.66 * 120 is 39.6, whole pixels away from the blur's own 14 at this ratio.
+    expect(canvasHeight(stage, el)).toBeCloseTo(
+      120 + 2 * Math.round(DEFAULT_BLEED * 0.66 * 120),
+      6,
+    );
+
+    // A taller line has a taller glow, so the room for it grows with the type and not the box.
+    const tighter = sized(el, { height: 0.33 });
+    expect(canvasHeight(tighter, el) - 120).toBeCloseTo((canvasHeight(stage, el) - 120) / 2, 6);
+  });
+
+  it('spends the framing fractions on the anchor, so the bleed never resizes the type', () => {
+    vi.stubGlobal('devicePixelRatio', 2);
+    const el = anchor(800, 120);
+    const bled = sized(el, { height: 0.66 });
+    const pinned = sized(el, { height: 0.66, bleed: 0 });
+
+    // The same word, in the same CSS pixels, on a canvas 80px taller.
+    expect(px(bled, bled.viewportBudget(0.94, 0.66).height, el)).toBeCloseTo(0.66 * 120, 6);
+    expect(px(bled, bled.viewportBudget(0.94, 0.66).width, el)).toBeCloseTo(0.94 * 800, 6);
+    expect(px(pinned, pinned.viewportBudget(0.94, 0.66).height, el)).toBeCloseTo(0.66 * 120, 6);
+    expect(px(pinned, pinned.viewportBudget(0.94, 0.66).width, el)).toBeCloseTo(0.94 * 800, 6);
+  });
+
+  it('leaves the aligned edge on the anchor, which is the line the page ranges against', () => {
+    vi.stubGlobal('devicePixelRatio', 2);
+    const el = anchor(800, 120);
+    const stage = sized(el, { height: 0.66 });
+
+    // `alignOffset` measures half of this out from the centre; the anchor's own width is what
+    // puts a start-aligned word's leading stem on the anchor's left edge rather than the canvas'.
+    expect(px(stage, stage.viewportBudget(0.94, 0.66).extent as number, el)).toBeCloseTo(800, 6);
+  });
+
+  it('never reaches less far than the blur carries light', () => {
+    vi.stubGlobal('devicePixelRatio', 2);
+    // A share of this type would be 3px, and the halo would stop rather than fall off.
+    const el = anchor(800, 20);
+    const stage = sized(el, { height: 0.3 });
+
+    expect(canvasHeight(stage, el)).toBeCloseTo(20 + 2 * (BLOOM_REACH_PX / 2), 6);
+  });
+
+  it('spends the floor in CSS pixels, so a coarse display gets the same halo', () => {
+    const el = anchor(800, 20);
+    vi.stubGlobal('devicePixelRatio', 1);
+    const coarse = canvasHeight(sized(el, { height: 0.3 }), el);
+    vi.stubGlobal('devicePixelRatio', 2);
+    const fine = canvasHeight(sized(el, { height: 0.3 }), el);
+
+    expect(coarse - 20).toBeCloseTo(2 * (fine - 20), 6);
+  });
+
+  it('pins the canvas back to the anchor at zero, for a page with no room to spare', () => {
+    vi.stubGlobal('devicePixelRatio', 2);
+    const el = anchor(800, 120);
+    const stage = sized(el, { bleed: 0 });
+
+    expect(stage.camera.aspect).toBeCloseTo(800 / 120, 12);
+    expect(stage.viewportBudget(0.94, 0.66).extent).toBeCloseTo(
+      frustumHeight(stage) * stage.camera.aspect,
+      12,
+    );
+  });
+
+  it('leaves a fullscreen overlay alone: there is nothing outside the viewport to reach into', () => {
+    vi.stubGlobal('devicePixelRatio', 2);
+    vi.stubGlobal('innerWidth', 1440);
+    vi.stubGlobal('innerHeight', 900);
+    const stage = new Stage({ idleTimeoutMs: 1000 });
+    stage.renderer = {
+      getPixelRatio: () => 2,
+      setPixelRatio: () => {},
+      setSize: () => {},
+    } as unknown as THREE.WebGLRenderer;
+    stage.resize();
+
+    expect(stage.camera.aspect).toBeCloseTo(1440 / 900, 12);
+  });
+
+  it('insets the canvas by the bleed, and the text layer with it', () => {
+    expect(canvasCss({ kind: 'element', el: anchor(800, 120) }, 40)).toContain('inset:-40px');
+    expect(layerCss({ kind: 'element', el: anchor(800, 120) }, 40)).toContain('inset:-40px');
+    // The letters are placed in canvas pixels; a layer on the anchor's box would land off by one bleed.
+    expect(layerCss({ kind: 'element', el: anchor(800, 120) }, 40)).toBe(
+      canvasCss({ kind: 'element', el: anchor(800, 120) }, 40),
+    );
+  });
+
+  it('writes the size out, since a canvas with `width: auto` takes its buffer as its own', () => {
+    const css = canvasCss({ kind: 'element', el: anchor(800, 120) }, 40);
+
+    expect(css).toContain('width:calc(100% + 80px)');
+    expect(css).toContain('height:calc(100% + 80px)');
   });
 });

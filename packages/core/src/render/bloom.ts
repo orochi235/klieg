@@ -25,6 +25,16 @@ type Sampler = THREE.IUniform<THREE.Texture | null>;
 /** Half-res texels per tap, one separable pass each: a tight core under a wider halo. */
 const BLUR_RADII = [1, 2.5];
 
+/** Taps either side of centre in the separable kernel below. */
+const BLUR_TAPS = 4;
+
+/**
+ * How far the blur carries light from a lit pixel, in device pixels. The passes run in sequence
+ * over half-resolution targets, so each one's reach doubles and they sum. What a canvas has to
+ * hold outside the type for the halo to fall off rather than stop.
+ */
+export const BLOOM_REACH_PX = BLUR_RADII.reduce((sum, r) => sum + BLUR_TAPS * r, 0) * 2;
+
 export class BloomPath {
   private sceneRT!: THREE.WebGLRenderTarget;
   private brightRT!: THREE.WebGLRenderTarget;

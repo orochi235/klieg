@@ -19,6 +19,8 @@ export interface SignOptions {
   /** A number, or any CSS color — `currentColor` and `var(--x)` included, resolved on `anchor`. */
   tint?: number | string;
   framing?: Framing;
+  /** How far the canvas reaches past the anchor. See `KliegOptions.bleed`. */
+  bleed?: number;
   lighting?: LightingSlot;
   bloom?: boolean;
   effects?: EffectSpec[];
@@ -66,6 +68,7 @@ export function sign(anchor: HTMLElement, options: SignOptions): Sign {
       fonts: { default: opts.font },
       placement: { kind: 'element', el: anchor },
       ...(opts.framing ? { framing: opts.framing } : {}),
+      ...(opts.bleed === undefined ? {} : { bleed: opts.bleed }),
     });
     if (!klieg.supported) {
       klieg.destroy();

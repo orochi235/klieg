@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.11.0
 
 ### An anchored sign's glow is no longer cut at its own edge
 

@@ -9,8 +9,13 @@
  *
  * Distinct characters only. `WellBuilder` answers a body per character rather than per letter
  * slot, so a word pays for each character once however often it repeats.
+ *
+ * Also what the built glyphs weigh, for shipping them baked instead of computing them in the page:
+ * as built (position and normal), positions only (a flat-shaded soup's normals come back from its
+ * positions on load), and those positions gzipped and brotlied the way a server would send them.
  */
 import { readFileSync } from 'node:fs';
+import { brotliCompressSync, gzipSync } from 'node:zlib';
 import opentype from 'opentype.js';
 import * as THREE from 'three';
 import { cutterFor } from '../packages/core/dist/render/wells/cutters.js';
@@ -67,35 +72,63 @@ const cpuMs = (fn) => {
 const letters = [...WORD].filter((c) => c.trim());
 const distinct = [...new Set(letters)];
 console.log(`"${WORD}": ${letters.length} letters, ${distinct.length} distinct, pitch ${PITCH}\n`);
-console.log('         cpu ms  cells');
+console.log('         cpu ms  cells   built KB  pos KB   gzip KB  brotli KB');
+
+const bytesOf = (geo) => {
+  let built = 0;
+  for (const attr of Object.values(geo.attributes)) built += attr.array.byteLength;
+  return { built, pos: geo.getAttribute('position').array };
+};
+const kb = (n) => (n / 1024).toFixed(1);
 
 let total = 0;
 let cells = 0;
+const sum = { built: 0, pos: 0, gzip: 0, brotli: 0 };
 for (const [i, char] of distinct.entries()) {
   const shapes = glyphToShapes(font, char, 1);
   let n = 0;
+  let shell;
+  let stones;
   const ms = cpuMs(() => {
     const region = regionOf(shapes, SPEC.insets);
     const cut = cutterFor('pave')(shapes, region, SPEC);
-    buildShell(shapes, cut, {
+    shell = buildShell(shapes, cut, {
       ...DEFAULT_SHELL,
       depth: 0.3,
       bezel: SPEC.bezel,
       rimBevel: SPEC.rimBevel,
       rimDrop: SPEC.rimDrop,
     });
-    fillFor('stone')(
+    stones = fillFor('stone')(
       cut.seats,
       { material: stubMaterial, faceZ: 0, floorZ: -SPEC.floor, girdleZ: -0.003 },
       SPEC,
-    );
+    ).geometry;
     n = cut.seats.length;
   });
   total += ms;
   cells += n;
+
+  const a = bytesOf(shell.geometry);
+  const b = bytesOf(stones);
+  const pos = Buffer.concat([
+    Buffer.from(a.pos.buffer, a.pos.byteOffset, a.pos.byteLength),
+    Buffer.from(b.pos.buffer, b.pos.byteOffset, b.pos.byteLength),
+  ]);
+  const built = a.built + b.built;
+  const gzip = gzipSync(pos, { level: 9 }).length;
+  const brotli = brotliCompressSync(pos).length;
+  sum.built += built;
+  sum.pos += pos.length;
+  sum.gzip += gzip;
+  sum.brotli += brotli;
   console.log(
-    `  ${`${i + 1}/${distinct.length}`.padEnd(6)} ${char}  ${ms.toFixed(0).padStart(6)}  ${String(n).padStart(5)}`,
+    `  ${`${i + 1}/${distinct.length}`.padEnd(6)} ${char}  ${ms.toFixed(0).padStart(6)}  ${String(n).padStart(5)}` +
+      `  ${kb(built).padStart(8)}  ${kb(pos.length).padStart(7)}  ${kb(gzip).padStart(7)}  ${kb(brotli).padStart(8)}`,
   );
 }
-console.log(`\n  word    ${total.toFixed(0).padStart(6)}ms  ${String(cells).padStart(5)} cells`);
+console.log(
+  `\n  word    ${total.toFixed(0).padStart(6)}  ${String(cells).padStart(5)}` +
+    `  ${kb(sum.built).padStart(8)}  ${kb(sum.pos).padStart(7)}  ${kb(sum.gzip).padStart(7)}  ${kb(sum.brotli).padStart(8)}`,
+);
 console.log(`  mean    ${(total / distinct.length).toFixed(0).padStart(6)}ms a glyph`);

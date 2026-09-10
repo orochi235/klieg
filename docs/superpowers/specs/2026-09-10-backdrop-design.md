@@ -30,7 +30,10 @@ It never receives the motion slots. No enter, no active, no exit — it is place
 its effects, so it is already at full presence when the hero arrives over it.
 
 `scale` is a multiple of the hero's fitted size, so the rows can overfill the frame and the tilt
-does not expose a corner. `dim` multiplies the backdrop's `gain`, which is what keeps it behind.
+does not expose a corner. `dim` scales the backdrop's frame-owned base, not the effect layer. Applied through `gain` it would
+be one contribution among several and any effect writing `gain` would fight it; applied to the base
+it is what every effect then modulates, so a chase still reads at full contrast against a dimmed
+row.
 
 ## Rows are lines
 

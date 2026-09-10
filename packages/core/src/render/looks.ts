@@ -23,7 +23,8 @@ export type LookName =
   | 'leather'
   | 'tubing'
   | 'piping'
-  | 'sequin';
+  | 'sequin'
+  | 'ice';
 
 /**
  * A literal union rather than `Extract<keyof THREE.MeshPhysicalMaterial, …>`. The emitted `.d.ts`
@@ -267,6 +268,43 @@ export const LOOKS: Record<LookName, LookSpec> = {
       dark: { color: 0xe8c9a0, roughness: 0.55, clearcoat: 0.4, sheen: 0.5 },
     },
   },
+  ice: {
+    color: 0xf2f5fa,
+    metalness: 1,
+    roughness: 0.08,
+    clearcoatRoughness: 0.04,
+    tintTo: 'decoration',
+    decoration: {
+      kind: 'well',
+      cutter: 'lattice',
+      bezel: 0.012,
+      insets: 'proportional',
+      floor: 0.09,
+      // Room for the girdle, which widens as `sink` shrinks: the stone is `size/2 + bevel *
+      // (1 - sink)` across, so a pitch tuned for the well alone leaves the stones overlapping.
+      pitch: 0.105,
+      size: 0.048,
+      fill: 'stone',
+      sink: 0.08,
+      tint: 0.5,
+      look: {},
+      stone: {
+        color: 0xffffff,
+        roughness: 0.04,
+        transmission: 1,
+        thickness: 1.4,
+        ior: 2.333,
+        // Saturated on purpose. klieg renders over an empty scene, so a near-clear stone
+        // transmits the black behind it and reads as a hole — the same reason `gem` sets one.
+        attenuationColor: 0x9ec4ff,
+        attenuationDistance: 0.9,
+        envMapIntensity: 3.4,
+        dispersion: 6,
+        tintSpecular: true,
+      },
+    },
+  },
+
   sequin: {
     color: 0x2a0f1c,
     metalness: 0.6,

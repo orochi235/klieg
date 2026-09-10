@@ -55,10 +55,18 @@ shared cache, fire 2/7:  0.0ms
 shared cache, fire 7/7:  0.0ms
 ```
 
-Every glyph extrusion and every tube blueprint the first row builds is already cached for the rest,
-so rows beyond the first are free to build. This is a constraint, not a nicety: constructed with a
-cache of its own, each row pays a full rebuild and seven rows block the main thread for around 40ms
-before the first frame.
+Every glyph extrusion the first row builds is already cached for the rest, so rows beyond the first
+are free to build. This is a constraint, not a nicety: constructed with a cache of its own, each row
+pays a full rebuild and seven rows block the main thread for around 40ms before the first frame.
+
+**Tube blueprints are the exception, and the measurement above does not cover them.** Two things
+keep a blueprint from being shared, and only the first is obvious: the cache key carries a
+per-letter seed (`decorations/tube.ts` says so at the point of use), so the same character in two
+rows keys differently; and a blueprint already lent out cannot be lent twice, so `takeBlueprint`
+builds a fresh spare even when the key does match. Every row of a `tubing` backdrop therefore
+builds its own blueprints. The 0.0ms figures come from sequential fires, which release their
+blueprints in between — rows within one word hold theirs at the same time, which is a different
+case and is not what was measured.
 
 ## What is not yet measured
 

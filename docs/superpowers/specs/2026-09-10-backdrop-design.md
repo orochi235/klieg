@@ -62,9 +62,9 @@ pays a full rebuild and seven rows block the main thread for around 40ms before 
 **Tube blueprints are the exception, and the measurement above does not cover them.** Two separate
 rules apply, at different scopes:
 
-*Every row builds its own.* The blueprint cache key takes the letter's own index as its seed
-(`decorations/tube.ts:132`), so the same character on two rows keys differently and each row builds
-from scratch. This is the row cost, and the seed alone accounts for all of it.
+*Every row builds its own.* The blueprint cache key takes the letter's own index as its seed, at
+`decorations/tube.ts`'s `takeBlueprint` call, so the same character on two rows keys differently and
+each row builds from scratch. This is the row cost, and the seed alone accounts for all of it.
 
 *The backdrop also cannot borrow the hero's.* A blueprint already lent out cannot be lent twice, so
 `takeBlueprint` builds a fresh spare even on a key that matches. Hero and backdrop are two words

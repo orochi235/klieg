@@ -79,15 +79,128 @@ interface Piece {
   ring: Ring;
 }
 
+/** Every edge of a region, as the box it occupies. Built once per region, read once per cell. */
+export interface Boundary {
+  minX: Float64Array;
+  minY: Float64Array;
+  maxX: Float64Array;
+  maxY: Float64Array;
+}
+
+export function boundaryOf(region: Ring[][]): Boundary {
+  let n = 0;
+  for (const poly of region) for (const ring of poly) n += ring.length;
+  const b: Boundary = {
+    minX: new Float64Array(n),
+    minY: new Float64Array(n),
+    maxX: new Float64Array(n),
+    maxY: new Float64Array(n),
+  };
+  let k = 0;
+  for (const poly of region) {
+    for (const ring of poly) {
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const a = ring[i] as Point;
+        const c = ring[j] as Point;
+        b.minX[k] = Math.min(a[0], c[0]);
+        b.maxX[k] = Math.max(a[0], c[0]);
+        b.minY[k] = Math.min(a[1], c[1]);
+        b.maxY[k] = Math.max(a[1], c[1]);
+        k++;
+      }
+    }
+  }
+  return b;
+}
+
+/** Whether a point is in the region: inside some polygon's outer ring and none of its holes. */
+function insideRegion(region: Ring[][], x: number, y: number): boolean {
+  for (const poly of region) {
+    const outer = poly[0];
+    if (!outer || !insideRing(outer, x, y)) continue;
+    let holed = false;
+    for (let h = 1; h < poly.length; h++) {
+      if (insideRing(poly[h] as Ring, x, y)) {
+        holed = true;
+        break;
+      }
+    }
+    if (!holed) return true;
+  }
+  return false;
+}
+
+/**
+ * Where a cell stands relative to the region, when that can be settled without clipping it.
+ *
+ * A cell crossing no edge of the region is wholly in or wholly out, and one point decides which —
+ * so the general boolean is only needed for the cells that actually meet an outline. Most of a
+ * letter's cells are nowhere near one.
+ *
+ * The crossing test is by box, so it defers on a cell that is merely near an edge. Deferring costs
+ * a clip that was not needed; the other error would cut a cell that was.
+ */
+export function standing(
+  boundary: Boundary,
+  region: Ring[][],
+  cell: Ring,
+): 'inside' | 'outside' | 'clip' {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const [x, y] of cell) {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  const { minX: eMinX, minY: eMinY, maxX: eMaxX, maxY: eMaxY } = boundary;
+  for (let i = 0; i < eMinX.length; i++) {
+    if (
+      (eMinX[i] as number) <= maxX &&
+      (eMaxX[i] as number) >= minX &&
+      (eMinY[i] as number) <= maxY &&
+      (eMaxY[i] as number) >= minY
+    ) {
+      return 'clip';
+    }
+  }
+  const p = cell[0] as Point;
+  return insideRegion(region, p[0], p[1]) ? 'inside' : 'outside';
+}
+
+/** One boundary per region, so the relax and cull passes rebuild nothing between cells. */
+const BOUNDARIES = new WeakMap<Ring[][], Boundary>();
+
+function boundaryFor(region: Ring[][]): Boundary {
+  let b = BOUNDARIES.get(region);
+  if (!b) {
+    b = boundaryOf(region);
+    BOUNDARIES.set(region, b);
+  }
+  return b;
+}
+
 /**
  * Every piece of `cell` the region leaves.
  *
  * Against the region as one multipolygon, never one polygon at a time: asking for the part of a
  * cell inside each polygon separately answers nothing at all for a letter whose bezel leaves two
  * pieces, which is every `i` and every `j`.
+ *
+ * `standing` settles the cells that cross nothing before the clipper is asked. That is most of
+ * them, and the clipper's cost is the letter's own vertex count rather than the cell's — so a cell
+ * in the middle of a stroke was paying for the whole outline to answer "unchanged".
  */
 function clipTo(cell: Ring, region: Ring[][]): Piece[] {
   if (cell.length < 3) return [];
+  switch (standing(boundaryFor(region), region, cell)) {
+    case 'inside':
+      return [{ ring: cell }];
+    case 'outside':
+      return [];
+  }
   try {
     const pieces = polygonClipping.intersection([cell] as never, region as never) ?? [];
     return pieces

@@ -5,6 +5,7 @@ import { WordCaches } from '../../../src/render/caches.js';
 import { createMaterial } from '../../../src/render/looks.js';
 import { cutterFor } from '../../../src/render/wells/cutters.js';
 import { fillFor } from '../../../src/render/wells/fills.js';
+import { boundaryOf, standing } from '../../../src/render/wells/pave.js';
 import { regionOf } from '../../../src/render/wells/region.js';
 import { area, type Ring } from '../../../src/render/wells/rings.js';
 import {
@@ -257,5 +258,58 @@ describe('a proportional bezel', () => {
     expect(scaled.thin).toBeGreaterThan(uniform.thin * 1.5);
     // The bezel is named for the thickest stroke, so the thickest stroke does not move.
     expect(scaled.thick).toBe(uniform.thick);
+  });
+});
+
+describe('standing', () => {
+  /** A 10x10 square with a 4x4 hole in the middle of it. */
+  const REGION: Ring[][] = [
+    [
+      [
+        [0, 0],
+        [10, 0],
+        [10, 10],
+        [0, 10],
+      ],
+      [
+        [3, 3],
+        [7, 3],
+        [7, 7],
+        [3, 7],
+      ],
+    ],
+  ];
+  const cell = (x: number, y: number, r = 0.4): Ring => [
+    [x - r, y - r],
+    [x + r, y - r],
+    [x + r, y + r],
+    [x - r, y + r],
+  ];
+
+  it('says inside for a cell nowhere near an edge, which is most of a letter', () => {
+    expect(standing(boundaryOf(REGION), REGION, cell(1.5, 5))).toBe('inside');
+  });
+
+  it('says outside for a cell beyond the region', () => {
+    expect(standing(boundaryOf(REGION), REGION, cell(20, 20))).toBe('outside');
+  });
+
+  it('says outside for a cell down a hole, not inside the ring that contains it', () => {
+    expect(standing(boundaryOf(REGION), REGION, cell(5, 5))).toBe('outside');
+  });
+
+  it('defers to the clipper for a cell straddling the outer edge', () => {
+    expect(standing(boundaryOf(REGION), REGION, cell(0, 5))).toBe('clip');
+  });
+
+  it('defers to the clipper for a cell straddling a hole', () => {
+    expect(standing(boundaryOf(REGION), REGION, cell(3, 5))).toBe('clip');
+  });
+
+  // The reject is a box test, so an edge whose own box merely overlaps is enough to defer. This
+  // cell stops exactly on the hole's wall without entering it, and still gets clipped. Being wrong
+  // in this direction costs a clip; being wrong the other way cuts a cell that needed one.
+  it('defers rather than guessing when a cell is close but not crossing', () => {
+    expect(standing(boundaryOf(REGION), REGION, cell(2.6, 5))).toBe('clip');
   });
 });

@@ -112,3 +112,8 @@ row('bead (pocket regrowth)', beadMs);
 row('shell (letter body)', shellMs);
 row('fill (stones)', fillMs);
 console.log(`  ${'total'.padEnd(22)} ${total.toFixed(1).padStart(8)}ms`);
+
+// A fast path that returns a cell unclipped must return the same ring the clipper would, or the
+// speed-up is a geometry change wearing an optimisation's clothes.
+const verts = cut.wells.reduce((n, w) => n + w.getPoints(1).length, 0);
+console.log(`\n  pocket vertices: ${verts} over ${wells} wells (${(verts / wells).toFixed(2)} each)`);

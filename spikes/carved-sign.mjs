@@ -36,11 +36,12 @@ const { decoration: _ignored, ...base } = look;
 // `--fill stone` seats a brilliant in every well. Without it the wells stay empty, which is the
 // path every spec written before the fill slice takes and the one that must not change.
 const FILL = arg('fill', '');
+const CUTTER = arg('cutter', 'lattice');
 const options = {
   look: base,
   decoration: {
     kind: 'well',
-    cutter: 'lattice',
+    cutter: CUTTER,
     bezel: Number(arg('bezel', '0.012')),
     floor: Number(arg('floor', '0.09')),
     pitch: Number(arg('pitch', '0.068')),
@@ -81,7 +82,7 @@ await page.goto(`http://127.0.0.1:${server.address().port}/`);
 await page.waitForFunction(() => window.__shot === true, null, { timeout: 60_000 });
 
 mkdirSync(OUT, { recursive: true });
-const file = resolve(OUT, `carved-${TEXT}-${LOOK}${FILL ? `-${FILL}` : ''}.png`);
+const file = resolve(OUT, `carved-${TEXT}-${LOOK}-${CUTTER}${FILL ? `-${FILL}` : ''}.png`);
 writeFileSync(file, await page.screenshot());
 console.log(`wrote ${file}`);
 

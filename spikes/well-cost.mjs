@@ -1,144 +1,127 @@
 /**
- * What does cutting wells into a letter cost?
+ * What a well-cut letter costs to build on the main thread, per cutter and per fill.
  *
- *   npm run build -w klieg && node spikes/well-cost.mjs [--stones 40] [--word JACKPOT]
+ *   npm run build -w klieg && node spikes/well-cost.mjs [word] [face]
  *
- * The wells-and-fills design says to pick a stone pitch against a measurement rather than against
- * a still of one letter, and this is that measurement — taken before any of the pipeline exists,
- * because it does not need it. A well is a hole in the plate, and a hole is a contour on the shape
- * the extruder triangulates; so cutting N of them is just `Shape.holes` with N more rings, and both
- * the vertex count and the build time can be read off today's extruder.
- *
- * Reports per letter, since a word is the sum and the letters differ: an `I` has room for far
- * fewer stones than an `O` and pays proportionally less.
+ * The question a shipped look has to answer: can `lattice` and `pave` be fired the way `gold` is,
+ * or is the block before the first frame long enough that they need their own handling. Cutting
+ * and filling are pure geometry, so this runs without GL — it is the CPU block, not the draw.
  */
 import { readFileSync } from 'node:fs';
 import opentype from 'opentype.js';
 import * as THREE from 'three';
-import {
-  buildChunkBlueprint,
-  chunkInstances,
-  poolFor,
-} from '../packages/core/dist/render/decoration.js';
-import { DEFAULT_GLYPH_OPTIONS, glyphToShapes } from '../packages/core/dist/text/glyphs.js';
+import { cutterFor } from '../packages/core/dist/render/wells/cutters.js';
+import { fillFor } from '../packages/core/dist/render/wells/fills.js';
+import { regionOf } from '../packages/core/dist/render/wells/region.js';
+import { glyphToShapes } from '../packages/core/dist/text/glyphs.js';
 
-const arg = (n, d) => {
-  const i = process.argv.indexOf(`--${n}`);
-  return i >= 0 ? process.argv[i + 1] : d;
-};
-const WORD = arg('word', 'JACKPOT');
-const STONES = arg('stones', '0,10,20,40,80').split(',').map(Number);
-const SEGMENTS = Number(arg('segments', '12'));
-const RADIUS = Number(arg('radius', '0.03'));
+const WORD = process.argv[2] ?? 'FUCK YOU TRAVIS';
+const FACE = process.argv[3] ?? 'default';
 
-const buf = readFileSync(new URL('../apps/lab/public/font.ttf', import.meta.url));
+const buf = readFileSync(
+  FACE === 'default'
+    ? new URL('../apps/lab/public/font.ttf', import.meta.url)
+    : new URL(`../apps/lab/public/fonts/${FACE}.ttf`, import.meta.url),
+);
 const font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
 
+const SPEC = {
+  kind: 'well',
+  bezel: 0.012,
+  floor: 0.09,
+  pitch: 0.055,
+  size: 0.048,
+  look: {},
+  fill: 'stone',
+  tint: 0.5,
+  sink: 0.25,
+};
+
+const chars = [...new Set([...WORD].filter((c) => c.trim()))];
+console.log(`word "${WORD}": ${[...WORD].filter((c) => c.trim()).length} letters, ${chars.length} distinct\n`);
+
+const pad = (s, w) => String(s).padEnd(w);
+const f1 = (n, w) => n.toFixed(1).padStart(w);
+
+for (const cutter of ['lattice', 'pave']) {
+  const cut = cutterFor(cutter);
+  const fill = fillFor('stone');
+  let cutMs = 0;
+  let fillMs = 0;
+  let wells = 0;
+  console.log(`--- ${cutter} ---`);
+  for (const [i, char] of chars.entries()) {
+    const shapes = glyphToShapes(font, char, 1);
+    const region = regionOf(shapes, 'proportional');
+    const t0 = performance.now();
+    const result = cut(shapes, region, { ...SPEC, cutter });
+    const t1 = performance.now();
+    const filled = fill(
+      result.seats,
+      {
+        // `applyLook` writes flake uniforms straight into `userData.flake`, which the real
+        // pipeline attaches when it compiles the shader. Stubbed here so the fill runs without GL.
+        material: () => {
+          const m = new THREE.MeshPhysicalMaterial();
+          m.userData.flake = {
+            uFlakeDensity: { value: 0 },
+            uFlakeSize: { value: 0 },
+            uFlakeSpread: { value: 0 },
+            uFlakeBump: { value: 0 },
+            uFlakeGloss: { value: 0 },
+            uFlakeColor: { value: new THREE.Color() },
+            uFlakeColorMix: { value: 0 },
+          };
+          return m;
+        },
+        faceZ: 0,
+        floorZ: -SPEC.floor,
+        girdleZ: -0.003,
+      },
+      { ...SPEC, cutter },
+    );
+    const t2 = performance.now();
+    cutMs += t1 - t0;
+    fillMs += t2 - t1;
+    wells += result.seats.length;
+    console.log(`  ${pad(`${i + 1}/${chars.length}`, 6)} ${pad(char, 3)} ${f1(t1 - t0, 7)}ms cut  ${f1(t2 - t1, 7)}ms fill  ${String(result.seats.length).padStart(4)} wells`);
+    filled.geometry?.dispose?.();
+  }
+  const perWord = ((cutMs + fillMs) / chars.length) * [...WORD].filter((c) => c.trim()).length;
+  console.log(`  distinct total: ${f1(cutMs, 7)}ms cut + ${f1(fillMs, 7)}ms fill, ${wells} wells`);
+  console.log(`  a whole word, cached per distinct char: ${f1(cutMs + fillMs, 7)}ms`);
+  console.log(`  uncached, every letter cut: ${f1(perWord, 7)}ms\n`);
+}
+
 /**
- * Where the stones sit. Reuses the chunk sampler rather than inventing a placement: it already
- * scatters over a glyph's surface with the cap bias a set stone would want, so the wells land where
- * a real one would and the count is honest about clustering.
+ * Where pavé's time goes. `relax` is Lloyd iteration over the whole cell field, so it is the first
+ * thing to suspect and the one knob that could move the cost by an order of magnitude.
  */
-function seats(shapes, n) {
-  if (n === 0) return [];
-  const geo = new THREE.ExtrudeGeometry(shapes, {
-    depth: DEFAULT_GLYPH_OPTIONS.depth,
-    bevelEnabled: false,
-  });
-  const spec = { kind: 'chunks', count: n, size: RADIUS * 2, shape: 'disc', align: 0, cluster: 0, proud: 0, faceBias: 32, look: {} };
-  const blueprint = buildChunkBlueprint(geo, { pool: poolFor(spec), faceBias: spec.faceBias });
-  const { matrices } = chunkInstances(blueprint, spec, 0);
-  geo.dispose();
-  const out = [];
-  const at = new THREE.Vector3();
-  for (const m of matrices) {
-    at.setFromMatrixPosition(m);
-    // Front cap only: a well cut into the extrusion band is a different cutter, and the design
-    // starts with a hole in a plate.
-    if (at.z > DEFAULT_GLYPH_OPTIONS.depth - 1e-3) out.push({ x: at.x, y: at.y });
+if (process.argv.includes('--relax')) {
+  const cut = cutterFor('pave');
+  console.log('--- pave, relax sweep on one letter ---');
+  console.log('relax    cut      wells');
+  for (const relax of [0, 1, 2, 3, 4, 6]) {
+    const shapes = glyphToShapes(font, 'R', 1);
+    const region = regionOf(shapes, 'proportional');
+    const t0 = performance.now();
+    const result = cut(shapes, region, { ...SPEC, cutter: 'pave', relax });
+    const ms = performance.now() - t0;
+    console.log(`${String(relax).padStart(5)}  ${f1(ms, 7)}ms  ${String(result.seats.length).padStart(5)}`);
   }
-  return out;
 }
 
-/** The same shapes with `n` circular holes added to whichever outline contains each seat. */
-function withWells(shapes, seats) {
-  const cut = shapes.map((s) => {
-    const copy = s.clone();
-    copy.holes = s.holes.map((h) => h.clone());
-    return copy;
-  });
-  let placed = 0;
-  for (const seat of seats) {
-    const host = cut.find((s) => THREE.ShapeUtils.isClockWise(s.getPoints(24)) !== undefined && inside(s, seat));
-    if (!host) continue;
-    const hole = new THREE.Path();
-    hole.absarc(seat.x, seat.y, RADIUS, 0, Math.PI * 2, true);
-    host.holes.push(hole);
-    placed++;
+/** Cost against cell count. `pitch` is what sets how many cells a letter holds. */
+if (process.argv.includes('--pitch')) {
+  const cut = cutterFor('pave');
+  console.log('--- pave, pitch sweep on one letter (relax 0) ---');
+  console.log('pitch     cut    wells   ms/well');
+  for (const pitch of [0.055, 0.07, 0.09, 0.12, 0.16, 0.22]) {
+    const shapes = glyphToShapes(font, 'R', 1);
+    const region = regionOf(shapes, 'proportional');
+    const t0 = performance.now();
+    const r = cut(shapes, region, { ...SPEC, cutter: 'pave', pitch, relax: 0 });
+    const ms = performance.now() - t0;
+    console.log(`${pitch.toFixed(3)}  ${f1(ms, 7)}ms  ${String(r.seats.length).padStart(5)}  ${f1(ms / Math.max(1, r.seats.length), 8)}`);
   }
-  return { cut, placed };
 }
-
-function inside(shape, point) {
-  const poly = shape.getPoints(24);
-  let hit = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const a = poly[i];
-    const b = poly[j];
-    if (a.y > point.y !== b.y > point.y && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x) {
-      hit = !hit;
-    }
-  }
-  return hit;
-}
-
-console.log(`wells at r=${RADIUS} em, ${SEGMENTS}-gon each, over "${WORD}"\n`);
-console.log('  asked   seated   vertices   triangles   build ms   per well   no bevel');
-const base = { v: 0, t: 0, bare: 0 };
-for (const n of STONES) {
-  let vertices = 0;
-  let triangles = 0;
-  let bare = 0;
-  let placed = 0;
-  const t0 = performance.now();
-  for (const ch of WORD) {
-    const shapes = glyphToShapes(font, ch, 1);
-    const { cut, placed: got } = withWells(shapes, seats(shapes, n));
-    placed += got;
-    const geo = new THREE.ExtrudeGeometry(cut, {
-      ...DEFAULT_GLYPH_OPTIONS,
-      bevelEnabled: true,
-      bevelOffset: 0,
-      curveSegments: SEGMENTS,
-    });
-    vertices += geo.getAttribute('position').count;
-    const index = geo.getIndex();
-    triangles += (index ? index.count : geo.getAttribute('position').count) / 3;
-    geo.dispose();
-    // The same cut without a bevel: a well's own bevel is what seats a stone, so what it costs
-    // over a bare hole is the number that decides whether the seat is geometry or a fill's job.
-    const flat = new THREE.ExtrudeGeometry(cut, {
-      depth: DEFAULT_GLYPH_OPTIONS.depth,
-      bevelEnabled: false,
-      curveSegments: SEGMENTS,
-    });
-    bare += flat.getAttribute('position').count;
-    flat.dispose();
-  }
-  const ms = performance.now() - t0;
-  if (n === 0) {
-    base.v = vertices;
-    base.t = triangles;
-    base.bare = bare;
-  }
-  const per = placed > 0 ? (vertices - base.v) / placed : 0;
-  const perBare = placed > 0 ? (bare - base.bare) / placed : 0;
-  console.log(
-    `  ${String(n).padStart(5)}   ${String(placed).padStart(6)}   ${String(vertices).padStart(8)}` +
-      `   ${String(triangles).padStart(9)}   ${ms.toFixed(0).padStart(8)}` +
-      `   ${per ? `+${per.toFixed(0)}`.padStart(8) : '       —'}   ${perBare ? `+${perBare.toFixed(0)}` : '—'}`,
-  );
-}
-console.log(`\n  asked is per letter; seated is the word's total, and falls short because the`);
-console.log('  sampler only takes seats on the front cap.');
-console.log(`  baseline is ${base.v} vertices for ${WORD.length} letters, ${base.bare} of them unbevelled.`);

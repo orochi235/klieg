@@ -19,7 +19,9 @@ a sign flickers for a few seconds, then chases, then shifts hue, forever. It is 
 currently on.
 
 Each part carries its own index. Its nominal boundary for step *k* is `k * every + phase`, where
-`phase` comes from the `EffectSpec`'s existing `stagger` — so the handover sweeps across the word
+`phase` comes from the `EffectSpec`'s existing `stagger`, spread over one step rather than over the
+whole pass: `phase = staggerFraction(part) * stagger * every`, so the last part to turn is at most
+one step behind the first however many pieces the list holds. The handover sweeps across the word
 instead of snapping the whole sign at once. `stagger: 0` degrades to the whole-word switch, which
 is why that case needs no separate mode.
 
@@ -48,7 +50,7 @@ deadline   forced   in order
 ```
 
 *Forced* is the share of handovers that pop rather than land at rest. *In order* is the share of
-neighbouring parts that still hand over in index order — the sweep reading as a sweep. Give the
+neighboring parts that still hand over in index order — the sweep reading as a sweep. Give the
 deferral room and the pops nearly vanish, but parts reach rest on their own schedules and the wipe
 decays into noise. Both curves flatten by 800ms, past which legibility is being paid for nothing.
 The floor near 33% is structural: one piece in three never rests, so every exit from it is forced.

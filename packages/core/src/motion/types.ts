@@ -32,7 +32,7 @@ export type EnterName = 'slam' | 'spin' | 'flip' | 'assemble' | 'rise' | 'none';
 export type ActiveName = 'float' | 'pulse' | 'shimmer' | 'none';
 export type ExitName = 'shatter' | 'drop' | 'recede' | 'fade' | 'none';
 
-export type StaggerFrom = 'start' | 'end' | 'center' | 'edges' | 'random';
+export type StaggerFrom = 'start' | 'end' | 'center' | 'edges' | 'random' | 'line';
 
 export interface StaggerSpec {
   /** Fraction of the pass consumed by the ramp-in. Ignored when `each` is given. */
@@ -92,6 +92,12 @@ export function orderKey(item: Ordered, spec: StaggerSpec = {}): number {
   switch (from) {
     case 'random':
       return hash01(item.index);
+    // One line is no ordering at all, and would start every part together; reading order is what
+    // the repertoire already does, so a single-line block plays exactly as it did.
+    case 'line':
+      return (item.lineCount ?? 1) > 1
+        ? (item.line ?? 0) / Math.max(1, item.lineCount as number)
+        : item.index / Math.max(1, item.count);
     case 'end':
       return 1 - item.index / Math.max(1, item.count);
     case 'center':

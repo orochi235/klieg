@@ -1,7 +1,10 @@
 # The backdrop: rows of the word behind the word
 
+**Built.** `FireOptions.backdrop`, `MAX_BACKDROP_ROWS` and `stagger: { from: 'line' }` are in
+`packages/core/src/index.ts` and `motion/types.ts`; the README section is *The backdrop*.
+
 **For:** whoever works on `index.ts`'s fire path or `effects/` next. **Answers:** what a backdrop
-is, why the rows cost nothing to build, and what is still unmeasured.
+is, what the rows cost to build and to draw, and where the cap comes from.
 
 A backdrop is the sign repeated in rows behind the fired word — tilted, dimmed, running an effect
 that crawls across the rows. It is not tied to a look: any look and any effect can be used this
@@ -55,20 +58,41 @@ shared cache, fire 2/7:  0.0ms
 shared cache, fire 7/7:  0.0ms
 ```
 
-Every glyph extrusion and every tube blueprint the first row builds is already cached for the rest,
-so rows beyond the first are free to build. This is a constraint, not a nicety: constructed with a
-cache of its own, each row pays a full rebuild and seven rows block the main thread for around 40ms
-before the first frame.
+Every glyph extrusion the first row builds is already cached for the rest, so rows beyond the first
+are free to build. This is a constraint, not a nicety: constructed with a cache of its own, each row
+pays a full rebuild and seven rows block the main thread for around 40ms before the first frame.
 
-## What is not yet measured
+A tube blueprint is the exception, and the figures above do not cover it. Its cache key carries the
+letter slot as well as the character, and every row's letters take fresh slots — so a `tubing`
+backdrop builds a blueprint per letter per row however the cache is shared. The numbers above are a
+repeat fire of the same word, where the slots line up; extra rows are not that case.
 
-The per-frame cost, which is the real risk and is not the build. Seven rows of fifteen letters is
-seven times the part pool, and the effect compositor evaluates every part every frame. On `tubing`
-a letter is many runs, so this may be thousands of `at()` calls per frame.
+## What a frame costs
 
-`rows` is capped at whatever a browser measurement supports. That measurement happens during
-implementation; no cap is picked here, because a number chosen now would be a guess wearing a
-limit's clothes.
+The per-frame cost was the real risk, and it is the look's, not the row count's. Measured with
+`spikes/backdrop-frame-cost.mjs` on "JACKPOT JACKPOT", 15 letters, a chase staggered by line,
+90 timed frames each:
+
+```
+look     rows  median    p95
+gold        1    0.10   0.20
+gold        7    0.30   0.40
+gold       16    0.40   0.50
+tubing      1    3.80   4.50
+tubing      4   10.40  11.30
+tubing      7   17.40  18.50
+tubing      8   19.60  20.90
+```
+
+`gold` addresses one body part per letter and barely notices the rows. `tubing` addresses many runs
+per letter, costs about 2.2ms a row, and passes a 60Hz frame's 16.7ms between 6 and 7 rows. The
+same sweep on a software rasterizer landed within 0.3ms of these numbers at every point, so this is
+the compositor and the run-color buffer writes rather than the draw — it does not improve on a
+faster GPU, and it gets worse on a slower CPU.
+
+`rows` is therefore capped at 12 as a guard on the allocation rather than as a frame budget: it
+sits above what the cheap looks manage comfortably and well above what the expensive ones can
+afford, and a caller wanting more than that is asking for wallpaper and should say so with `text`.
 
 ## Reduced motion
 

@@ -10,7 +10,14 @@ import type { PoseOffset, Vec3 } from '../../src/pose.js';
 import { WordCaches } from '../../src/render/caches.js';
 import type { ChunkSpec } from '../../src/render/decoration.js';
 import type { FlakeUniforms } from '../../src/render/flake.js';
-import { LOOKS, type LookSpec, lightBase, litEmissive, specOf } from '../../src/render/looks.js';
+import {
+  LOOKS,
+  type Look,
+  type LookSpec,
+  lightBase,
+  litEmissive,
+  specOf,
+} from '../../src/render/looks.js';
 import type { GradientSpec } from '../../src/render/tube/gradient.js';
 import { Word } from '../../src/render/word.js';
 import type { LoadedFont } from '../../src/text/font.js';
@@ -2479,5 +2486,86 @@ describe('framing alignment', () => {
     const word = new Word('AA', stubFont(), 'gold', START);
 
     expect(word.readout().fit.offsetX).toBe(word.group.position.x);
+  });
+});
+
+describe('a dimmed word', () => {
+  /** The lit tube run's material, which carries the decoration's own frame-owned base. */
+  function litTube(word: Word): THREE.MeshPhysicalMaterial {
+    const runs = drawn(groups(word)[0] as THREE.Group).children.slice(1);
+    const materials = runs.map((run) => (run as THREE.Mesh).material as THREE.MeshPhysicalMaterial);
+    const lit = materials.find((material) => material.emissive.getHex() !== 0x000000);
+    if (!lit) throw new Error('the word has no lit tube run to measure');
+    return lit;
+  }
+
+  function dimmed(look: Look, dim: number): Word {
+    // biome-ignore format: the trailing options are easier to read against the positional tail
+    return new Word('A', stubFont(), look, ROOMY, false, undefined, undefined, null, undefined, undefined, undefined, { dim });
+  }
+
+  it('scales the body emissive base, which is what an effect gain then modulates', () => {
+    expect(materialOf(dimmed('neon', 0.25)).emissiveIntensity).toBeCloseTo(3.2 * 0.25, 10);
+  });
+
+  it('scales the body opacity base', () => {
+    expect(materialOf(dimmed({ opacity: 0.8 }, 0.5)).opacity).toBeCloseTo(0.4, 10);
+  });
+
+  it('reaches a decoration base too, not only the body', () => {
+    expect(litTube(dimmed('tubing', 0.5)).emissiveIntensity).toBeCloseTo(3.4 * 0.5, 10);
+  });
+
+  it('leaves an effect gain to compose on top, so a chase keeps its full contrast', () => {
+    const half: EffectPiece = { duration: 1000, at: () => ({ gain: 0.5 }) };
+    const effects: LookSpec['effects'] = [{ piece: half, target: { kind: 'body', by: 'index' } }];
+    const word = dimmed({ ...specOf('neon'), effects }, 0.25);
+
+    word.apply(
+      timelineOf(() => ({})),
+      50,
+      NO_CTX,
+    );
+
+    expect(materialOf(word).emissiveIntensity).toBeCloseTo(3.2 * 0.25 * 0.5, 10);
+  });
+
+  it('leaves the base alone when no dim is asked for', () => {
+    expect(materialOf(new Word('A', stubFont(), 'neon', ROOMY)).emissiveIntensity).toBe(3.2);
+  });
+});
+
+describe('a fitted scale override', () => {
+  function forced(text: string, budget: Budget, fitScale: number): Word {
+    // biome-ignore format: the trailing options are easier to read against the positional tail
+    return new Word(text, stubFont(), 'gold', budget, false, undefined, undefined, null, undefined, undefined, undefined, { fitScale });
+  }
+
+  it('takes the scale it is given instead of the one the budget would fit', () => {
+    const fitted = new Word('AA', stubFont(), 'gold', ROOMY);
+    const word = forced('AA', ROOMY, fitted.placement.scale * 1.6);
+
+    expect(word.placement.scale).toBeCloseTo(fitted.placement.scale * 1.6, 10);
+    expect(word.group.scale.x).toBeCloseTo(fitted.placement.scale * 1.6, 10);
+  });
+
+  it('centres on its own block, so the override changes the size and not the placing', () => {
+    const rows = 'AA\nAA\nAA';
+    const fitted = new Word(rows, stubFont(), 'gold', ROOMY);
+    const word = forced(rows, ROOMY, 0.5);
+
+    expect(word.placement.midY).toBe(fitted.placement.midY);
+    expect(word.group.position.y).toBeCloseTo(-fitted.placement.midY * 0.5, 10);
+  });
+
+  it('places the aligned edge at the forced scale, not the fitted one', () => {
+    const LEFT: Budget = { width: 100, height: 100, extent: 200, edge: 'left' };
+    const fitted = new Word('AA', stubFont(), 'gold', LEFT);
+
+    // The painted left edge meets the box either way, so a different scale needs a different offset.
+    expect(forced('AA', LEFT, fitted.placement.scale / 2).placement.offsetX).not.toBeCloseTo(
+      fitted.placement.offsetX,
+      6,
+    );
   });
 });

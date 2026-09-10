@@ -6,7 +6,6 @@ import type { Crown } from '../inflate.js';
 import {
   applyLook,
   type FrameOwnedBase,
-  frameOwnedBase,
   type LightBase,
   lightBase,
   litEmissive,
@@ -44,7 +43,7 @@ export class WellBuilder implements DecorationBuilder {
     private readonly spec: WellSpec,
     private readonly ctx: WordBuildContext,
   ) {
-    this.base = frameOwnedBase(spec.stone ?? 'gem');
+    this.base = ctx.frameBase(spec.stone ?? 'gem');
     this.bodies = new GlyphCache<THREE.BufferGeometry>((char, depth) => {
       const shell = buildShell(ctx.shapes(char), this.cutOf(char), {
         ...DEFAULT_SHELL,

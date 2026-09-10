@@ -4,6 +4,7 @@ import type { LoadedFont } from '../../text/font.js';
 import type { WordCaches } from '../caches.js';
 import type { DecorationSpec } from '../decoration.js';
 import type { InflateOptions } from '../inflate.js';
+import type { FrameOwnedBase, Look } from '../looks.js';
 // Type-only, and must stay so: word.ts imports this module for real, so a value import here
 // would close the cycle. A type-only one is erased at compile time.
 import type { WordDebugHooks } from '../word.js';
@@ -26,6 +27,11 @@ export interface WordBuildContext {
   readonly baseY: readonly number[];
   /** A fresh material carrying the studio's environment settings. */
   studioMaterial(): THREE.MeshPhysicalMaterial;
+  /**
+   * A look's frame-owned base. Always this rather than `frameOwnedBase` directly: the word may be
+   * a dimmed one, and only this knows it.
+   */
+  frameBase(look: Look): FrameOwnedBase;
   glyph(char: string, depth: number): THREE.BufferGeometry;
   /** This glyph's contours, shared and cached. Clone before mutating. */
   shapes(char: string): THREE.Shape[];

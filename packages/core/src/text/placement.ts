@@ -129,8 +129,12 @@ export interface GlyphBounds {
  * cap height: a descender both drops the centre and eats budget. Alignment measures the painted
  * extent rather than the advance span the fit is scored on, so an edge glyph's side bearing does
  * not hold the word off the edge it was asked to meet.
+ *
+ * `force` takes the place of the scale the budget would give, and the vertical middle and the
+ * alignment are then measured at it — a block deliberately larger than the box still meets the
+ * edge it was ranged against.
  */
-export function fitOf(placed: Placement, geo: GlyphBounds, budget: Budget): Fit {
+export function fitOf(placed: Placement, geo: GlyphBounds, budget: Budget, force?: number): Fit {
   let minY = Number.POSITIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
   let minX = Number.POSITIVE_INFINITY;
@@ -153,7 +157,7 @@ export function fitOf(placed: Placement, geo: GlyphBounds, budget: Budget): Fit 
   }
 
   const drawn = Number.isFinite(minY);
-  const scale = fitScale(placed.inkWidth, drawn ? maxY - minY : 0, budget);
+  const scale = force ?? fitScale(placed.inkWidth, drawn ? maxY - minY : 0, budget);
 
   return {
     scale,

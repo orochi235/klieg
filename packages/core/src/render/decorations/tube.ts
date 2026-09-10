@@ -3,13 +3,7 @@ import type { ResolvedOffset } from '../../effects/types.js';
 import { DEFAULT_GLYPH_OPTIONS, EM, glyphToShapes } from '../../text/glyphs.js';
 import { buildTubeBlueprint, type TubeBlueprint, type TubeSpec } from '../decoration.js';
 import { seedFlake } from '../flake.js';
-import {
-  applyLook,
-  type FrameOwnedBase,
-  frameOwnedBase,
-  litEmissive,
-  setEmissiveIntensity,
-} from '../looks.js';
+import { applyLook, type FrameOwnedBase, litEmissive, setEmissiveIntensity } from '../looks.js';
 import { CRAWL_ATTRIBUTE, rampTexture } from '../tube/gradient.js';
 import {
   GRADIENT_BOUNDS_UNIFORM,
@@ -74,8 +68,8 @@ export class TubeBuilder implements DecorationBuilder {
     private readonly spec: TubeSpec,
     private readonly ctx: WordBuildContext,
   ) {
-    this.litBase = frameOwnedBase(spec.look);
-    this.darkBase = frameOwnedBase(spec.dark);
+    this.litBase = ctx.frameBase(spec.look);
+    this.darkBase = ctx.frameBase(spec.dark);
     this.gradientRamp = spec.gradient ? rampTexture(spec.gradient.stops) : null;
   }
 

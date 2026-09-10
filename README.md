@@ -629,6 +629,52 @@ For a static page with no bundler, `klieg/element/standalone` — `dist/standalo
 is the element, klieg and three inlined in one file a `<script type="module">` can load by itself.
 It ships no declarations: it is a script tag's build, not one to import from TypeScript.
 
+## The backdrop
+
+A backdrop is the sign repeated in rows behind the fired word — tilted, dimmed, running an effect
+that crawls across the rows. It is not tied to a look: any look and any effect can be used this way.
+
+```js
+import { fire, fromEuler } from 'klieg';
+
+const DEG = Math.PI / 180;
+
+await fire('JACKPOT!', {
+  look: 'gem',
+  backdrop: {
+    rows: 7,
+    look: 'tubing',
+    effects: [{ piece: 'chase', target: { kind: 'run', by: 'index' }, stagger: { from: 'line' } }],
+    transform: fromEuler(0, 0, -12 * DEG),
+    scale: 1.6,
+    dim: 0.35,
+  },
+});
+```
+
+It is a second word behind the hero, and it never takes the motion slots — no enter, no active, no
+exit. It is placed once and runs only its effects, so it is already at full presence when the hero
+arrives over it. Under reduced motion it is still placed and its effects hold still: the rows are
+composition, the crawl is motion.
+
+`scale` is a multiple of the hero's fitted size rather than of the backdrop's own, so the rows can
+overfill the frame and a tilt does not expose a corner. `dim` scales the backdrop's frame-owned
+base — its opacity and its emissive — rather than the effect layer, so an effect still modulates
+from the dimmed value and a chase reads at full contrast against a dimmed row. `look` defaults to
+the hero's, and `text` replaces what is repeated. The backdrop adds nothing to the DOM: the hero
+already carries the text a reader copies or a screen reader reads.
+
+**`stagger: { from: 'line' }` is what makes an effect crawl across the rows** — it orders parts by
+row instead of by reading order, and every part of a row starts together. It is general, and works
+on any multi-line block; on a single-line one it degrades to reading order, so nothing already
+written moves.
+
+**A backdrop shares the instance's caches, which is why the rows are affordable to build** — every
+glyph the first row extrudes is already cached for the rest. It is a per-frame cost, not a build
+cost, and the look decides it far more than the row count does: on a 15-letter sign `gold` runs 16
+rows in 0.4ms a frame, where `tubing` costs about 2.2ms a row and passes a 60Hz frame's budget at
+7 of them. `rows` is capped at 12; past that, say what you want with `text`.
+
 ## Multiple lines
 
 A `\n` in the text always breaks a line, and each line is centered on its own:

@@ -51,6 +51,29 @@ export interface WordDebugHooks {
   onLetter?(cell: THREE.Group, shapes: THREE.Shape[], depth: number): void;
 }
 
+/**
+ * Knobs a second word placed behind the first needs and a fired word does not, kept off the
+ * positional tail so neither has to name the other's defaults.
+ */
+export interface WordOptions {
+  /**
+   * The world scale to place the block at, in place of the one the budget fits it to. A backdrop
+   * takes the hero's, so its rows are a multiple of the hero's letter size and may overfill.
+   */
+  fitScale?: number;
+  /**
+   * Scales every frame-owned base this word builds — the body's and each decoration's. Deliberately
+   * not `gain`: that is the effect layer's own channel, so an effect writing it would fight this,
+   * where a scaled base is what every effect then modulates.
+   */
+  dim?: number;
+  /**
+   * World units to sit back from the plane a fired word occupies, so another word can draw over
+   * this one. Enough of it clears both words' extrusions; the depth buffer does the rest.
+   */
+  behind?: number;
+}
+
 /** One group per letter — per-letter motion (spin, flip, shatter) needs independent transforms. */
 /** The ink bounding box of a word's part pool, in its own layout space. */
 export interface WordExtent {
@@ -133,6 +156,12 @@ export class Word {
    * a word before its first frame is a word at rest.
    */
   private readonly bodyBase: FrameOwnedBase;
+  /** Multiplier on every base this word resolves through `frameBase`. 1 leaves them untouched. */
+  private readonly dim: number;
+  /** The scale this word was told to hold, if it was; undefined leaves the budget to fit it. */
+  private readonly forcedScale: number | undefined;
+  /** How far back the fit places the whole group, in world units. */
+  private readonly behind: number;
   private disposed = false;
 
   constructor(
@@ -147,14 +176,18 @@ export class Word {
     caches?: WordCaches,
     sizeOf?: (slot: number) => number,
     family?: string,
+    opts: WordOptions = {},
   ) {
+    this.dim = opts.dim ?? 1;
+    this.forcedScale = opts.fitScale;
+    this.behind = opts.behind ?? 0;
     this.sizeOf = sizeOf;
     this.family = family ?? font.family;
     this.envMap = envMap;
     this.group.add(this.inner);
 
     const spec = specOf(look);
-    this.bodyBase = frameOwnedBase(spec);
+    this.bodyBase = this.frameBase(spec);
 
     this.font = font;
     this.debug = debug;
@@ -194,7 +227,7 @@ export class Word {
       this.geoMaxY.push(drawn ? drawn.max.y : null);
     }
     this.liveCount = placed.x.length;
-    this.fit = fitOf(placed, this.glyphBounds(), budget);
+    this.fit = fitOf(placed, this.glyphBounds(), budget, this.forcedScale);
     this.fitFrom = this.fit;
     this.fitTo = this.fit;
     this.applyFit(this.fit);
@@ -444,7 +477,21 @@ export class Word {
 
   private applyFit(fit: Fit): void {
     this.group.scale.setScalar(fit.scale);
-    this.group.position.set(fit.offsetX, -fit.midY * fit.scale, 0);
+    this.group.position.set(fit.offsetX, -fit.midY * fit.scale, -this.behind);
+  }
+
+  /**
+   * A look's frame-owned base, scaled by this word's `dim`. Every base a builder resolves comes
+   * through here rather than through `frameOwnedBase` directly, so `dim` lands in one place
+   * instead of once per decoration kind.
+   */
+  frameBase(look: Look): FrameOwnedBase {
+    const base = frameOwnedBase(look);
+    if (this.dim === 1) return base;
+    return {
+      opacity: base.opacity * this.dim,
+      emissiveIntensity: base.emissiveIntensity * this.dim,
+    };
   }
 
   /** A material carrying the studio, listed so `setEnvRotation` can turn every one of them. */
@@ -647,7 +694,7 @@ export class Word {
     }
 
     this.fitFrom = this.fit;
-    this.fitTo = fitOf(placed, this.glyphBounds(kept), this.budget);
+    this.fitTo = fitOf(placed, this.glyphBounds(kept), this.budget, this.forcedScale);
     this.setGradientBounds();
     this.layoutVersion++;
 

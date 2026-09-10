@@ -14,7 +14,6 @@ import { seedFlake } from '../flake.js';
 import {
   applyLook,
   type FrameOwnedBase,
-  frameOwnedBase,
   type LightBase,
   lightBase,
   litEmissive,
@@ -41,7 +40,7 @@ export class ChunksBuilder implements DecorationBuilder {
     private readonly spec: ChunkSpec,
     private readonly ctx: WordBuildContext,
   ) {
-    this.base = frameOwnedBase(spec.look);
+    this.base = ctx.frameBase(spec.look);
     this.sharedGeometry = chunkGeometry(spec.shape);
     // Bedding places a glyph's chunks by where the glyph sits in the word, so its pool cannot be
     // shared between two letters the way a plain scatter's can.

@@ -176,6 +176,35 @@ describe('orderKey', () => {
       orderKey(word(2), { from: 'center' }),
     );
   });
+
+  it('orders by row for line, so an effect crawls down the block', () => {
+    const at = (index: number, line: number): LetterInfo => ({
+      index,
+      count: 6,
+      line,
+      column: index % 3,
+      lineCount: 3,
+      columnCount: 3,
+    });
+
+    // Every letter of a row shares its key, and a later row goes later.
+    expect(orderKey(at(0, 0), { from: 'line' })).toBe(orderKey(at(2, 0), { from: 'line' }));
+    expect(orderKey(at(3, 1), { from: 'line' })).toBeGreaterThan(
+      orderKey(at(0, 0), { from: 'line' }),
+    );
+  });
+
+  it('degrades to reading order on a single-line block, so nothing already written moves', () => {
+    const one = (index: number): LetterInfo => ({ index, count: 5, line: 0, lineCount: 1 });
+
+    expect([0, 1, 2, 3, 4].map((i) => orderKey(one(i), { from: 'line' }))).toEqual(
+      [0, 1, 2, 3, 4].map((i) => orderKey(one(i))),
+    );
+  });
+
+  it('degrades to reading order for a part with no row at all', () => {
+    expect(orderKey(word(3), { from: 'line' })).toBe(orderKey(word(3)));
+  });
 });
 
 describe('stagger spec forms', () => {

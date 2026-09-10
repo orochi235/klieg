@@ -59,14 +59,20 @@ Every glyph extrusion the first row builds is already cached for the rest, so ro
 are free to build. This is a constraint, not a nicety: constructed with a cache of its own, each row
 pays a full rebuild and seven rows block the main thread for around 40ms before the first frame.
 
-**Tube blueprints are the exception, and the measurement above does not cover them.** Two things
-keep a blueprint from being shared, and only the first is obvious: the cache key carries a
-per-letter seed (`decorations/tube.ts` says so at the point of use), so the same character in two
-rows keys differently; and a blueprint already lent out cannot be lent twice, so `takeBlueprint`
-builds a fresh spare even when the key does match. Every row of a `tubing` backdrop therefore
-builds its own blueprints. The 0.0ms figures come from sequential fires, which release their
-blueprints in between — rows within one word hold theirs at the same time, which is a different
-case and is not what was measured.
+**Tube blueprints are the exception, and the measurement above does not cover them.** Two separate
+rules apply, at different scopes:
+
+*Every row builds its own.* The blueprint cache key takes the letter's own index as its seed
+(`decorations/tube.ts:132`), so the same character on two rows keys differently and each row builds
+from scratch. This is the row cost, and the seed alone accounts for all of it.
+
+*The backdrop also cannot borrow the hero's.* A blueprint already lent out cannot be lent twice, so
+`takeBlueprint` builds a fresh spare even on a key that matches. Hero and backdrop are two words
+alive at once with overlapping indices, and the backdrop defaults to the hero's text and look — so
+its low letters take spares. This is a cost of the pair, not of the rows.
+
+The 0.0ms figures come from sequential fires, which release their blueprints in between. Neither
+rule was in play there, so the measurement never covered either case.
 
 ## What is not yet measured
 

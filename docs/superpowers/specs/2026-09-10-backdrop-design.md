@@ -62,10 +62,20 @@ Every glyph extrusion the first row builds is already cached for the rest, so ro
 are free to build. This is a constraint, not a nicety: constructed with a cache of its own, each row
 pays a full rebuild and seven rows block the main thread for around 40ms before the first frame.
 
-A tube blueprint is the exception, and the figures above do not cover it. Its cache key carries the
-letter slot as well as the character, and every row's letters take fresh slots — so a `tubing`
-backdrop builds a blueprint per letter per row however the cache is shared. The numbers above are a
-repeat fire of the same word, where the slots line up; extra rows are not that case.
+**Tube blueprints are the exception, and the measurement above does not cover them.** The cache key
+carries a per-letter seed, and `decorations/tube.ts` passes the letter slot as that seed — so within
+one word every letter keys differently, and a `tubing` backdrop builds a blueprint per letter per
+row however the cache is shared. Nothing in `caches.ts` knows what a slot is; the seed is the
+mechanism, and the slot is only what the tube builder happens to put in it.
+
+A second, separate rule bites where the hero and the backdrop overlap. A blueprint already lent out
+cannot be lent twice, so `takeBlueprint` builds a fresh spare on a key that does match. A backdrop
+taking the hero's look and text — which is the default — repeats its low slots, so those letters
+take spares rather than the cached blueprint. This never fires between rows of one word, whose
+seeds are all distinct.
+
+The 0.0ms figures above are sequential fires, which release their blueprints in between. Two words
+alive at once is a different case, and is not what was measured.
 
 ## What a frame costs
 

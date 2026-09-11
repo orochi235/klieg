@@ -163,12 +163,12 @@ describe('sheetLetterOf', () => {
   });
 });
 
-/** Runs a material's patch over a skeleton of three's shaders, as the renderer would. */
+/** Runs a material's patch over three's own physical shaders, as the renderer would. */
 function patched(material: THREE.MeshPhysicalMaterial) {
   const shader = {
     uniforms: {} as Record<string, { value: unknown }>,
-    vertexShader: 'void main() {\n#include <beginnormal_vertex>\n#include <begin_vertex>\n}',
-    fragmentShader: 'void main() {\n}',
+    vertexShader: THREE.ShaderLib.physical.vertexShader,
+    fragmentShader: THREE.ShaderLib.physical.fragmentShader,
   };
   material.onBeforeCompile(shader as never, {} as THREE.WebGLRenderer);
   return shader;
@@ -189,10 +189,21 @@ describe('maskMaterial', () => {
     maskMaterial(body, sheetUniforms(letter, shift), 'body');
     const stones = createMaterial(null);
     maskMaterial(stones, sheetUniforms(letter, shift), 'stones');
-    expect(patched(body).vertexShader).toContain(`attribute float ${SHEET_ATTRIBUTE}`);
-    expect(patched(stones).vertexShader).not.toContain(SHEET_ATTRIBUTE);
-    expect(patched(body).fragmentShader).toContain('discard');
-    expect(patched(stones).fragmentShader).toContain('discard');
+    const bodyShader = patched(body);
+    const stonesShader = patched(stones);
+    expect(bodyShader.vertexShader).toContain(`attribute float ${SHEET_ATTRIBUTE}`);
+    expect(stonesShader.vertexShader).not.toContain(SHEET_ATTRIBUTE);
+    expect(bodyShader.vertexShader).toContain('#include <begin_vertex>\nvMkPos = transformed;');
+    expect(bodyShader.fragmentShader).toContain('void main() {\n  if (vSheet');
+    expect(stonesShader.fragmentShader).toContain('discard');
+  });
+
+  it('keys a plain material and a decorated one differently in the same role', () => {
+    const plain = new THREE.MeshPhysicalMaterial();
+    maskMaterial(plain, sheetUniforms(letter, shift), 'body');
+    const decorated = createMaterial(null);
+    maskMaterial(decorated, sheetUniforms(letter, shift), 'body');
+    expect(plain.customProgramCacheKey()).not.toBe(decorated.customProgramCacheKey());
   });
 
   it("hands the shader this letter's own mask and slide", () => {

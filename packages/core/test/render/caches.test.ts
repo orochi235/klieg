@@ -268,7 +268,7 @@ describe('WordCaches.sheet', () => {
     const caches = new WordCaches();
     const { bake, baked } = baker();
     const small = caches.sheet(SPEC, box(0, 0, 0.5, 0.5), bake);
-    const big = caches.sheet(SPEC, box(0, 0, 1.2, 0.5), bake);
+    const big = caches.sheet(SPEC, box(0.4, 0, 1.2, 0.5), bake);
     expect(big).not.toBe(small);
     expect(big.box.containsBox(small.box)).toBe(true);
     expect(small.dispose).not.toHaveBeenCalled();
@@ -283,6 +283,19 @@ describe('WordCaches.sheet', () => {
     expect(caches.sheet(other, box(0, 0, 0.5, 0.5), bake)).not.toBe(
       caches.sheet(SPEC, box(0, 0, 0.5, 0.5), bake),
     );
+  });
+
+  it('refuses an empty box once nothing is held yet', () => {
+    const caches = new WordCaches();
+    const { bake } = baker();
+    expect(() => caches.sheet(SPEC, new THREE.Box2(), bake)).toThrow(/box that holds ink/);
+  });
+
+  it('still answers the held sheet for an empty need', () => {
+    const caches = new WordCaches();
+    const { bake } = baker();
+    const first = caches.sheet(SPEC, box(0, 0, 0.5, 0.5), bake);
+    expect(caches.sheet(SPEC, new THREE.Box2(), bake)).toBe(first);
   });
 });
 

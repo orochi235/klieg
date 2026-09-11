@@ -177,6 +177,7 @@ export class WordCaches {
     const key = this.interner.id(spec);
     const held = this.sheets.get(key);
     if (held?.box.containsBox(need)) return held;
+    if (need.isEmpty()) throw new Error('klieg: a sheet needs a box that holds ink');
     const box = need.clone();
     if (held) box.union(held.box);
     box.min.set(down(box.min.x), down(box.min.y));

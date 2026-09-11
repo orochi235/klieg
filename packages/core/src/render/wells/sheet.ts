@@ -118,8 +118,8 @@ export function bakeSheet(box: THREE.Box2, spec: SheetSpec): BakedSheet {
 }
 
 /**
- * Where the sheet starts, in em in from the outline: just past the glyph's own rounded bevel. That
- * bevel is 0.038 em wide, wider than `pave`'s bezel, so a sheet starting any sooner floats over it.
+ * Where the sheet starts, in em in from the outline: just past the glyph's own rounded bevel
+ * (`bevelSize`), which is wider than `pave`'s bezel, so a sheet starting any sooner floats over it.
  */
 export const MASK = DEFAULT_GLYPH_OPTIONS.bevelSize + 0.004;
 /** The rim's half-width either side of the seam, before its own bevel rounds it outward. */
@@ -246,12 +246,11 @@ float mkDepthAt(vec2 at) {
 }
 `;
 
-// vSheet is SHEET_BODY, SHEET_METAL or SHEET_RIM, compared at the half-steps between them.
 const TESTS: Record<SheetRole, string> = {
   body: `
-  if (vSheet < 0.5) {
+  if (vSheet < ${SHEET_BODY + 0.5}) {
     if (abs(normalize(vMkNrm).z) > 0.9 && mkDepthAt(vMkPos.xy) <= uMaskLevel) discard;
-  } else if (vSheet < 1.5) {
+  } else if (vSheet < ${SHEET_METAL + 0.5}) {
     if (mkDepthAt(vMkPos.xy + uMaskShift) > uMaskLevel || vMkPos.z < uClipZ) discard;
   }`,
   stones: `
@@ -265,7 +264,7 @@ export function maskMaterial(
   role: SheetRole,
 ): void {
   const before = material.onBeforeCompile;
-  const key = material.customProgramCacheKey.bind(material);
+  const prior = material.customProgramCacheKey();
   material.onBeforeCompile = (shader, renderer) => {
     before.call(material, shader, renderer);
     Object.assign(shader.uniforms, uniforms);
@@ -279,6 +278,6 @@ export function maskMaterial(
       `void main() {${TESTS[role]}`,
     );
   };
-  material.customProgramCacheKey = () => `${key()}|sheet-${role}`;
+  material.customProgramCacheKey = () => `${prior}|sheet-${role}`;
   material.needsUpdate = true;
 }

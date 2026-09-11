@@ -158,9 +158,9 @@ export interface WellSpec {
 
 /**
  * Pavé as one baked sheet shown through each letter under a thin rim, rather than wells carved into
- * it. Takes a well's numbers for the sheet itself; `insets` has no outline to measure and is unread.
+ * it. Takes a well's numbers for the sheet itself.
  */
-export interface SheetSpec extends Omit<WellSpec, 'kind' | 'cutter'> {
+export interface SheetSpec extends Omit<WellSpec, 'kind' | 'cutter' | 'insets'> {
   kind: 'sheet';
   cutter: 'pave';
 }

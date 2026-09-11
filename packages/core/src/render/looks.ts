@@ -276,16 +276,15 @@ export const LOOKS: Record<LookName, LookSpec> = {
     tintTo: 'decoration',
     decoration: {
       kind: 'well',
-      cutter: 'lattice',
+      cutter: 'tile',
       bezel: 0.012,
-      insets: 'proportional',
       floor: 0.09,
-      // Room for the girdle, which widens as `sink` shrinks: the stone is `size/2 + bevel *
-      // (1 - sink)` across, so a pitch tuned for the well alone leaves the stones overlapping.
-      pitch: 0.105,
+      pitch: 0.055,
       size: 0.048,
+      // The default bead is wider than the wall between two pockets holds.
+      rimBevel: 0.003,
+      rimDrop: 0.003,
       fill: 'stone',
-      sink: 0.08,
       tint: 0.5,
       look: {},
       stone: {

@@ -1653,7 +1653,11 @@ describe('part pool', () => {
 
   // Derived from LOOKS rather than named, so a look added later is covered without editing this.
   it('builds chunk parts for exactly the looks that scatter chunks', () => {
-    const scatters = (name: keyof typeof LOOKS) => LOOKS[name].decoration?.kind === 'chunks';
+    // A well's stones publish as one chunk per letter, so a filled well scatters them too.
+    const scatters = (name: keyof typeof LOOKS) => {
+      const decoration = LOOKS[name].decoration;
+      return decoration?.kind === 'chunks' || (decoration?.kind === 'well' && !!decoration.fill);
+    };
     const names = Object.keys(LOOKS) as (keyof typeof LOOKS)[];
 
     const built = names.filter(

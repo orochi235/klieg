@@ -283,7 +283,9 @@ describe('the wells are a real hollow', () => {
     const { default: opentype } = await import('opentype.js');
     const { readFileSync } = await import('node:fs');
     const buf = readFileSync(new URL('../../../../../apps/lab/public/font.ttf', import.meta.url));
-    const parsed = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+    const parsed = opentype.parse(
+      buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+    );
     const font = {
       font: parsed,
       unitsPerEm: parsed.unitsPerEm,

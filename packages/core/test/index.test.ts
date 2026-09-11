@@ -1463,6 +1463,10 @@ describe('published name lists', () => {
       'piping',
       'ice',
       'sequin',
+      'pave',
+      'bezel',
+      'carved',
+      'tiara',
     ]);
     expect(POLICY_NAMES).toEqual(['queue', 'replace', 'concurrent']);
   });

@@ -25,27 +25,39 @@ Ruled out — do not re-propose:
   exist to avoid.
 - **Shipping baked meshes of the carved wells.** Superseded: only the sheet needs baking.
 
-**Where it is.** Branch `pave-compare`, worktree `.claude/worktrees/pave-compare`, cut from
-`pave-look`, unpushed. The prototype is lab-only: `apps/lab/pave-compare/sheet.ts` bakes, masks and
-rims; `/pave-compare/` sets real, shader and sheet side by side at five angles; `/pave-spin/` with
-`spikes/pave-spin.mjs` renders a full turn to MP4. The branch also carries two speedups to the carved
-cutter — `standing()` settles a cell against the region's boxes before the clipper, and one
-`strokeWidths` pass feeds both of its uses — and the measurement spikes `pave-breakdown`,
-`pave-word`, `pave-identity` and `prof-top`.
+**Built.** Branch `pave-compare`, worktree `.claude/worktrees/pave-compare`, cut from `pave-look`,
+unpushed; [the plan](plans/2026-09-10-pave-sheet.md) has the design. `pave` is a `'sheet'`
+decoration (`render/decorations/sheet.ts`, `render/wells/sheet.ts`); `tiara`, `bezel` and `carved`
+still carve wells.
 
-**Next: make the sheet a real decoration.** Nothing is in core yet. The plan to do it is
-[plans/2026-09-10-pave-sheet.md](plans/2026-09-10-pave-sheet.md), **written, not built**. What the
-prototype does by hand that a builder has to own:
+- One sheet per spec is cached on `WordCaches` across fires. It is never smaller than ordinary text
+  needs (`ORDINARY`), so warm-up bakes the sheet nearly every word uses.
+- Each glyph gets a half-float mask and a rim, cached per (font, char). Each letter slides to its own
+  patch of the sheet.
+- The back face is the same sheet turned over, each copy clipped at the letter's middle.
+- The sheet's metal and rim draw on the body's own material, which fades by dither (`alphaHash`)
+  rather than blending, so the stones keep seeing gold behind them through a fade.
 
-- One sheet per look spec, baked once and shared by every letter — and across fires, which the well
-  builder's per-instance cut cache does not do today.
-- Per letter, a mask texture from the glyph's distance field, the rim, and a slide into the sheet so
-  neighbors do not show the same patch.
-- The glyph's own bevel is 0.038 em wide, wider than `pave`'s 0.026 bezel, so the sheet has to start
-  just past it or it floats over the slope — `MASK` in `sheet.ts`.
-- Stones and cells as addressable effect parts. Not designed yet.
-- Pavé on the back as well as the front — decided 2026-09-10. Both prototypes show a bare gold back
-  for half a full turn; the fix is the same sheet, masked facing the other way.
+On "FUCK YOU / TRAVIS", at a load average near 11: carved wells 7.0 s; the sheet 2.9 s on a first
+fire and 1.7 ms on the next. The first bake is bigger than the prototype's 0.8 s because of the
+ordinary-text floor.
+
+`/pave-compare/` sets carved wells, shader and sheet side by side at five angles; `/pave-spin/` with
+`spikes/pave-spin.mjs` turns wells and sheet through a full spin to MP4. The branch also carries two
+speedups to the carved cutter — `standing()` settles a cell against the region's boxes before the
+clipper, and one `strokeWidths` pass feeds both of its uses — and the measurement spikes
+`pave-breakdown`, `pave-word`, `pave-identity` and `prof-top`.
+
+**Open:**
+
+- **A dithered fade reads grainy from about 70% opacity down.** Blending instead snaps every stone to
+  black on a fade's first frame — see the first trap below. Which is worse is a look call.
+- **Stones the seam cuts show dark specks,** where the cut face sees into the hollow letter and the
+  rim is too narrow to hide it off axis. Dropping those stones and leaving their wells empty is the
+  likely fix.
+- Stones are one effect part per letter; individual stones as parts are not designed.
+- Every letter draws the whole sheet twice, front and back, and the mask discards most of it. The
+  cost is unmeasured.
 
 **Vegapunk is cleared to publish** — decided 2026-09-10, with its license recorded as unclear in
 `apps/lab/public/fonts/licenses/vegapunk.txt`. Its commit, `6e24e7c`, touches lab files only and
@@ -1388,6 +1400,13 @@ to move into `oil`'s own film.
   to the other. `spikes/run-decomposition.mjs`.
 
 ## Traps
+
+**Stones set in a `Word` body render dark.** `Word` makes every body material `transparent` so
+letters can fade, and three builds what a transmissive material refracts from opaque objects only, so
+a stone in front of a transparent body sees the background. The carved wells — `tiara`, `bezel`, and
+`pave` on `main` — all have it; the sheet avoids it by dithering its body. The pavé decision was
+watched against dark-stoned wells, but with opaque metal the wells' lumpy rims and crowded cells
+still lose.
 
 **A matching vertex count is not identical geometry.** The pavé box reject left every count
 unchanged and every coordinate different. `spikes/pave-identity.mjs` hashes each pocket and rim ring.

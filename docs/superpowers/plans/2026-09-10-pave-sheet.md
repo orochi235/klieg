@@ -1,8 +1,10 @@
 # Pavé by sheet — implementation plan
 
-**Status: not built.** Written 2026-09-10 on branch `pave-compare`; nothing below exists in core
-yet. The decision this builds, and what was ruled out, is in
-[the handoff](../HANDOFF.md#pavé-by-sheet--2026-09-10).
+**Status: built** 2026-09-10 on branch `pave-compare`, commits `215beb7..9b78145`; the full-suite
+gate in Task 9 has not run yet. The code departs from this text where review found problems: the
+sheet has an ordinary-text floor, the stones hang off a carrier at the letter's origin, and the
+body fades by dither. The code is the reference. The decision this builds, and what was ruled out,
+is in [the handoff](../HANDOFF.md#pavé-by-sheet--2026-09-10).
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

@@ -48,8 +48,8 @@ that a builder has to own:
 
 **Vegapunk is cleared to publish** — decided 2026-09-10, with its license recorded as unclear in
 `apps/lab/public/fonts/licenses/vegapunk.txt`. Its commit, `6e24e7c`, touches lab files only and
-cherry-picks cleanly onto `main`; a push to `main` that touches `apps/lab/**` deploys the lab. The
-session holding `main` was asked to land it — check `git branch --contains 6e24e7c` before assuming.
+cherry-picks cleanly onto `main`; a push to `main` that touches `apps/lab/**` deploys the lab. It is
+not landed: the session holding `main` will act only on Mike's word directly, not relayed by a peer.
 
 ## Branch state
 

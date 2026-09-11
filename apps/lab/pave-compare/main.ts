@@ -1,6 +1,6 @@
 /**
- * Pavé three ways, at the angles a spinning word passes through: the real wells, a shader painting
- * them on, and one baked sheet shown through the letter under a raised rim.
+ * Pavé three ways, at the angles a spinning word passes through: the carved wells, a shader
+ * painting them on, and one baked sheet shown through the letter under a raised rim.
  *
  *   /pave-compare/            one letter, 'R'
  *   /pave-compare/#S          any letter

@@ -54,8 +54,8 @@ function turned<T extends THREE.Object3D>(object: T): T {
  * The sheet's metal and the rim draw on the body's own material, hung off the body mesh, so every
  * write the body gets lands on them too. The stones are the one part this contributes.
  *
- * A see-through look (opacity below 1) is unsupported: with depth writes off, the mirrored back
- * copy sorts in front and blends over the face.
+ * The metal fades by dither, not by blending, so a see-through look (base opacity below 1) is a
+ * stipple rather than a tint.
  */
 export class SheetBuilder implements DecorationBuilder {
   /** One marked clone per char, builder-owned; the cache's glyph stays unmarked for other looks. */
@@ -64,8 +64,6 @@ export class SheetBuilder implements DecorationBuilder {
   private readonly materials: (THREE.MeshPhysicalMaterial | null)[] = [];
   private readonly meshes: (THREE.Mesh | null)[] = [];
   private readonly lights: (LightBase | null)[] = [];
-  /** Each letter's body material, which the sheet and rim share. Word's, so never disposed here. */
-  private readonly bodyMaterials: (THREE.MeshPhysicalMaterial | null)[] = [];
   private readonly base: FrameOwnedBase;
   /** Each char's outline box, which the sheet is sized from. */
   private readonly glyphBoxes = new Map<string, THREE.Box2>();
@@ -105,10 +103,11 @@ export class SheetBuilder implements DecorationBuilder {
     const shift = slideOf(index);
     const material = body.material as THREE.MeshPhysicalMaterial;
     maskMaterial(material, sheetUniforms(letter, shift), 'body');
-    // Opaque at rest: three's transmission pass samples only opaque objects, so the stones would
-    // otherwise refract the background instead of the gold behind them.
-    material.transparent = material.opacity < 1;
-    this.bodyMaterials[index] = material;
+    // Opaque, fading by dither: three's transmission pass samples only opaque objects, so the
+    // stones would otherwise refract the background instead of the gold behind them.
+    material.alphaHash = true;
+    material.transparent = false;
+    material.depthWrite = true;
 
     const front = new THREE.Mesh(sheet.shell, material);
     front.position.set(shift.x, shift.y, 0);
@@ -124,8 +123,7 @@ export class SheetBuilder implements DecorationBuilder {
   }
 
   buildLetter(index: number, char: string, sized: THREE.Group, tint: number | undefined): void {
-    // Not `skipLetter`: `dressBody` has already filed this slot's body material.
-    this.clearStones(index);
+    this.skipLetter(index);
     if (!this.spec.fill) return;
     const sheet = this.sheetFor(char);
     if (!sheet.stones) return;
@@ -158,11 +156,6 @@ export class SheetBuilder implements DecorationBuilder {
   }
 
   skipLetter(index: number): void {
-    this.bodyMaterials[index] = null;
-    this.clearStones(index);
-  }
-
-  private clearStones(index: number): void {
     this.materials[index] = null;
     this.meshes[index] = null;
     this.lights[index] = null;
@@ -191,12 +184,6 @@ export class SheetBuilder implements DecorationBuilder {
   }
 
   frame(index: number, opacity: number): void {
-    const body = this.bodyMaterials[index];
-    // three bakes OPAQUE into the program, so a flip without a recompile would pop, not fade.
-    if (body && body.transparent !== body.opacity < 1) {
-      body.transparent = body.opacity < 1;
-      body.needsUpdate = true;
-    }
     const material = this.materials[index];
     if (!material) return;
     material.opacity = opacity * this.base.opacity;
@@ -226,7 +213,6 @@ export class SheetBuilder implements DecorationBuilder {
     this.glyphBoxes.clear();
     for (const material of this.materials) material?.dispose();
     this.materials.length = 0;
-    this.bodyMaterials.length = 0;
     this.meshes.length = 0;
     this.lights.length = 0;
   }

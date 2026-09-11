@@ -152,28 +152,30 @@ describe('SheetBuilder', () => {
     builder.dispose();
   });
 
-  it('keeps the body opaque at rest and transparent only while it fades', () => {
+  it('fades the body by dither, opaque and on one program throughout', () => {
     const builder = new SheetBuilder(SPEC, context());
     const body = bodyOf(builder, 'A');
     const material = body.material as THREE.MeshPhysicalMaterial;
-    // As `Word` leaves it: transparent for fades, at the look's full opacity.
+    // As `Word` leaves a see-through look's body: blended, and writing no depth.
     material.transparent = true;
-    material.opacity = 1;
+    material.depthWrite = false;
     builder.dressBody(0, 'A', body);
     builder.buildLetter(0, 'A', new THREE.Group(), undefined);
-    expect(material.transparent).toBe(false);
+    const state = () => ({
+      alphaHash: material.alphaHash,
+      transparent: material.transparent,
+      depthWrite: material.depthWrite,
+      version: material.version,
+    });
+    const dressed = state();
+    expect(dressed).toMatchObject({ alphaHash: true, transparent: false, depthWrite: true });
 
     // `Word` writes the body's opacity, then calls `frame`.
-    const step = (opacity: number) => {
+    for (const opacity of [0.97, 0.4, 0.1, 1]) {
       material.opacity = opacity;
       builder.frame(0, opacity);
-      return { transparent: material.transparent, version: material.version };
-    };
-    const rest = material.version;
-    expect(step(0.4)).toEqual({ transparent: true, version: rest + 1 });
-    expect(step(0.2)).toEqual({ transparent: true, version: rest + 1 });
-    expect(step(1)).toEqual({ transparent: false, version: rest + 2 });
-    expect(step(1)).toEqual({ transparent: false, version: rest + 2 });
+      expect(state()).toEqual(dressed);
+    }
 
     const freed = watchDispose(material);
     builder.dispose();

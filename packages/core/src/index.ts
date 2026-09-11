@@ -3,7 +3,13 @@ import type { Easing } from './easing.js';
 import { EFFECTS } from './effects/pieces.js';
 import type { EffectName, EffectSpec, FrameCtx } from './effects/types.js';
 import { ACTIVE } from './motion/active.js';
-import { type Slot, slotDuration, slotMovesLetters, Timeline } from './motion/compositor.js';
+import {
+  PLACED,
+  type Slot,
+  slotDuration,
+  slotMovesLetters,
+  Timeline,
+} from './motion/compositor.js';
 import { ENTER } from './motion/enter.js';
 import { EXIT } from './motion/exit.js';
 import { isolate, type PhaseEvent, PhaseReporter } from './motion/phases.js';
@@ -35,7 +41,7 @@ import type { LoadedFont } from './text/font.js';
 import { measureBaselineRatio, registerFace } from './text/font-face.js';
 import { FontRegistry, type FontSpec } from './text/font-registry.js';
 import { DEFAULT_GLYPH_OPTIONS } from './text/glyphs.js';
-import type { Align } from './text/layout.js';
+import type { Align, Budget } from './text/layout.js';
 import type { Arrangement } from './text/placement.js';
 import { projectLetters } from './text/projection.js';
 import { plainTextOf, sizeOf, type TextRun, tintOf } from './text/runs.js';
@@ -163,6 +169,29 @@ function resolveSlot<N extends string>(
   if (typeof slot === 'string') return builtin[slot];
   if (Array.isArray(slot)) return slot.map((s) => (typeof s === 'string' ? builtin[s] : s));
   return slot;
+}
+
+/**
+ * The most rows a backdrop lays out. A guard on the allocation, not a frame budget: what a frame
+ * costs is the size of the part pool, and the look decides that far more than the row count does.
+ * Measured with `spikes/backdrop-frame-cost.mjs` on a 15-letter sign — `gold` runs 16 rows in
+ * 0.4ms a frame, where `tubing` costs about 2.2ms a row and passes 16.7ms at 7 of them. Past this
+ * a caller is asking for wallpaper, and should say so with `text` rather than with `rows`.
+ */
+export const MAX_BACKDROP_ROWS = 12;
+
+/** The sign on `rows` lines. A run list repeats as a list, so each run's styling repeats with it. */
+function onRows(text: string | TextRun[], rows: number): string | TextRun[] {
+  const asked = Math.max(1, Math.floor(rows));
+  const n = Math.min(asked, MAX_BACKDROP_ROWS);
+  if (n !== asked) {
+    console.warn(
+      `klieg: a backdrop lays out at most ${MAX_BACKDROP_ROWS} rows — asked for ${asked}`,
+    );
+  }
+  if (n === 1) return text;
+  if (typeof text === 'string') return Array.from({ length: n }, () => text).join('\n');
+  return Array.from({ length: n }, (_, i) => (i === 0 ? text : [{ text: '\n' }, ...text])).flat();
 }
 
 /** Names a slot for a diagnostic; a caller's own piece has no name to give. */
@@ -321,11 +350,48 @@ export interface FireOptions {
    */
   onPhase?: (event: PhaseEvent) => void;
   /**
+   * The sign repeated in rows behind this one, tilted and dimmed and running effects of its own.
+   * It shares this instance's caches, and adds nothing to the DOM — the hero already carries the
+   * text a reader copies or hears.
+   */
+  backdrop?: BackdropSpec;
+  /**
    * Aborts this one effect without touching the instance. Composed with the queue's own signal
    * rather than replacing it: an abort plays no exit, and the promise resolves rather than
    * rejecting, which is what it already promises for an effect the queue drops.
    */
   signal?: AbortSignal;
+}
+
+/**
+ * The sign repeated in rows behind the fired word. Not tied to a look: any look and any effect can
+ * be used this way, and `stagger: { from: 'line' }` is what makes an effect crawl across the rows.
+ *
+ * It never takes the motion slots. No enter, no active, no exit — it is placed once and runs only
+ * its effects, so it is already at full presence when the hero arrives over it.
+ */
+export interface BackdropSpec {
+  /** How many lines the sign is repeated on. Defaults to 1, which is an ordinary second sign. */
+  rows?: number;
+  /** What is repeated, in place of the hero's own text. */
+  text?: string | TextRun[];
+  /** Defaults to the hero's look — it is the same sign, standing further back. */
+  look?: Look;
+  /** Replaces the backdrop look's own effects, as `FireOptions.effects` does for the hero. */
+  effects?: EffectSpec[];
+  /** Turns the rows as one rigid object, so a tilt can run them off the corners of the frame. */
+  transform?: Transform;
+  /**
+   * Multiple of the hero's fitted letter size. Above 1 the rows overfill the frame, which is what
+   * keeps a tilt from exposing a corner. Defaults to 1.
+   */
+  scale?: number;
+  /**
+   * Scales the backdrop's frame-owned base — its opacity and its emissive — so the rows sit under
+   * the hero. Not the effect layer: an effect still modulates from the dimmed base, so a chase
+   * reads at full contrast against a dimmed row. Defaults to 1.
+   */
+  dim?: number;
 }
 
 /** Timing for the move into a new layout. `scale` addresses the viewport fit, not letter size. */
@@ -491,6 +557,44 @@ export function createKlieg(options: KliegOptions): Klieg {
       perRun(letter.index) ?? (typeof fireTint === 'function' ? fireTint(letter) : fireTint);
   }
 
+  /**
+   * The second word, built against the hero's own fit. Its scale is a multiple of the hero's rather
+   * than of its own budget fit, or seven rows would shrink to fit the frame instead of overfilling
+   * it; `behind` is its own extrusion plus a hero's thickness of clearance, which the depth buffer
+   * then resolves.
+   */
+  function rowsBehind(
+    spec: BackdropSpec,
+    rowText: string | TextRun[],
+    hero: Word,
+    loaded: LoadedFont,
+    budget: Budget,
+    heroLook: Look,
+  ): Word {
+    const text = onRows(rowText, spec.rows ?? 1);
+    const chosen = spec.look ?? heroLook;
+    const look = spec.effects ? { ...specOf(chosen), effects: spec.effects } : chosen;
+    const depth = DEFAULT_GLYPH_OPTIONS.depth;
+    const heroScale = hero.placement.scale;
+    const scale = heroScale * (spec.scale ?? 1);
+    const word = new Word(
+      text,
+      loaded,
+      look,
+      budget,
+      false,
+      undefined,
+      undefined,
+      stage.environment?.texture ?? null,
+      caches,
+      sizeOf(text),
+      undefined,
+      { fitScale: scale, dim: spec.dim ?? 1, behind: depth * scale + depth * heroScale },
+    );
+    if (spec.transform) word.transform = spec.transform;
+    return word;
+  }
+
   async function run(
     text: string | TextRun[],
     opts: FireOptions,
@@ -501,34 +605,40 @@ export function createKlieg(options: KliegOptions): Klieg {
     if (signal.aborted) return;
 
     // A run names a klieg font; layout resolves a registered family. Every distinct name a run
-    // mentions is loaded (and so registered) before anything is laid out.
-    const named = typeof text === 'string' ? [] : [...new Set(text.flatMap((r) => r.font ?? []))];
+    // mentions is loaded (and so registered) before anything is laid out. The backdrop's own text
+    // is in here too, so a run naming a font reads the same behind the sign as in front of it.
+    const rowText = opts.backdrop ? (opts.backdrop.text ?? text) : null;
+    const namesIn = (t: string | TextRun[]) =>
+      typeof t === 'string' ? [] : t.flatMap((r) => r.font ?? []);
+    const named = [...new Set([...namesIn(text), ...(rowText ? namesIn(rowText) : [])])];
     const families = new Map<string, string>();
     for (const name of named) families.set(name, (await font(name)).family);
     if (signal.aborted) return;
 
-    const runs =
-      typeof text === 'string'
-        ? text
-        : text.map((r) => (r.font ? { ...r, font: families.get(r.font) as string } : r));
+    const resolve = (t: string | TextRun[]): string | TextRun[] =>
+      typeof t === 'string'
+        ? t
+        : t.map((r) => (r.font ? { ...r, font: families.get(r.font) as string } : r));
+    const runs = resolve(text);
 
     const renderer = stage.mount();
     const chosen = opts.look ?? 'gold';
     const bloom = wantsBloom(opts.bloom, chosen) ? new BloomPath(renderer) : null;
     // A caller's list replaces the look's own rather than adding to it.
     const look = opts.effects ? { ...specOf(chosen), effects: opts.effects } : chosen;
+    const budget = stage.viewportBudget(
+      options.framing?.width,
+      options.framing?.height,
+      options.framing?.align,
+      opts.lineAlign,
+    );
     let word: Word;
     try {
       word = new Word(
         runs,
         loaded,
         look,
-        stage.viewportBudget(
-          options.framing?.width,
-          options.framing?.height,
-          options.framing?.align,
-          opts.lineAlign,
-        ),
+        budget,
         opts.wrap,
         tintFor(text, opts.tint),
         undefined,
@@ -543,6 +653,20 @@ export function createKlieg(options: KliegOptions): Klieg {
     }
     if (opts.transform) word.transform = opts.transform;
     stage.scene.add(word.group);
+
+    let backdrop: Word | null = null;
+    try {
+      backdrop =
+        opts.backdrop && rowText
+          ? rowsBehind(opts.backdrop, resolve(rowText), word, loaded, budget, chosen)
+          : null;
+    } catch (err) {
+      stage.scene.remove(word.group);
+      word.dispose();
+      bloom?.dispose();
+      throw err;
+    }
+    if (backdrop) stage.scene.add(backdrop.group);
 
     const enter = resolveSlot(opts.enter ?? 'slam', ENTER);
     const active = resolveSlot(opts.active ?? 'none', ACTIVE);
@@ -640,8 +764,10 @@ export function createKlieg(options: KliegOptions): Klieg {
         off();
         detachDismiss();
         stage.scene.remove(word.group);
+        if (backdrop) stage.scene.remove(backdrop.group);
         host?.remove();
         word.dispose();
+        backdrop?.dispose();
         bloom?.dispose();
         stage.scheduleIdleTeardown();
         done();
@@ -750,6 +876,9 @@ export function createKlieg(options: KliegOptions): Klieg {
             dt: still ? Number.POSITIVE_INFINITY : dt,
           };
           word.apply(driver, elapsed, ctx);
+          // Never the driver: the backdrop takes no motion slot, so it is at full presence from
+          // its first frame. Its own effects still run, off the same clock the hero reads.
+          backdrop?.apply(PLACED, elapsed, ctx);
 
           if (layer && mode === 'layer' && family) {
             if (word.atRest()) {
@@ -794,6 +923,7 @@ export function createKlieg(options: KliegOptions): Klieg {
           // The scene write above reaches only a material with no `envMap` of its own; every
           // material the word draws with carries one.
           word.setEnvRotation(env.pitch, env.yaw);
+          backdrop?.setEnvRotation(env.pitch, env.yaw);
 
           if (bloom) {
             bloom.render(stage.scene, stage.camera);

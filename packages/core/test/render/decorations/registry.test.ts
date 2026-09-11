@@ -10,7 +10,7 @@ import type {
   WordBuildContext,
 } from '../../../src/render/decorations/registry.js';
 import { decorationBuilderFor } from '../../../src/render/decorations/registry.js';
-import { createMaterial, specOf } from '../../../src/render/looks.js';
+import { createMaterial, frameOwnedBase, specOf } from '../../../src/render/looks.js';
 import { RUN_COLOR_ATTRIBUTE } from '../../../src/render/tube/tint.js';
 import type { WordDebugHooks } from '../../../src/render/word.js';
 import type { LoadedFont } from '../../../src/text/font.js';
@@ -335,6 +335,7 @@ function wordContext(debug?: WordDebugHooks): WordBuildContext {
     font,
     caches,
     debug,
+    frameBase: (look) => frameOwnedBase(look),
     baseX: [0, 0, 0],
     baseY: [0, 0, 0],
     // `createMaterial`, not a bare physical material: `applyLook` writes flake uniforms the

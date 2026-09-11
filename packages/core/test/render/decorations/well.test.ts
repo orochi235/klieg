@@ -5,7 +5,7 @@ import { WordCaches } from '../../../src/render/caches.js';
 import type { WellSpec } from '../../../src/render/decoration.js';
 import type { WordBuildContext } from '../../../src/render/decorations/registry.js';
 import { WellBuilder } from '../../../src/render/decorations/well.js';
-import { createMaterial } from '../../../src/render/looks.js';
+import { createMaterial, frameOwnedBase } from '../../../src/render/looks.js';
 import type { LoadedFont } from '../../../src/text/font.js';
 
 const UPEM = 1000;
@@ -60,6 +60,7 @@ function context(inflate?: { profile: 'cushion'; rise: number; reach: number }):
     font,
     caches,
     inflate,
+    frameBase: (look) => frameOwnedBase(look),
     baseX: [0, 1],
     baseY: [0, 0],
     studioMaterial: () => createMaterial(null),

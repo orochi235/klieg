@@ -13,6 +13,7 @@ import {
   type KliegOptions,
   LIGHTING_NAMES,
   LOOK_NAMES,
+  MAX_BACKDROP_ROWS,
   type PhaseEvent,
   POLICY_NAMES,
   wantsBloom,
@@ -1247,6 +1248,196 @@ describe('driving an effect from the host', () => {
     expect(queued).toHaveLength(2);
     expect(queued[0]).toThrow('host');
     expect(words()).toHaveLength(0);
+  });
+});
+
+describe('backdrop', () => {
+  /** The hero is added first, so the backdrop is the scene's second word. */
+  function backdrop(): THREE.Group {
+    const back = words()[1];
+    if (!back) throw new Error('the scene has no backdrop');
+    return back as THREE.Group;
+  }
+
+  /** Every letter cell of a word, under the transform group the fit group holds. */
+  function cellsOf(word: THREE.Object3D): THREE.Object3D[] {
+    return (word.children[0] as THREE.Group).children;
+  }
+
+  it('adds no second word when no backdrop is asked for', async () => {
+    const bk = create();
+    const done = bk.fire('HI', INSTANT);
+    await flush();
+
+    expect(words()).toHaveLength(1);
+
+    clock.advance(16);
+    await done;
+  });
+
+  it('repeats the hero text on one line per row', async () => {
+    const bk = create();
+    const done = bk.fire('AB', { ...INSTANT, backdrop: { rows: 3 } });
+    await flush();
+
+    expect(cellsOf(backdrop())).toHaveLength(6);
+
+    clock.advance(16);
+    await done;
+  });
+
+  it('repeats what text names instead of the hero, on the same rows', async () => {
+    const bk = create();
+    const done = bk.fire('HELLO', { ...INSTANT, backdrop: { rows: 2, text: 'AB' } });
+    await flush();
+
+    expect(cellsOf(backdrop())).toHaveLength(4);
+
+    clock.advance(16);
+    await done;
+  });
+
+  it('builds no new geometry, because it shares the hero cache', async () => {
+    const bk = create();
+    const plain = bk.fire('AB', INSTANT);
+    await flush();
+    const built = new Set(
+      cellsOf(words()[0] as THREE.Object3D).map(
+        (cell) => ((cell.children[0] as THREE.Group).children[0] as THREE.Mesh).geometry,
+      ),
+    );
+    clock.advance(16);
+    await plain;
+
+    const done = bk.fire('AB', { ...INSTANT, backdrop: { rows: 4 } });
+    await flush();
+    const rows = cellsOf(backdrop()).map(
+      (cell) => ((cell.children[0] as THREE.Group).children[0] as THREE.Mesh).geometry,
+    );
+
+    expect(rows).not.toHaveLength(0);
+    for (const geometry of rows) expect(built.has(geometry)).toBe(true);
+
+    clock.advance(16);
+    await done;
+  });
+
+  it('sits behind the hero, clear of its extrusion', async () => {
+    const bk = create();
+    const done = bk.fire('AB', { ...INSTANT, backdrop: { rows: 2 } });
+    await flush();
+
+    expect(backdrop().position.z).toBeLessThan(-DEFAULT_GLYPH_OPTIONS.depth * backdrop().scale.x);
+
+    clock.advance(16);
+    await done;
+  });
+
+  it('takes the hero fitted scale times its own, so the rows can overfill the frame', async () => {
+    const bk = create();
+    const done = bk.fire('AB', { ...INSTANT, backdrop: { rows: 3, scale: 1.6 } });
+    await flush();
+    const hero = (words()[0] as THREE.Group).scale.x;
+
+    expect(backdrop().scale.x).toBeCloseTo(hero * 1.6, 10);
+
+    clock.advance(16);
+    await done;
+  });
+
+  it('dims the rows without touching the hero', async () => {
+    const bk = create();
+    const done = bk.fire('AB', { ...INSTANT, look: 'neon', backdrop: { rows: 2, dim: 0.25 } });
+    await flush();
+    const emissiveOf = (word: THREE.Object3D) =>
+      (((cellsOf(word)[0] as THREE.Group).children[0] as THREE.Group).children[0] as THREE.Mesh)
+        .material as THREE.MeshPhysicalMaterial;
+
+    expect(emissiveOf(backdrop()).emissiveIntensity).toBeCloseTo(
+      emissiveOf(words()[0] as THREE.Object3D).emissiveIntensity * 0.25,
+      10,
+    );
+
+    clock.advance(16);
+    await done;
+  });
+
+  it('takes no pose from the motion slots, so it is at full presence before the hero lands', async () => {
+    const bk = create();
+    // `slam` drives the hero in from off screen; the backdrop is placed and left alone.
+    const done = bk.fire('AB', { ...INSTANT, enter: 'slam', backdrop: { rows: 2 } });
+    await flush();
+    clock.advance(16);
+    const back = cellsOf(backdrop())[0] as THREE.Group;
+    const hero = cellsOf(words()[0] as THREE.Object3D)[0] as THREE.Group;
+
+    expect(back.position.z).toBe(0);
+    expect(back.scale.x).toBe(1);
+    expect(hero.position.z).not.toBe(0);
+
+    clock.advance(2000);
+    await done;
+  });
+
+  it('takes its own transform, leaving the hero square', async () => {
+    const bk = create();
+    const tilt = fromEuler(0, 0, -0.2);
+    const done = bk.fire('AB', { ...INSTANT, backdrop: { rows: 2, transform: tilt } });
+    await flush();
+
+    expect((backdrop().children[0] as THREE.Group).rotation.z).toBeCloseTo(-0.2, 10);
+    expect(((words()[0] as THREE.Group).children[0] as THREE.Group).rotation.z).toBe(0);
+
+    clock.advance(16);
+    await done;
+  });
+
+  it('caps the rows, and says so, rather than laying out whatever it was handed', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const bk = create();
+    const done = bk.fire('A', { ...INSTANT, backdrop: { rows: 500 } });
+    await flush();
+
+    expect(cellsOf(backdrop())).toHaveLength(MAX_BACKDROP_ROWS);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(String(MAX_BACKDROP_ROWS)));
+
+    clock.advance(16);
+    await done;
+  });
+
+  it('is an ordinary second sign at rows 1', async () => {
+    const bk = create();
+    const done = bk.fire('AB', { ...INSTANT, backdrop: { rows: 1 } });
+    await flush();
+
+    expect(cellsOf(backdrop())).toHaveLength(2);
+
+    clock.advance(16);
+    await done;
+  });
+
+  it('comes down and is disposed with the hero when the effect settles', async () => {
+    const bk = create();
+    const spy = vi.spyOn(Word.prototype, 'dispose');
+    const done = bk.fire('AB', { ...INSTANT, backdrop: { rows: 2 } });
+    await flush();
+    clock.advance(16);
+    await done;
+
+    expect(words()).toHaveLength(0);
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('is still placed under reduced motion, which stops the crawl and not the rows', async () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    const bk = create();
+    const done = bk.fire('AB', { ...INSTANT, hold: 100, backdrop: { rows: 3 } });
+    await flush();
+
+    expect(cellsOf(backdrop())).toHaveLength(6);
+
+    clock.advance(200);
+    await done;
   });
 });
 

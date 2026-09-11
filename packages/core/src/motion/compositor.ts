@@ -11,6 +11,24 @@ export const blankPose = (): Pose => ({
 });
 
 /**
+ * The pose source for a word that is placed once and never moved. `Word.apply` still runs its
+ * effects — what this withholds is the motion slots, not the frame.
+ */
+export const PLACED = {
+  poseAt(_elapsed: number, _letter: LetterInfo, out: Pose = blankPose()): Pose {
+    out.position[0] = REST.position[0];
+    out.position[1] = REST.position[1];
+    out.position[2] = REST.position[2];
+    out.rotation[0] = REST.rotation[0];
+    out.rotation[1] = REST.rotation[1];
+    out.rotation[2] = REST.rotation[2];
+    out.scale = REST.scale;
+    out.opacity = REST.opacity;
+    return out;
+  },
+};
+
+/**
  * `scaleOffset` then `accumulate`, fused and in place. Additive channels fade toward 0 and
  * multiplicative ones toward 1 — scaling those toward 0 would collapse the word rather than
  * remove the contribution.

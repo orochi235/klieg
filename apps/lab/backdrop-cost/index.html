@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>klieg — backdrop cost</title>
+    <style>
+      body { background: #111; color: #eee; font: 13px/1.6 ui-monospace, monospace; padding: 24px; }
+      h1 { font-size: 14px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+      td { padding: 2px 18px 2px 0; font-variant-numeric: tabular-nums; }
+      td:not(:first-child) { text-align: right; color: #ffd479; }
+      th { padding: 2px 18px 2px 0; text-align: right; color: #888; font-weight: 400; }
+      th:first-child { text-align: left; }
+      .note { color: #888; max-width: 66ch; margin-top: 18px; }
+      .over { color: #ff6b6b; }
+    </style>
+  </head>
+  <body>
+    <h1>What a backdrop costs per frame</h1>
+    <table id="out"></table>
+    <p class="note" id="note">measuring…</p>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

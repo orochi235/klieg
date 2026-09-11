@@ -1,123 +1,96 @@
 # `tile`: a gem field clipped to the outline
 
-**For:** whoever implements this next. **Answers:** what the third cutter does, why it is an order
-of magnitude cheaper than `pave`, and what the spike did not settle.
+**For:** whoever works on the well cutters next. **Answers:** what the third cutter does, what a
+letter cut with it costs, and which of its rules exist because the obvious version broke.
 
-**Status: unbuilt.** `spikes/gem-tiling.mjs` proves the method and the cost; no cutter is
-registered and no look points at one.
+**Status: built.** `tile` is registered beside `lattice` and `pave` in
+`packages/core/src/render/wells/tile.ts`, and the `ice` look uses it. `spikes/gem-tiling.mjs` draws
+its pockets top down; `spikes/well-cost.mjs` measures a whole letter.
 
-A well-cut letter today costs seconds, and almost none of it is the stones. `tile` gets the same
-picture — stones tessellated to a sliver, cut cleanly where the letter ends — by laying a regular
-field over the letter and clipping it, instead of deriving a field from the letter's own geometry.
+`tile` gets pavé's picture — stones tessellated to a sliver of metal, cut cleanly where the letter
+ends — by laying a regular hexagon field over the letter and cutting it back, instead of deriving a
+field from the letter's own geometry.
 
-## What it costs now, and why
+## What a letter costs
 
-For "FUCK YOU TRAVIS", 13 letters, 12 distinct:
+For "FUCK YOU TRAVIS", 12 distinct letters, every stage a letter pays before its first frame
+(`node spikes/well-cost.mjs`, measured at a load average of about 10):
 
 ```
-                       region      cut     fill     total
-pave, proportional     1966.0   3697.6     27.4   5691.0ms
-tile                        —    537.0     27.4    564.4ms
+            region      cut     shell     fill      total
+tile           0.1    171.9    2094.6     35.9     2302.4ms
+lattice     2186.7      2.2    1580.0      3.0     3771.9ms
+pave        1982.9   4698.8    4801.0     36.2    11519.0ms
 ```
 
-The stones are 27.4ms of either. What `pave` pays for is deciding where metal may be removed: it
-rasterizes a signed distance field over the glyph, marches iso-contours at every inset level, and
-derives a tessellation from them. Profiling puts 29% in `strokeWidths`, 12% in `rasterize` and
-about 20% in the clipping library.
+`lattice` and `pave` both read a proportional `Region`, a distance field over the glyph; `tile`
+never builds one. The bead rings are cut inside the shell stage, which is why `pave`'s shell is
+larger than the others'.
 
-`tile` needs none of that, so it needs no `Region` at all — which is where the 1,966ms goes.
+**Most of what `tile` costs now is the shell, and none of that is the wells.** Profiled, half the
+pipeline is the shell rasterizing and marching its own 512² distance field of the letter's skin —
+the same work for any carved letter. The next saving is there, not in the cutter.
 
 ## The method
 
-Tile the glyph's bounding box with flat-top hexagons at `pitch`, shrunk toward their own centers by
-`wall / 2`. That shrink is the sliver of metal between two stones, and hexagons are chosen because
-they tile with no gap for it to compete with.
+A flat-top hexagon lattice, centered on the glyph's box. `pitch` is the distance between
+neighboring centers, as it is for `pave`, so a whole cell is `pitch` across its flats. The cell's
+pocket is the hexagon with `wall / 2` taken off every edge, intersected with the glyph taken in by
+`bezel`.
 
-Classify each cell by how many of its six corners lie inside the glyph:
+The glyph's outline is sampled the way the shell's front face is — corners cut, curves at the
+glyph's own segment count — and bucketed on a grid at `pitch`. Each cell asks its buckets for the
+outline segments within its circumradius plus `bezel`:
 
-- **Six** — keep it whole. It never reaches the clipper. Most cells land here.
-- **None** — drop it on the point test alone.
-- **Some** — clip the cell against the glyph outline and keep what is left, sharp edges and all.
+- **None, center inside** — the pocket is the plain hexagon. Most cells land here.
+- **None, center outside** — dropped.
+- **Some** — the cell is worked on a small distance field of its own, about 30 × 30, built only from
+  the segments its buckets returned. The value at a point is the larger of its distance outside the
+  cell's hexagon less half the wall, and its distance outside the glyph less the bezel; the pocket
+  is that field's zero level, marched.
 
-A point is inside the glyph when it is inside an outer contour and outside every hole of that same
-contour. Reject against each contour's bounding box first; most points a box tiling produces are
-outside every contour, and the box test is what makes them cheap.
+The rim bead needs the pocket grown by `g` at each of its steps, and that is the same field read at
+level `g` — so every bead ring nests inside the next by construction, with nothing offset.
 
-**The orientation of the hexagon has to match the lattice step.** Pointy-top cells on flat-top
-spacing leave a triangle between every three cells — a hole, not a sliver, and it looks like a
-different design rather than like a bug.
+## Rules that exist because the obvious version broke
 
-**Nudge a straddler toward its own center by a millionth before clipping it.** A tiling puts whole
-rows of cells on one line, and polygon-clipping refuses to close a ring built from coincident
-edges. `pave.ts` already does this for the same reason. The spike drops a cell the clipper cannot
-close rather than guessing at it, and counts the drops; at the measured settings there were none
-across 2,150 cells.
+**The bezel is not optional.** A pocket that reaches the outline pushes its rim bead across the
+letter's face. Nothing in the tree offsets a contour, and a uniform `Region` costs 914ms for the
+word above, which is why the cell builds a local field instead.
 
-## Bucket the outline
+**Offset the edges, don't scale toward the center.** Scaling a hexagon's circumradius down by half
+the wall leaves neighbors 0.87 of a wall apart. And the hexagon's orientation has to match the
+lattice step: pointy-top cells on flat-top spacing leave a triangle between every three.
 
-Cost tracks outline complexity almost exactly, because every straddling cell is currently clipped
-against the whole glyph:
+**A rim bead can take at most 0.8 of half the wall.** A wider one, which the shared default
+`rimBevel` is, would meet the neighboring pocket's rim on the face; the growth is capped there.
+`ice` sets `rimBevel` and `rimDrop` to 0.003.
 
-```
-char   outline pts     ms
- I               5    1.0
- T               9    2.3
- R             445   60.1
- S            1253  179.5
-```
+**One pocket per rim.** A cell cut in two by a neck narrower than two bezels has two pieces that the
+widest bead joins again, and two pockets sharing a rim is a band no stitch closes. The larger piece
+is kept.
 
-`S` is not harder than `I` in cells — 212 against 90. It is harder because each of its 98
-straddlers is intersected against 1,253 points of outline.
+**A piece with a hole is dropped**, since a pocket is one ring. So is a piece with no point the
+whole of it can be seen from: the stone fill shrinks the pocket's outline toward the seat's point
+to make the table and culet, and shrunk toward any other point a bent pocket throws the table
+outside it — measured at 0.0085em on an `R` before this rule. The seat sits at the center of that
+region, and the `stone` fill now shrinks toward the seat's own point when it lies in the pocket.
 
-So: bucket the outline segments into a uniform grid at `pitch`, and give each straddler only the
-segments in its own bucket and the ring of buckets around it. This is the one optimization the
-implementation should carry from the start rather than leave for later — it addresses the term that
-dominates every measurement above. **It is an expectation, not a measurement**, and it is an
-expectation about the cut alone.
+**Every pocket is nudged toward its seat by a few billionths**, as `pave.ts` does: whole rows of
+pockets share a line, and three points from two rings on one line is an ear the face's
+triangulation cannot walk back.
 
 ## How it fits
 
-A third `Cutter`, registered beside `lattice` and `pave`, returning the same `Cut` — wells, seats,
-floor. `WellSpec` gains nothing it does not already have: `pitch`, `wall` and `bezel` all mean here
-what they mean for `pave`.
+`tile` is a `Cutter` like the others and ignores the `Region` it is handed. `WellBuilder` now hands
+every cutter a region built on first read (`lazyRegion`), so the cutter that never reads it never
+pays for it, and the `Cutter` signature is unchanged. `insets` has no effect on `tile`: a
+proportional bezel is measured on the region's field.
 
-It is the one cutter that needs no `Region`, and `Cutter` takes one. Pass it and ignore it rather
-than widening the signature for a single caller; the shipped shape of that argument is not worth
-changing for this.
+`minArea` defaults to 0.1 for `tile`, chosen by eye; smaller pieces at the edge are dropped rather
+than set with a speck of a stone.
 
-`ice` moves from `lattice` to `tile` once this lands. That is a look change with a visual baseline,
-so it does not ride along silently.
+## What is not settled
 
-## Two things the spike got wrong about its own scope
-
-**It never applies `bezel`.** It declares the value and then clips to the raw outline. A well's rim
-bead grows it at the face, so a pocket reaching the outline pushes its rim across the letter's own
-edge — pockets have to stop `bezel` short of it. Nothing in the tree offsets a contour, and a
-`Region` is the thing this design exists to avoid paying for, so the inset has to come from
-somewhere else.
-
-**No figure here includes the shell.** Building the letter's body costs about 1,650ms for the
-measured word, on top of region, cut and fill. Every number in this spec is the cut, and the cut
-alone is not what a well-cut letter costs. This is the third time a measurement in this repo has
-been quoted for a stage rather than a pipeline; quote the whole path or say which stage you mean.
-
-## What the spike did not settle
-
-**Footprints, not meshes.** The spike produces 2D rings. Seating a brilliant in each is what the
-`stone` fill already does, and it costs 27ms a word — but nothing has yet run the two together, so
-"the fill just works on these" is untested. A clipped cell is not convex and not a hexagon; the
-fill has only ever been handed a `Seat`, which carries a center and a half-width. Either the seats
-a clipped cell produces are honest about its real extent, or stones will overhang the metal at
-every edge of every letter.
-
-**Hexagons are not diamonds.** The footprint shape is a separate choice from the method, and the
-method does not depend on it. Any shape that tiles will do.
-
-## Testing
-
-The classification is pure and tests without geometry: a cell wholly inside is kept and never
-clipped, a cell wholly outside is dropped, a straddler is clipped to something smaller than itself.
-Hexagon orientation matches the lattice step — assert that two neighbors' shrunk rings are `wall`
-apart, which is the property the gap bug broke. A cell the clipper refuses is dropped and counted,
-never emitted half-formed. And the bucketed outline returns what the whole outline returns, which
-is what keeps the optimization honest.
+**Hexagons are not diamonds.** The footprint is a separate choice from the method, which only needs
+a convex cell that tiles and a distance to its outline.

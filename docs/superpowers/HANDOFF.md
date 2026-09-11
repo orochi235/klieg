@@ -6,19 +6,24 @@ next.
 
 ## In flight, 2026-09-10
 
-**The next task is implementing [the `tile` cutter](specs/2026-09-10-tiled-cutter-design.md) on
-`main`.** The spec is written and carries the measurements; `spikes/gem-tiling.mjs` is the working
-proof of the method. Nothing of it is built.
+**[The `tile` cutter](specs/2026-09-10-tiled-cutter-design.md) is built on `main`, and `ice` uses
+it.** The spec now describes what was built, which departs from the spike: pockets stop `bezel`
+inside the outline, and a cell the outline passes near is worked on a small distance field of its
+own rather than clipped with polygon-clipping. A whole letter costs about 5x less than `pave`, and
+most of what is left is the shell's own distance field of the letter's skin — that is the next
+saving, not the cutter.
 
 Everything below is on `main` and unpushed. `git log --oneline @{u}..HEAD` is the live answer for
-how much.
+how much. **The full suites have not been run** on the tile work — only the wells, decorations,
+looks and word unit files and the `ice` visual test. Run `npm run check` and the visual suite
+before pushing.
 
-**Three specs were written today and none of them is implemented on `main`.** In the order they
-matter:
+**`ice` is landed now**: in `LOOKS`, in both look-name lists in `looks.test.ts`, in
+`apps/lab/test/looks.spec.ts`, and with a baseline. Three unit tests had been failing on `main`
+since `ice` was added — the two name lists, and `word.test.ts`'s chunk-part test, whose predicate
+did not count a filled well's stones as chunks. All three are fixed.
 
-[`tile`](specs/2026-09-10-tiled-cutter-design.md) — a third well cutter that lays a hexagon field
-over the glyph and clips only the cells straddling its edge. 564ms against `pave`'s 5,691ms for the
-same word, because it needs no `Region` and no distance field. This is the one to build.
+Two other specs from today, neither implemented on `main`:
 
 [`backdrop`](specs/2026-09-10-backdrop-design.md) — rows of the word behind the word. **Already
 implemented, but not here:** session `klieg-f0` built it in a worktree on branch `backdrop`, cut
@@ -26,12 +31,6 @@ from a commit that predates `ice`, unreviewed and unrebased. Do not reimplement 
 
 [`cycle`](specs/2026-09-10-cycle-effect-design.md) — an effect piece that hands over to the next
 one on a staggered, rest-deferred schedule. Unbuilt, and nothing depends on it.
-
-**The `ice` look is committed but deliberately half-landed.** It is in `LOOKS` and reachable by
-name, while `apps/lab/test/looks.spec.ts` still lists twelve looks and no baseline exists for it.
-That gap is intentional — `ice` selects `lattice` today and the spec moves it to `tile`, so the
-baseline was not worth generating twice. Finish it when `tile` lands: add it to that list, generate
-the baseline, run the scoped suites.
 
 ### Decisions made in conversation that are not in any file
 
@@ -43,10 +42,10 @@ at that, not a replacement for the idea.
 hole, because klieg renders over an empty scene. `gem` already carries a comment saying so. `ice`'s
 blue is not a taste decision that can simply be lightened.
 
-**`sink` is what makes a stone read as a stone.** At the shipped default of 0.25 the crown sits
-under the letter's face and the field reads as dimples; `ice` uses 0.08. `pitch` then has to clear
-the wider girdle a shallow sink leaves, which is why `ice` sits at 0.105 rather than the 0.055
-`pave` uses.
+**`sink` is what makes a `lattice` stone read as a stone.** At the shipped default of 0.25 the
+crown sits under the letter's face and the field reads as dimples; 0.08 fixes it, and `pitch` then
+has to clear the wider girdle a shallow sink leaves. It does nothing for `tile` or `pave`, whose
+stones are shaped to their pockets and stand their tables proud of the face regardless.
 
 **Two measurements in this repo excluded `regionOf` and were wrong because of it.** Any figure for
 what a well-cut letter costs has to include the region, which is the larger half. `spikes/well-cost.mjs`

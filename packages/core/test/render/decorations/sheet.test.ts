@@ -152,6 +152,34 @@ describe('SheetBuilder', () => {
     builder.dispose();
   });
 
+  it('keeps the body opaque at rest and transparent only while it fades', () => {
+    const builder = new SheetBuilder(SPEC, context());
+    const body = bodyOf(builder, 'A');
+    const material = body.material as THREE.MeshPhysicalMaterial;
+    // As `Word` leaves it: transparent for fades, at the look's full opacity.
+    material.transparent = true;
+    material.opacity = 1;
+    builder.dressBody(0, 'A', body);
+    builder.buildLetter(0, 'A', new THREE.Group(), undefined);
+    expect(material.transparent).toBe(false);
+
+    // `Word` writes the body's opacity, then calls `frame`.
+    const step = (opacity: number) => {
+      material.opacity = opacity;
+      builder.frame(0, opacity);
+      return { transparent: material.transparent, version: material.version };
+    };
+    const rest = material.version;
+    expect(step(0.4)).toEqual({ transparent: true, version: rest + 1 });
+    expect(step(0.2)).toEqual({ transparent: true, version: rest + 1 });
+    expect(step(1)).toEqual({ transparent: false, version: rest + 2 });
+    expect(step(1)).toEqual({ transparent: false, version: rest + 2 });
+
+    const freed = watchDispose(material);
+    builder.dispose();
+    expect(freed()).toBe(false);
+  });
+
   it('slides each letter to its own patch of the sheet', () => {
     expect(slideOf(0).equals(slideOf(1))).toBe(false);
     for (let slot = 0; slot < 24; slot++) {

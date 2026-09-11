@@ -141,6 +141,7 @@ export class SheetBuilder implements DecorationBuilder {
     // The part is a carrier at the letter's origin, so an effect's scale pivots there rather than
     // at the slide, which would walk the stones off their pockets.
     const mesh = new THREE.Mesh(this.carrier, material);
+    mesh.layers.disableAll();
     mesh.add(slid);
     sized.add(mesh);
 

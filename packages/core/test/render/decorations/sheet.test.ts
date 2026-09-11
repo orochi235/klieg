@@ -198,6 +198,7 @@ describe('SheetBuilder', () => {
     expect(front?.position.z).toBe(0);
     expect(back?.position.z).toBe(DEPTH);
     expect(back?.scale.z).toBe(-1);
+    expect([carrier, front, back].map((m) => m?.layers.mask)).toEqual([0, 1, 1]);
     const carrierFreed = watchDispose(carrier.geometry);
     const stonesFreed = watchDispose(front?.geometry as THREE.BufferGeometry);
     builder.dispose();

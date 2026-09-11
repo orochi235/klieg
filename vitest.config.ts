@@ -23,6 +23,10 @@ export default defineConfig({
         find: /^@core\//,
         replacement: fileURLToPath(new URL('./packages/core/src/', import.meta.url)),
       },
+      {
+        find: /^@shared\//,
+        replacement: fileURLToPath(new URL('./packages/core/dev/shared/', import.meta.url)),
+      },
     ],
   },
   test: {

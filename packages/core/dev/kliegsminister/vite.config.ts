@@ -8,9 +8,6 @@ export default defineConfig({
   cacheDir: fileURLToPath(new URL('../../node_modules/.vite-kliegsminister', import.meta.url)),
   server: { host: '::', port: LABS.kliegsminister.port, strictPort: true },
   resolve: {
-    alias: {
-      '@core': fileURLToPath(new URL('../../src', import.meta.url)),
-      '@shared': fileURLToPath(new URL('../shared', import.meta.url)),
-    },
+    alias: { '@core': fileURLToPath(new URL('../../src', import.meta.url)) },
   },
 });

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { LABS, type LabId, labHref, labPages } from '../../../dev/shared/pages.js';
 
 const LAN = { protocol: 'http:', hostname: '10.0.0.187' };
-const IPV6 = { protocol: 'http:', hostname: '[::1]' };
+const IPV6 = new URL('http://[::1]:5181/');
 
 describe('dev lab pages', () => {
   it('links each lab on the host the page was opened on, at that lab port', () => {

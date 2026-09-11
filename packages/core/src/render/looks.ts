@@ -197,7 +197,7 @@ export const LOOKS: Record<LookName, LookSpec> = {
   },
   tubing: {
     // A backing, not a body: what reads as the sign is the tube in front of it.
-    color: 0x0a0010,
+    color: 0x060a00,
     metalness: 0,
     roughness: 0.5,
     clearcoat: 0,
@@ -222,16 +222,17 @@ export const LOOKS: Record<LookName, LookSpec> = {
       // glass would take the corner outright.
       corners: { break: 0.7, connect: 0.3 },
       select: { by: 'seed', amount: 0.85 },
-      colors: [0xff2d95],
+      // Tennis-ball optic yellow.
+      colors: [0xa0ff00],
       look: {
-        color: 0x1a0010,
-        emissive: 0xff2d95,
+        color: 0x121a00,
+        emissive: 0xa0ff00,
         emissiveIntensity: 3.4,
         clearcoat: 0,
         roughness: 0.35,
       },
       dark: {
-        color: 0x2a1520,
+        color: 0x1c2410,
         emissive: 0x000000,
         roughness: 0.25,
         clearcoat: 1,

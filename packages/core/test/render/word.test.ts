@@ -2123,15 +2123,15 @@ describe('effects', () => {
     expect(decorationOf(word).emissiveIntensity).toBeCloseTo(2, 6);
   });
 
-  // tubing's runs are 0xff2d95, so red is already saturated and clamping cannot raise it: a lamp
-  // this test can see has to be read off green or blue.
+  // tubing's runs are 0xa0ff00: green is saturated and the lamp is tinted by a colour with no blue,
+  // so red is the one channel a lamp can visibly raise.
   it('adds lamp light into a run colour', () => {
     const word = tubingWith([{ piece: lamplight, target: { kind: 'run', by: 'index' } }]);
-    const before = runColorOf(word, 0, 'g');
+    const before = runColorOf(word, 0, 'r');
 
     word.apply(STILL, 0, NO_CTX);
 
-    expect(runColorOf(word, 0, 'g')).toBeGreaterThan(before);
+    expect(runColorOf(word, 0, 'r')).toBeGreaterThan(before);
   });
 
   it('lets a lamp go when a regroup drops the letter it was lighting', () => {

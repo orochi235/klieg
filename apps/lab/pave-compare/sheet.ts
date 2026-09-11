@@ -125,11 +125,15 @@ export function maskMaterial(
   material: THREE.MeshPhysicalMaterial,
   mask: Mask,
   mode: 'inside' | 'cap',
+  shift: THREE.Vector2 = new THREE.Vector2(),
 ): void {
   const uniforms = {
     uMask: { value: mask.texture },
     uMaskXf: { value: mask.xf },
     uMaskLevel: { value: -MASK },
+    // Where this mesh sits in the letter's own space. A sheet slid to show a letter its own patch
+    // has to be masked where it lands, not where it was baked.
+    uMaskShift: { value: shift },
   };
   const before = material.onBeforeCompile;
   material.onBeforeCompile = (shader, renderer) => {
@@ -145,10 +149,10 @@ export function maskMaterial(
         ? 'if (mkDepth > uMaskLevel) discard;'
         : 'if (normalize(vMkNrm).z > 0.9 && mkDepth <= uMaskLevel) discard;';
     shader.fragmentShader =
-      `uniform sampler2D uMask;\nuniform vec4 uMaskXf;\nuniform float uMaskLevel;\nvarying vec3 vMkPos;\nvarying vec3 vMkNrm;\n${shader.fragmentShader}`.replace(
+      `uniform sampler2D uMask;\nuniform vec4 uMaskXf;\nuniform float uMaskLevel;\nuniform vec2 uMaskShift;\nvarying vec3 vMkPos;\nvarying vec3 vMkNrm;\n${shader.fragmentShader}`.replace(
         'void main() {',
         `void main() {
-  vec2 mkUv = ((vMkPos.xy - uMaskXf.xy) / uMaskXf.z + 0.5) / uMaskXf.w;
+  vec2 mkUv = ((vMkPos.xy + uMaskShift - uMaskXf.xy) / uMaskXf.z + 0.5) / uMaskXf.w;
   float mkDepth = texture2D(uMask, mkUv).r;
   ${test}`,
       );
@@ -192,6 +196,21 @@ export function rimOf(mask: Mask): THREE.BufferGeometry {
   // Seated on the face, its lower bevel buried under it.
   geo.translate(0, 0, DEPTH + DEFAULT_GLYPH_OPTIONS.bevelThickness);
   return geo;
+}
+
+/**
+ * A fresh stone material matching the sheet's own, so each letter can carry its own mask. Built
+ * rather than cloned: a clone round-trips `userData` through JSON and loses the flake uniforms.
+ */
+export function stoneMaterialOf(
+  sheet: Sheet,
+  stone: Look,
+  env: THREE.Texture,
+): THREE.MeshPhysicalMaterial {
+  const m = createMaterial(env);
+  applyLook(m, stone);
+  m.thickness = sheet.stoneMaterial.thickness;
+  return m;
 }
 
 /** A metal material in a look's own finish, carrying the studio the way a `Word`'s does. */

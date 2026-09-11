@@ -7,9 +7,19 @@ export interface CatalogFont {
   name: string;
   class: FontClass;
   /** The family as the Google Fonts API spells it, for `scripts/fonts.mjs`. */
-  google: string;
+  google?: string;
+  /**
+   * The committed file, for a face from outside Google Fonts. The script cannot fetch one, so it
+   * is always seeded and its license note is written by hand beside the others.
+   */
+  file?: string;
   /** Committed to the repo, and so servable without running the script first. */
   seeded?: boolean;
+}
+
+/** Where the lab serves a face from. */
+export function fontUrl(face: CatalogFont, base: string): string {
+  return `${base}fonts/${face.file ?? `${face.id}.ttf`}`;
 }
 
 /**
@@ -49,6 +59,7 @@ export const CATALOG: CatalogFont[] = [
   { id: 'pirata-one', name: 'Pirata One', class: 'display', google: 'Pirata One' },
   { id: 'jersey-25', name: 'Jersey 25', class: 'display', google: 'Jersey 25' },
   { id: 'asset', name: 'Asset', class: 'display', google: 'Asset' },
+  { id: 'vegapunk', name: 'Vegapunk', class: 'display', file: 'vegapunk.otf', seeded: true },
 
   { id: 'rye', name: 'Rye', class: 'woodtype', google: 'Rye', seeded: true },
   { id: 'bevan', name: 'Bevan', class: 'woodtype', google: 'Bevan' },

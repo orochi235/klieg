@@ -1,0 +1,11 @@
+Vegapunk FREE, version 1.004
+Designed by Andreas Kosikin, published by FactoryType.
+
+Not from Google Fonts, so scripts/fonts.mjs did not fetch this and no license text came with it.
+This file is Vegapunk-FREE.otf as distributed on dafont, where the author lists it as
+"100% Free": https://www.dafont.com/vegapunk.font
+
+The font's own license field reads "Freebies". FactoryType sells a full version:
+https://go.factory738.com/rHBVW9
+
+The free version grants no redistribution terms in writing beyond that listing.

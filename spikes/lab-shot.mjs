@@ -1,9 +1,9 @@
 // Screenshots a running lab and reports any console or page errors, which is the fastest way to
 // tell a lab that renders from one that only loads. Needs the lab's dev server already up.
-//   URL=http://localhost:5183/ OUT=/tmp/lab.png WAIT=6000 node spikes/lab-shot.mjs
+//   URL=http://localhost:5184/ OUT=/tmp/lab.png WAIT=6000 node spikes/lab-shot.mjs
 import { chromium } from '@playwright/test';
 
-const url = process.env.URL ?? 'http://localhost:5183/';
+const url = process.env.URL ?? 'http://localhost:5184/';
 const out = process.env.OUT ?? '/tmp/lab.png';
 const wait = Number(process.env.WAIT ?? 4000);
 

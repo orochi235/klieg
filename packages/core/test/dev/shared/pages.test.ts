@@ -10,7 +10,7 @@ describe('dev lab pages', () => {
     expect(labPages(LAN)).toEqual([
       { href: 'http://10.0.0.187:5181', label: 'tube lab' },
       { href: 'http://10.0.0.187:5182', label: 'kliegsminister' },
-      { href: 'http://10.0.0.187:5183', label: 'composition lab' },
+      { href: 'http://10.0.0.187:5184', label: 'composition lab' },
     ]);
     expect(labHref('kliegsminister', IPV6)).toBe('http://[::1]:5182');
   });

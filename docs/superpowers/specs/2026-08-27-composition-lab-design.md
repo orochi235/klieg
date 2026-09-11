@@ -94,7 +94,7 @@ with its body inlined.
 
 ## Where it lives
 
-`packages/core/dev/composition-lab/`, `npm run dev:composition-lab -w klieg`, vite on port 5183 —
+`packages/core/dev/composition-lab/`, `npm run dev:composition-lab -w klieg`, vite on port 5184 —
 5180, 5181 and 5182 are apps/lab, tube-lab and corner-lab, and the point of a fourth lab is
 running it beside them. React plus labkit plus a `persist.ts`, the shape the other two use. It
 resolves core through a `@core/*` alias rather than `../../../src/`; the older labs are not

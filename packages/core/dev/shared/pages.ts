@@ -4,7 +4,7 @@ import type { LabPage } from '@weasel-js/labkit';
 export const LABS = {
   'tube-lab': { label: 'tube lab', port: 5181 },
   kliegsminister: { label: 'kliegsminister', port: 5182 },
-  'composition-lab': { label: 'composition lab', port: 5183 },
+  'composition-lab': { label: 'composition lab', port: 5184 },
 } as const satisfies Record<string, { label: string; port: number }>;
 
 export type LabId = keyof typeof LABS;

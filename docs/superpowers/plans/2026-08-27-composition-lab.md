@@ -30,7 +30,7 @@ is written below; the code is right and this section is the record.
 - `@core/*` path alias, in both `tsconfig.json` `paths` and `vite.config.ts` `resolve.alias`. Copy `dev/corner-lab/` exactly; never write `../../../src/`.
 - Comments are 1–2 lines and only for what the code cannot say. Most steps below need none.
 - `npm run check` is lint + typecheck + test and must be green before every commit.
-- Ports: 5180 `apps/lab`, 5181 `tube-lab`, 5182 `corner-lab`, **5183 this lab**.
+- Ports: 5180 `apps/lab`, 5181 `tube-lab`, 5182 `corner-lab`, **5184 this lab**.
 
 ---
 
@@ -354,9 +354,9 @@ No behaviour change: 1147 tests, unchanged."
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
-// 5183, so this sits alongside apps/lab (5180), the tube lab (5181) and the corner lab (5182).
+// 5184, so this sits alongside apps/lab (5180), the tube lab (5181) and the corner lab (5182).
 export default defineConfig({
-  server: { port: 5183 },
+  server: { port: 5184 },
   resolve: {
     alias: { '@core': fileURLToPath(new URL('../../src', import.meta.url)) },
   },
@@ -479,7 +479,7 @@ export function App() {
 - [x] **Step 4: Verify it boots**
 
 Run: `npm run dev:composition-lab -w klieg`
-Open `http://localhost:5183`. Expected: the three placeholder regions, no console errors.
+Open `http://localhost:5184`. Expected: the three placeholder regions, no console errors.
 Then `npm run check` — expected clean.
 
 - [x] **Step 5: Commit**
@@ -1232,7 +1232,7 @@ Append to `packages/core/dev/composition-lab/src/styles.css`:
 
 - [x] **Step 5: Verify by eye**
 
-Run: `npm run dev:composition-lab -w klieg`, open `http://localhost:5183`.
+Run: `npm run dev:composition-lab -w klieg`, open `http://localhost:5184`.
 Expected: `ACRONYM` renders in `tubing` and plays; pause holds it; dragging the scrubber backward
 re-renders at that time rather than freezing. No console errors.
 

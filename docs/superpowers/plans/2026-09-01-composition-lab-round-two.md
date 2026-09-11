@@ -19,7 +19,7 @@ re-derives targeting, staggering or merging: it drives core's own `planEffects` 
 
 **Design:** [`specs/2026-09-01-composition-lab-round-two-design.md`](../specs/2026-09-01-composition-lab-round-two-design.md)
 
-**Run the lab:** `npm --prefix packages/core run dev:composition-lab` — vite on port 5183.
+**Run the lab:** `npm --prefix packages/core run dev:composition-lab` — vite on port 5184.
 
 **Run the tests:** `npx vitest run packages/core/test/composition-lab/` from the repo root.
 
@@ -228,7 +228,7 @@ so replace that line with:
 - [ ] **Step 4: Verify by eye**
 
 Run: `npm --prefix packages/core run dev:composition-lab`
-Open `http://localhost:5183/`, add a `hue` layer, and pick `color` in the channel select.
+Open `http://localhost:5184/`, add a `hue` layer, and pick `color` in the channel select.
 Expected: a colour band sweeping through the wheel, with the playhead over it. Pick `light`.
 Expected: a flat line at 0 — nothing writes light yet, which Task 3 fixes.
 

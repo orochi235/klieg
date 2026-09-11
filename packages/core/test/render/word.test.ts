@@ -1661,6 +1661,7 @@ describe('part pool', () => {
   });
 
   // Derived from LOOKS rather than named, so a look added later is covered without editing this.
+  // Builds every look in full, the pavé sheet's bake included, which outlasts the default timeout.
   it('builds chunk parts for exactly the looks that scatter chunks or fill with stones', () => {
     const chunky = (name: keyof typeof LOOKS) => {
       const decoration = LOOKS[name].decoration;
@@ -1676,7 +1677,7 @@ describe('part pool', () => {
 
     expect(built).toEqual(names.filter(chunky));
     expect(built).not.toHaveLength(0);
-  });
+  }, 20_000);
 
   // A chunk field covers its whole letter, so unlike a run it has no box of its own to offer.
   it("gives a chunk part its letter's ink", () => {

@@ -156,6 +156,15 @@ export interface WellSpec {
   stone?: MaterialSpec;
 }
 
+/**
+ * Pavé as one baked sheet shown through each letter under a thin rim, rather than wells carved into
+ * it. Takes a well's numbers for the sheet itself; `insets` has no outline to measure and is unread.
+ */
+export interface SheetSpec extends Omit<WellSpec, 'kind' | 'cutter'> {
+  kind: 'sheet';
+  cutter: 'pave';
+}
+
 export interface ChunkBlueprint {
   kind: 'chunks';
   position: Float32Array;
@@ -163,7 +172,7 @@ export interface ChunkBlueprint {
   dispose(): void;
 }
 
-export type DecorationSpec = TubeSpec | ChunkSpec | WellSpec;
+export type DecorationSpec = TubeSpec | ChunkSpec | WellSpec | SheetSpec;
 export type Blueprint = TubeBlueprint | ChunkBlueprint;
 
 /** How many surface samples a char shares. Letters draw their own chunks from this pool. */

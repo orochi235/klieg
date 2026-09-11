@@ -1,0 +1,221 @@
+import * as THREE from 'three';
+import type { ResolvedOffset } from '../../effects/types.js';
+import { DEFAULT_GLYPH_OPTIONS, GlyphCache } from '../../text/glyphs.js';
+import type { SheetSpec } from '../decoration.js';
+import { DEFAULT_INFLATE } from '../inflate.js';
+import {
+  applyLook,
+  type FrameOwnedBase,
+  frameOwnedBase,
+  type LightBase,
+  lightBase,
+  litEmissive,
+} from '../looks.js';
+import {
+  type BakedSheet,
+  bakeSheet,
+  markSheet,
+  maskMaterial,
+  SHEET_BODY,
+  type SheetLetter,
+  sheetLetterOf,
+  sheetUniforms,
+} from '../wells/sheet.js';
+import type { DecorationBuilder, DecorationPart, WordBuildContext } from './registry.js';
+
+const DEPTH = DEFAULT_GLYPH_OPTIONS.depth;
+/** Room past the glyph on every side, so the sheet has whole cells where the mask cuts it. */
+const MARGIN = 0.08;
+/** How far one letter's patch of the sheet may sit from another's, in em: six cells or so. */
+export const SLACK = 0.3;
+
+const frac = (n: number) => n - Math.floor(n);
+
+/** Where letter `slot` sits on the sheet. Fixed per slot, so each fire of a word shows the same. */
+export function slideOf(slot: number): THREE.Vector2 {
+  return new THREE.Vector2(-SLACK * frac(slot * 0.618034), -SLACK * frac(slot * 0.381966 + 0.1));
+}
+
+/** `object` turned onto the letter's back: mirrored through its middle. */
+function turned<T extends THREE.Object3D>(object: T): T {
+  object.position.z = DEPTH;
+  object.scale.z = -1;
+  return object;
+}
+
+/**
+ * Pavé as one baked sheet shown through each letter, front and back, under a rim on the seam.
+ *
+ * The sheet's metal and the rim draw on the body's own material, hung off the body mesh, so every
+ * write the body gets lands on them too. The stones are the one part this contributes.
+ */
+export class SheetBuilder implements DecorationBuilder {
+  /** One marked clone per char, builder-owned; the cache's glyph stays unmarked for other looks. */
+  private readonly bodies: GlyphCache<THREE.BufferGeometry>;
+  /** Per letter slot, so an effect can reach one letter's stones without its neighbors'. */
+  private readonly materials: (THREE.MeshPhysicalMaterial | null)[] = [];
+  private readonly meshes: (THREE.Mesh | null)[] = [];
+  private readonly lights: (LightBase | null)[] = [];
+  private readonly base: FrameOwnedBase;
+
+  constructor(
+    private readonly spec: SheetSpec,
+    private readonly ctx: WordBuildContext,
+  ) {
+    if (ctx.inflate && { ...DEFAULT_INFLATE, ...ctx.inflate }.profile !== 'flat') {
+      throw new Error(
+        "klieg: a 'sheet' decoration needs a flat letter; carve an inflated one with 'well'",
+      );
+    }
+    this.base = frameOwnedBase(spec.stone ?? 'gem');
+    this.bodies = new GlyphCache<THREE.BufferGeometry>((char, depth) => {
+      const body = ctx.glyph(char, depth).clone();
+      markSheet(body, SHEET_BODY);
+      return body;
+    });
+  }
+
+  prime(chars: readonly string[]): void {
+    const glyphs = new THREE.Box2();
+    for (const char of new Set(chars)) this.cover(glyphs, char);
+    if (!glyphs.isEmpty()) this.sheetOver(glyphs);
+  }
+
+  bodyGeometry(char: string, depth: number): THREE.BufferGeometry {
+    return this.bodies.get(char, depth);
+  }
+
+  dressBody(index: number, char: string, body: THREE.Mesh): void {
+    const sheet = this.sheetFor(char);
+    const letter = this.letterOf(char);
+    const shift = slideOf(index);
+    const material = body.material as THREE.MeshPhysicalMaterial;
+    maskMaterial(material, sheetUniforms(letter, shift), 'body');
+
+    const front = new THREE.Mesh(sheet.shell, material);
+    front.position.set(shift.x, shift.y, 0);
+    const back = turned(new THREE.Mesh(sheet.shell, material));
+    back.position.x = shift.x;
+    back.position.y = shift.y;
+    body.add(
+      front,
+      back,
+      new THREE.Mesh(letter.rim, material),
+      turned(new THREE.Mesh(letter.rim, material)),
+    );
+  }
+
+  buildLetter(index: number, char: string, sized: THREE.Group, tint: number | undefined): void {
+    this.skipLetter(index);
+    if (!this.spec.fill) return;
+    const sheet = this.sheetFor(char);
+    if (!sheet.stones) return;
+
+    const shift = slideOf(index);
+    const material = this.ctx.studioMaterial();
+    applyLook(material, this.spec.stone ?? 'gem', tint);
+    material.thickness = sheet.thickness;
+    material.transparent = true;
+    material.opacity = this.base.opacity;
+    material.emissiveIntensity = this.base.emissiveIntensity;
+    maskMaterial(material, sheetUniforms(this.letterOf(char), shift), 'stones');
+
+    const mesh = new THREE.Mesh(sheet.stones, material);
+    mesh.add(turned(new THREE.Mesh(sheet.stones, material)));
+    const slid = new THREE.Group();
+    slid.position.set(shift.x, shift.y, 0);
+    slid.add(mesh);
+    sized.add(slid);
+
+    this.materials[index] = material;
+    this.meshes[index] = mesh;
+    this.lights[index] = lightBase(this.spec.stone ?? 'gem', tint);
+  }
+
+  skipLetter(index: number): void {
+    this.materials[index] = null;
+    this.meshes[index] = null;
+    this.lights[index] = null;
+  }
+
+  /** One part per letter that drew stones, as the carved wells contribute. */
+  collectParts(): DecorationPart[] {
+    const fields: number[] = [];
+    for (let i = 0; i < this.meshes.length; i++) {
+      if (this.meshes[i]) fields.push(i);
+    }
+    return fields.map((slot, n) => ({
+      info: this.ctx.partInfo(
+        'chunk',
+        n,
+        fields.length,
+        slot,
+        n / fields.length,
+        1 / fields.length,
+        undefined,
+        this.spec.fill,
+      ),
+      mesh: this.meshes[slot] as THREE.Mesh,
+      slot,
+    }));
+  }
+
+  frame(index: number, opacity: number): void {
+    const material = this.materials[index];
+    if (!material) return;
+    material.opacity = opacity * this.base.opacity;
+    material.emissiveIntensity = this.base.emissiveIntensity;
+    const light = this.lights[index];
+    if (light) material.emissive.setHex(light.emissive);
+  }
+
+  /** The sheet shows only within its letter, so there is no box of its own. */
+  boundsAt(): THREE.Box2 | null {
+    return null;
+  }
+
+  applyGradientBounds(): void {}
+
+  writePart(part: DecorationPart, out: ResolvedOffset): void {
+    const material = part.mesh.material as THREE.MeshPhysicalMaterial;
+    const light = this.lights[part.slot];
+    if (light) material.emissive.setHex(litEmissive(light.emissive, light.hue, out.light));
+    material.emissiveIntensity = this.base.emissiveIntensity * out.gain;
+  }
+
+  dispose(): void {
+    // The sheet and every mask and rim belong to the caches, which outlive this word.
+    this.bodies.dispose();
+    for (const material of this.materials) material?.dispose();
+    this.materials.length = 0;
+    this.meshes.length = 0;
+    this.lights.length = 0;
+  }
+
+  /** Widens `box` by `char`'s outline; a glyph that drew no ink leaves it alone. */
+  private cover(box: THREE.Box2, char: string): void {
+    if (!this.ctx.glyph(char, DEPTH).attributes.position?.count) return;
+    for (const shape of this.ctx.shapes(char)) {
+      for (const point of shape.getPoints(24)) box.expandByPoint(point);
+    }
+  }
+
+  private sheetFor(char: string): BakedSheet {
+    const glyph = new THREE.Box2();
+    this.cover(glyph, char);
+    return this.sheetOver(glyph);
+  }
+
+  /** The shared sheet, grown if it must be to hold `glyphs`, the margin and any letter's slide. */
+  private sheetOver(glyphs: THREE.Box2): BakedSheet {
+    const need = glyphs.clone().expandByScalar(MARGIN);
+    need.max.addScalar(SLACK);
+    return this.ctx.caches.sheet(this.spec, need, (box) => bakeSheet(box, this.spec));
+  }
+
+  private letterOf(char: string): SheetLetter {
+    return this.ctx.caches.sheetLetter(this.ctx.font, char, () =>
+      sheetLetterOf(this.ctx.shapes(char)),
+    );
+  }
+}

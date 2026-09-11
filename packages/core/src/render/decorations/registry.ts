@@ -8,6 +8,7 @@ import type { InflateOptions } from '../inflate.js';
 // would close the cycle. A type-only one is erased at compile time.
 import type { WordDebugHooks } from '../word.js';
 import { ChunksBuilder } from './chunks.js';
+import { SheetBuilder } from './sheet.js';
 import { TubeBuilder } from './tube.js';
 import { WellBuilder } from './well.js';
 
@@ -105,3 +106,4 @@ export function decorationBuilderFor(
 registerDecoration('chunks', (spec, ctx) => new ChunksBuilder(spec, ctx));
 registerDecoration('tube', (spec, ctx) => new TubeBuilder(spec, ctx));
 registerDecoration('well', (spec, ctx) => new WellBuilder(spec, ctx));
+registerDecoration('sheet', (spec, ctx) => new SheetBuilder(spec, ctx));

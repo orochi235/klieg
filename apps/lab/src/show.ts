@@ -12,7 +12,7 @@ import {
   type PoseOffset,
 } from 'klieg';
 import * as THREE from 'three';
-import { CATALOG } from './fonts/catalog.js';
+import { CATALOG, fontUrl } from './fonts/catalog.js';
 import { decodeConfig } from './show-config.js';
 
 type Tick = (nowMs: number) => void;
@@ -194,7 +194,7 @@ const FONTS: Record<string, string> = {
   ...Object.fromEntries(
     CATALOG.filter((face) => face.seeded).map((face) => [
       face.id,
-      `${import.meta.env.BASE_URL}fonts/${face.id}.ttf`,
+      fontUrl(face, import.meta.env.BASE_URL),
     ]),
   ),
 };

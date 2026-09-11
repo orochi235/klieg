@@ -22,7 +22,7 @@ import {
   specOf,
 } from 'klieg';
 
-import { CATALOG, CLASS_NAMES } from './fonts/catalog.js';
+import { CATALOG, CLASS_NAMES, fontUrl } from './fonts/catalog.js';
 import { encodeConfig, type ShowConfig } from './show-config.js';
 
 const DEG = Math.PI / 180;
@@ -348,9 +348,7 @@ const FONT_URL = `${import.meta.env.BASE_URL}font.ttf`;
 const FACES = CATALOG.filter((face) => face.seeded);
 const FONTS: Record<string, string> = {
   default: FONT_URL,
-  ...Object.fromEntries(
-    FACES.map((face) => [face.id, `${import.meta.env.BASE_URL}fonts/${face.id}.ttf`]),
-  ),
+  ...Object.fromEntries(FACES.map((face) => [face.id, fontUrl(face, import.meta.env.BASE_URL)])),
 };
 
 const font = choice('font', ['default', ...FACES.map((face) => face.id)]);

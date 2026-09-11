@@ -1074,7 +1074,7 @@ Roughly in order of value; the items are independent of each other.
   verified by mutation: swapping the arithmetic for the resonant version fails that test alone and
   leaves the other five green.
 
-- **The composition lab is built and on `main`.** `npm run dev:composition-lab -w klieg`, port 5183.
+- **The composition lab is built and on `main`.** `npm run dev:composition-lab -w klieg`, port 5184.
   You build a whole `fire()` in the rail — look, hold, effect layers with their params, targeting,
   and a `roving` wrapper — and watch it render live on a clock the lab owns. Playing advances the
   clock; scrubbing backward remounts the fire and jumps straight to the target, which

@@ -1,6 +1,7 @@
 import { EffectFrame, planEffects } from '@core/effects/frame.js';
 import type { FrameCtx, PartInfo } from '@core/effects/types.js';
 import { type LoadedFont, loadFont } from '@core/text/font.js';
+import { LabBar } from '@shared/LabBar.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildLayer, type Composition, finestPass, toFireOptions } from './composition.js';
 import { DraftPane } from './DraftPane.js';
@@ -143,6 +144,7 @@ export function App() {
 
   return (
     <div className="cl-shell">
+      <LabBar lab="composition-lab" />
       <aside className="cl-rail">
         <Rail
           composition={composition}

@@ -23,13 +23,16 @@ function boxPath(w: number, top: number, bottom: number): PathCommand[] {
   ];
 }
 
-/** Every char is a 0.5 em wide box rising 0.7 em, except 'W', which is twice as wide. */
+/**
+ * Every char is a 0.5 em wide box rising 0.7 em, except 'W', three times as wide: wider than
+ * ordinary text, so the sheet warm-up bakes does not hold it.
+ */
 function stubFont(): LoadedFont {
   const font = {
     charToGlyph: (char: string) => ({
       advanceWidth: 600,
       getPath: (_x: number, _y: number, size: number) => ({
-        commands: boxPath((char === 'W' ? 1 : 0.5) * size, 0.7 * size, 0),
+        commands: boxPath((char === 'W' ? 1.5 : 0.5) * size, 0.7 * size, 0),
         toPathData: () => 'M0 0',
       }),
     }),
@@ -93,6 +96,18 @@ function context(
   };
 }
 
+/** A box holding one point, which any baked sheet contains. */
+const PROBE = new THREE.Box2(new THREE.Vector2(0.1, 0.1), new THREE.Vector2(0.1, 0.1));
+
+/** Whether `target` fires its dispose event from here on. */
+function watchDispose(target: THREE.EventDispatcher<{ dispose: object }>): () => boolean {
+  let fired = false;
+  target.addEventListener('dispose', () => {
+    fired = true;
+  });
+  return () => fired;
+}
+
 /** A body the way `Word` makes one: the builder's geometry on a fresh studio material. */
 function bodyOf(builder: SheetBuilder, char: string): THREE.Mesh {
   return new THREE.Mesh(builder.bodyGeometry(char, DEPTH), createMaterial(null));
@@ -109,7 +124,11 @@ describe('SheetBuilder', () => {
       ctx.glyph('A', DEPTH).getAttribute('position').count,
     );
     expect(new Set(body.getAttribute(SHEET_ATTRIBUTE).array)).toEqual(new Set([SHEET_BODY]));
+    const clone = watchDispose(body);
+    const cached = watchDispose(ctx.glyph('A', DEPTH));
     builder.dispose();
+    expect(clone()).toBe(true);
+    expect(cached()).toBe(false);
   });
 
   it('hangs the sheet and the rim off the body, front and back, on the body material', () => {
@@ -124,6 +143,10 @@ describe('SheetBuilder', () => {
     for (const turned of [back, rimBack]) {
       expect(turned?.scale.z).toBe(-1);
       expect(turned?.position.z).toBe(DEPTH);
+    }
+    for (const bead of [rim, rimBack]) {
+      expect(bead?.position.x).toBe(0);
+      expect(bead?.position.y).toBe(0);
     }
     expect((body.material as THREE.Material).customProgramCacheKey()).toContain('sheet-body');
     builder.dispose();
@@ -141,13 +164,14 @@ describe('SheetBuilder', () => {
     const builder = new SheetBuilder(SPEC, context());
     const body = bodyOf(builder, 'A');
     builder.dressBody(1, 'A', body);
-    const front = body.children[0] as THREE.Mesh;
-    expect(front.position.x).toBeCloseTo(slideOf(1).x, 9);
-    expect(front.position.y).toBeCloseTo(slideOf(1).y, 9);
+    for (const sheet of body.children.slice(0, 2)) {
+      expect(sheet.position.x).toBeCloseTo(slideOf(1).x, 9);
+      expect(sheet.position.y).toBeCloseTo(slideOf(1).y, 9);
+    }
     builder.dispose();
   });
 
-  it('contributes one stone part per letter, its back copy riding the front', () => {
+  it('contributes one stone part per letter, pivoting on the letter with both copies slid', () => {
     const builder = new SheetBuilder(SPEC, context());
     const sized = new THREE.Group();
     builder.buildLetter(0, 'A', sized, undefined);
@@ -156,12 +180,29 @@ describe('SheetBuilder', () => {
     expect(parts).toHaveLength(1);
     expect(parts[0]?.info.kind).toBe('chunk');
     expect(parts[0]?.info.fill).toBe('stone');
-    const stones = parts[0]?.mesh as THREE.Mesh;
-    expect(stones.parent?.position.x).toBeCloseTo(slideOf(0).x, 9);
-    expect(stones.position.toArray()).toEqual([0, 0, 0]);
-    expect((stones.children[0] as THREE.Mesh).scale.z).toBe(-1);
-    expect((stones.material as THREE.Material).customProgramCacheKey()).toContain('sheet-stones');
+    const carrier = parts[0]?.mesh as THREE.Mesh;
+    expect(carrier.parent).toBe(sized);
+    expect(carrier.position.toArray()).toEqual([0, 0, 0]);
+    expect(carrier.geometry.getAttribute('position')).toBeUndefined();
+    expect((carrier.material as THREE.Material).customProgramCacheKey()).toContain('sheet-stones');
+
+    expect(carrier.children).toHaveLength(1);
+    const slid = carrier.children[0] as THREE.Object3D;
+    expect(slid.position.x).toBeCloseTo(slideOf(0).x, 9);
+    expect(slid.position.y).toBeCloseTo(slideOf(0).y, 9);
+    expect(slid.children).toHaveLength(2);
+    const [front, back] = slid.children as THREE.Mesh[];
+    expect(back?.geometry).toBe(front?.geometry);
+    expect(front?.geometry.getAttribute('position').count).toBeGreaterThan(0);
+    for (const stones of [front, back]) expect(stones?.material).toBe(carrier.material);
+    expect(front?.position.z).toBe(0);
+    expect(back?.position.z).toBe(DEPTH);
+    expect(back?.scale.z).toBe(-1);
+    const carrierFreed = watchDispose(carrier.geometry);
+    const stonesFreed = watchDispose(front?.geometry as THREE.BufferGeometry);
     builder.dispose();
+    expect(carrierFreed()).toBe(true);
+    expect(stonesFreed()).toBe(false);
   });
 
   it('sets no stones and contributes no part when no fill is named', () => {
@@ -178,7 +219,7 @@ describe('SheetBuilder', () => {
     const ctx = context();
     const builder = new SheetBuilder(SPEC, ctx);
     builder.prime(['A', 'W', ' ']);
-    const primed = ctx.caches.sheet(SPEC, new THREE.Box2(), () => {
+    const primed = ctx.caches.sheet(SPEC, PROBE, () => {
       throw new Error('prime should already have baked a sheet');
     });
     const body = bodyOf(builder, 'W');
@@ -197,12 +238,17 @@ describe('SheetBuilder', () => {
     first.dressBody(0, 'A', a);
     second.dressBody(0, 'A', b);
     const shell = (a.children[0] as THREE.Mesh).geometry;
+    const rim = (a.children[2] as THREE.Mesh).geometry;
     expect((b.children[0] as THREE.Mesh).geometry).toBe(shell);
-    expect((b.children[2] as THREE.Mesh).geometry).toBe((a.children[2] as THREE.Mesh).geometry);
+    expect((b.children[2] as THREE.Mesh).geometry).toBe(rim);
+    const letter = caches.sheetLetter(font, 'A', () => {
+      throw new Error('the letter should already be held');
+    });
+    const freed = [watchDispose(shell), watchDispose(rim), watchDispose(letter.mask)];
     first.dispose();
-    expect(shell.getAttribute('position').count).toBeGreaterThan(0);
+    expect(freed.map((fired) => fired())).toEqual([false, false, false]);
     expect(() =>
-      caches.sheet(SPEC, new THREE.Box2(), () => {
+      caches.sheet(SPEC, PROBE, () => {
         throw new Error('the sheet should still be held');
       }),
     ).not.toThrow();

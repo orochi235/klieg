@@ -28,10 +28,15 @@ const DEPTH = DEFAULT_GLYPH_OPTIONS.depth;
 const MARGIN = 0.08;
 /** How far one letter's patch of the sheet may sit from another's, in em: six cells or so. */
 export const SLACK = 0.3;
+/** Ordinary text's glyph extent in em, so warm-up bakes the sheet nearly every word uses. */
+const ORDINARY = new THREE.Box2(new THREE.Vector2(-0.05, -0.25), new THREE.Vector2(0.95, 0.8));
 
 const frac = (n: number) => n - Math.floor(n);
 
-/** Where letter `slot` sits on the sheet. Fixed per slot, so each fire of a word shows the same. */
+/**
+ * Where letter `slot` sits on the sheet. Fixed per slot, so each fire of a word shows the same
+ * patches, until a glyph bigger than ordinary text grows the sheet and moves its lattice.
+ */
 export function slideOf(slot: number): THREE.Vector2 {
   return new THREE.Vector2(-SLACK * frac(slot * 0.618034), -SLACK * frac(slot * 0.381966 + 0.1));
 }
@@ -48,6 +53,9 @@ function turned<T extends THREE.Object3D>(object: T): T {
  *
  * The sheet's metal and the rim draw on the body's own material, hung off the body mesh, so every
  * write the body gets lands on them too. The stones are the one part this contributes.
+ *
+ * A see-through look (opacity below 1) is unsupported: with depth writes off, the mirrored back
+ * copy sorts in front and blends over the face.
  */
 export class SheetBuilder implements DecorationBuilder {
   /** One marked clone per char, builder-owned; the cache's glyph stays unmarked for other looks. */
@@ -57,6 +65,10 @@ export class SheetBuilder implements DecorationBuilder {
   private readonly meshes: (THREE.Mesh | null)[] = [];
   private readonly lights: (LightBase | null)[] = [];
   private readonly base: FrameOwnedBase;
+  /** Each char's outline box, which the sheet is sized from. */
+  private readonly glyphBoxes = new Map<string, THREE.Box2>();
+  /** Drawless geometry for each stone part's carrier, shared by every letter. */
+  private readonly carrier = new THREE.BufferGeometry();
 
   constructor(
     private readonly spec: SheetSpec,
@@ -77,7 +89,7 @@ export class SheetBuilder implements DecorationBuilder {
 
   prime(chars: readonly string[]): void {
     const glyphs = new THREE.Box2();
-    for (const char of new Set(chars)) this.cover(glyphs, char);
+    for (const char of new Set(chars)) glyphs.union(this.boxOf(char));
     if (!glyphs.isEmpty()) this.sheetOver(glyphs);
   }
 
@@ -120,12 +132,17 @@ export class SheetBuilder implements DecorationBuilder {
     material.emissiveIntensity = this.base.emissiveIntensity;
     maskMaterial(material, sheetUniforms(this.letterOf(char), shift), 'stones');
 
-    const mesh = new THREE.Mesh(sheet.stones, material);
-    mesh.add(turned(new THREE.Mesh(sheet.stones, material)));
     const slid = new THREE.Group();
     slid.position.set(shift.x, shift.y, 0);
-    slid.add(mesh);
-    sized.add(slid);
+    slid.add(
+      new THREE.Mesh(sheet.stones, material),
+      turned(new THREE.Mesh(sheet.stones, material)),
+    );
+    // The part is a carrier at the letter's origin, so an effect's scale pivots there rather than
+    // at the slide, which would walk the stones off their pockets.
+    const mesh = new THREE.Mesh(this.carrier, material);
+    mesh.add(slid);
+    sized.add(mesh);
 
     this.materials[index] = material;
     this.meshes[index] = mesh;
@@ -186,29 +203,39 @@ export class SheetBuilder implements DecorationBuilder {
   dispose(): void {
     // The sheet and every mask and rim belong to the caches, which outlive this word.
     this.bodies.dispose();
+    this.carrier.dispose();
+    this.glyphBoxes.clear();
     for (const material of this.materials) material?.dispose();
     this.materials.length = 0;
     this.meshes.length = 0;
     this.lights.length = 0;
   }
 
-  /** Widens `box` by `char`'s outline; a glyph that drew no ink leaves it alone. */
-  private cover(box: THREE.Box2, char: string): void {
-    if (!this.ctx.glyph(char, DEPTH).attributes.position?.count) return;
-    for (const shape of this.ctx.shapes(char)) {
-      for (const point of shape.getPoints(24)) box.expandByPoint(point);
+  /** `char`'s outline box, empty for a glyph that drew no ink. Shared: never mutate it. */
+  private boxOf(char: string): THREE.Box2 {
+    let box = this.glyphBoxes.get(char);
+    if (!box) {
+      box = new THREE.Box2();
+      if (this.ctx.glyph(char, DEPTH).attributes.position?.count) {
+        for (const shape of this.ctx.shapes(char)) {
+          for (const point of shape.getPoints(24)) box.expandByPoint(point);
+        }
+      }
+      this.glyphBoxes.set(char, box);
     }
+    return box;
   }
 
   private sheetFor(char: string): BakedSheet {
-    const glyph = new THREE.Box2();
-    this.cover(glyph, char);
-    return this.sheetOver(glyph);
+    return this.sheetOver(this.boxOf(char));
   }
 
-  /** The shared sheet, grown if it must be to hold `glyphs`, the margin and any letter's slide. */
+  /**
+   * The shared sheet, grown if it must be to hold `glyphs`, ordinary text, the margin and any
+   * letter's slide.
+   */
   private sheetOver(glyphs: THREE.Box2): BakedSheet {
-    const need = glyphs.clone().expandByScalar(MARGIN);
+    const need = glyphs.clone().union(ORDINARY).expandByScalar(MARGIN);
     need.max.addScalar(SLACK);
     return this.ctx.caches.sheet(this.spec, need, (box) => bakeSheet(box, this.spec));
   }

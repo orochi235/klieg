@@ -31,6 +31,7 @@ const NBSP = '\u00a0';
 const ZWJ = '\u200d';
 const BLANK = new Set([' ', NBSP, ZWJ]);
 const DESCENDS = new Set(['g']);
+const WIDE = new Set(['W']);
 
 /** Box spanning `bottom`..`top` in three's y-up space; opentype paths are y-down. */
 function boxPath(w: number, top: number, bottom: number): PathCommand[] {
@@ -43,7 +44,10 @@ function boxPath(w: number, top: number, bottom: number): PathCommand[] {
   ];
 }
 
-/** Chars are 0.5 em wide boxes rising 0.7 em; 'g' also drops 0.2 em, and blanks draw nothing. */
+/**
+ * Chars are 0.5 em wide boxes rising 0.7 em; 'W' is 1.5 em wide, 'g' also drops 0.2 em, and blanks
+ * draw nothing.
+ */
 const STUB_FAMILY = 'klieg-test-word';
 
 function stubFont(): LoadedFont {
@@ -53,7 +57,11 @@ function stubFont(): LoadedFont {
       getPath: (_x: number, _y: number, size: number) => ({
         commands: BLANK.has(char)
           ? []
-          : boxPath(0.5 * size, 0.7 * size, DESCENDS.has(char) ? -0.2 * size : 0),
+          : boxPath(
+              (WIDE.has(char) ? 1.5 : 0.5) * size,
+              0.7 * size,
+              DESCENDS.has(char) ? -0.2 * size : 0,
+            ),
         toPathData: () => 'M0 0',
       }),
     }),
@@ -2518,8 +2526,9 @@ describe('a sheet decoration', () => {
     const dress = vi.spyOn(SheetBuilder.prototype, 'dressBody');
     const sheet = vi.spyOn(WordCaches.prototype, 'sheet');
     try {
-      const word = new Word('Ag', stubFont(), LOOK, ROOMY);
-      expect(prime).toHaveBeenCalledWith(['A', 'g']);
+      // 'W' is wider than the sheet 'A' alone bakes, so without the prime this would bake twice.
+      const word = new Word('AW', stubFont(), LOOK, ROOMY);
+      expect(prime).toHaveBeenCalledWith(['A', 'W']);
       expect(prime.mock.invocationCallOrder[0]).toBeLessThan(
         dress.mock.invocationCallOrder[0] as number,
       );

@@ -63,7 +63,9 @@ export interface DecorationBuilder {
   prime?(chars: readonly string[]): void;
   /**
    * Letter `index`'s body mesh, just made and not yet drawn, before `buildLetter`. A builder may
-   * patch its material or hang geometry off it, which then takes every write the body gets.
+   * patch its material or hang geometry off it, which then takes every write the body gets. The
+   * material is `Word`'s and the builder must not dispose it; whatever hangs off the body is the
+   * builder's or the caches' to free, because `Word` never walks the body's children.
    */
   dressBody?(index: number, char: string, body: THREE.Mesh): void;
   /**

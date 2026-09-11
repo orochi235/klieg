@@ -309,9 +309,9 @@ export const LOOKS: Record<LookName, LookSpec> = {
   },
 
   /**
-   * Four candidates for what the wells line ships as. `pave` shows one baked sheet through each
-   * letter; `tiara` carves the same wells into an inflated solid, `bezel` swaps the cutter, and
-   * `carved` names no fill at all.
+   * Four candidates for how a letter takes pavé. `pave` shows one baked sheet through each letter.
+   * The other three carve wells into it: `tiara` into an inflated solid, `bezel` with the lattice
+   * cutter, and `carved` with no fill at all.
    */
   pave: {
     color: 0xffc44d,

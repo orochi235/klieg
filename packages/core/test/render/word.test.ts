@@ -1661,15 +1661,20 @@ describe('part pool', () => {
   });
 
   // Derived from LOOKS rather than named, so a look added later is covered without editing this.
-  it('builds chunk parts for exactly the looks that scatter chunks', () => {
-    const scatters = (name: keyof typeof LOOKS) => LOOKS[name].decoration?.kind === 'chunks';
+  it('builds chunk parts for exactly the looks that scatter chunks or fill with stones', () => {
+    const chunky = (name: keyof typeof LOOKS) => {
+      const decoration = LOOKS[name].decoration;
+      return (
+        decoration?.kind === 'chunks' || (!!decoration && 'fill' in decoration && !!decoration.fill)
+      );
+    };
     const names = Object.keys(LOOKS) as (keyof typeof LOOKS)[];
 
     const built = names.filter(
       (name) => new Word('A', stubFont(), name, ROOMY).partsOf('chunk').length > 0,
     );
 
-    expect(built).toEqual(names.filter(scatters));
+    expect(built).toEqual(names.filter(chunky));
     expect(built).not.toHaveLength(0);
   });
 

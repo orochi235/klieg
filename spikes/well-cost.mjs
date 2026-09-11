@@ -125,3 +125,29 @@ if (process.argv.includes('--pitch')) {
     console.log(`${pitch.toFixed(3)}  ${f1(ms, 7)}ms  ${String(r.seats.length).padStart(5)}  ${f1(ms / Math.max(1, r.seats.length), 8)}`);
   }
 }
+
+/**
+ * What the region itself costs. The per-cutter figures above start after `regionOf`, so they leave
+ * out work every well-cut letter pays before a cutter is even called — and `proportional` insets
+ * add `strokeWidths` over the whole distance field on top.
+ */
+if (process.argv.includes('--region')) {
+  console.log('--- regionOf, per distinct letter ---');
+  console.log('insets        shapes    region    total');
+  for (const insets of ['uniform', 'proportional']) {
+    let shapeMs = 0;
+    let regionMs = 0;
+    for (const char of chars) {
+      const t0 = performance.now();
+      const shapes = glyphToShapes(font, char, 1);
+      const t1 = performance.now();
+      regionOf(shapes, insets);
+      const t2 = performance.now();
+      shapeMs += t1 - t0;
+      regionMs += t2 - t1;
+    }
+    console.log(
+      `${insets.padEnd(14)}${f1(shapeMs, 6)}ms ${f1(regionMs, 8)}ms ${f1(shapeMs + regionMs, 8)}ms`,
+    );
+  }
+}

@@ -57,6 +57,16 @@ export interface DecorationBuilder {
   /** A letter that drew no ink. Keeps every per-letter slot aligned with the letter pool. */
   skipLetter(index: number): void;
   /**
+   * Every letter's char in slot order, once, before the first letter is built — for a builder whose
+   * shared geometry has to cover the whole word rather than grow letter by letter.
+   */
+  prime?(chars: readonly string[]): void;
+  /**
+   * Letter `index`'s body mesh, just made and not yet drawn, before `buildLetter`. A builder may
+   * patch its material or hang geometry off it, which then takes every write the body gets.
+   */
+  dressBody?(index: number, char: string, body: THREE.Mesh): void;
+  /**
    * This letter's body geometry, replacing the extruded glyph. Omit it and `Word` uses the cache.
    *
    * Disposal is the reverse of `ctx.glyph()`'s: what this answers is the builder's own and the

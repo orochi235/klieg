@@ -33,8 +33,9 @@ cutter — `standing()` settles a cell against the region's boxes before the cli
 `strokeWidths` pass feeds both of its uses — and the measurement spikes `pave-breakdown`,
 `pave-word`, `pave-identity` and `prof-top`.
 
-**Next: make the sheet a real decoration.** Nothing is in core yet. What the prototype does by hand
-that a builder has to own:
+**Next: make the sheet a real decoration.** Nothing is in core yet. The plan to do it is
+[plans/2026-09-10-pave-sheet.md](plans/2026-09-10-pave-sheet.md), **written, not built**. What the
+prototype does by hand that a builder has to own:
 
 - One sheet per look spec, baked once and shared by every letter — and across fires, which the well
   builder's per-instance cut cache does not do today.

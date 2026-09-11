@@ -5,7 +5,7 @@ import { WordCaches } from '../../../src/render/caches.js';
 import type { SheetSpec } from '../../../src/render/decoration.js';
 import type { WordBuildContext } from '../../../src/render/decorations/registry.js';
 import { SheetBuilder, SLACK, slideOf } from '../../../src/render/decorations/sheet.js';
-import { createMaterial } from '../../../src/render/looks.js';
+import { createMaterial, frameOwnedBase } from '../../../src/render/looks.js';
 import { SHEET_ATTRIBUTE, SHEET_BODY } from '../../../src/render/wells/sheet.js';
 import type { LoadedFont } from '../../../src/text/font.js';
 import { DEFAULT_GLYPH_OPTIONS } from '../../../src/text/glyphs.js';
@@ -93,6 +93,7 @@ function context(
       span,
     }),
     meshInk: () => ({ minX: 0, maxX: 0, minY: 0, maxY: 0 }),
+    frameBase: (look) => frameOwnedBase(look),
   };
 }
 

@@ -6,7 +6,6 @@ import { DEFAULT_INFLATE } from '../inflate.js';
 import {
   applyLook,
   type FrameOwnedBase,
-  frameOwnedBase,
   type LightBase,
   lightBase,
   litEmissive,
@@ -79,7 +78,7 @@ export class SheetBuilder implements DecorationBuilder {
         "klieg: a 'sheet' decoration needs a flat letter; carve an inflated one with 'well'",
       );
     }
-    this.base = frameOwnedBase(spec.stone ?? 'gem');
+    this.base = ctx.frameBase(spec.stone ?? 'gem');
     this.bodies = new GlyphCache<THREE.BufferGeometry>((char, depth) => {
       const body = ctx.glyph(char, depth).clone();
       markSheet(body, SHEET_BODY);

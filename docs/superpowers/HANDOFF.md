@@ -3,7 +3,68 @@
 **For:** the next session picking this up. **Answers:** what is on `main`, what each merged branch
 learned that its design doc does not carry, and what is worth doing next.
 
+## Pavé by sheet — 2026-09-10
+
+**For:** whoever builds pavé next. **Answers:** which way to build it, what was ruled out, and where
+the pieces are.
+
+**Decided: pavé is a sheet shown through the letter, not wells carved into it.** Mike watched both
+spin and judged the sheet version better: the carved wells — `pave-look`'s stitched shell — carry
+geometric distortions from trying to be too cute, a lumpy rim around every counter and cells crowding
+where strokes meet. The sheet version is the plain extruded glyph with its front cap opened on the
+GPU wherever one baked pavé sheet shows through, and a thin raised rim on the seam hiding the stones
+the mask cuts. It is also about four times cheaper: on "FUCK YOU / TRAVIS" the wells build in 7.0 s,
+where the sheet bakes once in 0.8 s and all twelve letters' masks and rims take 1.0 s.
+
+Ruled out — do not re-propose:
+
+- **Painting pavé on in the fragment shader.** Competitive straight on; from 25° to 60° the face
+  flattens into streaks, and that is most of a spin.
+- **Contouring the distance field once and offsetting the other levels.** Fourteen contour passes at
+  about 8 ms is a 100 ms ceiling, and polygon offsetting is the fragile thing the field's own contours
+  exist to avoid.
+- **Shipping baked meshes of the carved wells.** Superseded: only the sheet needs baking.
+
+**Where it is.** Branch `pave-compare`, worktree `.claude/worktrees/pave-compare`, cut from
+`pave-look`, unpushed. The prototype is lab-only: `apps/lab/pave-compare/sheet.ts` bakes, masks and
+rims; `/pave-compare/` sets real, shader and sheet side by side at five angles; `/pave-spin/` with
+`spikes/pave-spin.mjs` renders a full turn to MP4. The branch also carries two speedups to the carved
+cutter — `standing()` settles a cell against the region's boxes before the clipper, and one
+`strokeWidths` pass feeds both of its uses — and the measurement spikes `pave-breakdown`,
+`pave-word`, `pave-identity` and `prof-top`.
+
+**Next: make the sheet a real decoration.** Nothing is in core yet. What the prototype does by hand
+that a builder has to own:
+
+- One sheet per look spec, baked once and shared by every letter — and across fires, which the well
+  builder's per-instance cut cache does not do today.
+- Per letter, a mask texture from the glyph's distance field, the rim, and a slide into the sheet so
+  neighbors do not show the same patch.
+- The glyph's own bevel is 0.038 em wide, wider than `pave`'s 0.026 bezel, so the sheet has to start
+  just past it or it floats over the slope — `MASK` in `sheet.ts`.
+- Stones and cells as addressable effect parts. Not designed yet.
+
+**Open, and Mike's to decide:**
+
+- **Pavé on the backs.** Both versions show a bare gold back for half a full turn. On the sheet path
+  it is nearly free — the same sheet, masked facing the other way. Worth settling before a spin range
+  is chosen.
+- **Publishing Vegapunk.** It is a lab preset on this branch, in one commit touching lab files only,
+  so it cherry-picks onto `main` on its own. The author's dafont listing says "100% Free", the font's
+  own license field says "Freebies", aggregator sites say personal use only, and nothing written
+  covers redistribution. `apps/lab/public/fonts/licenses/vegapunk.txt` records all of it. Nothing is
+  public until the lab deploys.
+
 ## Branch state
+
+**`backdrop` — the backdrop spec, built, waiting on Mike's review.** Worktree
+`.claude/worktrees/backdrop`, cut from `56a6c86`: `fire({ backdrop })`, `stagger: { from: 'line' }`,
+and `MAX_BACKDROP_ROWS = 12` from `spikes/backdrop-frame-cost.mjs`; the spec on that branch is marked
+built. Before it goes anywhere, drop the early pavé commits it also carries — everything after
+`552432e` on that branch — which `pave-compare` supersedes. It predates `ice` on `main`: the session
+holding `main` asked that it not be rebased onto a moving `main` until `ice` settles, and owns the
+`ice` baselines and `looks.spec.ts`. The worktree guard means the merge has to be done by a session
+at the repo root.
 
 **`face-and-side` and `wells-teardown` are both merged into `main`**: the sequin work, the bevel
 chamfer and contour union, flatness sampling, and the decoration registry that replaced `word.ts`'s
@@ -1330,6 +1391,24 @@ to move into `oil`'s own film.
   to the other. `spikes/run-decomposition.mjs`.
 
 ## Traps
+
+**A matching vertex count is not identical geometry.** The pavé box reject left every count
+unchanged and every coordinate different. `spikes/pave-identity.mjs` hashes each pocket and rim ring.
+
+**Wall-clock timing on this machine moves more than the effects being measured** whenever other
+sessions are running. `spikes/pave-word.mjs` reads CPU time; profile shares from `prof-top.mjs` also
+survive load.
+
+**Plain `chromium.launch()` gets `chrome-headless-shell`, which rasterizes WebGL in software** — and
+transmission is the pass software gets wrong. The render spikes pass `channel: 'chromium'` and
+`--use-angle=metal`.
+
+**`spikes/*.test.ts` sit outside vitest's `include`.** A spike that needs `vi.spyOn` has to run from
+under `packages/*/test/`.
+
+**The pavé spikes expect the `pave-compare` lab on :5192** —
+`npm run dev -w @klieg/lab -- --port 5192 --strictPort --host '::'`. The session holding `main` runs
+its lab on :5180; stop servers by port, not by pattern.
 
 **"The lamp landed" cannot tell one light base from another.** A chunk part reading the *body's*
 `lightBase` rather than its field's still brightens the material, so every brightness assertion

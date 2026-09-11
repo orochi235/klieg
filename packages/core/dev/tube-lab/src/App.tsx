@@ -2,6 +2,7 @@ import { specOf } from '@core/render/looks.js';
 import type { TubeSpec } from '@core/render/tube/index.js';
 import type { LoadedFont } from '@core/text/font.js';
 import { DEFAULT_GLYPH_OPTIONS, glyphToShapes } from '@core/text/glyphs.js';
+import { LabBar } from '@shared/LabBar.js';
 import { Workspace } from '@weasel-js/labkit';
 import {
   type PointerEvent as ReactPointerEvent,
@@ -557,6 +558,7 @@ export function App({
 
   return (
     <div className="lab">
+      <LabBar lab="tube-lab" />
       <div className="stage" ref={stageRef}>
         <canvas ref={canvasRef} />
         <Workspace

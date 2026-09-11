@@ -8,6 +8,7 @@
   "include": ["test"],
   "references": [
     { "path": "./tsconfig.json" },
+    { "path": "./dev/shared" },
     { "path": "./dev/tube-lab" },
     { "path": "./dev/kliegsminister" },
     { "path": "./dev/composition-lab" }

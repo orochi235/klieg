@@ -3,7 +3,8 @@
   "compilerOptions": {
     "outDir": "../.tsbuild/tube-lab",
     "paths": {
-      "@core/*": ["../../src/*"]
+      "@core/*": ["../../src/*"],
+      "@shared/*": ["../shared/*"]
     },
     "rootDir": ".",
     "jsx": "react-jsx",
@@ -11,5 +12,5 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
   "include": ["src", "vite.config.ts"],
-  "references": [{ "path": "../.." }]
+  "references": [{ "path": "../.." }, { "path": "../shared" }]
 }

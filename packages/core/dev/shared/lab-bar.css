@@ -1,0 +1,15 @@
+/* Matches the header labkit's own shell draws, without the shell's element defaults, which would
+   restyle the lab's own controls. */
+.lab-bar {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  padding: var(--wzl-space-sm) var(--wzl-space-md);
+  color: var(--wzl-fg);
+  font-family: var(--wzl-font-ui);
+  font-size: var(--wzl-font-size);
+  line-height: 1.4;
+  background: var(--wzl-surface-raised);
+  border-bottom: 1px solid var(--wzl-border);
+}

@@ -7,9 +7,10 @@
     "types": ["vite/client"],
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "paths": {
-      "@core/*": ["../../src/*"]
+      "@core/*": ["../../src/*"],
+      "@shared/*": ["../shared/*"]
     }
   },
   "include": ["src", "vite.config.ts"],
-  "references": [{ "path": "../.." }]
+  "references": [{ "path": "../.." }, { "path": "../shared" }]
 }

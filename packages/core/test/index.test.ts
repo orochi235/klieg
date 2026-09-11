@@ -1270,6 +1270,7 @@ describe('published name lists', () => {
       'leather',
       'tubing',
       'piping',
+      'ice',
       'sequin',
     ]);
     expect(POLICY_NAMES).toEqual(['queue', 'replace', 'concurrent']);

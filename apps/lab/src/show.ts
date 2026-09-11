@@ -106,6 +106,8 @@ const config = decodeConfig(
 );
 document.title = config.text.replace(/\s+/g, ' ').trim();
 fallback.textContent = config.text;
+// Editing the hash in the address bar navigates nowhere, so the page would keep the old sign.
+addEventListener('hashchange', () => location.reload());
 
 const quiet = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const cycling = !quiet && config.cycleMs > 0 && config.looks.length > 1;

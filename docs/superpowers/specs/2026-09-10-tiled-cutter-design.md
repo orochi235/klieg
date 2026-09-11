@@ -69,11 +69,11 @@ char   outline pts     ms
 `S` is not harder than `I` in cells — 212 against 90. It is harder because each of its 98
 straddlers is intersected against 1,253 points of outline.
 
-So: bucket the outline segments into a uniform grid at `pitch`, and clip each straddler against
-only the segments in its own bucket and the ring of buckets around it. This is the one optimization
-the implementation should carry from the start rather than leave for later — it addresses the term
-that dominates every measurement above. **It is an expectation, not a measurement:** the spike does
-not implement it, and the claim that the word lands under 100ms is unproven until it does.
+So: bucket the outline segments into a uniform grid at `pitch`, and give each straddler only the
+segments in its own bucket and the ring of buckets around it. This is the one optimization the
+implementation should carry from the start rather than leave for later — it addresses the term that
+dominates every measurement above. **It is an expectation, not a measurement**, and it is an
+expectation about the cut alone.
 
 ## How it fits
 
@@ -87,6 +87,19 @@ changing for this.
 
 `ice` moves from `lattice` to `tile` once this lands. That is a look change with a visual baseline,
 so it does not ride along silently.
+
+## Two things the spike got wrong about its own scope
+
+**It never applies `bezel`.** It declares the value and then clips to the raw outline. A well's rim
+bead grows it at the face, so a pocket reaching the outline pushes its rim across the letter's own
+edge — pockets have to stop `bezel` short of it. Nothing in the tree offsets a contour, and a
+`Region` is the thing this design exists to avoid paying for, so the inset has to come from
+somewhere else.
+
+**No figure here includes the shell.** Building the letter's body costs about 1,650ms for the
+measured word, on top of region, cut and fill. Every number in this spec is the cut, and the cut
+alone is not what a well-cut letter costs. This is the third time a measurement in this repo has
+been quoted for a stage rather than a pipeline; quote the whole path or say which stage you mean.
 
 ## What the spike did not settle
 

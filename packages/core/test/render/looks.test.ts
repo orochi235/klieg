@@ -320,6 +320,11 @@ describe('decorated looks', () => {
     expect(specOf('sequin').decoration?.kind).toBe('chunks');
   });
 
+  it('builds pave from one baked sheet, and keeps the carved wells for tiara', () => {
+    expect(specOf('pave').decoration?.kind).toBe('sheet');
+    expect(specOf('tiara').decoration?.kind).toBe('well');
+  });
+
   it('makes tubing a glowing tube over a near-invisible body', () => {
     const spec = specOf('tubing');
 

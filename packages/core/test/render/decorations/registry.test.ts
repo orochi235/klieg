@@ -21,6 +21,7 @@ describe('decorationBuilderFor', () => {
   it('has a factory registered for each shipped kind', () => {
     expect(decorationBuilderFor(specOf('sequin').decoration, wordContext())).not.toBeNull();
     expect(decorationBuilderFor(specOf('tubing').decoration, wordContext())).not.toBeNull();
+    expect(decorationBuilderFor(specOf('pave').decoration, wordContext())).not.toBeNull();
   });
 
   it('answers null for no decoration at all', () => {

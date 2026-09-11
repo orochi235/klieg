@@ -309,9 +309,9 @@ export const LOOKS: Record<LookName, LookSpec> = {
   },
 
   /**
-   * Four candidates for what the wells line ships as. Each is one point in `WellSpec`'s space,
-   * not a variation on the last: `pave` and `tiara` differ only in whether the solid is inflated,
-   * `bezel` swaps the cutter, and `carved` names no fill at all.
+   * Four candidates for what the wells line ships as. `pave` shows one baked sheet through each
+   * letter; `tiara` carves the same wells into an inflated solid, `bezel` swaps the cutter, and
+   * `carved` names no fill at all.
    */
   pave: {
     color: 0xffc44d,
@@ -321,11 +321,8 @@ export const LOOKS: Record<LookName, LookSpec> = {
     // "Make it red" should recolour the stones, not the gold they are set in.
     tintTo: 'decoration',
     decoration: {
-      kind: 'well',
+      kind: 'sheet',
       cutter: 'pave',
-      // A uniform bezel takes the same absolute amount off a thin stroke as a thick one, so the
-      // horizontals come back holding fewer stones than their width says they should.
-      insets: 'proportional',
       bezel: 0.026,
       floor: 0.07,
       pitch: 0.05,

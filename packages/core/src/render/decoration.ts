@@ -84,7 +84,7 @@ export interface ChunkSpec {
 export interface WellSpec {
   kind: 'well';
   /** Which registered cutter places the wells. A second cutter makes this a discriminant. */
-  cutter: 'lattice' | 'pave';
+  cutter: 'lattice' | 'pave' | 'tile';
   /**
    * How far in from every contour a well stays, in em. Also caps the slab's bevel, because the
    * slab's front face is every well's floor and a bevelled cap ramps across its own bevel width.
@@ -94,19 +94,20 @@ export interface WellSpec {
    * How `bezel` is measured. `uniform` takes the same amount off every stroke, so a thin one loses
    * a larger fraction of itself and ends up holding far fewer stones than its width says it should.
    * `proportional` takes that amount off the thickest stroke and the same fraction off the rest.
+   * Measured on the letter's distance field, which `tile` never builds, so `tile` is always uniform.
    */
   insets?: Insets;
   /** How deep a well is — the plate's thickness — in em. */
   floor: number;
-  /** Lattice pitch — with pavé and no gaps, very nearly a cell's width — in em. */
+  /** Lattice pitch — with pavé and no gaps very nearly a cell's width, with tile exactly it — in em. */
   pitch: number;
-  /** Metal left standing between two pavé cells, in em. Half of it comes off each cell. */
+  /** Metal left standing between two pavé or tile cells, in em. Half of it comes off each cell. */
   wall?: number;
   /** How far a pavé seed may wander off the lattice, as a fraction of the pitch. */
   jitter?: number;
   /** Lloyd passes: each free seed walks to the centroid of what it owns inside the region. */
   relax?: number;
-  /** A pavé cell holding less than this fraction of a whole one loses its seed. */
+  /** A pavé or tile cell holding less than this fraction of a whole one is dropped. */
   minArea?: number;
   seed?: number;
   /**

@@ -136,14 +136,18 @@ const ROOM = 0.94;
  * deriving it from the cell's width instead sinks the narrow cells below the metal, and the narrow
  * cells are the ones at the edges. A pavilion with no room shallows rather than flattens, because a
  * stone sitting flat on its own floor reads as a tile in a hole. And both caps are triangulated
- * rather than fanned, from a sampled interior point rather than the centroid: a clipped cell is not
- * convex, so a fan from one vertex throws triangles clean outside it.
+ * rather than fanned, shrunk toward the seat's point or a sampled interior one rather than the
+ * centroid: a clipped cell is not convex, so a fan from one vertex throws triangles outside it.
  */
 function setStone(seat: Seat, ctx: FillContext, into: number[]): boolean {
   const outline = seat.outline;
   if (!outline || outline.length < 3) return false;
   const ring = outline.map(([x, y]): [number, number] => [x + seat.x, y + seat.y]);
-  const c = interiorPoint(ring);
+  // The seat's own point when it is in the pocket: a cutter that shaped a bent cell chose one the
+  // whole cell can be seen from, and shrinking toward any other throws the table outside it.
+  const c: [number, number] = insideRing(ring, seat.x, seat.y)
+    ? [seat.x, seat.y]
+    : interiorPoint(ring);
   if (!insideRing(ring, c[0], c[1])) return false;
 
   const width = Math.sqrt(area(ring));

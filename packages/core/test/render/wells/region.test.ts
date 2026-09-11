@@ -2,7 +2,7 @@ import type { Font, PathCommand } from 'opentype.js';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { WordCaches } from '../../../src/render/caches.js';
-import { regionOf } from '../../../src/render/wells/region.js';
+import { lazyRegion, regionOf } from '../../../src/render/wells/region.js';
 import type { LoadedFont } from '../../../src/text/font.js';
 
 const UPEM = 1000;
@@ -82,6 +82,30 @@ describe('regionOf', () => {
     const region = regionOf([outer]);
     expect(region.contains(0.5, 0.5, 0)).toBe(false);
     expect(region.contains(0.15, 0.5, 0.05)).toBe(true);
+  });
+});
+
+// `tile` needs no region, and the field is most of what one costs — so the builder hands every
+// cutter one that is only built when read.
+describe('lazyRegion', () => {
+  it('builds nothing until read', () => {
+    // `regionOf` throws on a glyph with no ink, so a lazy one over nothing throws only on use.
+    const region = lazyRegion([]);
+    expect(() => region.field).toThrow(/ink/);
+  });
+
+  it('answers what regionOf does once read', () => {
+    const shapes = new WordCaches().shapes(stubFont(), 'A');
+    const lazy = lazyRegion(shapes, 'proportional');
+    const eager = regionOf(shapes, 'proportional');
+    for (const [x, y, c] of [
+      [0.25, 0.35, 0.2],
+      [0.02, 0.35, 0.05],
+      [-0.1, 0.35, 0],
+    ] as const) {
+      expect(lazy.contains(x, y, c)).toBe(eager.contains(x, y, c));
+    }
+    expect(lazy.levelFor(0.1)).toBe(eager.levelFor(0.1));
   });
 });
 

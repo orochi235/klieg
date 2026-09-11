@@ -15,7 +15,7 @@ import type { Cut } from '../wells/cutters.js';
 import { cutterFor } from '../wells/cutters.js';
 import type { Filled } from '../wells/fills.js';
 import { fillFor } from '../wells/fills.js';
-import { regionOf } from '../wells/region.js';
+import { lazyRegion } from '../wells/region.js';
 import { buildShell, DEFAULT_SHELL, shellPlanes } from '../wells/shell.js';
 import type { DecorationBuilder, DecorationPart, WordBuildContext } from './registry.js';
 
@@ -65,7 +65,7 @@ export class WellBuilder implements DecorationBuilder {
     let cut = this.cuts.get(char);
     if (!cut) {
       const shapes = this.ctx.shapes(char);
-      cut = cutterFor(this.spec.cutter)(shapes, regionOf(shapes, this.spec.insets), this.spec);
+      cut = cutterFor(this.spec.cutter)(shapes, lazyRegion(shapes, this.spec.insets), this.spec);
       this.cuts.set(char, cut);
     }
     return cut;

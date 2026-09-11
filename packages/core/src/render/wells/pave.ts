@@ -160,7 +160,7 @@ function voronoiCell(i: number, seeds: Point[], pitch: number): Ring {
   return cell;
 }
 
-const toPath = (ring: Ring): THREE.Path => {
+export const toPath = (ring: Ring): THREE.Path => {
   const path = new THREE.Path();
   const head = ring[0] as Point;
   path.moveTo(head[0], head[1]);

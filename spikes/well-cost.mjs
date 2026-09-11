@@ -1,22 +1,29 @@
 /**
- * What a well-cut letter costs to build on the main thread, per cutter and per fill.
+ * What a well-cut letter costs to build on the main thread, per cutter, stage by stage.
  *
- *   npm run build -w klieg && node spikes/well-cost.mjs [word] [face]
+ *   npm run build -w klieg && node spikes/well-cost.mjs [word] [face] [--cutters tile,lattice,pave]
  *
- * The question a shipped look has to answer: can `lattice` and `pave` be fired the way `gold` is,
- * or is the block before the first frame long enough that they need their own handling. Cutting
- * and filling are pure geometry, so this runs without GL — it is the CPU block, not the draw.
+ * Every stage a letter pays before its first frame: the region (the distance field `lattice` and
+ * `pave` read, and `tile` never builds), the cut, the shell stitched around the wells, and the
+ * stone fill. Quote the total, not a stage — a stage on its own has been mistaken for the pipeline
+ * more than once. Cutting and filling are pure geometry, so this runs without GL.
  */
 import { readFileSync } from 'node:fs';
 import opentype from 'opentype.js';
 import * as THREE from 'three';
 import { cutterFor } from '../packages/core/dist/render/wells/cutters.js';
 import { fillFor } from '../packages/core/dist/render/wells/fills.js';
-import { regionOf } from '../packages/core/dist/render/wells/region.js';
-import { glyphToShapes } from '../packages/core/dist/text/glyphs.js';
+import { lazyRegion, regionOf } from '../packages/core/dist/render/wells/region.js';
+import { buildShell, DEFAULT_SHELL, shellPlanes } from '../packages/core/dist/render/wells/shell.js';
+import { DEFAULT_GLYPH_OPTIONS, glyphToShapes } from '../packages/core/dist/text/glyphs.js';
 
-const WORD = process.argv[2] ?? 'FUCK YOU TRAVIS';
-const FACE = process.argv[3] ?? 'default';
+const positional = process.argv.slice(2).filter((a, i, all) => !a.startsWith('--') && !all[i - 1]?.startsWith('--cutters'));
+const WORD = positional[0] ?? 'FUCK YOU TRAVIS';
+const FACE = positional[1] ?? 'default';
+const CUTTERS = (process.argv[process.argv.indexOf('--cutters') + 1] ?? '').includes(',') ||
+  process.argv.includes('--cutters')
+  ? process.argv[process.argv.indexOf('--cutters') + 1].split(',')
+  : ['tile', 'lattice', 'pave'];
 
 const buf = readFileSync(
   FACE === 'default'
@@ -28,6 +35,7 @@ const font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + bu
 const SPEC = {
   kind: 'well',
   bezel: 0.012,
+  insets: 'proportional',
   floor: 0.09,
   pitch: 0.055,
   size: 0.048,
@@ -35,6 +43,9 @@ const SPEC = {
   fill: 'stone',
   tint: 0.5,
   sink: 0.25,
+  // Under half the wall, so neighboring pockets' rims never meet on the face.
+  rimBevel: 0.003,
+  rimDrop: 0.003,
 };
 
 const chars = [...new Set([...WORD].filter((c) => c.trim()))];
@@ -43,54 +54,67 @@ console.log(`word "${WORD}": ${[...WORD].filter((c) => c.trim()).length} letters
 const pad = (s, w) => String(s).padEnd(w);
 const f1 = (n, w) => n.toFixed(1).padStart(w);
 
-for (const cutter of ['lattice', 'pave']) {
+/** `applyLook` writes flake uniforms the real pipeline attaches when it compiles the shader. */
+const material = () => {
+  const m = new THREE.MeshPhysicalMaterial();
+  m.userData.flake = {
+    uFlakeDensity: { value: 0 },
+    uFlakeSize: { value: 0 },
+    uFlakeSpread: { value: 0 },
+    uFlakeBump: { value: 0 },
+    uFlakeGloss: { value: 0 },
+    uFlakeColor: { value: new THREE.Color() },
+    uFlakeColorMix: { value: 0 },
+  };
+  return m;
+};
+
+const depth = DEFAULT_GLYPH_OPTIONS.depth;
+for (const cutter of CUTTERS) {
   const cut = cutterFor(cutter);
   const fill = fillFor('stone');
-  let cutMs = 0;
-  let fillMs = 0;
+  const spec = { ...SPEC, cutter };
+  const sum = [0, 0, 0, 0];
   let wells = 0;
   console.log(`--- ${cutter} ---`);
+  console.log('     n/N  ch    region       cut     shell      fill     total  wells');
   for (const [i, char] of chars.entries()) {
     const shapes = glyphToShapes(font, char, 1);
-    const region = regionOf(shapes, 'proportional');
     const t0 = performance.now();
-    const result = cut(shapes, region, { ...SPEC, cutter });
+    // What `WellBuilder` hands a cutter: built on first read, so `tile` never pays for it.
+    const region = cutter === 'tile' ? lazyRegion(shapes, spec.insets) : regionOf(shapes, spec.insets);
     const t1 = performance.now();
+    const result = cut(shapes, region, spec);
+    const t2 = performance.now();
+    const shell = buildShell(shapes, result, {
+      ...DEFAULT_SHELL,
+      depth,
+      bezel: spec.bezel,
+      rimBevel: spec.rimBevel,
+      rimDrop: spec.rimDrop,
+    });
+    const t3 = performance.now();
+    const planes = shellPlanes(depth, spec.floor, spec.bezel);
     const filled = fill(
       result.seats,
-      {
-        // `applyLook` writes flake uniforms straight into `userData.flake`, which the real
-        // pipeline attaches when it compiles the shader. Stubbed here so the fill runs without GL.
-        material: () => {
-          const m = new THREE.MeshPhysicalMaterial();
-          m.userData.flake = {
-            uFlakeDensity: { value: 0 },
-            uFlakeSize: { value: 0 },
-            uFlakeSpread: { value: 0 },
-            uFlakeBump: { value: 0 },
-            uFlakeGloss: { value: 0 },
-            uFlakeColor: { value: new THREE.Color() },
-            uFlakeColorMix: { value: 0 },
-          };
-          return m;
-        },
-        faceZ: 0,
-        floorZ: -SPEC.floor,
-        girdleZ: -0.003,
-      },
-      { ...SPEC, cutter },
+      { material, faceZ: planes.faceZ, floorZ: planes.floorZ, girdleZ: planes.faceZ - spec.rimDrop },
+      spec,
     );
-    const t2 = performance.now();
-    cutMs += t1 - t0;
-    fillMs += t2 - t1;
+    const t4 = performance.now();
+    const stages = [t1 - t0, t2 - t1, t3 - t2, t4 - t3];
+    stages.forEach((ms, k) => {
+      sum[k] += ms;
+    });
     wells += result.seats.length;
-    console.log(`  ${pad(`${i + 1}/${chars.length}`, 6)} ${pad(char, 3)} ${f1(t1 - t0, 7)}ms cut  ${f1(t2 - t1, 7)}ms fill  ${String(result.seats.length).padStart(4)} wells`);
+    console.log(
+      `  ${pad(`${i + 1}/${chars.length}`, 6)} ${pad(char, 3)}${stages.map((ms) => f1(ms, 8)).join('  ')}  ${f1(t4 - t0, 8)}  ${String(result.seats.length).padStart(5)}`,
+    );
+    shell.geometry.dispose();
     filled.geometry?.dispose?.();
   }
-  const perWord = ((cutMs + fillMs) / chars.length) * [...WORD].filter((c) => c.trim()).length;
-  console.log(`  distinct total: ${f1(cutMs, 7)}ms cut + ${f1(fillMs, 7)}ms fill, ${wells} wells`);
-  console.log(`  a whole word, cached per distinct char: ${f1(cutMs + fillMs, 7)}ms`);
-  console.log(`  uncached, every letter cut: ${f1(perWord, 7)}ms\n`);
+  const total = sum.reduce((a, b) => a + b, 0);
+  console.log(`  total      ${sum.map((ms) => f1(ms, 8)).join('  ')}  ${f1(total, 8)}  ${String(wells).padStart(5)}`);
+  console.log(`  every letter, uncached: ${f1((total / chars.length) * [...WORD].filter((c) => c.trim()).length, 8)}ms\n`);
 }
 
 /**

@@ -67,6 +67,22 @@ export function regionOf(shapes: readonly THREE.Shape[], insets: Insets = 'unifo
   };
 }
 
+/** A region built on first read, so a cutter that never reads it never pays for the field. */
+export function lazyRegion(shapes: readonly THREE.Shape[], insets: Insets = 'uniform'): Region {
+  let built: Region | undefined;
+  const get = () => {
+    built ??= regionOf(shapes, insets);
+    return built;
+  };
+  return {
+    contains: (x, y, clearance) => get().contains(x, y, clearance),
+    get field() {
+      return get().field;
+    },
+    levelFor: (clearance) => get().levelFor(clearance),
+  };
+}
+
 /** The same field with every cell divided by the width of the stroke it belongs to. */
 function scaleByWidth(field: Field): Field {
   const { width } = strokeWidths(field);

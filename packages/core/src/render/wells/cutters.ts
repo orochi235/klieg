@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { WellSpec } from '../decoration.js';
 import { pave } from './pave.js';
 import type { Region } from './region.js';
+import { tileCutter } from './tile.js';
 
 /** How finely a contour is sampled when measuring the glyph's extent. */
 const CONTOUR_SEGMENTS = 24;
@@ -14,7 +15,10 @@ const ROW = Math.sqrt(3) / 2;
  * measuring an outline it has already placed.
  */
 export interface Seat {
-  /** The well's centre in the glyph's own em space. */
+  /**
+   * The well's center in the glyph's own em space. For a shaped pocket, a point the whole pocket can
+   * be seen from, which is what a stone's table and culet shrink toward.
+   */
   x: number;
   y: number;
   /** The well's half-diagonal, in em. */
@@ -101,3 +105,4 @@ registerCutter('lattice', lattice);
 // Registered here rather than by `pave.ts` registering itself: the package declares a narrow
 // `sideEffects` list, so a module imported only for its registration is dropped from the bundle.
 registerCutter('pave', pave);
+registerCutter('tile', tileCutter);

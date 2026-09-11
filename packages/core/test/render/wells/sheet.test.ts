@@ -1,11 +1,15 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import type { SheetSpec } from '../../../src/render/decoration.js';
+import { regionOf } from '../../../src/render/wells/region.js';
 import {
   bakeSheet,
   CLIP_Z,
+  MASK,
   SHEET_ATTRIBUTE,
   SHEET_METAL,
+  SHEET_RIM,
+  sheetLetterOf,
 } from '../../../src/render/wells/sheet.js';
 import { DEFAULT_GLYPH_OPTIONS } from '../../../src/text/glyphs.js';
 
@@ -89,5 +93,69 @@ describe('bakeSheet', () => {
     expect(sheet.stones).toBeNull();
     expect(sheet.thickness).toBe(0);
     sheet.dispose();
+  });
+});
+
+/** A 0.5 by 0.7 em box, the letter every stub font in these tests draws. */
+function boxShapes(): THREE.Shape[] {
+  return [
+    new THREE.Shape([
+      new THREE.Vector2(0, 0),
+      new THREE.Vector2(0.5, 0),
+      new THREE.Vector2(0.5, 0.7),
+      new THREE.Vector2(0, 0.7),
+    ]),
+  ];
+}
+
+const FACE_Z = DEFAULT_GLYPH_OPTIONS.depth + DEFAULT_GLYPH_OPTIONS.bevelThickness;
+
+describe('sheetLetterOf', () => {
+  it('carries the glyph distance field as a half-float texture the shader can filter', () => {
+    const letter = sheetLetterOf(boxShapes());
+    expect(letter.mask.type).toBe(THREE.HalfFloatType);
+    expect(letter.mask.format).toBe(THREE.RedFormat);
+    expect(letter.mask.magFilter).toBe(THREE.LinearFilter);
+
+    const { field } = regionOf(boxShapes(), 'uniform');
+    const [originX, originY, emPerCell, size] = letter.xf.toArray();
+    expect([originX, originY, emPerCell, size]).toEqual([
+      field.originX,
+      field.originY,
+      field.emPerCell,
+      field.size,
+    ]);
+    // The texel under the middle of the box: deep inside, so negative, and what the field holds.
+    const ix = Math.round((0.25 - field.originX) / field.emPerCell);
+    const iy = Math.round((0.35 - field.originY) / field.emPerCell);
+    const texel = (letter.mask.image.data as Uint16Array)[iy * field.size + ix] as number;
+    const depth = THREE.DataUtils.fromHalfFloat(texel);
+    expect(depth).toBeLessThan(-0.2);
+    expect(depth).toBeCloseTo(field.data[iy * field.size + ix] as number, 3);
+    letter.dispose();
+  });
+
+  it('seats the rim on the seam between the letter face and the sheet', () => {
+    const letter = sheetLetterOf(boxShapes());
+    const { field } = regionOf(boxShapes(), 'uniform');
+    const position = letter.rim.getAttribute('position');
+    expect(position.count).toBeGreaterThan(0);
+    for (let i = 0; i < position.count; i++) {
+      // Within the bead's half-width and its rounding of the seam, which sits MASK em inside.
+      expect(Math.abs(field.sample(position.getX(i), position.getY(i)) + MASK)).toBeLessThan(0.012);
+    }
+    letter.rim.computeBoundingBox();
+    const box = letter.rim.boundingBox as THREE.Box3;
+    // Its lower bevel buried in the face, its crown standing just proud of it.
+    expect(box.min.z).toBeLessThan(FACE_Z);
+    expect(box.max.z).toBeGreaterThan(FACE_Z);
+    expect(box.max.z).toBeLessThan(FACE_Z + 0.02);
+    letter.dispose();
+  });
+
+  it('marks every rim vertex as rim', () => {
+    const letter = sheetLetterOf(boxShapes());
+    expect(new Set(letter.rim.getAttribute(SHEET_ATTRIBUTE).array)).toEqual(new Set([SHEET_RIM]));
+    letter.dispose();
   });
 });

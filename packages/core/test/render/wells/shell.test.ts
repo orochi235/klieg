@@ -247,6 +247,143 @@ describe('buildShell', () => {
 // A look may ask for the shape of the solid and for what is carved out of it at once. The crown is
 // zero at the letter's own contour and outside it, so the walls, both chamfers and the back cap
 // stand exactly where they did and only the front side rides.
+describe('the wells are a real hollow', () => {
+  /** Signed volume of a closed mesh, by the divergence theorem. Meaningless if it is not closed. */
+  const volumeOf = (pos: Float32Array) => {
+    let v = 0;
+    for (let t = 0; t < pos.length; t += 9) {
+      const ax = pos[t] as number;
+      const ay = pos[t + 1] as number;
+      const az = pos[t + 2] as number;
+      const bx = pos[t + 3] as number;
+      const by = pos[t + 4] as number;
+      const bz = pos[t + 5] as number;
+      const cx = pos[t + 6] as number;
+      const cy = pos[t + 7] as number;
+      const cz = pos[t + 8] as number;
+      v += (ax * (by * cz - bz * cy) + ay * (bz * cx - bx * cz) + az * (bx * cy - by * cx)) / 6;
+    }
+    return Math.abs(v);
+  };
+
+  const solidOf = () => {
+    const shapes = shapesOf();
+    return buildShell(shapes, { wells: [], seats: [], floor: SPEC.floor }, OPTS).geometry;
+  };
+
+  // A pocket whose wall collapses into the plane leaves the letter solid while every edge is still
+  // walked once and every test above still passes — the render just shows a flat plate where the
+  // wells were. Volume is what says the hollow is there, and it needs the shell to be closed to
+  // mean anything, which `openEdges` asserts separately.
+  // The gate the pocket test above cannot be, and the one a stub font cannot give: a wall that
+  // collapses into its own plane leaves the ring walked, so `openEdges` still reads 0, while the
+  // counter it bounded has been filled in. Only a real glyph's rings reproduce it — the stall
+  // wants a ring dense and curved enough for the nearest point to recede before it approaches.
+  it('keeps a counter a hole all the way through', async () => {
+    const { default: opentype } = await import('opentype.js');
+    const { readFileSync } = await import('node:fs');
+    const buf = readFileSync(new URL('../../../../../apps/lab/public/font.ttf', import.meta.url));
+    const parsed = opentype.parse(
+      buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+    );
+    const font = {
+      font: parsed,
+      unitsPerEm: parsed.unitsPerEm,
+      key: '/f.ttf',
+      family: 'shell-counter',
+      metrics: { advanceOf: () => 600, kernOf: () => 0 },
+      bytes: new ArrayBuffer(0),
+    } as never;
+
+    const shapes = new WordCaches().shapes(font, 'R');
+    const hole = (shapes[0] as THREE.Shape).holes[0] as THREE.Path;
+    const box = new THREE.Box2();
+    for (const p of hole.getPoints(64)) box.expandByPoint(p);
+    const at = box.getCenter(new THREE.Vector2());
+
+    const pos = positionsOf(
+      buildShell(shapes, { wells: [], seats: [], floor: SPEC.floor }, OPTS).geometry,
+    );
+    expect(openEdges(pos)).toBe(0);
+
+    // Straight down z through the middle of the counter. A through-hole is hit by nothing; a
+    // filled one is hit by its front cap and its back.
+    let hits = 0;
+    for (let t = 0; t < pos.length; t += 9) {
+      const [x0, x1, x2] = [pos[t] as number, pos[t + 3] as number, pos[t + 6] as number];
+      const [y0, y1, y2] = [pos[t + 1] as number, pos[t + 4] as number, pos[t + 7] as number];
+      const d = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
+      if (Math.abs(d) < 1e-12) continue;
+      const w0 = ((x1 - at.x) * (y2 - at.y) - (x2 - at.x) * (y1 - at.y)) / d;
+      const w1 = ((x2 - at.x) * (y0 - at.y) - (x0 - at.x) * (y2 - at.y)) / d;
+      const w2 = 1 - w0 - w1;
+      if (w0 >= 0 && w1 >= 0 && w2 >= 0) hits++;
+    }
+    expect(hits).toBe(0);
+  });
+
+  it('takes metal out, in proportion to the pockets it cut', () => {
+    const { cut, geo } = shellOf();
+    expect(cut.wells.length).toBeGreaterThan(0);
+    const carved = volumeOf(positionsOf(geo));
+    const solid = volumeOf(positionsOf(solidOf()));
+    expect(carved).toBeLessThan(solid);
+
+    // A well is a diamond sunk `floor` deep, tapering from the bead's opening at the face to
+    // `size` at the seat — so what it removes is bracketed by the two, and the bracket is what a
+    // collapsed wall cannot satisfy: it removes nothing at all.
+    const prism = (across: number) => cut.wells.length * ((across * across) / 2) * SPEC.floor;
+    expect(solid - carved).toBeGreaterThan(prism(SPEC.size));
+    expect(solid - carved).toBeLessThan(prism(SPEC.size + 2 * DEFAULT_SHELL.rimBevel));
+  });
+});
+
+describe('crease smoothing', () => {
+  const normalsOf = (geo: THREE.BufferGeometry) =>
+    (geo.getAttribute('normal') as THREE.BufferAttribute).array as Float32Array;
+  /** Triangles whose three vertices disagree about the normal — i.e. that shade smoothly. */
+  const smoothTris = (n: Float32Array) => {
+    let count = 0;
+    for (let t = 0; t < n.length; t += 9) {
+      const same =
+        Math.abs((n[t] as number) - (n[t + 3] as number)) < 1e-6 &&
+        Math.abs((n[t + 1] as number) - (n[t + 4] as number)) < 1e-6 &&
+        Math.abs((n[t + 2] as number) - (n[t + 5] as number)) < 1e-6;
+      if (!same) count++;
+    }
+    return count;
+  };
+
+  it('leaves the shell flat at 0, which is what it has always been', () => {
+    expect(smoothTris(normalsOf(shellOf({ crease: 0 }).geo))).toBe(0);
+  });
+
+  it('smooths a bevel at 40 and moves not one vertex', () => {
+    const flat = shellOf({ crease: 0 }).geo;
+    const soft = shellOf({ crease: 40 }).geo;
+    expect(smoothTris(normalsOf(soft))).toBeGreaterThan(0);
+    // The whole claim: this is a shading pass. A geometry change here would move a baseline.
+    expect(positionsOf(soft)).toEqual(positionsOf(flat));
+  });
+
+  // The crease between a letter's face and its chamfer is a right angle at the cap; averaging
+  // across it rounds the letter's own edge off, which is what the flat shell was protecting.
+  it('keeps a face-to-bevel crease hard', () => {
+    const n = normalsOf(shellOf({ crease: 40 }).geo);
+    const pos = positionsOf(shellOf({ crease: 40 }).geo);
+    let flatFacing = 0;
+    for (let t = 0; t < pos.length; t += 9) {
+      // A triangle lying in the front cap points straight down +z; if the crease leaked, its
+      // normal would tilt toward the chamfer beside it.
+      const isCap =
+        Math.abs((pos[t + 2] as number) - (pos[t + 5] as number)) < 1e-9 &&
+        Math.abs((pos[t + 2] as number) - (pos[t + 8] as number)) < 1e-9;
+      if (isCap && (n[t + 2] as number) > 0.999) flatFacing++;
+    }
+    expect(flatFacing).toBeGreaterThan(0);
+  });
+});
+
 describe('a crowned shell', () => {
   const CROWN = { profile: 'cushion' as const, rise: 0.06, reach: 0.08 };
   const planes = shellPlanes(OPTS.depth, SPEC.floor, SPEC.bezel);

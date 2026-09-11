@@ -52,6 +52,11 @@ export interface ShellOptions {
   /** Radius the convex corners are rounded to — outer corners, tips, a leg's point. */
   roundOuter: number;
   /**
+   * Faces meeting at less than this many degrees share an averaged normal. 0 leaves the shell flat,
+   * which is what it has always been. See `creaseSmooth`.
+   */
+  crease: number;
+  /**
    * The shape of the solid itself: how far the letter's front face stands proud of the flat cap,
    * as a profile over its own distance field. Absent is flat, which is what every shell was.
    */
@@ -64,6 +69,7 @@ export const DEFAULT_SHELL: Omit<ShellOptions, 'depth' | 'bezel'> = {
   segments: 3,
   round: 0,
   roundOuter: 0,
+  crease: 0,
 };
 
 /**
@@ -224,8 +230,6 @@ class Skin {
       }
     }
     const b = upper.slice(off).concat(upper.slice(0, off));
-    const ta = arc(lower);
-    const tb = arc(b);
     const A = (i: number) => {
       const p = lower[i % na] as Point;
       return [p[0], p[1], zLo];
@@ -234,16 +238,56 @@ class Skin {
       const p = b[j % nb] as Point;
       return [p[0], p[1], zHi];
     };
-    let i = 0;
+
+    /**
+     * Where each vertex of `lower` meets `upper`: the nearest point on it, taken with a pointer
+     * that only ever moves forward, so the map is monotone and every edge of both rings is still
+     * walked exactly once.
+     *
+     * Arc length is what this used to be, and it is a *global* fraction — each ring divided by its
+     * own perimeter. Two iso levels of the same field do not lose length evenly: a corner closes
+     * up while the straight runs beside it barely move, so the two parameters drift apart and the
+     * quads skew along the band instead of spanning it. That is the stretch marks down a curved
+     * edge, and the fan where a corner has closed. Nearest-point cannot drift, because it is not
+     * measured along the ring at all.
+     */
+    const map = new Int32Array(na + 1);
+    const d2 = (i: number, j: number): number => {
+      const p = lower[i % na] as Point;
+      const q = b[j % nb] as Point;
+      const dx = q[0] - p[0];
+      const dy = q[1] - p[1];
+      return dx * dx + dy * dy;
+    };
+    // Argmin over a forward window rather than "advance while the next one is closer". One-step
+    // lookahead stalls for good the moment distance ticks up before it comes down — and a pointer
+    // that never moves fans a whole ring off one vertex, which collapses the strip into the plane.
+    const window = Math.max(8, Math.ceil((2 * nb) / na) + 4);
     let j = 0;
-    while (i < na || j < nb) {
-      if (j >= nb || (i < na && (ta[i + 1] as number) <= (tb[j + 1] as number))) {
-        this.tri(A(i), A(i + 1), B(j));
-        i++;
-      } else {
-        this.tri(A(i), B(j + 1), B(j));
-        j++;
+    for (let i = 0; i < na; i++) {
+      let best = d2(i, j);
+      let at = j;
+      const limit = Math.min(j + window, nb);
+      for (let k = j + 1; k <= limit; k++) {
+        const d = d2(i, k);
+        if (d < best) {
+          best = d;
+          at = k;
+        }
       }
+      j = at;
+      map[i] = j;
+    }
+    // The last vertex is the first one come round again, and it has to land on `nb` however the
+    // search left the pointer — otherwise the wedge of `upper` past it is never walked and the
+    // strip is open along its own seam.
+    map[na] = nb;
+
+    for (let i = 0; i < na; i++) {
+      const from = map[i] as number;
+      const to = map[i + 1] as number;
+      this.tri(A(i), A(i + 1), B(from));
+      for (let k = from; k < to; k++) this.tri(A(i + 1), B(k + 1), B(k));
     }
   }
 
@@ -448,6 +492,79 @@ export interface Shell {
  * because only it knows where they are; their rim beads come from the cutter too when it can
  * re-derive them, and are shrunk here when it cannot.
  */
+/**
+ * Average the normals of faces meeting at a vertex where they meet at less than `crease` degrees.
+ *
+ * The shell is one soup, so `computeVertexNormals` gives every triangle its own constant normal.
+ * On the broad quads of a bevel that is what the look reads by; on a band of slivers — where a
+ * chamfer's inner ring has lost length that its outer ring still has — it is a stripe per triangle,
+ * which reads as stretch marks down a curved edge. An angle limit keeps both: the crease between
+ * face and bevel is far past any sane threshold and stays hard, while a bevel's own steps average.
+ *
+ * Positions are untouched and the buffer stays non-indexed, so nothing downstream sees a change.
+ * Vertices at or past `crownFrom` keep the normals the crown fitted for them.
+ */
+function creaseSmooth(geo: THREE.BufferGeometry, crease: number, crownFrom: number): void {
+  const position = (geo.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
+  const normal = (geo.getAttribute('normal') as THREE.BufferAttribute).array as Float32Array;
+  const faces = position.length / 9;
+  const faceN = new Float32Array(faces * 3);
+  const ab = new THREE.Vector3();
+  const ac = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  for (let f = 0; f < faces; f++) {
+    const t = f * 9;
+    ab.set(
+      (position[t + 3] as number) - (position[t] as number),
+      (position[t + 4] as number) - (position[t + 1] as number),
+      (position[t + 5] as number) - (position[t + 2] as number),
+    );
+    ac.set(
+      (position[t + 6] as number) - (position[t] as number),
+      (position[t + 7] as number) - (position[t + 1] as number),
+      (position[t + 8] as number) - (position[t + 2] as number),
+    );
+    n.crossVectors(ab, ac).normalize();
+    faceN.set([n.x, n.y, n.z], f * 3);
+  }
+
+  // A grid quantised well below the ring spacing: two rings that meet along an edge were built
+  // from the same points, so they land in the same bucket without a tolerance search.
+  const GRID = 1e5;
+  const at = new Map<string, number[]>();
+  const vertices = position.length / 3;
+  for (let v = 0; v < vertices; v++) {
+    const k = `${Math.round((position[v * 3] as number) * GRID)},${Math.round((position[v * 3 + 1] as number) * GRID)},${Math.round((position[v * 3 + 2] as number) * GRID)}`;
+    const list = at.get(k);
+    if (list) list.push(v);
+    else at.set(k, [v]);
+  }
+
+  const limit = Math.cos((crease * Math.PI) / 180);
+  const sum = new THREE.Vector3();
+  const own = new THREE.Vector3();
+  for (const group of at.values()) {
+    for (const v of group) {
+      // The crown fitted its own; leaving them is what keeps a domed face from picking up the
+      // chamfer it meets.
+      if (crownFrom >= 0 && v * 3 >= crownFrom) continue;
+      const f = Math.floor(v / 3) * 3;
+      own.set(faceN[f] as number, faceN[f + 1] as number, faceN[f + 2] as number);
+      sum.set(0, 0, 0);
+      for (const w of group) {
+        if (crownFrom >= 0 && w * 3 >= crownFrom) continue;
+        const g = Math.floor(w / 3) * 3;
+        n.set(faceN[g] as number, faceN[g + 1] as number, faceN[g + 2] as number);
+        if (n.dot(own) >= limit) sum.add(n);
+      }
+      if (sum.lengthSq() === 0) sum.copy(own);
+      sum.normalize();
+      normal.set([sum.x, sum.y, sum.z], v * 3);
+    }
+  }
+  (geo.getAttribute('normal') as THREE.BufferAttribute).needsUpdate = true;
+}
+
 export function buildShell(shapes: readonly THREE.Shape[], cut: Cut, opts: ShellOptions): Shell {
   const full = DEFAULT_GLYPH_OPTIONS.bevelSize;
   const planes = shellPlanes(opts.depth, cut.floor, opts.bezel);
@@ -528,6 +645,7 @@ export function buildShell(shapes: readonly THREE.Shape[], cut: Cut, opts: Shell
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(skin.pos), 3));
   geo.computeVertexNormals();
+  if (opts.crease > 0) creaseSmooth(geo, opts.crease, skin.crownAt);
   // The crown's own, over the range it wrote. `computeVertexNormals` on a soup gives every face one
   // constant normal, and the rest of the shell wants exactly that — the bevel highlight is what
   // every look reads by, and welding its crease smooth is what takes it away.

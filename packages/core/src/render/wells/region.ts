@@ -55,8 +55,10 @@ export function regionOf(shapes: readonly THREE.Shape[], insets: Insets = 'unifo
   // ridge whatever a stroke is worth, so a clearance of `c` is level `-c / widest`: `c` off the
   // thickest stroke and the same fraction off every thinner one. Both cutters read the same pair,
   // so a proportional bezel reaches the cell field as well as the containment test.
-  const widest = insets === 'proportional' ? strokeWidths(plain).widest : 1;
-  const field = insets === 'proportional' ? scaleByWidth(plain) : plain;
+  // Once, not once per use: both the widest stroke and the per-cell scale read the same pass.
+  const widths = insets === 'proportional' ? strokeWidths(plain) : null;
+  const widest = widths ? widths.widest : 1;
+  const field = widths ? scaleByWidth(plain, widths.width) : plain;
   const levelFor = (clearance: number) => -clearance / widest;
   return {
     // Inside is negative, so "at least `clearance` in" is one comparison. A point off the grid
@@ -84,8 +86,7 @@ export function lazyRegion(shapes: readonly THREE.Shape[], insets: Insets = 'uni
 }
 
 /** The same field with every cell divided by the width of the stroke it belongs to. */
-function scaleByWidth(field: Field): Field {
-  const { width } = strokeWidths(field);
+function scaleByWidth(field: Field, width: Float64Array): Field {
   const data = new Float64Array(field.data.length);
   for (let i = 0; i < data.length; i++) data[i] = (field.data[i] as number) / (width[i] as number);
   const { size, emPerCell, originX, originY } = field;

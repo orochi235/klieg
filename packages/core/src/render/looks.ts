@@ -24,7 +24,11 @@ export type LookName =
   | 'tubing'
   | 'piping'
   | 'sequin'
-  | 'ice';
+  | 'ice'
+  | 'pave'
+  | 'bezel'
+  | 'carved'
+  | 'tiara';
 
 /**
  * A literal union rather than `Extract<keyof THREE.MeshPhysicalMaterial, …>`. The emitted `.d.ts`
@@ -339,6 +343,151 @@ export const LOOKS: Record<LookName, LookSpec> = {
         jitter: 0.2,
       },
       look: { color: 0xffd9c0, metalness: 1, roughness: 0.18, clearcoat: 1 },
+    },
+  },
+
+  /**
+   * Four candidates for how a letter takes pavé. `pave` shows one baked sheet through each letter.
+   * The other three carve wells into it: `tiara` into an inflated solid, `bezel` with the lattice
+   * cutter, and `carved` with no fill at all.
+   */
+  pave: {
+    color: 0xffc44d,
+    metalness: 1,
+    roughness: 0.16,
+    clearcoatRoughness: 0.08,
+    // "Make it red" should recolour the stones, not the gold they are set in.
+    tintTo: 'decoration',
+    decoration: {
+      kind: 'sheet',
+      cutter: 'pave',
+      bezel: 0.026,
+      floor: 0.07,
+      pitch: 0.05,
+      wall: 0.008,
+      relax: 4,
+      edge: 'absorb',
+      // Read by `lattice` alone; `pave` cuts cells and takes its size from the pitch.
+      size: 0.048,
+      rimBevel: 0.003,
+      rimDrop: 0.003,
+      look: {},
+      // The shell is one soup, so every triangle carries its own normal. That is right on a
+      // bevel's broad quads and a stripe per triangle wherever a band runs to slivers — which is
+      // most of a curved edge, where the chamfer's inner ring has lost length the outer one keeps.
+      // 40 averages a bevel's own steps and leaves the face-to-chamfer crease hard.
+      crease: 40,
+      fill: 'stone',
+      sink: 0.25,
+      facets: 8,
+      stone: {
+        color: 0xffffff,
+        roughness: 0.04,
+        transmission: 1,
+        ior: 2.4,
+        dispersion: 5,
+        attenuationColor: 0xfff6ea,
+        clearcoatRoughness: 0.02,
+      },
+    },
+  },
+  bezel: {
+    color: 0xf2f5fa,
+    metalness: 1,
+    roughness: 0.08,
+    clearcoatRoughness: 0.04,
+    tintTo: 'decoration',
+    decoration: {
+      kind: 'well',
+      cutter: 'lattice',
+      bezel: 0.032,
+      floor: 0.085,
+      // Twice `size`, so every stone stands in metal of its own width rather than in a field.
+      pitch: 0.12,
+      size: 0.06,
+      // The bead is the setting here rather than a rim, so it is the shipped shell default.
+      rimBevel: 0.008,
+      rimDrop: 0.008,
+      look: {},
+      crease: 40,
+      fill: 'stone',
+      sink: 0.3,
+      // Eight, not four: a four-point girdle inscribes the seat corner to corner, and from head on
+      // its table is a flat square that reads as a painted diamond rather than a cut stone.
+      facets: 8,
+      stone: {
+        color: 0xffffff,
+        roughness: 0.05,
+        transmission: 1,
+        ior: 2.2,
+        dispersion: 4,
+        attenuationColor: 0xd4143c,
+        attenuationDistance: 0.6,
+        clearcoatRoughness: 0.03,
+        tintSpecular: true,
+      },
+    },
+  },
+  carved: {
+    color: 0xb8bcc4,
+    metalness: 1,
+    roughness: 0.22,
+    clearcoatRoughness: 0.1,
+    decoration: {
+      kind: 'well',
+      cutter: 'pave',
+      insets: 'proportional',
+      bezel: 0.03,
+      floor: 0.055,
+      pitch: 0.062,
+      wall: 0.012,
+      relax: 4,
+      edge: 'absorb',
+      size: 0.048,
+      // No stone to hide the rim, so the bead is what the pockets read by.
+      rimBevel: 0.006,
+      rimDrop: 0.006,
+      look: {},
+      crease: 40,
+    },
+  },
+  tiara: {
+    color: 0xffc44d,
+    metalness: 1,
+    roughness: 0.16,
+    clearcoatRoughness: 0.08,
+    tintTo: 'decoration',
+    inflate: { profile: 'cushion', rise: 0.08, reach: 0.1 },
+    decoration: {
+      kind: 'well',
+      cutter: 'pave',
+      insets: 'proportional',
+      bezel: 0.028,
+      floor: 0.06,
+      pitch: 0.052,
+      wall: 0.008,
+      relax: 4,
+      // Not `grade`: pinning a row on the region's own boundary needs room for a lattice behind
+      // it, and a stroke this narrow has none — the pinned row becomes the whole field, stretched
+      // into slivers all round the outline. On a G that took it from 141 clean cells to 203.
+      edge: 'absorb',
+      size: 0.048,
+      rimBevel: 0.003,
+      rimDrop: 0.003,
+      look: {},
+      crease: 40,
+      fill: 'stone',
+      sink: 0.25,
+      facets: 8,
+      stone: {
+        color: 0xffffff,
+        roughness: 0.04,
+        transmission: 1,
+        ior: 2.4,
+        dispersion: 5,
+        attenuationColor: 0xfff6ea,
+        clearcoatRoughness: 0.02,
+      },
     },
   },
 };

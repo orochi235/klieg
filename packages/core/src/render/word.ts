@@ -199,6 +199,7 @@ export class Word {
     this.fitTo = this.fit;
     this.applyFit(this.fit);
 
+    this.builder?.prime?.(this.charOf);
     for (let i = 0; i < this.charOf.length; i++) {
       this.buildCell(i, font, look, spec, tint, debug);
     }
@@ -501,6 +502,7 @@ export class Word {
     const bodyMesh = new THREE.Mesh(body, material);
     this.bodyMeshes[i] = bodyMesh;
     sized.add(bodyMesh);
+    this.builder?.dressBody?.(i, char, bodyMesh);
 
     this.builder?.buildLetter(i, char, sized, decorTint);
 

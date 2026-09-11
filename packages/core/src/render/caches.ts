@@ -1,8 +1,15 @@
 import type * as THREE from 'three';
 import type { LoadedFont } from '../text/font.js';
 import { buildGlyphGeometry, DEFAULT_GLYPH_OPTIONS, EM, glyphToShapes } from '../text/glyphs.js';
+import type { SheetSpec } from './decoration.js';
 import { DEFAULT_INFLATE, type InflateOptions, inflate } from './inflate.js';
 import type { TubeBlueprint, TubeSpec } from './tube/index.js';
+import type { BakedSheet, SheetLetter } from './wells/sheet.js';
+
+/** A sheet's box grows in steps this big, so two words a hair apart share one bake. */
+const SHEET_STEP = 0.25;
+const down = (v: number) => Math.floor(v / SHEET_STEP) * SHEET_STEP;
+const up = (v: number) => Math.ceil(v / SHEET_STEP) * SHEET_STEP;
 
 /**
  * Object-valued key parts (a loaded font, a tube spec) become numbers, so one flat string key can
@@ -34,6 +41,10 @@ export class WordCaches {
   private readonly blueprints = new Map<string, { blueprint: TubeBlueprint; leased: boolean }>();
   /** Blueprints built because the cached one was already lent out; disposed on release. */
   private readonly onLoan = new Set<TubeBlueprint>();
+  private readonly sheets = new Map<number, BakedSheet>();
+  /** Sheets a bigger bake replaced. A word built on one may still be drawing it. */
+  private readonly outgrown: BakedSheet[] = [];
+  private readonly sheetLetters = new Map<string, SheetLetter>();
   private disposed = false;
 
   get size(): number {
@@ -157,6 +168,38 @@ export class WordCaches {
     }
   }
 
+  /**
+   * The baked sheet for `spec`, covering `need`. One per spec, shared by every letter of every word
+   * on these caches; a need the held sheet does not cover bakes one over both.
+   */
+  sheet(spec: SheetSpec, need: THREE.Box2, bake: (box: THREE.Box2) => BakedSheet): BakedSheet {
+    if (this.disposed) throw new Error('klieg: WordCaches used after dispose');
+    const key = this.interner.id(spec);
+    const held = this.sheets.get(key);
+    if (held?.box.containsBox(need)) return held;
+    if (need.isEmpty()) throw new Error('klieg: a sheet needs a box that holds ink');
+    const box = need.clone();
+    if (held) box.union(held.box);
+    box.min.set(down(box.min.x), down(box.min.y));
+    box.max.set(up(box.max.x), up(box.max.y));
+    const baked = bake(box);
+    if (held) this.outgrown.push(held);
+    this.sheets.set(key, baked);
+    return baked;
+  }
+
+  /** A glyph's sheet mask and rim. Depth is not part of the key: every letter is built at one. */
+  sheetLetter(font: LoadedFont, char: string, build: () => SheetLetter): SheetLetter {
+    if (this.disposed) throw new Error('klieg: WordCaches used after dispose');
+    const key = `${this.interner.id(font)}|${char}`;
+    let letter = this.sheetLetters.get(key);
+    if (!letter) {
+      letter = build();
+      this.sheetLetters.set(key, letter);
+    }
+    return letter;
+  }
+
   dispose(): void {
     for (const geo of this.geometries.values()) geo.dispose();
     this.geometries.clear();
@@ -166,6 +209,12 @@ export class WordCaches {
     this.blueprints.clear();
     for (const spare of this.onLoan) spare.dispose();
     this.onLoan.clear();
+    for (const sheet of this.sheets.values()) sheet.dispose();
+    this.sheets.clear();
+    for (const sheet of this.outgrown) sheet.dispose();
+    this.outgrown.length = 0;
+    for (const letter of this.sheetLetters.values()) letter.dispose();
+    this.sheetLetters.clear();
     this.disposed = true;
   }
 }

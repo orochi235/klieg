@@ -8,7 +8,8 @@ import { NONE, orderKey } from '../../src/motion/types.js';
 import { pointerFrame } from '../../src/pointer.js';
 import type { PoseOffset, Vec3 } from '../../src/pose.js';
 import { WordCaches } from '../../src/render/caches.js';
-import type { ChunkSpec } from '../../src/render/decoration.js';
+import type { ChunkSpec, SheetSpec } from '../../src/render/decoration.js';
+import { SheetBuilder } from '../../src/render/decorations/sheet.js';
 import type { FlakeUniforms } from '../../src/render/flake.js';
 import { LOOKS, type LookSpec, lightBase, litEmissive, specOf } from '../../src/render/looks.js';
 import type { GradientSpec } from '../../src/render/tube/gradient.js';
@@ -30,6 +31,7 @@ const NBSP = '\u00a0';
 const ZWJ = '\u200d';
 const BLANK = new Set([' ', NBSP, ZWJ]);
 const DESCENDS = new Set(['g']);
+const WIDE = new Set(['W']);
 
 /** Box spanning `bottom`..`top` in three's y-up space; opentype paths are y-down. */
 function boxPath(w: number, top: number, bottom: number): PathCommand[] {
@@ -42,7 +44,10 @@ function boxPath(w: number, top: number, bottom: number): PathCommand[] {
   ];
 }
 
-/** Chars are 0.5 em wide boxes rising 0.7 em; 'g' also drops 0.2 em, and blanks draw nothing. */
+/**
+ * Chars are 0.5 em wide boxes rising 0.7 em; 'W' is 1.5 em wide, 'g' also drops 0.2 em, and blanks
+ * draw nothing.
+ */
 const STUB_FAMILY = 'klieg-test-word';
 
 function stubFont(): LoadedFont {
@@ -52,7 +57,11 @@ function stubFont(): LoadedFont {
       getPath: (_x: number, _y: number, size: number) => ({
         commands: BLANK.has(char)
           ? []
-          : boxPath(0.5 * size, 0.7 * size, DESCENDS.has(char) ? -0.2 * size : 0),
+          : boxPath(
+              (WIDE.has(char) ? 1.5 : 0.5) * size,
+              0.7 * size,
+              DESCENDS.has(char) ? -0.2 * size : 0,
+            ),
         toPathData: () => 'M0 0',
       }),
     }),
@@ -1652,11 +1661,13 @@ describe('part pool', () => {
   });
 
   // Derived from LOOKS rather than named, so a look added later is covered without editing this.
-  it('builds chunk parts for exactly the looks that scatter chunks', () => {
-    // A well's stones publish as one chunk per letter, so a filled well scatters them too.
-    const scatters = (name: keyof typeof LOOKS) => {
+  // Builds every look in full, the pavé sheet's bake included, which outlasts the default timeout.
+  it('builds chunk parts for exactly the looks that scatter chunks or fill with stones', () => {
+    const chunky = (name: keyof typeof LOOKS) => {
       const decoration = LOOKS[name].decoration;
-      return decoration?.kind === 'chunks' || (decoration?.kind === 'well' && !!decoration.fill);
+      return (
+        decoration?.kind === 'chunks' || (!!decoration && 'fill' in decoration && !!decoration.fill)
+      );
     };
     const names = Object.keys(LOOKS) as (keyof typeof LOOKS)[];
 
@@ -1664,9 +1675,9 @@ describe('part pool', () => {
       (name) => new Word('A', stubFont(), name, ROOMY).partsOf('chunk').length > 0,
     );
 
-    expect(built).toEqual(names.filter(scatters));
+    expect(built).toEqual(names.filter(chunky));
     expect(built).not.toHaveLength(0);
-  });
+  }, 20_000);
 
   // A chunk field covers its whole letter, so unlike a run it has no box of its own to offer.
   it("gives a chunk part its letter's ink", () => {
@@ -2483,5 +2494,76 @@ describe('framing alignment', () => {
     const word = new Word('AA', stubFont(), 'gold', START);
 
     expect(word.readout().fit.offsetX).toBe(word.group.position.x);
+  });
+});
+
+describe('a sheet decoration', () => {
+  /** `pave`'s own numbers at twice the pitch, so a bake costs a quarter of the shipped one. */
+  const SHEET = {
+    kind: 'sheet',
+    cutter: 'pave',
+    bezel: 0.026,
+    floor: 0.07,
+    pitch: 0.1,
+    wall: 0.012,
+    relax: 1,
+    edge: 'absorb',
+    size: 0.048,
+    rimBevel: 0.003,
+    rimDrop: 0.003,
+    look: {},
+    fill: 'stone',
+    sink: 0.25,
+    facets: 8,
+  } as const satisfies SheetSpec;
+  const LOOK = { opacity: 1, decoration: SHEET };
+
+  it('hangs the sheet and the rim off every body, on that body material', () => {
+    const word = new Word('AB', stubFont(), LOOK, ROOMY);
+    for (const body of meshes(word)) {
+      expect(body.children).toHaveLength(4);
+      for (const child of body.children as THREE.Mesh[]) expect(child.material).toBe(body.material);
+    }
+    word.dispose();
+  });
+
+  it('primes the sheet with every char before any letter is dressed, and bakes it once', () => {
+    const prime = vi.spyOn(SheetBuilder.prototype, 'prime');
+    const dress = vi.spyOn(SheetBuilder.prototype, 'dressBody');
+    const sheet = vi.spyOn(WordCaches.prototype, 'sheet');
+    try {
+      // 'W' is wider than the sheet 'A' alone bakes, so without the prime this would bake twice.
+      const word = new Word('AW', stubFont(), LOOK, ROOMY);
+      expect(prime).toHaveBeenCalledWith(['A', 'W']);
+      expect(prime.mock.invocationCallOrder[0]).toBeLessThan(
+        dress.mock.invocationCallOrder[0] as number,
+      );
+      expect(new Set(sheet.mock.results.map((r) => r.value)).size).toBe(1);
+      word.dispose();
+    } finally {
+      prime.mockRestore();
+      dress.mockRestore();
+      sheet.mockRestore();
+    }
+  });
+
+  it('shares one sheet between words on the same caches', () => {
+    const caches = new WordCaches();
+    const font = stubFont();
+    const make = () => new Word('A', font, LOOK, ROOMY, false, undefined, undefined, null, caches);
+    const a = make();
+    const b = make();
+    const shellOf = (word: Word) =>
+      ((meshes(word)[0] as THREE.Mesh).children[0] as THREE.Mesh).geometry;
+    expect(shellOf(b)).toBe(shellOf(a));
+    a.dispose();
+    b.dispose();
+    caches.dispose();
+  });
+
+  it('contributes one stone part per letter', () => {
+    const word = new Word('AB', stubFont(), LOOK, ROOMY);
+    expect(word.partsOf('chunk').map((part) => part.fill)).toEqual(['stone', 'stone']);
+    word.dispose();
   });
 });

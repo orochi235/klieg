@@ -1,8 +1,10 @@
 import type { Font } from 'opentype.js';
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { WordCaches } from '../../src/render/caches.js';
+import type { SheetSpec } from '../../src/render/decoration.js';
 import type { TubeBlueprint, TubeSpec } from '../../src/render/tube/index.js';
+import type { BakedSheet, SheetLetter } from '../../src/render/wells/sheet.js';
 import type { LoadedFont } from '../../src/text/font.js';
 import { DEFAULT_GLYPH_OPTIONS } from '../../src/text/glyphs.js';
 
@@ -222,5 +224,99 @@ describe('WordCaches.shapes', () => {
     const caches = new WordCaches();
     caches.dispose();
     expect(() => caches.shapes(stubFont(), 'A')).toThrow('used after dispose');
+  });
+});
+
+describe('WordCaches.sheet', () => {
+  const SPEC = { kind: 'sheet' } as unknown as SheetSpec;
+  const box = (x0: number, y0: number, x1: number, y1: number) =>
+    new THREE.Box2(new THREE.Vector2(x0, y0), new THREE.Vector2(x1, y1));
+  const baker = () => {
+    const baked: BakedSheet[] = [];
+    const bake = vi.fn((at: THREE.Box2): BakedSheet => {
+      const sheet = {
+        box: at.clone(),
+        shell: new THREE.BufferGeometry(),
+        stones: null,
+        thickness: 0,
+        dispose: vi.fn(),
+      };
+      baked.push(sheet);
+      return sheet;
+    });
+    return { bake, baked };
+  };
+
+  it('bakes once for a spec, whatever inside that sheet later asks', () => {
+    const caches = new WordCaches();
+    const { bake } = baker();
+    const first = caches.sheet(SPEC, box(0, 0, 0.6, 0.7), bake);
+    expect(caches.sheet(SPEC, box(0.1, 0.1, 0.5, 0.5), bake)).toBe(first);
+    expect(bake).toHaveBeenCalledTimes(1);
+  });
+
+  it('snaps the box outward to quarter-em steps', () => {
+    const caches = new WordCaches();
+    const { bake } = baker();
+    const first = caches.sheet(SPEC, box(-0.08, -0.08, 0.88, 1.08), bake);
+    expect(first.box.min.toArray()).toEqual([-0.25, -0.25]);
+    expect(first.box.max.toArray()).toEqual([1, 1.25]);
+    expect(caches.sheet(SPEC, box(-0.1, -0.1, 0.9, 1.1), bake)).toBe(first);
+  });
+
+  it('bakes a sheet over both when a need falls outside, and keeps the old one until dispose', () => {
+    const caches = new WordCaches();
+    const { bake, baked } = baker();
+    const small = caches.sheet(SPEC, box(0, 0, 0.5, 0.5), bake);
+    const big = caches.sheet(SPEC, box(0.4, 0, 1.2, 0.5), bake);
+    expect(big).not.toBe(small);
+    expect(big.box.containsBox(small.box)).toBe(true);
+    expect(small.dispose).not.toHaveBeenCalled();
+    caches.dispose();
+    for (const sheet of baked) expect(sheet.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps one sheet per spec', () => {
+    const caches = new WordCaches();
+    const { bake } = baker();
+    const other = { kind: 'sheet' } as unknown as SheetSpec;
+    expect(caches.sheet(other, box(0, 0, 0.5, 0.5), bake)).not.toBe(
+      caches.sheet(SPEC, box(0, 0, 0.5, 0.5), bake),
+    );
+  });
+
+  it('refuses an empty box once nothing is held yet', () => {
+    const caches = new WordCaches();
+    const { bake } = baker();
+    expect(() => caches.sheet(SPEC, new THREE.Box2(), bake)).toThrow(/box that holds ink/);
+  });
+
+  it('still answers the held sheet for an empty need', () => {
+    const caches = new WordCaches();
+    const { bake } = baker();
+    const first = caches.sheet(SPEC, box(0, 0, 0.5, 0.5), bake);
+    expect(caches.sheet(SPEC, new THREE.Box2(), bake)).toBe(first);
+  });
+});
+
+describe('WordCaches.sheetLetter', () => {
+  const letter = (): SheetLetter => ({
+    mask: new THREE.DataTexture(),
+    xf: new THREE.Vector4(),
+    rim: new THREE.BufferGeometry(),
+    dispose: vi.fn(),
+  });
+
+  it('builds once per font and char, and frees each with the caches', () => {
+    const caches = new WordCaches();
+    const font = stubFont();
+    const build = vi.fn(letter);
+    const a = caches.sheetLetter(font, 'A', build);
+    expect(caches.sheetLetter(font, 'A', build)).toBe(a);
+    expect(caches.sheetLetter(font, 'B', build)).not.toBe(a);
+    expect(caches.sheetLetter(stubFont(), 'A', build)).not.toBe(a);
+    expect(build).toHaveBeenCalledTimes(3);
+    caches.dispose();
+    expect(a.dispose).toHaveBeenCalledTimes(1);
   });
 });

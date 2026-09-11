@@ -54,6 +54,7 @@ export class WellBuilder implements DecorationBuilder {
         rimDrop: spec.rimDrop ?? spec.rimBevel ?? DEFAULT_SHELL.rimDrop,
         round: spec.round ?? 0,
         roundOuter: spec.roundOuter ?? 0,
+        crease: spec.crease ?? DEFAULT_SHELL.crease,
         inflate: ctx.inflate,
       });
       this.crowns.set(char, shell.crown);

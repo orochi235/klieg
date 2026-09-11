@@ -59,6 +59,10 @@ const NAMES: LookName[] = [
   'piping',
   'sequin',
   'ice',
+  'pave',
+  'bezel',
+  'carved',
+  'tiara',
 ];
 
 function snapshot(material: THREE.MeshPhysicalMaterial): Record<string, unknown> {
@@ -301,6 +305,10 @@ describe('decorated looks', () => {
       'piping',
       'ice',
       'sequin',
+      'pave',
+      'bezel',
+      'carved',
+      'tiara',
     ]);
   });
 
@@ -312,6 +320,11 @@ describe('decorated looks', () => {
 
   it('builds sequin from the chunks generator', () => {
     expect(specOf('sequin').decoration?.kind).toBe('chunks');
+  });
+
+  it('builds pave from one baked sheet, and keeps the carved wells for tiara', () => {
+    expect(specOf('pave').decoration?.kind).toBe('sheet');
+    expect(specOf('tiara').decoration?.kind).toBe('well');
   });
 
   it('makes tubing a glowing tube over a near-invisible body', () => {

@@ -8,6 +8,7 @@ import type { InflateOptions } from '../inflate.js';
 // would close the cycle. A type-only one is erased at compile time.
 import type { WordDebugHooks } from '../word.js';
 import { ChunksBuilder } from './chunks.js';
+import { SheetBuilder } from './sheet.js';
 import { TubeBuilder } from './tube.js';
 import { WellBuilder } from './well.js';
 
@@ -55,6 +56,18 @@ export interface DecorationBuilder {
   buildLetter(index: number, char: string, sized: THREE.Group, tint: number | undefined): void;
   /** A letter that drew no ink. Keeps every per-letter slot aligned with the letter pool. */
   skipLetter(index: number): void;
+  /**
+   * Every letter's char in slot order, once, before the first letter is built — for a builder whose
+   * shared geometry has to cover the whole word rather than grow letter by letter.
+   */
+  prime?(chars: readonly string[]): void;
+  /**
+   * Letter `index`'s body mesh, just made and not yet drawn, before `buildLetter`. A builder may
+   * patch its material or hang geometry off it, which then takes every write the body gets. The
+   * material is `Word`'s and the builder must not dispose it; whatever hangs off the body is the
+   * builder's or the caches' to free, because `Word`'s dispose frees only instanced meshes.
+   */
+  dressBody?(index: number, char: string, body: THREE.Mesh): void;
   /**
    * This letter's body geometry, replacing the extruded glyph. Omit it and `Word` uses the cache.
    *
@@ -105,3 +118,4 @@ export function decorationBuilderFor(
 registerDecoration('chunks', (spec, ctx) => new ChunksBuilder(spec, ctx));
 registerDecoration('tube', (spec, ctx) => new TubeBuilder(spec, ctx));
 registerDecoration('well', (spec, ctx) => new WellBuilder(spec, ctx));
+registerDecoration('sheet', (spec, ctx) => new SheetBuilder(spec, ctx));

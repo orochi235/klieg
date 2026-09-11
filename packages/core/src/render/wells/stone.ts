@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { DEFAULT_GLYPH_OPTIONS } from '../../text/glyphs.js';
 import type { WellSpec } from '../decoration.js';
 import { applyLook } from '../looks.js';
 import type { Seat } from './cutters.js';
@@ -7,6 +6,7 @@ import type { Seat } from './cutters.js';
 import type { Fill, FillContext, Filled } from './fills.js';
 import { interiorPoint } from './pave.js';
 import { area, insideRing } from './rings.js';
+import { DEFAULT_SHELL } from './shell.js';
 
 /** After the round brilliant: table width, crown height and pavilion depth over girdle width. */
 const TABLE = 0.53;
@@ -22,21 +22,21 @@ const FACETS = 8;
 /**
  * A brilliant cut, flat-shaded so every facet catches its own highlight.
  *
- * The girdle's width and the height it sits at are one choice, not two: `ExtrudeGeometry` bevels a
- * hole outward toward the face, so a well is `half + bevelSize` wide at the plate's front and only
- * `half` wide once the bevel has run out. `sink` moves the stone along that taper, and the radius
- * follows. Seat it below the collar and the stone sits in a pit with its crown under the letter's
- * own surface, which reads as a field of dimples rather than of stones.
+ * The girdle's width and the height it sits at are one choice, not two: the shell beads every rim,
+ * so a well is `half + rimBevel` wide at the plate's front and only `half` wide once the bead has
+ * run out. `sink` moves the stone along that taper, and the radius follows. Seat it below the
+ * collar and the stone sits in a pit with its crown under the letter's own surface, which reads as
+ * a field of dimples rather than of stones.
  */
 function brilliant(
   half: number,
   faceZ: number,
   sink: number,
   facets: number,
+  rim: Rim,
 ): THREE.BufferGeometry {
-  const bevel = DEFAULT_GLYPH_OPTIONS.bevelSize;
-  const girdleR = half + bevel * (1 - sink);
-  const girdleZ = faceZ - sink * DEFAULT_GLYPH_OPTIONS.bevelThickness;
+  const girdleR = half + rim.bevel * (1 - sink);
+  const girdleZ = faceZ - sink * rim.drop;
   const width = girdleR * 2;
 
   // Four girdle points sit on the seat's own corners; eight alternate corner and edge midpoint,
@@ -118,9 +118,19 @@ function ride(
   return Object.assign((x: number, y: number) => sz + gx * (x - cx) + gy * (y - cy), { at });
 }
 
+/**
+ * The taper a pocket's rim bead cuts: `bevel` wider at the face than at the bottom of the bead,
+ * which is `drop` below it. Taken from the shell rather than from the glyph's own chamfer — the
+ * body is stitched, not extruded, so the letter's 0.038 em chamfer never lands on a pocket.
+ */
+export interface Rim {
+  bevel: number;
+  drop: number;
+}
+
 /** The girdle's width, which the stone's own transmission thickness is scaled against. */
-export function girdleWidth(half: number, sink: number): number {
-  return (half + DEFAULT_GLYPH_OPTIONS.bevelSize * (1 - sink)) * 2;
+export function girdleWidth(half: number, sink: number, rim: Rim): number {
+  return (half + rim.bevel * (1 - sink)) * 2;
 }
 
 /** How far a stone's table stands proud of the letter's own face, in em. */
@@ -224,14 +234,20 @@ export const stone: Fill = (seats: readonly Seat[], ctx: FillContext, spec: Well
   const sink = spec.sink ?? SINK;
   const facets = spec.facets ?? FACETS;
   const half = spec.size / 2;
-  const geometry = brilliant(half, ctx.faceZ, sink, facets);
+  // The drop comes back off the planes the plate was built on; the bead's width does not reach
+  // them, so it is read from the same spec field the shell was handed.
+  const rim: Rim = {
+    bevel: spec.rimBevel ?? DEFAULT_SHELL.rimBevel,
+    drop: Math.max(ctx.faceZ - ctx.girdleZ, 0),
+  };
+  const geometry = brilliant(half, ctx.faceZ, sink, facets, rim);
 
   const material = ctx.material();
   applyLook(material, spec.stone ?? 'gem');
   // `transmission` attenuates over `thickness` in world units, and the looks are tuned for a volume
   // the size of a letter. A stone is a twentieth of that, so inheriting the look's own thickness
   // absorbs nearly everything and the field renders as black holes in the plate.
-  material.thickness = (spec.tint ?? TINT) * girdleWidth(half, sink);
+  material.thickness = (spec.tint ?? TINT) * girdleWidth(half, sink, rim);
 
   // A whole diamond is rigid, so it rides its seat's own tangent plane: lifted by what the crown
   // did there, and sheared by the slope, which keeps the girdle in the metal on both sides.

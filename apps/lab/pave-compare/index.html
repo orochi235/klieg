@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>klieg — pavé, real against painted</title>
+    <style>
+      body { background: #0a0a0a; color: #ddd; font: 13px/1.5 ui-monospace, monospace; margin: 0; padding: 20px; }
+      #status { color: #888; margin-bottom: 14px; }
+      #grid { display: grid; grid-template-columns: repeat(5, 260px); gap: 6px; }
+      #grid img { width: 260px; height: 260px; display: block; }
+      .label { grid-column: 1 / -1; color: #ffd479; margin-top: 10px; }
+      .angles { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(5, 260px); gap: 6px; color: #888; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div id="status">loading…</div>
+    <div id="grid"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

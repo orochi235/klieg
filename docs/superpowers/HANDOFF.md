@@ -1,7 +1,56 @@
-# Handoff — klieg, 2026-08-28
+# Handoff — klieg, 2026-09-10
 
-**For:** the next session picking this up. **Answers:** what is on `main`, what each merged branch
-learned that its design doc does not carry, and what is worth doing next.
+**For:** the next session picking this up. **Answers:** what is in flight right now, what is on
+`main`, what each merged branch learned that its design doc does not carry, and what is worth doing
+next.
+
+## In flight, 2026-09-10
+
+**The next task is implementing [the `tile` cutter](specs/2026-09-10-tiled-cutter-design.md) on
+`main`.** The spec is written and carries the measurements; `spikes/gem-tiling.mjs` is the working
+proof of the method. Nothing of it is built.
+
+Everything below is on `main` and unpushed. `git log --oneline @{u}..HEAD` is the live answer for
+how much.
+
+**Three specs were written today and none of them is implemented on `main`.** In the order they
+matter:
+
+[`tile`](specs/2026-09-10-tiled-cutter-design.md) — a third well cutter that lays a hexagon field
+over the glyph and clips only the cells straddling its edge. 564ms against `pave`'s 5,691ms for the
+same word, because it needs no `Region` and no distance field. This is the one to build.
+
+[`backdrop`](specs/2026-09-10-backdrop-design.md) — rows of the word behind the word. **Already
+implemented, but not here:** session `klieg-f0` built it in a worktree on branch `backdrop`, cut
+from a commit that predates `ice`, unreviewed and unrebased. Do not reimplement it.
+
+[`cycle`](specs/2026-09-10-cycle-effect-design.md) — an effect piece that hands over to the next
+one on a staggered, rest-deferred schedule. Unbuilt, and nothing depends on it.
+
+**The `ice` look is committed but deliberately half-landed.** It is in `LOOKS` and reachable by
+name, while `apps/lab/test/looks.spec.ts` still lists twelve looks and no baseline exists for it.
+That gap is intentional — `ice` selects `lattice` today and the spec moves it to `tile`, so the
+baseline was not worth generating twice. Finish it when `tile` lands: add it to that list, generate
+the baseline, run the scoped suites.
+
+### Decisions made in conversation that are not in any file
+
+**Pavé is on hold, not rejected.** It costs 3,725ms of cutting on top of 1,966ms of region for a
+13-letter word. It stays registered and unshipped until it is cheap enough; `tile` is the attempt
+at that, not a replacement for the idea.
+
+**The stones must stay saturated.** A near-clear stone transmits the black behind it and reads as a
+hole, because klieg renders over an empty scene. `gem` already carries a comment saying so. `ice`'s
+blue is not a taste decision that can simply be lightened.
+
+**`sink` is what makes a stone read as a stone.** At the shipped default of 0.25 the crown sits
+under the letter's face and the field reads as dimples; `ice` uses 0.08. `pitch` then has to clear
+the wider girdle a shallow sink leaves, which is why `ice` sits at 0.105 rather than the 0.055
+`pave` uses.
+
+**Two measurements in this repo excluded `regionOf` and were wrong because of it.** Any figure for
+what a well-cut letter costs has to include the region, which is the larger half. `spikes/well-cost.mjs`
+now measures both; do not quote a cutter number on its own.
 
 ## Branch state
 

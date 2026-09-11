@@ -200,3 +200,85 @@ function rimOf(field: Field): THREE.BufferGeometry {
   markSheet(geometry, SHEET_RIM);
   return geometry;
 }
+
+/**
+ * `body` opens both caps over the sheet, keeps the sheet's metal only inside the mask and in front
+ * of `CLIP_Z`, and never cuts the rim. `stones` keeps stones inside the mask.
+ */
+export type SheetRole = 'body' | 'stones';
+
+export interface SheetUniforms {
+  uMask: { value: THREE.Texture };
+  uMaskXf: { value: THREE.Vector4 };
+  uMaskLevel: { value: number };
+  /** Where this letter's patch of the sheet sits: sheet space plus this is letter space. */
+  uMaskShift: { value: THREE.Vector2 };
+  uClipZ: { value: number };
+}
+
+export function sheetUniforms(letter: SheetLetter, shift: THREE.Vector2): SheetUniforms {
+  return {
+    uMask: { value: letter.mask },
+    uMaskXf: { value: letter.xf },
+    uMaskLevel: { value: -MASK },
+    uMaskShift: { value: shift.clone() },
+    uClipZ: { value: CLIP_Z },
+  };
+}
+
+const VARYINGS: Record<SheetRole, string> = {
+  body: 'varying vec3 vMkPos;\nvarying vec3 vMkNrm;\nvarying float vSheet;\n',
+  stones: 'varying vec3 vMkPos;\n',
+};
+
+const WRITES: Record<SheetRole, string> = {
+  body: `vMkPos = transformed;\nvMkNrm = objectNormal;\nvSheet = ${SHEET_ATTRIBUTE};`,
+  stones: 'vMkPos = transformed;',
+};
+
+const UNIFORMS = `uniform sampler2D uMask;
+uniform vec4 uMaskXf;
+uniform float uMaskLevel;
+uniform vec2 uMaskShift;
+uniform float uClipZ;
+float mkDepthAt(vec2 at) {
+  return texture2D(uMask, ((at - uMaskXf.xy) / uMaskXf.z + 0.5) / uMaskXf.w).r;
+}
+`;
+
+// vSheet is SHEET_BODY, SHEET_METAL or SHEET_RIM, compared at the half-steps between them.
+const TESTS: Record<SheetRole, string> = {
+  body: `
+  if (vSheet < 0.5) {
+    if (abs(normalize(vMkNrm).z) > 0.9 && mkDepthAt(vMkPos.xy) <= uMaskLevel) discard;
+  } else if (vSheet < 1.5) {
+    if (mkDepthAt(vMkPos.xy + uMaskShift) > uMaskLevel || vMkPos.z < uClipZ) discard;
+  }`,
+  stones: `
+  if (mkDepthAt(vMkPos.xy + uMaskShift) > uMaskLevel) discard;`,
+};
+
+/** Patches `material` to show the sheet through one letter. See `SheetRole` for what each keeps. */
+export function maskMaterial(
+  material: THREE.MeshPhysicalMaterial,
+  uniforms: SheetUniforms,
+  role: SheetRole,
+): void {
+  const before = material.onBeforeCompile;
+  const key = material.customProgramCacheKey.bind(material);
+  material.onBeforeCompile = (shader, renderer) => {
+    before.call(material, shader, renderer);
+    Object.assign(shader.uniforms, uniforms);
+    const attribute = role === 'body' ? `attribute float ${SHEET_ATTRIBUTE};\n` : '';
+    shader.vertexShader = `${attribute}${VARYINGS[role]}${shader.vertexShader}`.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>\n${WRITES[role]}`,
+    );
+    shader.fragmentShader = `${UNIFORMS}${VARYINGS[role]}${shader.fragmentShader}`.replace(
+      'void main() {',
+      `void main() {${TESTS[role]}`,
+    );
+  };
+  material.customProgramCacheKey = () => `${key()}|sheet-${role}`;
+  material.needsUpdate = true;
+}

@@ -1,15 +1,18 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import type { SheetSpec } from '../../../src/render/decoration.js';
+import { createMaterial } from '../../../src/render/looks.js';
 import { regionOf } from '../../../src/render/wells/region.js';
 import {
   bakeSheet,
   CLIP_Z,
   MASK,
+  maskMaterial,
   SHEET_ATTRIBUTE,
   SHEET_METAL,
   SHEET_RIM,
   sheetLetterOf,
+  sheetUniforms,
 } from '../../../src/render/wells/sheet.js';
 import { DEFAULT_GLYPH_OPTIONS } from '../../../src/text/glyphs.js';
 
@@ -157,5 +160,60 @@ describe('sheetLetterOf', () => {
     const letter = sheetLetterOf(boxShapes());
     expect(new Set(letter.rim.getAttribute(SHEET_ATTRIBUTE).array)).toEqual(new Set([SHEET_RIM]));
     letter.dispose();
+  });
+});
+
+/** Runs a material's patch over a skeleton of three's shaders, as the renderer would. */
+function patched(material: THREE.MeshPhysicalMaterial) {
+  const shader = {
+    uniforms: {} as Record<string, { value: unknown }>,
+    vertexShader: 'void main() {\n#include <beginnormal_vertex>\n#include <begin_vertex>\n}',
+    fragmentShader: 'void main() {\n}',
+  };
+  material.onBeforeCompile(shader as never, {} as THREE.WebGLRenderer);
+  return shader;
+}
+
+describe('maskMaterial', () => {
+  const letter = sheetLetterOf(boxShapes());
+  const shift = new THREE.Vector2(-0.1, -0.2);
+
+  it('keeps the patch the material already carried', () => {
+    const material = createMaterial(null);
+    maskMaterial(material, sheetUniforms(letter, shift), 'body');
+    expect(patched(material).vertexShader).toContain('vFlakePos');
+  });
+
+  it('tells the body, the sheet and the rim apart by a vertex attribute', () => {
+    const body = createMaterial(null);
+    maskMaterial(body, sheetUniforms(letter, shift), 'body');
+    const stones = createMaterial(null);
+    maskMaterial(stones, sheetUniforms(letter, shift), 'stones');
+    expect(patched(body).vertexShader).toContain(`attribute float ${SHEET_ATTRIBUTE}`);
+    expect(patched(stones).vertexShader).not.toContain(SHEET_ATTRIBUTE);
+    expect(patched(body).fragmentShader).toContain('discard');
+    expect(patched(stones).fragmentShader).toContain('discard');
+  });
+
+  it("hands the shader this letter's own mask and slide", () => {
+    const material = createMaterial(null);
+    maskMaterial(material, sheetUniforms(letter, shift), 'stones');
+    const { uniforms } = patched(material);
+    expect(uniforms.uMask?.value).toBe(letter.mask);
+    const gotShift = uniforms.uMaskShift?.value as THREE.Vector2;
+    expect(gotShift.toArray()).toEqual([-0.1, -0.2]);
+    expect(uniforms.uMaskLevel?.value).toBe(-MASK);
+  });
+
+  it('gives each role its own program, shared by every letter in that role', () => {
+    const other = sheetLetterOf(boxShapes());
+    const key = (role: 'body' | 'stones', of = letter) => {
+      const material = createMaterial(null);
+      maskMaterial(material, sheetUniforms(of, shift), role);
+      return material.customProgramCacheKey();
+    };
+    expect(key('body')).toBe(key('body', other));
+    expect(key('body')).not.toBe(key('stones'));
+    expect(key('body')).not.toBe(createMaterial(null).customProgramCacheKey());
   });
 });

@@ -6,7 +6,7 @@ export default defineConfig({
   // Per-lab, because three labs share packages/core/node_modules: one shared dep cache lets
   // whichever server started last invalidate the others, which 504s them into a blank page.
   cacheDir: fileURLToPath(new URL('../../node_modules/.vite-composition-lab', import.meta.url)),
-  server: { port: LABS['composition-lab'].port },
+  server: { host: '::', port: LABS['composition-lab'].port, strictPort: true },
   resolve: {
     alias: {
       '@core': fileURLToPath(new URL('../../src', import.meta.url)),

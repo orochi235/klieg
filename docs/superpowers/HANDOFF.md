@@ -43,17 +43,13 @@ that a builder has to own:
 - The glyph's own bevel is 0.038 em wide, wider than `pave`'s 0.026 bezel, so the sheet has to start
   just past it or it floats over the slope — `MASK` in `sheet.ts`.
 - Stones and cells as addressable effect parts. Not designed yet.
+- Pavé on the back as well as the front — decided 2026-09-10. Both prototypes show a bare gold back
+  for half a full turn; the fix is the same sheet, masked facing the other way.
 
-**Open, and Mike's to decide:**
-
-- **Pavé on the backs.** Both versions show a bare gold back for half a full turn. On the sheet path
-  it is nearly free — the same sheet, masked facing the other way. Worth settling before a spin range
-  is chosen.
-- **Publishing Vegapunk.** It is a lab preset on this branch, in one commit touching lab files only,
-  so it cherry-picks onto `main` on its own. The author's dafont listing says "100% Free", the font's
-  own license field says "Freebies", aggregator sites say personal use only, and nothing written
-  covers redistribution. `apps/lab/public/fonts/licenses/vegapunk.txt` records all of it. Nothing is
-  public until the lab deploys.
+**Vegapunk is cleared to publish** — decided 2026-09-10, with its license recorded as unclear in
+`apps/lab/public/fonts/licenses/vegapunk.txt`. Its commit, `6e24e7c`, touches lab files only and
+cherry-picks cleanly onto `main`; a push to `main` that touches `apps/lab/**` deploys the lab. The
+session holding `main` was asked to land it — check `git branch --contains 6e24e7c` before assuming.
 
 ## Branch state
 

@@ -14,7 +14,12 @@ export interface TextRun {
 /** Glyphs are laid out at 1 em, so a run's `size` is its font size outright. */
 const EM = 1;
 
-export function styledRunsOf(text: string | TextRun[], defaultFont: string): StyledRun[] {
+/** `tracking` is in em, the unit glyphs lay out at, and rides the runs so the wrap search sees it. */
+export function styledRunsOf(
+  text: string | TextRun[],
+  defaultFont: string,
+  tracking = 0,
+): StyledRun[] {
   const runs = typeof text === 'string' ? [{ text } as TextRun] : text;
   return runs
     .filter((run) => run.text.length > 0)
@@ -22,6 +27,7 @@ export function styledRunsOf(text: string | TextRun[], defaultFont: string): Sty
       text: run.text,
       fontFamily: run.font ?? defaultFont,
       fontSize: (run.size ?? 1) * EM,
+      letterSpacing: tracking,
     }));
 }
 

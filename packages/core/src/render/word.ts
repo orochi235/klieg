@@ -72,6 +72,8 @@ export interface WordOptions {
    * this one. Enough of it clears both words' extrusions; the depth buffer does the rest.
    */
   behind?: number;
+  /** Extra advance after each glyph, in em. Negative tightens. */
+  tracking?: number;
 }
 
 /** One group per letter — per-letter motion (spin, flip, shatter) needs independent transforms. */
@@ -162,6 +164,7 @@ export class Word {
   private readonly forcedScale: number | undefined;
   /** How far back the fit places the whole group, in world units. */
   private readonly behind: number;
+  private readonly tracking: number;
   private disposed = false;
 
   constructor(
@@ -181,6 +184,7 @@ export class Word {
     this.dim = opts.dim ?? 1;
     this.forcedScale = opts.fitScale;
     this.behind = opts.behind ?? 0;
+    this.tracking = opts.tracking ?? 0;
     this.sizeOf = sizeOf;
     this.family = family ?? font.family;
     this.envMap = envMap;
@@ -197,7 +201,7 @@ export class Word {
     this.inflate = spec.inflate;
     this.builder = decorationBuilderFor(spec.decoration, this);
 
-    const runs = styledRunsOf(text, this.family);
+    const runs = styledRunsOf(text, this.family, this.tracking);
     const laid = wrap
       ? wrapRuns(runs, budget, this.layoutOpts())
       : layoutRunsForKlieg(runs, this.layoutOpts());
@@ -674,7 +678,7 @@ export class Word {
 
     const chars = kept.map((i) => this.charOf[i] as string);
     const laid = layoutRunsForKlieg(
-      styledRunsOf(arrange(chars, as), this.family),
+      styledRunsOf(arrange(chars, as), this.family, this.tracking),
       this.layoutOpts(),
     );
     const placed = placeBlock(laid, (char) => this.drawsInk(char), this.budget.lineEdge);

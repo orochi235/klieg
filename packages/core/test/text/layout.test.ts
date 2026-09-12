@@ -90,6 +90,21 @@ describe('layoutRunsForKlieg', () => {
     expect(laid.slots[1]?.line).toBe(1);
   });
 
+  it('pushes later glyphs out by the tracking and widens the word', () => {
+    const plain = layoutRunsForKlieg(styledRunsOf('AB', family), OPTS);
+    const tracked = layoutRunsForKlieg(styledRunsOf('AB', family, 0.5), OPTS);
+
+    expect(tracked.slots[1]?.x).toBeCloseTo((plain.slots[1]?.x as number) + 0.5);
+    expect(tracked.width).toBeGreaterThan(plain.width);
+  });
+
+  it('tightens on a negative tracking', () => {
+    const plain = layoutRunsForKlieg(styledRunsOf('AB', family), OPTS);
+    const tight = layoutRunsForKlieg(styledRunsOf('AB', family, -0.1), OPTS);
+
+    expect(tight.slots[1]?.x).toBeCloseTo((plain.slots[1]?.x as number) - 0.1);
+  });
+
   it('lays a string and a single run of the same text out identically', () => {
     const fromString = layoutRunsForKlieg(styledRunsOf('AB', family), OPTS);
     const fromRun = layoutRunsForKlieg(styledRunsOf([{ text: 'AB' }], family), OPTS);

@@ -50,6 +50,8 @@ export interface ShowConfig {
   pivot: boolean;
   /** Recolors the type, as `0xff2d6f`. */
   tint?: number;
+  /** Extra advance after each glyph, in em. Negative tightens. */
+  tracking?: number;
 
   /** The one look the link was composed against, distinct from the `looks` cycle list. */
   look?: LookName;
@@ -109,6 +111,7 @@ const SHORT: Record<string, string> = {
   eyeX: 'ex',
   eyeY: 'ey',
   tint: 'ti',
+  tracking: 'tk',
   pivot: 'pv',
   wrap: 'wr',
   chrome: 'ch',
@@ -147,6 +150,7 @@ export function encodeConfig(config: Partial<ShowConfig>, opaque = false): strin
   put('hold', c.hold);
   put('blend', c.blendMs);
   if (c.tint !== undefined) put('tint', hex(c.tint));
+  if (c.tracking !== undefined) put('tracking', c.tracking);
   if (c.bloom !== undefined) put('bloom', c.bloom ? 'on' : 'off');
   put('camera', c.camera);
   if (c.fov !== undefined) put('fov', c.fov);
@@ -258,6 +262,7 @@ function fromQuery(raw: string): Record<string, unknown> {
     eyeY: num('eyeY'),
     pivot: flag('pivot'),
     tint: color('tint'),
+    tracking: num('tracking'),
     look: text('look'),
     font: text('font'),
     enter: text('enter'),
@@ -298,6 +303,7 @@ export function resolveConfig(input: unknown): ShowConfig {
     eyeY: pickEye(raw.eyeY),
     pivot: raw.pivot !== false,
     tint: pickTint(raw.tint),
+    tracking: pickTracking(raw.tracking),
     look,
     // Validated against the catalogue here, so `show` never asks klieg for a face it has no url
     // for: a link outlives the face list it was written against.
@@ -332,6 +338,15 @@ function pickEye(value: unknown): number | undefined {
 function pickFov(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
   return Math.min(Math.max(value, MIN_FOV), MAX_FOV);
+}
+
+/** Past an em the letters no longer read as one word; below the floor they collide outright. */
+const MIN_TRACKING = -0.25;
+const MAX_TRACKING = 1;
+
+function pickTracking(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return Math.min(Math.max(value, MIN_TRACKING), MAX_TRACKING);
 }
 /** The faces whose binaries ship, which is what a link may name. */
 const FACE_IDS = CATALOG.filter((face) => face.seeded).map((face) => face.id);

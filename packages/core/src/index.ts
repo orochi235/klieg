@@ -323,6 +323,11 @@ export interface FireOptions {
   lineAlign?: Align;
   /** A name from the instance's `fonts`. Defaults to `defaultFont`, else the first entry. */
   font?: string;
+  /**
+   * Extra advance after each glyph, in em. Negative tightens. A face with advances too tight for
+   * display sizes — a pixel face especially — wants a little here.
+   */
+  tracking?: number;
   /** Break long lines to whatever arrangement renders largest. Explicit newlines always break. */
   wrap?: boolean;
   /** Let the overlay swallow the dismissing click instead of passing it through to the page. */
@@ -652,6 +657,8 @@ export function createKlieg(options: KliegOptions): Klieg {
         stage.environment?.texture ?? null,
         caches,
         sizeOf(text),
+        undefined,
+        { tracking: opts.tracking },
       );
     } catch (err) {
       // This rejects before the settle() that would otherwise free the bloom's render targets.

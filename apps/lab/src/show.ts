@@ -171,6 +171,7 @@ function options(look: LookName): FireOptions {
           config.transform.roll * DEG,
         )
       : undefined,
+    tracking: config.tracking,
     // A long word in portrait is unreadable on one line; wrapping picks whatever fits largest.
     wrap: config.wrap,
   };

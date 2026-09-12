@@ -10,6 +10,7 @@
     { "path": "./tsconfig.json" },
     { "path": "./dev/shared" },
     { "path": "./dev/tube-lab" },
+    { "path": "./dev/tube-gallery" },
     { "path": "./dev/kliegsminister" },
     { "path": "./dev/composition-lab" }
   ]

@@ -1,0 +1,16 @@
+{
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../.tsbuild/tube-gallery",
+    "rootDir": ".",
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "paths": {
+      "@core/*": ["../../src/*"],
+      "@shared/*": ["../shared/*"]
+    }
+  },
+  "include": ["src", "vite.config.ts"],
+  "references": [{ "path": "../.." }, { "path": "../shared" }]
+}

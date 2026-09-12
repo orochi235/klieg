@@ -6,8 +6,11 @@ next.
 
 ## In flight, 2026-09-12
 
-Branch is `main`, **7 commits unpushed**, `tsc -b` green at `0039b86`. The full suites have still not
-been run against them; that is the pre-push gate and it is still owed.
+Branch is `main` and unpushed — `git log --oneline @{u}..HEAD` is the live count, and any number
+written here is false the moment the next thing lands. `tsc -b`, biome and
+`apps/lab/test/show-config.test.ts` are green at `d8b1793`. **The full suites have never been run
+against any of it**; that is the pre-push gate and it is still owed. Nothing here is deployed, and
+a push touching `apps/lab/**` deploys the lab.
 
 This checkout is shared, and has been by three sessions in one day — one committed `tracking` at
 12:13 and the tube gallery at 16:05, both out from under this document. **Stage explicit paths,
@@ -135,21 +138,32 @@ as an `M` and a `B` as a `D`.
 round-three file exists and its 83 tests across 9 files pass. The round-two *plan* is 71 unchecked,
 0 checked — nobody ticked the boxes. Do not read that plan as a to-do list.
 
-**`show-config.ts` maps two fields to one wire key, and it loses data.** `exit: 'ex'` and
-`eyeX: 'ex'`, lines 102 and 111, so `ex=` means both. Unfixed, and **not** harmless — the earlier
-claim here that each rejects the other's values is withdrawn, having been reasoned rather than run.
+**`show-config.ts` mapped two fields to one wire key, and it lost data. Fixed in `d8b1793`, not
+deployed.** `exit` and `eyeX` both wrote `ex`, and `encodeConfig` appends rather than sets, so a
+link naming both wrote `ex` **twice**, `put('exit')` running first. Decoding took the first with
+`q.get`, so both fields read the exit name: the exit survived, and the offset became
+`Number('shatter')` → `NaN` → `undefined` at `pickEye`. Nothing was rejected and nothing warned.
+An earlier note here called that harmless because each field rejects the other's values — reasoned,
+never run.
 
-What happens, demonstrated rather than argued: `encodeConfig` uses `out.append`, and `put('exit')`
-at line 146 runs before `put('eyeX')` at 157, so a config carrying both writes `ex=` **twice**.
-Decoding reads `q.get('ex')`, which takes the first, so both fields read the exit name — `exit`
-survives, and `eyeX` becomes `Number('shatter')` → `NaN` → `undefined` at `pickEye`, which rejects
-non-finite. So **any share link naming both an exit and an eye offset silently drops the eye
-offset**, and the same link without an exit round-trips fine. That control is what pins the loss on
-the collision rather than on `eyeX`.
+**The fix:** `eyeX` writes `ei`; `exit` keeps `ex`, because every lab link carries an exit and only
+a moved eye slider produces an `eyeX`, so leaving the common field alone keeps more links intact.
+`legacyEyeX` scans every `ex` value for a numeric one, so older links still decode — an exit is a
+name, so the two never collide in value.
 
-`eyeY: 'ey'` is unaffected; `ex` is the only duplicated key in `SHORT`. The fix is a new key for one
-of the two, which changes the link format — existing links carrying that key would read differently,
-so it is a decision, not a typo.
+**The scan is the whole fix, and a first-value read is the defect wearing a fix's shape.** A legacy
+link naming both is `ex=fade&ex=0.5`, exit first, so anything resting on `URLSearchParams.get`
+reads `'fade'` and drops the offset again. The one assertion that can tell those apart is the
+both-values case at `show-config.test.ts:127`: mutate the loop at `show-config.ts:254` to a single
+`q.get` and it goes red while the other 39 stay green. **A link carrying the offset alone passes
+either way — never let that stand in as the test.** That file is 40 tests now, against the 35
+recorded elsewhere here.
+
+**Not shipped:** a push to `main` touching `apps/lab/**` triggers `pages.yml`, so the live lab
+hands out links that drop the offset until someone pushes — Mike's call, it is a deploy. And the
+wider lesson, which is not about this key: **this format went a whole release carrying two fields
+on one key because exactly one surface exercises it.** Before today that test file had no coverage
+of `ex`, `eyeX` or `eye` at all.
 
 ### The box
 
@@ -162,7 +176,16 @@ tube-lab, **5182** kliegsminister, **5184** composition-lab, **5185** tube-galle
 apps/lab, **5196** repo root. Kill by port, never `pkill -f vite` — that takes out every session's.
 
 **`5199` is not klieg.** `~/src/astv` holds it with `--strictPort --host ::`. A peer shot two
-surfaces against it before noticing and got screenshots of a different application.
+surfaces against it before noticing and got screenshots of a different application. **`5183` is not
+klieg either** — that is slopboard's vite, and it is the ghost of the removed `corner-lab`, whose
+stale build output still sits in `dev/.tsbuild/corner-lab/`.
+
+**So: identify a dev server by its process cwd, never by the port it answers on.** `lsof -p <pid>
+-a -d cwd`. This has now caught two sessions in one day, and the map above will invite a third —
+Mike runs many projects at once and their ports interleave. A lab declaring `strictPort: true` can
+only ever be on its declared port, so read the declaration (`pages.ts`) rather than inferring from
+what is listening. A port that answers does not say whose it is, and the render looks plausible
+either way.
 
 ## In flight, 2026-09-10
 

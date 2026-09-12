@@ -3,6 +3,7 @@ import type { TubeSpec } from '@core/render/tube/index.js';
 import type { LoadedFont } from '@core/text/font.js';
 import { DEFAULT_GLYPH_OPTIONS, glyphToShapes } from '@core/text/glyphs.js';
 import { LabBar } from '@shared/LabBar.js';
+import { LabRenderer, type PanelDraw, type PanelRect } from '@shared/lab-renderer.js';
 import { Workspace } from '@weasel-js/labkit';
 import {
   type PointerEvent as ReactPointerEvent,
@@ -24,7 +25,6 @@ import {
 import { clear, save, type WorkspaceLayout } from './persist.js';
 import { Rail } from './Rail.js';
 import { buildCell, type Cell } from './render/cell.js';
-import { LabRenderer, type PanelDraw, type PanelRect } from './render/lab.js';
 import { rampOverride } from './render/ramp.js';
 import { buildSkeleton } from './render/skeleton.js';
 import { type TubeLook, tubeSpecOf } from './spec.js';

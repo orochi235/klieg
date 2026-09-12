@@ -59,7 +59,8 @@
     "prepack": "npm run build && cp ../../README.md README.md",
     "prepublishOnly": "npm --prefix ../.. run check",
     "dev:kliegsminister": "vite dev/kliegsminister",
-    "dev:composition-lab": "vite dev/composition-lab"
+    "dev:composition-lab": "vite dev/composition-lab",
+    "dev:tube-gallery": "vite dev/tube-gallery"
   },
   "dependencies": {
     "@weasel-js/font": "1.4.4",

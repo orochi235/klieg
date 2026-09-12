@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { FILL, fitter, labCamera } from '../../../dev/tube-lab/src/render/cell.js';
+import { FILL, fitter, labCamera } from '../../../dev/shared/lab-view.js';
 
 /** A tubing glyph as measured: the tube stands most of a glyph depth in front of the word plane. */
 const SIZE = { x: 1.674, y: 1.79, z: 1.183 };

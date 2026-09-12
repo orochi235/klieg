@@ -64,7 +64,7 @@ export class LabRenderer {
     const r = this.renderer;
     // Integer device pixels: setViewport rounds where setRenderTarget(null) floors, so a fractional
     // rect can shift a pixel between the scene draw and the composite and leave a hairline seam.
-    // The far edge snaps too, or a panel and its neighbour round apart and strand a column.
+    // The far edge snaps too, or a panel and its neighbor round apart and strand a column.
     const dpr = r.getPixelRatio();
     const snap = (v: number) => Math.round(v * dpr) / dpr;
     for (const panel of panels) {

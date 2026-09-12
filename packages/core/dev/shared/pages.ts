@@ -5,6 +5,7 @@ export const LABS = {
   'tube-lab': { label: 'tube lab', port: 5181 },
   kliegsminister: { label: 'kliegsminister', port: 5182 },
   'composition-lab': { label: 'composition lab', port: 5184 },
+  'tube-gallery': { label: 'tube gallery', port: 5185 },
 } as const satisfies Record<string, { label: string; port: number }>;
 
 export type LabId = keyof typeof LABS;

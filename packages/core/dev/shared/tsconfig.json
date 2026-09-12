@@ -5,7 +5,11 @@
     "rootDir": ".",
     "jsx": "react-jsx",
     "types": ["vite/client"],
-    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "paths": {
+      "@core/*": ["../../src/*"]
+    }
   },
-  "include": ["*.ts", "*.tsx"]
+  "include": ["*.ts", "*.tsx"],
+  "references": [{ "path": "../.." }]
 }

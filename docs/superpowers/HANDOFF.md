@@ -92,13 +92,14 @@ a literal in `template.html`.
 
 Rebuild is a regenerate, not surgery on the inline base64: `build.py <dir>` reads `combos.json` plus
 `NN.png` into `cards.json`, then `assemble.py <dir>` substitutes `__CARDS__` into `template.html`.
-A working copy — 50 PNGs and all four files — is staged in this session's scratchpad under `sheet/`.
+A working copy — 50 PNGs and all four files — is at **`~/site/sheet/`**, moved there out of a dead
+session's `/private/tmp` scratchpad on 2026-09-12. It is the only copy and nothing versions it.
 Cards are independent stills named by index, so dropping one is a delete plus a rename, never a
 re-render.
 
 **Six decisions block the rebuild** — the four below, then card 17 and card 18 after them.
-Candidates for all of them are rendered and on the slopboard wall, in the scratchpad under `out/`,
-`haze/` and `track/`:
+Candidates for all of them are rendered, in **`~/site/`** under `out/`, `haze/` and `track/`, with
+`shoot.mjs` and the four `combos-*.json` that produced them alongside:
 
 - Tracking for card 31 (press-start-2p). Rendered at 0, 0.05, 0.1, 0.2 — 0.1 is the recommendation;
   at 0.2 the word gap stops reading as wider than the letter gaps.

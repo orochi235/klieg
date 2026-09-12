@@ -93,6 +93,42 @@ describe('show config', () => {
     expect(decodeConfig(encoded).text).toBe('BIG TOP');
   });
 
+  // `exit` and `eyeX` both used to write `ex`, and encode appends rather than sets — so a link
+  // naming both wrote `ex` twice, decode's `q.get` took the first, and the eye offset was lost
+  // with nothing rejected. `eyeX` has its own key now; a bare numeric `ex` still reads as an eye
+  // offset so that links written before this keep meaning what they meant.
+  it('keeps an eye offset that rides alongside an exit', () => {
+    const round = decodeConfig(encodeConfig({ text: 'JACKPOT', exit: 'shatter', eyeX: 0.4 }));
+    expect(round.exit).toBe('shatter');
+    expect(round.eyeX).toBe(0.4);
+  });
+
+  it('gives the eye offset a key of its own, so no key is written twice', () => {
+    const q = new URLSearchParams(encodeConfig({ text: 'JACKPOT', exit: 'shatter', eyeX: 0.4 }));
+    expect(q.getAll('ex')).toEqual(['shatter']);
+    expect(q.getAll('ei')).toEqual(['0.4']);
+  });
+
+  it('still reads an eye offset off a link that wrote it as ex', () => {
+    expect(decodeConfig('t=JACKPOT&ex=0.4').eyeX).toBe(0.4);
+    expect(decodeConfig('t=JACKPOT&ex=0.4').exit).toBeUndefined();
+  });
+
+  it('reads an exit off a link that names one and no eye offset', () => {
+    expect(decodeConfig('t=JACKPOT&ex=shatter').exit).toBe('shatter');
+    expect(decodeConfig('t=JACKPOT&ex=shatter').eyeX).toBeUndefined();
+  });
+
+  // The one case that tells a scan of every `ex` apart from a read of the first: a link written
+  // before the split that named both wrote `ex` twice, the exit first. Anything resting on
+  // `URLSearchParams.get` reads the exit name here and drops the offset — the defect intact,
+  // behind a fix that looks right. A link carrying the offset alone passes either way.
+  it('reads an eye offset out of a legacy link that names an exit too', () => {
+    const round = decodeConfig('t=JACKPOT&ex=fade&ex=0.5');
+    expect(round.exit).toBe('fade');
+    expect(round.eyeX).toBe(0.5);
+  });
+
   it('still reads a link made before the query-string format', () => {
     const c = decodeConfig(legacy({ text: 'JACKPOT!', look: 'gold', lineAlign: 'start' }));
     expect([c.text, c.look, c.lineAlign]).toEqual(['JACKPOT!', 'gold', 'start']);

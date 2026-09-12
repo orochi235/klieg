@@ -108,7 +108,7 @@ const SHORT: Record<string, string> = {
   bloom: 'bm',
   camera: 'cm',
   fov: 'fv',
-  eyeX: 'ex',
+  eyeX: 'ei',
   eyeY: 'ey',
   tint: 'ti',
   tracking: 'tk',
@@ -245,6 +245,17 @@ function fromQuery(raw: string): Record<string, unknown> {
     const value = get(key);
     return value && /^[0-9a-f]{1,6}$/i.test(value) ? Number.parseInt(value, 16) : undefined;
   };
+  /**
+   * `eyeX` wrote `ex` until it was given `ei`, and `exit` writes `ex` too — so a link from before
+   * that carries one `ex` which is either. They never collide in value, an exit being a name, so a
+   * numeric one is an eye offset. Only reached when the link names no `ei`.
+   */
+  const legacyEyeX = () => {
+    for (const value of q.getAll(SHORT.exit as string)) {
+      if (value.trim() !== '' && Number.isFinite(Number(value))) return Number(value);
+    }
+    return undefined;
+  };
 
   const looks = [...q.getAll(SHORT.looks as string), ...q.getAll('looks')];
   const axes = { yaw: num('yaw'), pitch: num('pitch'), roll: num('roll') };
@@ -258,7 +269,7 @@ function fromQuery(raw: string): Record<string, unknown> {
     bloom: flag('bloom'),
     camera: text('camera'),
     fov: num('fov'),
-    eyeX: num('eyeX'),
+    eyeX: num('eyeX') ?? legacyEyeX(),
     eyeY: num('eyeY'),
     pivot: flag('pivot'),
     tint: color('tint'),

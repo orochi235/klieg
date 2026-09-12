@@ -16,9 +16,11 @@ export interface ProjectionInput {
   /** Layout line per letter, as `Word` holds it. */
   line: readonly number[];
   fit: { scale: number; midY: number; offsetX: number };
-  /** Vertical field of view, in degrees. */
+  /** Vertical field of view, in degrees. Zero under a parallel lens, which has none. */
   fov: number;
   cameraZ: number;
+  /** What a parallel lens shows at every depth, in world units. Absent under a perspective one. */
+  orthoHeight?: number;
   /** Extrusion depth in em. */
   depth: number;
   /** Bevel thickness in em. three lays the bevel outside the extrusion, not inside it. */
@@ -48,6 +50,8 @@ export interface PlacedWord {
   fit: { scale: number; midY: number; offsetX: number };
   fov: number;
   cameraZ: number;
+  /** What a parallel lens shows at every depth, in world units. Absent under a perspective one. */
+  orthoHeight?: number;
   aspect: number;
   depth: number;
   bevel: number;
@@ -55,6 +59,9 @@ export interface PlacedWord {
 
 /** Visible height in world units at the letters' front face. */
 function faceHeight(input: PlacedWord): number {
+  // A parallel lens shows the same height wherever the face sits, so the front cap's depth
+  // changes nothing about how large it is drawn.
+  if (input.orthoHeight !== undefined) return input.orthoHeight;
   // three extrudes a shape from z = -bevel to z = depth + bevel, so the front cap clears the
   // nominal depth by a bevel thickness. Measuring to `depth` puts the plane behind the face.
   const faceDistance = input.cameraZ - (input.depth + input.bevel) * input.fit.scale;

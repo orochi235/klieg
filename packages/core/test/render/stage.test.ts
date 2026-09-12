@@ -1,4 +1,4 @@
-import type * as THREE from 'three';
+import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BLOOM_REACH_PX } from '../../src/render/bloom.js';
 import {
@@ -24,7 +24,8 @@ function headlessStage(idleTimeoutMs = 1000): Stage {
 }
 
 function frustumHeight(stage: Stage): number {
-  return 2 * Math.tan((stage.camera.fov * Math.PI) / 360) * stage.camera.position.z;
+  const lens = stage.lens();
+  return lens.orthoHeight ?? 2 * Math.tan((lens.fov * Math.PI) / 360) * lens.cameraZ;
 }
 
 describe('viewportBudget', () => {
@@ -39,7 +40,7 @@ describe('viewportBudget', () => {
 
   it('matches the frustum extent at the camera distance', () => {
     const stage = headlessStage();
-    stage.camera.aspect = 1.5;
+    stage.aspect = 1.5;
     const budget = stage.viewportBudget(1, 1);
 
     expect(budget.height).toBeCloseTo(frustumHeight(stage), 12);
@@ -50,15 +51,15 @@ describe('viewportBudget', () => {
     const stage = headlessStage();
     const budget = stage.viewportBudget();
 
-    expect(budget.width).toBeCloseTo(frustumHeight(stage) * stage.camera.aspect * 0.62, 12);
+    expect(budget.width).toBeCloseTo(frustumHeight(stage) * stage.aspect * 0.62, 12);
     expect(budget.height).toBeCloseTo(frustumHeight(stage) * 0.3, 12);
   });
 
   it('feeds aspect into width only', () => {
     const stage = headlessStage();
-    stage.camera.aspect = 1;
+    stage.aspect = 1;
     const square = stage.viewportBudget();
-    stage.camera.aspect = 2;
+    stage.aspect = 2;
     const wide = stage.viewportBudget();
 
     expect(wide.width).toBeCloseTo(square.width * 2, 12);
@@ -162,7 +163,7 @@ describe('resize', () => {
   it('does nothing without a renderer, so no NaN aspect reaches the camera', () => {
     const stage = headlessStage();
     expect(() => stage.resize()).not.toThrow();
-    expect(stage.camera.aspect).toBe(1);
+    expect(stage.aspect).toBe(1);
   });
 });
 
@@ -302,7 +303,7 @@ describe('the fit cap', () => {
       idleTimeoutMs: 1000,
       placement: { kind: 'element', el: anchor(800, 120) },
     });
-    strip.camera.aspect = 800 / 120;
+    strip.aspect = 800 / 120;
     const budget = strip.viewportBudget(0.94, 0.66);
 
     expect(budget.cap).toBe(Number.POSITIVE_INFINITY);
@@ -319,10 +320,10 @@ describe('framing against an anchor', () => {
       placement: { kind: 'element', el: anchor(800, 120) },
     });
     // What resize() writes for that box; the frustum height at this depth never moves.
-    strip.camera.aspect = 800 / 120;
+    strip.aspect = 800 / 120;
     const budget = strip.viewportBudget(0.94, 0.66);
 
-    expect(budget.width / (frustumHeight(strip) * strip.camera.aspect)).toBeCloseTo(0.94, 12);
+    expect(budget.width / (frustumHeight(strip) * strip.aspect)).toBeCloseTo(0.94, 12);
     expect(budget.height / frustumHeight(strip)).toBeCloseTo(0.66, 12);
   });
 });
@@ -332,10 +333,10 @@ it('reports the whole box as the extent the alignment measures against', () => {
     idleTimeoutMs: 1000,
     placement: { kind: 'element', el: anchor(800, 120) },
   });
-  strip.camera.aspect = 800 / 120;
+  strip.aspect = 800 / 120;
   const budget = strip.viewportBudget(0.94, 0.66);
 
-  expect(budget.extent).toBeCloseTo(frustumHeight(strip) * strip.camera.aspect, 12);
+  expect(budget.extent).toBeCloseTo(frustumHeight(strip) * strip.aspect, 12);
   // The fractions cut the budget out of the extent; alignment needs the extent itself.
   expect(budget.width).toBeCloseTo((budget.extent as number) * 0.94, 12);
 });
@@ -430,7 +431,7 @@ describe('the lens against a wide anchor', () => {
     const stage = headlessStage();
     stage.applyLens(10.17);
 
-    expect(stage.camera.fov).toBe(BASE_FOV);
+    expect(stage.lens().fov).toBe(BASE_FOV);
     expect(stage.camera.position.z).toBe(BASE_Z);
   });
 
@@ -441,10 +442,10 @@ describe('the lens against a wide anchor', () => {
     });
     strip.applyLens(1180 / 116);
 
-    expect(strip.camera.fov).toBeLessThan(BASE_FOV);
+    expect(strip.lens().fov).toBeLessThan(BASE_FOV);
     expect(strip.camera.position.z).toBeGreaterThan(BASE_Z);
     expect(
-      halfAngleDeg(1180 / 116, { fov: strip.camera.fov, z: strip.camera.position.z }),
+      halfAngleDeg(1180 / 116, { fov: strip.lens().fov, z: strip.lens().cameraZ }),
     ).toBeLessThanOrEqual(MAX_HALF_ANGLE_DEG + 1e-9);
   });
 
@@ -453,11 +454,11 @@ describe('the lens against a wide anchor', () => {
       idleTimeoutMs: 1000,
       placement: { kind: 'element', el: anchor(1180, 116) },
     });
-    strip.camera.aspect = 1180 / 116;
+    strip.aspect = 1180 / 116;
     strip.applyLens(1180 / 116);
     const budget = strip.viewportBudget(0.94, 0.66);
 
-    expect(budget.width / (frustumHeight(strip) * strip.camera.aspect)).toBeCloseTo(0.94, 12);
+    expect(budget.width / (frustumHeight(strip) * strip.aspect)).toBeCloseTo(0.94, 12);
     expect(budget.height / frustumHeight(strip)).toBeCloseTo(0.66, 12);
   });
 });
@@ -486,8 +487,7 @@ describe('the canvas past the anchor', () => {
 
   /** The canvas box `resize` wrote, back out of the aspect and the anchor it grew from. */
   function canvasHeight(stage: Stage, el: { clientWidth: number; clientHeight: number }): number {
-    const bleed =
-      (stage.camera.aspect * el.clientHeight - el.clientWidth) / (2 - 2 * stage.camera.aspect);
+    const bleed = (stage.aspect * el.clientHeight - el.clientWidth) / (2 - 2 * stage.aspect);
     return el.clientHeight + 2 * bleed;
   }
 
@@ -559,9 +559,9 @@ describe('the canvas past the anchor', () => {
     const el = anchor(800, 120);
     const stage = sized(el, { bleed: 0 });
 
-    expect(stage.camera.aspect).toBeCloseTo(800 / 120, 12);
+    expect(stage.aspect).toBeCloseTo(800 / 120, 12);
     expect(stage.viewportBudget(0.94, 0.66).extent).toBeCloseTo(
-      frustumHeight(stage) * stage.camera.aspect,
+      frustumHeight(stage) * stage.aspect,
       12,
     );
   });
@@ -578,7 +578,7 @@ describe('the canvas past the anchor', () => {
     } as unknown as THREE.WebGLRenderer;
     stage.resize();
 
-    expect(stage.camera.aspect).toBeCloseTo(1440 / 900, 12);
+    expect(stage.aspect).toBeCloseTo(1440 / 900, 12);
   });
 
   it('insets the canvas by the bleed, and the text layer with it', () => {
@@ -595,5 +595,81 @@ describe('the canvas past the anchor', () => {
 
     expect(css).toContain('width:calc(100% + 80px)');
     expect(css).toContain('height:calc(100% + 80px)');
+  });
+});
+
+describe('the lens', () => {
+  const perspective = headlessStage();
+
+  it('shows the same frustum height however wide the angle', () => {
+    const narrow = new Stage({ idleTimeoutMs: 1000, camera: { fov: 12 } });
+    const wide = new Stage({ idleTimeoutMs: 1000, camera: { fov: 55 } });
+    // Same height at the word, so the fractions keep their meaning and the type keeps its size.
+    expect(frustumHeight(narrow)).toBeCloseTo(frustumHeight(perspective), 9);
+    expect(frustumHeight(wide)).toBeCloseTo(frustumHeight(perspective), 9);
+    expect(narrow.viewportBudget().width).toBeCloseTo(perspective.viewportBudget().width, 9);
+    // A narrower angle spans that height from further back, which is what takes the perspective out.
+    expect(narrow.lens().cameraZ).toBeGreaterThan(perspective.lens().cameraZ);
+    expect(wide.lens().cameraZ).toBeLessThan(perspective.lens().cameraZ);
+  });
+
+  it('fits an orthographic word exactly as a perspective one', () => {
+    const ortho = new Stage({ idleTimeoutMs: 1000, camera: { projection: 'ortho' } });
+    ortho.applyLens(1.5);
+    perspective.applyLens(1.5);
+    expect(ortho.ortho).toBe(true);
+    expect(ortho.viewportBudget().width).toBeCloseTo(perspective.viewportBudget().width, 9);
+    expect(ortho.viewportBudget().height).toBeCloseTo(perspective.viewportBudget().height, 9);
+  });
+
+  // Nothing tapers in parallel projection, so alignment must not inset the word for its extrusion.
+  it('reports no depth taper when parallel', () => {
+    const ortho = new Stage({ idleTimeoutMs: 1000, camera: { projection: 'ortho' } });
+    expect(ortho.viewportBudget().cameraZ).toBe(0);
+    expect(ortho.lens().orthoHeight).toBeCloseTo(frustumHeight(perspective), 9);
+    expect(perspective.viewportBudget().cameraZ).toBeGreaterThan(0);
+  });
+});
+
+// An off-centre viewer sees the same window from beside it: the word's own plane is the window, so
+// it cannot move, and only what stands in front of or behind it slides.
+describe('an off-axis eye', () => {
+  const project = (stage: Stage, x: number, y: number, z: number): THREE.Vector3 => {
+    // The renderer does this every frame; nothing else here has moved the camera into the world.
+    stage.camera.updateMatrixWorld();
+    return new THREE.Vector3(x, y, z).project(stage.camera);
+  };
+
+  it('leaves the window itself where a centred eye put it', () => {
+    const centred = headlessStage();
+    const beside = new Stage({ idleTimeoutMs: 1000, camera: { eye: { x: 0.8, y: -0.4 } } });
+    for (const [x, y] of [
+      [0, 0],
+      [1.4, 0.9],
+      [-2, 1.1],
+    ] as const) {
+      const a = project(centred, x, y, 0);
+      const b = project(beside, x, y, 0);
+      expect(b.x).toBeCloseTo(a.x, 9);
+      expect(b.y).toBeCloseTo(a.y, 9);
+    }
+  });
+
+  it('slides what stands off that plane, which is the parallax', () => {
+    const centred = headlessStage();
+    const beside = new Stage({ idleTimeoutMs: 1000, camera: { eye: { x: 0.8 } } });
+    const front = { centred: project(centred, 0, 0, 1), beside: project(beside, 0, 0, 1) };
+    expect(front.beside.x).toBeLessThan(front.centred.x);
+    // Behind the window it slides the other way, as a window's own frame does.
+    expect(project(beside, 0, 0, -1).x).toBeGreaterThan(project(centred, 0, 0, -1).x);
+  });
+
+  it('has nothing to move in parallel projection, which has no viewpoint', () => {
+    const flat = new Stage({
+      idleTimeoutMs: 1000,
+      camera: { projection: 'ortho', eye: { x: 0.8 } },
+    });
+    expect(flat.camera.position.x).toBe(0);
+    expect(project(flat, 0, 0, 1).x).toBeCloseTo(project(flat, 0, 0, -1).x, 9);
   });
 });

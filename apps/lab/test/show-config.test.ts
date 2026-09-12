@@ -31,6 +31,18 @@ describe('show config: the performance fields', () => {
     expect(round({ lineAlign: 'sideways' as never }).lineAlign).toBe('start');
   });
 
+  // The lens is the one field that changes how the type is drawn rather than what it does, and a
+  // link naming a fov a frustum cannot be would render nothing at all.
+  it('carries the lens, and holds a fov to an angle that draws', () => {
+    expect(round({}).camera).toBeUndefined();
+    expect(round({}).fov).toBeUndefined();
+    expect(round({ camera: 'ortho' }).camera).toBe('ortho');
+    expect(round({ camera: 'sideways' as never }).camera).toBeUndefined();
+    expect(round({ fov: 24 }).fov).toBe(24);
+    expect(round({ fov: 400 }).fov).toBe(90);
+    expect(round({ fov: 1 }).fov).toBe(5);
+  });
+
   it('carries the acronym routine, or nothing at all', () => {
     expect(round({}).acronym).toBeUndefined();
     expect(

@@ -1,4 +1,5 @@
 import type { Align } from './index.js';
+import type { CameraSpec } from './render/stage.js';
 import type { Sign, SignOptions } from './sign/index.js';
 
 const TAG = 'klieg-sign';
@@ -55,6 +56,10 @@ class KliegSign extends HTMLElement {
     'align',
     'lighting',
     'bloom',
+    'camera',
+    'fov',
+    'eye-x',
+    'eye-y',
   ];
 
   /** Anything an attribute cannot serialize, and the full `FireOptions` escape hatch. */
@@ -169,6 +174,12 @@ class KliegSign extends HTMLElement {
     // Through `fraction` for the reason it exists: an empty `bleed` must not read as 0 and pin
     // the canvas to the anchor.
     const bleed = fraction(this.getAttribute('bleed'));
+    const camera = lens(
+      this.getAttribute('camera'),
+      this.getAttribute('fov'),
+      this.getAttribute('eye-x'),
+      this.getAttribute('eye-y'),
+    );
 
     return {
       font,
@@ -177,12 +188,42 @@ class KliegSign extends HTMLElement {
       ...optional('tint', this.getAttribute('tint') ?? undefined),
       ...(Object.keys(framing).length ? { framing } : {}),
       ...optional('bleed', bleed),
+      ...optional('camera', camera),
       ...optional('lighting', lighting),
       ...optional('effects', this.effects),
       ...optional('bloom', bloom === null ? undefined : bloom !== 'false'),
       ...optional('fire', this.options),
     };
   }
+}
+
+/**
+ * `camera="ortho"` for parallel projection, or a perspective lens with its own `fov` in degrees
+ * and an `eye-x`/`eye-y` viewpoint as a share of the window.
+ */
+function lens(
+  projection: string | null,
+  fov: string | null,
+  eyeX: string | null,
+  eyeY: string | null,
+): CameraSpec | undefined {
+  if (projection === 'ortho') return { projection: 'ortho' };
+  const number = (raw: string | null) => {
+    const value = raw === null || raw.trim() === '' ? Number.NaN : Number(raw);
+    return Number.isFinite(value) ? value : undefined;
+  };
+  const angle = number(fov);
+  const x = number(eyeX);
+  const y = number(eyeY);
+  const eye = x === undefined && y === undefined ? undefined : { x: x ?? 0, y: y ?? 0 };
+  if (angle === undefined && !eye) {
+    return projection === 'perspective' ? { projection: 'perspective' } : undefined;
+  }
+  return {
+    projection: 'perspective',
+    ...(angle === undefined ? {} : { fov: angle }),
+    ...(eye ? { eye } : {}),
+  };
 }
 
 if (!customElements.get(TAG)) customElements.define(TAG, KliegSign);

@@ -28,6 +28,7 @@ import {
 } from './render/lighting.js';
 import { LOOKS, type Look, type LookName, type LookSpec, specOf } from './render/looks.js';
 import {
+  type CameraSpec,
   type Framing,
   type Placement,
   prefersReducedMotion,
@@ -238,6 +239,11 @@ export interface KliegOptions {
   /** How much of the viewport the type may fill. The default leaves room for the page underneath. */
   framing?: Framing;
   /**
+   * The lens: `{ projection: 'ortho' }` for parallel projection, or a `fov` in degrees for how
+   * much perspective a word shows. Neither changes how large the type is drawn.
+   */
+  camera?: CameraSpec;
+  /**
    * How far the canvas reaches past its anchor, as a share of the tallest the type may be — room
    * for a glow, a bevel highlight or a bloom halo to fall off in. Without it the canvas is the
    * anchor exactly, and everything a look paints outside the type's own box is cut at the edge the
@@ -254,7 +260,7 @@ export interface KliegOptions {
   bleed?: number;
 }
 
-export type { Framing, Placement } from './render/stage.js';
+export type { CameraSpec, Framing, Placement } from './render/stage.js';
 export type { Align } from './text/layout.js';
 export type { TextRun } from './text/runs.js';
 
@@ -504,6 +510,7 @@ export function createKlieg(options: KliegOptions): Klieg {
     placement,
     ...(options.framing ? { framing: options.framing } : {}),
     ...(options.bleed === undefined ? {} : { bleed: options.bleed }),
+    ...(options.camera ? { camera: options.camera } : {}),
   });
 
   const caches = new WordCaches();
@@ -859,9 +866,7 @@ export function createKlieg(options: KliegOptions): Klieg {
               pointerClient,
               {
                 fit: word.placement,
-                fov: stage.camera.fov,
-                cameraZ: stage.camera.position.z,
-                aspect: stage.camera.aspect,
+                ...stage.lens(),
                 depth: DEFAULT_GLYPH_OPTIONS.depth,
                 bevel: DEFAULT_GLYPH_OPTIONS.bevelThickness,
               },
@@ -894,9 +899,7 @@ export function createKlieg(options: KliegOptions): Klieg {
               if (layer.isStale(key)) {
                 const projected = projectLetters({
                   ...readout,
-                  fov: stage.camera.fov,
-                  cameraZ: stage.camera.position.z,
-                  aspect: stage.camera.aspect,
+                  ...stage.lens(),
                   depth: DEFAULT_GLYPH_OPTIONS.depth,
                   bevel: DEFAULT_GLYPH_OPTIONS.bevelThickness,
                   width: key.width,

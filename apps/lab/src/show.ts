@@ -1,6 +1,7 @@
 import {
   type ActiveSlot,
   acronym,
+  type CameraSpec,
   type Clock,
   createKlieg,
   type EnterSlot,
@@ -202,6 +203,21 @@ const FONTS: Record<string, string> = {
 };
 const chosenFont = config.font ?? 'default';
 
+/** The lens a link asked for: parallel, or perspective with its own angle and viewpoint. */
+function lens(): CameraSpec | undefined {
+  if (config.camera === 'ortho') return { projection: 'ortho' };
+  const eye =
+    config.eyeX === undefined && config.eyeY === undefined
+      ? undefined
+      : { x: config.eyeX ?? 0, y: config.eyeY ?? 0 };
+  if (config.fov === undefined && !eye) return undefined;
+  return {
+    projection: 'perspective',
+    ...(config.fov === undefined ? {} : { fov: config.fov }),
+    ...(eye ? { eye } : {}),
+  };
+}
+
 const klieg = createKlieg({
   fonts: FONTS,
   clock,
@@ -219,6 +235,7 @@ const klieg = createKlieg({
   // `align` is explicit because an element placement defaults to `start`: the stage is the whole
   // page rather than a column of prose, so there is no text edge here for the word to meet.
   framing: { width: 0.84, height: 0.72, align: 'center' },
+  camera: lens(),
 });
 
 let index = 0;

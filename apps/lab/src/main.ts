@@ -2,6 +2,7 @@ import {
   ACTIVE_NAMES,
   type Align,
   acronym,
+  type CameraSpec,
   type Clock,
   createKlieg,
   EFFECTS,
@@ -56,6 +57,10 @@ const look = choice('look', LOOK_NAMES);
 const lighting = choice('lighting', LIGHTING_NAMES);
 const policy = choice('policy', POLICY_NAMES);
 
+const cameraInput = el<HTMLSelectElement>('camera');
+const fovInput = el<HTMLInputElement>('fov');
+const eyeXInput = el<HTMLInputElement>('eyeX');
+const eyeYInput = el<HTMLInputElement>('eyeY');
 const textInput = el<HTMLTextAreaElement>('text');
 const bloomInput = el<HTMLSelectElement>('bloom');
 const wrapInput = el<HTMLInputElement>('wrap');
@@ -366,12 +371,24 @@ function create(): Klieg {
     fonts: FONTS,
     policy: policy.get(),
     clock: PIN === null ? undefined : new PinnedClock(PIN),
+    camera: cameraSpec(),
   });
   const pinned = PIN === null ? '' : `, pinned at ${PIN}ms`;
   log(
     `instance up (policy ${policy.get()}${pinned}${instance.supported ? '' : ', webgl2 UNSUPPORTED'})`,
   );
   return instance;
+}
+
+/** The lens is fixed for an instance, so changing either control builds a new one. */
+function cameraSpec(): CameraSpec {
+  return cameraInput.value === 'ortho'
+    ? { projection: 'ortho' }
+    : {
+        projection: 'perspective',
+        fov: Number(fovInput.value),
+        eye: { x: Number(eyeXInput.value), y: Number(eyeYInput.value) },
+      };
 }
 
 let bk = create();
@@ -603,6 +620,13 @@ policy.select.addEventListener('change', () => {
   bk.destroy();
   bk = create();
 });
+for (const input of [cameraInput, fovInput, eyeXInput, eyeYInput]) {
+  input.addEventListener('change', () => {
+    bk.destroy();
+    bk = create();
+    fireCurrent();
+  });
+}
 
 // Greyed rather than ignored: a look reads a grain, a tube or a chunk field only if its spec
 // carries one, and a live slider that does nothing reads as a broken slider.

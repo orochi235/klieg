@@ -41,6 +41,30 @@ export interface Framing {
   align?: Align;
 }
 
+/**
+ * The lens the type is seen through. `fov` is how much perspective the word shows, not how large
+ * it is: the frustum's height at the word is fixed, so narrowing the angle walks the camera back
+ * and the word keeps its size. `ortho` is that taken to the limit — parallel projection, where a
+ * letter at the end of a long word is drawn exactly as the one in the middle is, and `fov` has
+ * nothing to say.
+ */
+export interface CameraSpec {
+  projection?: 'perspective' | 'ortho';
+  /** Vertical field of view in degrees. Perspective only; defaults to `BASE_FOV`. */
+  fov?: number;
+  /**
+   * Where the viewer is, as a share of the window's own half-width and half-height: `{ x: 1 }`
+   * puts the eye over the window's right edge. The word's plane stays the window, so the type
+   * keeps its size and position there and everything in front of or behind it slides — which is
+   * what makes a letter's extrusion turn toward a viewer who is not centred. Perspective only:
+   * parallel projection has no viewpoint to move.
+   */
+  eye?: { x?: number; y?: number };
+}
+
+/** Past this the window is behind the eye, and the frustum turns inside out. */
+const MAX_EYE = 2;
+
 export interface StageOptions {
   /** Resolved at mount, not at construction, so a document-less environment can still get here. */
   target?: HTMLElement;
@@ -52,6 +76,8 @@ export interface StageOptions {
   framing?: Framing;
   /** How far the canvas reaches past the anchor. See `KliegOptions.bleed`. */
   bleed?: number;
+  /** The lens. Fixed for an instance's lifetime, as the placement is. */
+  camera?: CameraSpec;
 }
 
 // Inline because a library ships no stylesheet, and host page CSS must not reach the overlay.
@@ -150,16 +176,26 @@ export const DEFAULT_BLEED = 0.5;
  * `MAX_HALF_ANGLE_DEG`, and `fov` narrows to hold the frustum height at the word's depth. Narrow
  * boxes keep the base lens exactly, so a fullscreen overlay renders byte-identically.
  */
-export function lensFor(aspect: number): { fov: number; z: number } {
+export function lensFor(aspect: number, fov = BASE_FOV): { fov: number; z: number } {
+  // The distance this angle needs to span the fixed frustum height, so `fov` changes how much
+  // perspective the word shows and never how large it is.
+  const base = FRUSTUM_HEIGHT / (2 * Math.tan((fov * Math.PI) / 360));
   const halfWidth = (FRUSTUM_HEIGHT * aspect) / 2;
-  const z = Math.max(BASE_Z, halfWidth / Math.tan((MAX_HALF_ANGLE_DEG * Math.PI) / 180));
-  if (z === BASE_Z) return { fov: BASE_FOV, z: BASE_Z };
+  const z = Math.max(base, halfWidth / Math.tan((MAX_HALF_ANGLE_DEG * Math.PI) / 180));
+  if (z === base) return { fov, z };
   return { fov: (2 * Math.atan(FRUSTUM_HEIGHT / (2 * z)) * 180) / Math.PI, z };
+}
+
+/** The parallel lens: no angle, and the frustum is the same box at every depth. */
+export function orthoLens(aspect: number): { height: number; width: number; z: number } {
+  return { height: FRUSTUM_HEIGHT, width: FRUSTUM_HEIGHT * aspect, z: BASE_Z };
 }
 
 export class Stage {
   readonly scene = new THREE.Scene();
-  readonly camera = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.1, BASE_FAR);
+  readonly camera: THREE.PerspectiveCamera | THREE.OrthographicCamera;
+  /** The canvas' aspect, held here because an orthographic camera has no field for it. */
+  aspect = 1;
   canvas: HTMLCanvasElement | null = null;
   textLayer: HTMLElement | null = null;
   renderer: THREE.WebGLRenderer | null = null;
@@ -177,7 +213,51 @@ export class Stage {
 
   constructor(private readonly opts: StageOptions) {
     this.placement = opts.placement ?? { kind: 'fullscreen' };
+    const ortho = opts.camera?.projection === 'ortho';
+    const lens = orthoLens(1);
+    this.camera = ortho
+      ? new THREE.OrthographicCamera(
+          -lens.width / 2,
+          lens.width / 2,
+          lens.height / 2,
+          -lens.height / 2,
+          0.1,
+          BASE_FAR,
+        )
+      : new THREE.PerspectiveCamera(opts.camera?.fov ?? BASE_FOV, 1, 0.1, BASE_FAR);
     this.camera.position.set(0, 0, BASE_Z);
+    this.applyLens(1);
+  }
+
+  /** What the lens shows vertically at the word's depth, in world units. */
+  private frustumHeight(): number {
+    if (this.camera instanceof THREE.OrthographicCamera) {
+      return this.camera.top - this.camera.bottom;
+    }
+    return 2 * Math.tan((this.camera.fov * Math.PI) / 360) * this.camera.position.z;
+  }
+
+  /** Whether the type is drawn in parallel projection. */
+  get ortho(): boolean {
+    return !this.camera.type.startsWith('Perspective');
+  }
+
+  /**
+   * What the lens is doing, for the two places that map world to page — the letters' own CSS
+   * boxes and a pointer aimed back into the word. An orthographic lens reports the height it
+   * shows at every depth instead of an angle, because it has none.
+   */
+  lens(): { fov: number; cameraZ: number; aspect: number; orthoHeight?: number } {
+    const aspect = this.aspect;
+    if (this.camera instanceof THREE.OrthographicCamera) {
+      return {
+        fov: 0,
+        cameraZ: this.camera.position.z,
+        aspect,
+        orthoHeight: this.camera.top - this.camera.bottom,
+      };
+    }
+    return { fov: this.camera.fov, cameraZ: this.camera.position.z, aspect };
   }
 
   /** Idempotent: repeated fires reuse one context rather than allocating a new one. */
@@ -276,7 +356,6 @@ export class Stage {
     const cw = w + 2 * bleed;
     const ch = h + 2 * bleed;
     this.renderer.setSize(cw, ch, false);
-    this.camera.aspect = cw / ch;
     this.applyLens(cw / ch);
   }
 
@@ -308,12 +387,55 @@ export class Stage {
 
   /** Only an anchor can be wide enough to need the longer lens; the overlay keeps the base one. */
   applyLens(aspect: number): void {
-    const lens = this.placement.kind === 'element' ? lensFor(aspect) : { fov: BASE_FOV, z: BASE_Z };
+    this.aspect = aspect;
+    if (this.camera instanceof THREE.OrthographicCamera) {
+      const lens = orthoLens(aspect);
+      this.camera.left = -lens.width / 2;
+      this.camera.right = lens.width / 2;
+      this.camera.top = lens.height / 2;
+      this.camera.bottom = -lens.height / 2;
+      this.camera.position.z = lens.z;
+      this.camera.far = lens.z + (BASE_FAR - BASE_Z);
+      this.camera.updateProjectionMatrix();
+      return;
+    }
+    const want = this.opts.camera?.fov ?? BASE_FOV;
+    const lens =
+      this.placement.kind === 'element'
+        ? lensFor(aspect, want)
+        : { fov: want, z: FRUSTUM_HEIGHT / (2 * Math.tan((want * Math.PI) / 360)) };
+    const half = { x: (FRUSTUM_HEIGHT * aspect) / 2, y: FRUSTUM_HEIGHT / 2 };
+    const eye = this.eyeOffset(half);
     this.camera.fov = lens.fov;
-    this.camera.position.z = lens.z;
+    this.camera.aspect = aspect;
+    this.camera.position.set(eye.x, eye.y, lens.z);
     // The far plane rides at a fixed depth behind the word rather than at a fixed distance.
     this.camera.far = lens.z + (BASE_FAR - BASE_Z);
     this.camera.updateProjectionMatrix();
+    if (eye.x === 0 && eye.y === 0) return;
+    // An off-centre eye sees the same window through a skewed frustum: the sides are no longer
+    // symmetric about the axis, so the window — and the word on it — stays put while everything
+    // at another depth slides. `updateProjectionMatrix` above wrote the symmetric one.
+    const near = this.camera.near;
+    const scale = near / lens.z;
+    this.camera.projectionMatrix.makePerspective(
+      (-half.x - eye.x) * scale,
+      (half.x - eye.x) * scale,
+      (half.y - eye.y) * scale,
+      (-half.y - eye.y) * scale,
+      near,
+      this.camera.far,
+      this.camera.coordinateSystem,
+    );
+    this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
+  }
+
+  /** The eye's own place in world units, from the share of the window the caller asked for. */
+  private eyeOffset(half: { x: number; y: number }): { x: number; y: number } {
+    const eye = this.opts.camera?.eye;
+    if (!eye || this.ortho) return { x: 0, y: 0 };
+    const clamp = (v: number | undefined) => Math.min(Math.max(v ?? 0, -MAX_EYE), MAX_EYE);
+    return { x: clamp(eye.x) * half.x, y: clamp(eye.y) * half.y };
   }
 
   /**
@@ -331,14 +453,18 @@ export class Stage {
     align?: Align,
     lineAlign?: Align,
   ): Budget {
-    const vh = 2 * Math.tan((this.camera.fov * Math.PI) / 360) * this.camera.position.z;
+    // Read off the camera rather than assumed: `applyLens` holds this height fixed, but a caller
+    // that moves the camera itself has moved what the fractions are a share of.
+    const vh = this.frustumHeight();
     const shrink = this.shrink();
-    const extent = vh * this.camera.aspect * shrink.x;
+    const extent = vh * this.aspect * shrink.x;
     return {
       width: extent * widthFrac,
       height: vh * shrink.y * heightFrac,
       extent,
-      cameraZ: this.camera.position.z,
+      // Zero where nothing tapers: an orthographic frustum is the same box at the near cap as at
+      // the word, so a letter's extrusion cannot cross an edge its front face clears.
+      cameraZ: this.ortho ? 0 : this.camera.position.z,
       edge: edgeFor(align ?? this.defaultAlign(), this.direction()),
       lineEdge: edgeFor(lineAlign ?? 'start', this.direction()),
       // The anchor's box is the bound already, and filling it is the whole point of anchoring.

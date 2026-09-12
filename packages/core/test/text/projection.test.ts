@@ -181,3 +181,20 @@ describe('layoutFromNdc', () => {
     expect(top.y).toBeGreaterThan(bottom.y);
   });
 });
+
+// A parallel lens shows one height at every depth, so a letter's own extrusion cannot change how
+// large its box is drawn — which is the whole reason to reach for one.
+describe('a parallel lens', () => {
+  it('sizes a letter the same however deep the type is', () => {
+    const flat = projectLetters({ ...input(), orthoHeight: 2, depth: 0.2 });
+    const deep = projectLetters({ ...input(), orthoHeight: 2, depth: 0.4 });
+    expect(flat.fontSize).toBeCloseTo(deep.fontSize, 9);
+  });
+
+  it('draws a deeper perspective word larger, which is what it replaces', () => {
+    // Both fronts sit in front of the camera at z = 1; a face nearer the lens is drawn larger.
+    const flat = projectLetters({ ...input(), depth: 0.2 });
+    const deep = projectLetters({ ...input(), depth: 0.4 });
+    expect(deep.fontSize).toBeGreaterThan(flat.fontSize);
+  });
+});

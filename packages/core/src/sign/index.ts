@@ -7,7 +7,7 @@ import {
   type LightingSlot,
   type Look,
 } from '../index.js';
-import { prefersReducedMotion } from '../render/stage.js';
+import { type CameraSpec, prefersReducedMotion } from '../render/stage.js';
 import { resolveTint } from './tint.js';
 
 export interface SignOptions {
@@ -21,6 +21,8 @@ export interface SignOptions {
   framing?: Framing;
   /** How far the canvas reaches past the anchor. See `KliegOptions.bleed`. */
   bleed?: number;
+  /** The lens. See `KliegOptions.camera`. */
+  camera?: CameraSpec;
   lighting?: LightingSlot;
   bloom?: boolean;
   effects?: EffectSpec[];
@@ -69,6 +71,7 @@ export function sign(anchor: HTMLElement, options: SignOptions): Sign {
       placement: { kind: 'element', el: anchor },
       ...(opts.framing ? { framing: opts.framing } : {}),
       ...(opts.bleed === undefined ? {} : { bleed: opts.bleed }),
+      ...(opts.camera ? { camera: opts.camera } : {}),
     });
     if (!klieg.supported) {
       klieg.destroy();

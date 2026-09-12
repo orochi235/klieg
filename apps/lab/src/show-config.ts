@@ -39,6 +39,13 @@ export interface ShowConfig {
   lighting: LightingName;
   /** Undefined lets each look decide, which is what the default does. */
   bloom?: boolean;
+  /** Parallel projection, or the perspective one every link had before this. */
+  camera?: 'perspective' | 'ortho';
+  /** How much perspective a perspective lens shows, in degrees. Never how large the type is. */
+  fov?: number;
+  /** Where the viewer is, as a share of the window's own half-width and half-height. */
+  eyeX?: number;
+  eyeY?: number;
   /** Whether dragging turns the type. */
   pivot: boolean;
   /** Recolors the type, as `0xff2d6f`. */
@@ -97,6 +104,10 @@ const SHORT: Record<string, string> = {
   hold: 'hd',
   blend: 'bd',
   bloom: 'bm',
+  camera: 'cm',
+  fov: 'fv',
+  eyeX: 'ex',
+  eyeY: 'ey',
   tint: 'ti',
   pivot: 'pv',
   wrap: 'wr',
@@ -137,6 +148,10 @@ export function encodeConfig(config: Partial<ShowConfig>, opaque = false): strin
   put('blend', c.blendMs);
   if (c.tint !== undefined) put('tint', hex(c.tint));
   if (c.bloom !== undefined) put('bloom', c.bloom ? 'on' : 'off');
+  put('camera', c.camera);
+  if (c.fov !== undefined) put('fov', c.fov);
+  if (c.eyeX !== undefined) put('eyeX', c.eyeX);
+  if (c.eyeY !== undefined) put('eyeY', c.eyeY);
   if (!c.pivot) put('pivot', 'off');
   if (!c.wrap) put('wrap', 'off');
   if (!c.chrome) put('chrome', 'off');
@@ -237,6 +252,10 @@ function fromQuery(raw: string): Record<string, unknown> {
     cycleMs: num('cycle'),
     lighting: text('lighting'),
     bloom: flag('bloom'),
+    camera: text('camera'),
+    fov: num('fov'),
+    eyeX: num('eyeX'),
+    eyeY: num('eyeY'),
     pivot: flag('pivot'),
     tint: color('tint'),
     look: text('look'),
@@ -273,6 +292,10 @@ export function resolveConfig(input: unknown): ShowConfig {
       ? (raw.lighting as LightingName)
       : 'static',
     bloom: typeof raw.bloom === 'boolean' ? raw.bloom : undefined,
+    camera: pickName(raw.camera, CAMERAS),
+    fov: pickFov(raw.fov),
+    eyeX: pickEye(raw.eyeX),
+    eyeY: pickEye(raw.eyeY),
     pivot: raw.pivot !== false,
     tint: pickTint(raw.tint),
     look,
@@ -293,6 +316,23 @@ export function resolveConfig(input: unknown): ShowConfig {
 }
 
 const ALIGNS = ['start', 'center', 'end'] as const;
+const CAMERAS = ['perspective', 'ortho'] as const;
+/** Wider than a lens anyone would choose, and never zero: a flat frustum draws nothing. */
+const MIN_FOV = 5;
+const MAX_FOV = 90;
+
+/** Past a couple of windows the eye is beside the window rather than in front of it. */
+const MAX_EYE = 2;
+
+function pickEye(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return Math.min(Math.max(value, -MAX_EYE), MAX_EYE);
+}
+
+function pickFov(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return Math.min(Math.max(value, MIN_FOV), MAX_FOV);
+}
 /** The faces whose binaries ship, which is what a link may name. */
 const FACE_IDS = CATALOG.filter((face) => face.seeded).map((face) => face.id);
 const MAX_DEGREES = 180;

@@ -1,8 +1,168 @@
-# Handoff — klieg, 2026-09-10
+# Handoff — klieg, 2026-09-12
 
 **For:** the next session picking this up. **Answers:** what is in flight right now, what is on
 `main`, what each merged branch learned that its design doc does not carry, and what is worth doing
 next.
+
+## In flight, 2026-09-12
+
+Branch is `main`, **7 commits unpushed**, `tsc -b` green at `0039b86`. The full suites have still not
+been run against them; that is the pre-push gate and it is still owed.
+
+This checkout is shared, and has been by three sessions in one day — one committed `tracking` at
+12:13 and the tube gallery at 16:05, both out from under this document. **Stage explicit paths,
+never `git add -A`,** and check `git log` before believing anything here that calls itself
+uncommitted. Ask a peer before committing a file you did not modify: this document sat modified and
+unattributed for two hours, and was only safe to commit once both live sessions had disclaimed it.
+
+Six `spikes/_*.mjs` are untracked and deliberately so — the `_` prefix is this repo's throwaway
+convention. `_surface-shoot.mjs` belongs to a live peer session and shoots all 17 browser surfaces;
+leave it. `_counter-runs.mjs`, `_counter-box.mjs`, `_gallery-shoot.mjs`, `_mast-shoot.mjs` and
+`_mast-tmp.mjs` are orphans of finished sessions.
+
+### The tube gallery — landed as `0039b86`
+
+A dev lab at `packages/core/dev/tube-gallery/`, port 5185: 24 tube variants side by side in one GL
+context, each sweeping its own hue. Two commits under a merge — `c8cb6a5` moves `LabRenderer` and
+the camera/fitter view math out of tube-lab into `dev/shared`, `cec4226` is the lab itself.
+
+**It needed no core changes.** `LookSpec.effects` already carries an `EffectSpec[]`, and
+`Word.apply` runs the effect frame whenever one exists — so a cell is the shipped `tubing` look
+spread with its own overrides plus a `hue` piece, and the gallery drives `apply` per frame where
+tube-lab applies a rest pose once. `LabRenderer` owns no loop of its own; "one draw per change" was
+always tube-lab's `App.tsx`, never the renderer.
+
+**Two ways a cell silently stops cycling, both refused in code rather than written down.** A
+`tubeMaterial` override clears `readsRunColor` and `decorations/tube.ts`'s color write returns early
+on it — so no cell passes one, and that is why this lab has no ramp mode. A `mode: 'replace'`
+gradient makes the fragment shader write the ramp alone and drop `vRunColor` (`tube/tint.ts`, the
+`const tinted =` ternary), so `lookFor` throws on one. That second case is the "`hue` rendered as a
+control is equally dead" claim elsewhere in this document, now pinned to the line of GLSL that
+causes it — it is narrow, not general.
+
+**Unverified: whether the history bisects.** `c8cb6a5` was never typechecked standalone, because
+proving it means checking out an intermediate commit in a checkout another session is writing to.
+That the refactor is *inert* is evidenced: git recorded `render/lab.ts → shared/lab-renderer.ts` as
+a rename with one line changed, and `fit.test.ts` passes unchanged against the moved math.
+
+**Open, and Mike has not ruled on any of them:** `spread-none` renders identically to the default
+cell, since `spread` already defaults to 0 — a wasted panel; `luma 0.8` blows out to near-white; and
+the geometry-only cells read more alike than they are at 150px, separating only at a larger cell or
+a shorter variant list.
+
+**The thread this came out of is still open.** `hue` cannot be reached from a `/show/` link at all:
+`apps/lab/src/show-config.ts` has 25 wire keys and no effects key, and no shipped look carries
+effects. Anything meant to be a shareable cycling-tube link needs that built first.
+
+`spikes/_gallery-shoot.mjs` (untracked) drives playwright against 5185 and writes three frames 1.5s
+apart. Comparing the first against the last is how the sweep was shown to move rather than asserted.
+
+### `tracking` — landed as `ebb816b`
+
+Extra advance after each glyph, in em; negative tightens. Six files:
+`packages/core/src/text/runs.ts` (the `styledRunsOf` parameter), `render/word.ts` (`WordOptions.tracking`
+and both call sites), `src/index.ts` (`FireOptions.tracking`, passed at the hero `new Word`),
+`apps/lab/src/show-config.ts` (wire key `tk`, clamped −0.25…1), `apps/lab/src/show.ts`, and two new
+cases in `packages/core/test/text/layout.test.ts`.
+
+It rides the **runs**, not the layout opts, because `layoutRunsForKlieg`, `wrapRuns` and
+`candidateWidths` all receive the same runs array — so the wrap search gets it for free where
+threading it through `opts` would have meant touching five sites. weasel already implements the
+arithmetic as `letterSpacing` on a `StyledRun`; nothing in `layout.ts` changed.
+
+Green at `ebb816b`: that layout file 17/17, `apps/lab/test/show-config.test.ts` 35/35, both tsc
+projects exit 0. **The two new tests are watched evidence now, not reasoning** — delete
+`letterSpacing: tracking` from `runs.ts:30` and exactly those two go red (2 failed, 15 passed);
+put it back and the pair is green.
+
+Also untracked: `spikes/_mast-shoot.mjs`, the screenshot harness. It differs from the earlier
+`_mast-tmp.mjs` in two ways worth keeping — `lt` is no longer hard-coded (hash parsing takes the
+*first* duplicate key, so an appended override silently loses), and a `bg=` token injects a page
+background through `addStyleTag` so haze can be tried without editing the show page under a running
+dev server.
+
+### The masthead proof sheet
+
+A live artifact: `https://claude.ai/code/artifact/62596fe3-a5b4-4ac0-927c-b3760e924f5b`. Fifty
+cards; the grid opens on the thirteen in `POOL` — `{1, 2, 4, 5, 7, 17, 18, 25, 28, 31, 36, 38, 44}`,
+a literal in `template.html`.
+
+Rebuild is a regenerate, not surgery on the inline base64: `build.py <dir>` reads `combos.json` plus
+`NN.png` into `cards.json`, then `assemble.py <dir>` substitutes `__CARDS__` into `template.html`.
+A working copy — 50 PNGs and all four files — is staged in this session's scratchpad under `sheet/`.
+Cards are independent stills named by index, so dropping one is a delete plus a rename, never a
+re-render.
+
+**Six decisions block the rebuild** — the four below, then card 17 and card 18 after them.
+Candidates for all of them are rendered and on the slopboard wall, in the scratchpad under `out/`,
+`haze/` and `track/`:
+
+- Tracking for card 31 (press-start-2p). Rendered at 0, 0.05, 0.1, 0.2 — 0.1 is the recommendation;
+  at 0.2 the word gap stops reading as wider than the letter gaps.
+- Card 28's material, currently `oil`. Rendered as velvet, leather and gem.
+- Haze behind the type. Four treatments rendered. **It is the show page's own
+  `body` radial-gradient**, not `BackdropSpec` — so it cannot apply to only the oil cards without
+  new code, since one background serves every card.
+- Whether the metals (25, 36, 38) take `lt=sweep`. It clearly helps a still; on the live site it is
+  a highlight rotating forever on a 3.4s clock.
+
+Settled already: 25 → gold.
+
+**Card 17's `cm=ortho` is struck, and the reason recorded for it was wrong twice over.** What reads
+as a crooked card is the word sitting 58px right of the frame's center, and the lens is not what puts
+it there: ortho, `fv=8`, `fv=45` and the default all land within 3px of each other. Great-vibes'
+leading swash on the capital `M` holds layout space, so the framing centers a box that includes it,
+but under `tubing` the tube barely lights that swash — faint ink reaches 29px further left than
+bright ink. The same font under `piping` draws the swash solid and the offset falls to 11px;
+vegapunk and satisfy center to within 3px. No wire key is known to fix this, and `pv` is untested.
+
+The stroke doubling on that card is a second, unrelated defect: tubing's 0.08 backing is *drawn*,
+not merely non-occluding (see Traps), so it ghosts out from behind wherever the tube's `amplitude`
+wander leaves the letterform uncovered. Any `tubing` card on a script face has both.
+
+**Card 18 is no longer "drop".** Rendered as `oil`: plain `oil` is the look as designed, near-black
+with the iridescent film on the stroke edges, and dark enough to depend on the haze decision going
+its way. Keeping card 18's `ti=2df0ff` replaces oil's `color`, leaving the film nothing to work
+against, so it reads as teal enamel rather than oil. Undecided.
+
+**Vegapunk is a candidate face, uppercase only** — its lowercase misreads badly, an `h` coming out
+as an `M` and a `B` as a `D`.
+
+### Two corrections to this document
+
+**The composition lab's rounds two and three were built.** `ad916fa Merge branch
+'tenure-and-leftovers'` is in the history and `d065d66` is an ancestor of `main`; every round-two and
+round-three file exists and its 83 tests across 9 files pass. The round-two *plan* is 71 unchecked,
+0 checked — nobody ticked the boxes. Do not read that plan as a to-do list.
+
+**`show-config.ts` maps two fields to one wire key, and it loses data.** `exit: 'ex'` and
+`eyeX: 'ex'`, lines 102 and 111, so `ex=` means both. Unfixed, and **not** harmless — the earlier
+claim here that each rejects the other's values is withdrawn, having been reasoned rather than run.
+
+What happens, demonstrated rather than argued: `encodeConfig` uses `out.append`, and `put('exit')`
+at line 146 runs before `put('eyeX')` at 157, so a config carrying both writes `ex=` **twice**.
+Decoding reads `q.get('ex')`, which takes the first, so both fields read the exit name — `exit`
+survives, and `eyeX` becomes `Number('shatter')` → `NaN` → `undefined` at `pickEye`, which rejects
+non-finite. So **any share link naming both an exit and an eye offset silently drops the eye
+offset**, and the same link without an exit round-trips fine. That control is what pins the loss on
+the collision rather than on `eyeX`.
+
+`eyeY: 'ey'` is unaffected; `ex` is the only duplicated key in `SHORT`. The fix is a new key for one
+of the two, which changes the link format — existing links carrying that key would read differently,
+so it is a decision, not a typo.
+
+### The box
+
+**Recovered — the servers are up again.** That 5195 was dead under memory pressure (load 32.66, 711k
+pageouts) was true when written and is not now: it serves HTTP 200, and renders are possible. Load
+was 12.3 and falling at 18:40 on 2026-09-12. Check `uptime` before a suite, not before a render.
+
+The ports in use, most held by a peer session that will drop them when its user is done: **5181**
+tube-lab, **5182** kliegsminister, **5184** composition-lab, **5185** tube-gallery, **5195**
+apps/lab, **5196** repo root. Kill by port, never `pkill -f vite` — that takes out every session's.
+
+**`5199` is not klieg.** `~/src/astv` holds it with `--strictPort --host ::`. A peer shot two
+surfaces against it before noticing and got screenshots of a different application.
 
 ## In flight, 2026-09-10
 
@@ -73,10 +233,12 @@ Ruled out — do not re-propose:
   exist to avoid.
 - **Shipping baked meshes of the carved wells.** Superseded: only the sheet needs baking.
 
-**Built.** Branch `pave-compare`, worktree `.claude/worktrees/pave-compare`, cut from `pave-look`,
-unpushed; [the plan](plans/2026-09-10-pave-sheet.md) has the design. `pave` is a `'sheet'`
-decoration (`render/decorations/sheet.ts`, `render/wells/sheet.ts`); `tiara`, `bezel` and `carved`
-still carve wells.
+**Built, and landed on `main` — the branch and worktree are both gone.** `.claude/worktrees/` is
+empty and no `pave-compare` ref exists; the work is in the history (`51d3799`, `433f880`,
+`90e30d2`). [The plan](plans/2026-09-10-pave-sheet.md) has the design. `pave` is a `'sheet'`
+decoration (`render/decorations/sheet.ts`, `render/wells/sheet.ts`), registered at
+`decorations/registry.ts:127` and selected by a look at `looks.ts:362`; `tiara`, `bezel` and
+`carved` still carve wells.
 
 - One sheet per spec is cached on `WordCaches` across fires. It is never smaller than ordinary text
   needs (`ORDINARY`), so warm-up bakes the sheet nearly every word uses.
@@ -114,14 +276,12 @@ not landed: the session holding `main` will act only on Mike's word directly, no
 
 ## Branch state
 
-**`backdrop` — the backdrop spec, built, waiting on Mike's review.** Worktree
-`.claude/worktrees/backdrop`, cut from `56a6c86`: `fire({ backdrop })`, `stagger: { from: 'line' }`,
-and `MAX_BACKDROP_ROWS = 12` from `spikes/backdrop-frame-cost.mjs`; the spec on that branch is marked
-built. Before it goes anywhere, drop the early pavé commits it also carries — everything after
-`552432e` on that branch — which `pave-compare` supersedes. It predates `ice` on `main`: the session
-holding `main` asked that it not be rebased onto a moving `main` until `ice` settles, and owns the
-`ice` baselines and `looks.spec.ts`. The worktree guard means the merge has to be done by a session
-at the repo root.
+**`backdrop` is landed on `main`, and its branch and worktree are gone.** Everything this section
+used to describe as pending — the review, dropping the early pavé commits, the rebase ordering
+against `ice`, the worktree guard — is spent; do not go looking for that branch. `BackdropSpec`,
+`rowsBehind` and `MAX_BACKDROP_ROWS` all live in `packages/core/src/index.ts`, and
+`packages/core/test/index.test.ts` has a `describe('backdrop')` of **13 tests, all passing** at
+`0039b86`.
 
 **`face-and-side` and `wells-teardown` are both merged into `main`**: the sequin work, the bevel
 chamfer and contour union, flatness sampling, and the decoration registry that replaced `word.ts`'s
@@ -559,9 +719,10 @@ publishing, checking first that the tag matches `packages/core/package.json` and
 already on the registry. `npm view` reports a stale version straight after a publish — read
 `https://registry.npmjs.org/klieg` to see what actually landed.
 
-**Work sits on `tenure-and-leftovers`, 42 commits ahead of `origin/main` and unpushed** — the
-tenure reconciliation, kliegsminister's three leftovers, and the composition lab's third round, on
-top of a `main` that was already 37 ahead. `## Unreleased` holds the `chunk` part kind and `gem`'s
+**~~Work sits on `tenure-and-leftovers`, 42 commits ahead of `origin/main` and unpushed~~ — merged.**
+That branch is gone; `ad916fa` merged it and `d065d66` is an ancestor of `main`. The tenure
+reconciliation, kliegsminister's three leftovers and the composition lab's third round are all on
+`main`. `## Unreleased` holds the `chunk` part kind and `gem`'s
 tinted specular lobe, both stacked above that untagged 0.10.0. `npm run check` is green at **1561
 tests across 82 files** and `npx playwright test --list` reports **40 across 3 files**, measured at
 `d065d66`.
@@ -1540,7 +1701,16 @@ the pixel-count ratio cannot substitute for it. Playwright's default 0.2 hid blo
 
 **The visual suite cannot see `piping`'s cord.** It traces inset at `level: -0.015`, so the cord is
 inside the letter body in both framings and both its baselines are blind to the change that matters
-most for that look. Judge piping by `spikes/bend-acceptance.mjs` or a lab capture.
+most for that look. Judge piping by `spikes/bend-acceptance.mjs` or a lab capture. The suite shoots
+`JACKPOT!` and `MMMM` in the default face, so "inside the body" holds only for thick strokes: on a
+hairline script face the cord's 0.03 radius is more than a -0.015 inset can contain, and it surfaces
+past the silhouette as a detached cream speck. Great-vibes shows this beside the `l`.
+
+**`curveSegments` is a fixed count, not a tolerance.** `glyphs.ts:24` samples every shape at 10
+segments however long the curve is, so a long sweeping stroke facets visibly — there is a hard
+crease across great-vibes' capital `M` at masthead size. The adaptive `flatten()` at
+`FLATNESS = 1e-4` a few lines above is used for the analysis polygons only, not the rendered
+extrusion.
 
 **A bloomed look at DPR 2 can exhaust Playwright's default 5s screenshot budget** while the stability
 loop waits for two consecutive frames. `shoot()` passes `timeout: 20000`, and an occasional single

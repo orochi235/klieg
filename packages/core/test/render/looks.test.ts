@@ -242,7 +242,7 @@ describe('applyLook', () => {
 
     applyLook(material, 'neon');
 
-    // three's own default, not neon's 3.2: the value reaches the material through Word.
+    // three's own default, not neon's 1.9: the value reaches the material through Word.
     expect(material.emissiveIntensity).toBe(1);
     // Everything else still lands, so this is an ownership split and not a dropped write.
     expect(material.emissive.getHex()).not.toBe(0x000000);
@@ -342,7 +342,7 @@ describe('decorated looks', () => {
   it('keeps the lit tube at its own declared emissive intensity', () => {
     const decoration = specOf('tubing').decoration;
     if (decoration?.kind !== 'tube') throw new Error('tubing lost its tube decoration');
-    expect(frameOwnedBase(decoration.look).emissiveIntensity).toBe(3.4);
+    expect(frameOwnedBase(decoration.look).emissiveIntensity).toBe(2);
   });
 
   it('gives tubing dark glass its own look rather than a copy of the lit one', () => {
@@ -629,7 +629,7 @@ describe('tint', () => {
 
 describe('frameOwnedBase', () => {
   it("carries a look's own declared values", () => {
-    expect(frameOwnedBase('neon')).toEqual({ opacity: 1, emissiveIntensity: 3.2 });
+    expect(frameOwnedBase('neon')).toEqual({ opacity: 1, emissiveIntensity: 1.9 });
     expect(frameOwnedBase('tubing')).toEqual({ opacity: 0.08, emissiveIntensity: 1 });
   });
 

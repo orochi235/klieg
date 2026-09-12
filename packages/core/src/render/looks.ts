@@ -167,7 +167,7 @@ export const LOOKS: Record<LookName, LookSpec> = {
     roughness: 0.4,
     clearcoat: 0,
     emissive: 0xff2d95,
-    emissiveIntensity: 3.2,
+    emissiveIntensity: 1.9,
     bloom: true,
   },
   flake: {
@@ -231,7 +231,7 @@ export const LOOKS: Record<LookName, LookSpec> = {
       look: {
         color: 0x121a00,
         emissive: 0xa0ff00,
-        emissiveIntensity: 3.4,
+        emissiveIntensity: 2.0,
         clearcoat: 0,
         roughness: 0.35,
       },

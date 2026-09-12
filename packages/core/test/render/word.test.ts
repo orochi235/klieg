@@ -1555,7 +1555,7 @@ describe('frame-owned material properties', () => {
   it('carries a look emissiveIntensity onto the material without any frame having run', () => {
     const word = new Word('A', stubFont(), 'neon', ROOMY);
 
-    expect(materialOf(word).emissiveIntensity).toBe(3.2);
+    expect(materialOf(word).emissiveIntensity).toBe(1.9);
   });
 
   // Poisoned first: asserting the value after a frame without disturbing it passes whether or
@@ -1567,7 +1567,7 @@ describe('frame-owned material properties', () => {
 
     runOneFrame(word);
 
-    expect(material.emissiveIntensity).toBe(3.2);
+    expect(material.emissiveIntensity).toBe(1.9);
   });
 
   // REST.opacity is 1, so the bare base is the at-rest value rather than a guess at a pose.
@@ -1588,7 +1588,7 @@ describe('frame-owned material properties', () => {
   it('carries a decoration emissiveIntensity onto the lit tube material', () => {
     const word = new Word('A', stubFont(), 'tubing', ROOMY);
 
-    expect(litTubeMaterial(word).emissiveIntensity).toBe(3.4);
+    expect(litTubeMaterial(word).emissiveIntensity).toBe(2);
   });
 
   it('rewrites the lit tube emissiveIntensity every frame, not only at construction', () => {
@@ -1598,7 +1598,7 @@ describe('frame-owned material properties', () => {
 
     runOneFrame(word);
 
-    expect(material.emissiveIntensity).toBe(3.4);
+    expect(material.emissiveIntensity).toBe(2);
   });
 });
 
@@ -1961,7 +1961,7 @@ describe('effects', () => {
 
     word.apply(STILL, 0, NO_CTX);
 
-    expect(materialOf(word).emissiveIntensity).toBeCloseTo(1.6, 6);
+    expect(materialOf(word).emissiveIntensity).toBeCloseTo(1.9 * 0.5, 6);
   });
 
   const lamplight: EffectPiece = {
@@ -2591,7 +2591,7 @@ describe('a dimmed word', () => {
   }
 
   it('scales the body emissive base, which is what an effect gain then modulates', () => {
-    expect(materialOf(dimmed('neon', 0.25)).emissiveIntensity).toBeCloseTo(3.2 * 0.25, 10);
+    expect(materialOf(dimmed('neon', 0.25)).emissiveIntensity).toBeCloseTo(1.9 * 0.25, 10);
   });
 
   it('scales the body opacity base', () => {
@@ -2599,7 +2599,7 @@ describe('a dimmed word', () => {
   });
 
   it('reaches a decoration base too, not only the body', () => {
-    expect(litTube(dimmed('tubing', 0.5)).emissiveIntensity).toBeCloseTo(3.4 * 0.5, 10);
+    expect(litTube(dimmed('tubing', 0.5)).emissiveIntensity).toBeCloseTo(2 * 0.5, 10);
   });
 
   it('leaves an effect gain to compose on top, so a chase keeps its full contrast', () => {
@@ -2613,11 +2613,11 @@ describe('a dimmed word', () => {
       NO_CTX,
     );
 
-    expect(materialOf(word).emissiveIntensity).toBeCloseTo(3.2 * 0.25 * 0.5, 10);
+    expect(materialOf(word).emissiveIntensity).toBeCloseTo(1.9 * 0.25 * 0.5, 10);
   });
 
   it('leaves the base alone when no dim is asked for', () => {
-    expect(materialOf(new Word('A', stubFont(), 'neon', ROOMY)).emissiveIntensity).toBe(3.2);
+    expect(materialOf(new Word('A', stubFont(), 'neon', ROOMY)).emissiveIntensity).toBe(1.9);
   });
 });
 

@@ -79,6 +79,7 @@ export {
 } from './effects/lamp.js';
 export { type ChaseSpec, EFFECTS, type FlickerSpec, type HueSpec } from './effects/pieces.js';
 export { type RovingSpec, roving } from './effects/roving.js';
+export { type TurnsSpec, turns } from './effects/turns.js';
 export type {
   EffectName,
   EffectPiece,

@@ -3,6 +3,16 @@
 **For:** whoever works on `effects/` next. **Answers:** what `cycle` is, why the handover defers
 rather than cuts, and what `deadline` actually trades away.
 
+**Built, as `turns` — two departures from what is written below.** The name: `cycle` is already a
+published export, the looping idle from `motion/build.ts` that the README teaches at `cycle(duration,
+spec)`, so the effect could not have it. And `stagger` is the piece's own option rather than the
+`EffectSpec`'s: the frame planner spends `EffectSpec.stagger` before a piece is ever called
+(`effects/frame.ts:83`), and `stagger()` ramps and clamps `t` rather than offsetting it, so the
+phase this design asks for is not reachable from inside a piece. Set `stagger` on the piece and
+leave the spec's own unset, or the two compound. The schedule below is otherwise as built, and the
+walk is rebuilt from `t` every frame the way `roving`'s is, a piece never being handed absolute
+time.
+
 A look's `effects` list runs every piece at once, layered. `cycle` runs them one at a time instead:
 a sign flickers for a few seconds, then chases, then shifts hue, forever. It is an ordinary
 `EffectPiece`, so the compositor does not change and it composes with everything already written.

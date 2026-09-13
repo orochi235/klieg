@@ -24,6 +24,7 @@ describe('documented surface', () => {
       'still',
       'track',
       'lamp',
+      'turns',
       'fixed',
       'orbit',
       'along',

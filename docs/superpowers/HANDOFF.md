@@ -1634,6 +1634,15 @@ to move into `oil`'s own film.
 
 ## Traps
 
+**`EffectSpec.stagger` is spent before a piece is ever called.** `effects/frame.ts:83` applies it and
+hands `at()` the result, so a piece sees neither its own stagger nor absolute time. Worse than a
+missing value: `stagger()` *ramps and clamps* — `(t - start) / span`, `motion/types.ts:113` — rather
+than offsetting, so a late part sits pinned at 0 or 1 for part of the pass instead of running the
+same curve later. A piece needing a per-part phase has to carry its own option, as `turns` does, and
+setting both compounds them. This is why the `cycle` design's `phase = staggerFraction(part) *
+stagger * every` is unreachable from inside a piece, and why that piece shipped as `turns` —
+`motion/build.ts` already exports `cycle`.
+
 **Stones set in a `Word` body render dark.** `Word` makes every body material `transparent` so
 letters can fade, and three builds what a transmissive material refracts from opaque objects only, so
 a stone in front of a transparent body sees the background. The carved wells — `tiara`, `bezel`, and

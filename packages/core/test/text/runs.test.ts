@@ -8,6 +8,14 @@ describe('styledRunsOf', () => {
     ]);
   });
 
+  it('rides tracking on every run, so the wrap search sees it', () => {
+    expect(styledRunsOf('HI', 'display', 0.05)[0]?.letterSpacing).toBeCloseTo(0.05);
+  });
+
+  it('omits letter spacing at zero, leaving the node style to govern', () => {
+    expect(styledRunsOf('HI', 'display', 0)[0]).not.toHaveProperty('letterSpacing');
+  });
+
   it('gives each run the fire-wide font unless it names its own', () => {
     const runs: TextRun[] = [{ text: 'A' }, { text: 'B', font: 'body' }];
     expect(styledRunsOf(runs, 'display').map((r) => r.fontFamily)).toEqual(['display', 'body']);

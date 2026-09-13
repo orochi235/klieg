@@ -27,7 +27,9 @@ export function styledRunsOf(
       text: run.text,
       fontFamily: run.font ?? defaultFont,
       fontSize: (run.size ?? 1) * EM,
-      letterSpacing: tracking,
+      // Omitted at 0 rather than written: weasel falls an absent field back to the node's own text
+      // style, where an explicit 0 would override it.
+      ...(tracking ? { letterSpacing: tracking } : {}),
     }));
 }
 

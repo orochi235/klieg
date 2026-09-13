@@ -1,5 +1,42 @@
 # Changelog
 
+## Unreleased
+
+### One effect can hand over to the next
+
+`turns({ pieces, every, deadline, stagger })` runs a list of effect pieces one at a time instead of
+layering them, so a sign flickers for a few seconds, then chases, then shifts hue, and round again.
+It is an ordinary effect piece, so the compositor is unchanged and it composes with everything
+already written.
+
+The handover waits for rest: a part swaps at the first moment the outgoing piece is contributing
+nothing, which is what lets the change need no crossfade — at rest there is nothing on screen to cut
+away from. `deadline` bounds that wait, and exists for the pieces that never rest, `hue` being always
+mid-shift and otherwise holding its part for good. It is clamped below one step, past which a part
+can fall two steps behind and skip a piece outright. `stagger` spreads the handover across the word
+so the change sweeps rather than snapping the whole sign at once.
+
+### The lens is yours to set
+
+`createKlieg({ camera })` chooses how the word is seen. `{ projection: 'ortho' }` draws it in
+parallel projection, so every letter's extrusion runs parallel rather than converging and a sign
+reads as an elevation instead of a photograph. On a perspective lens, `fov` in degrees says how much
+perspective a word shows, and `eye: { x, y }` moves the viewer off center — as a share of the
+window's own half-width and half-height, so `{ x: 1 }` puts the eye over the window's right edge and
+the letters turn their sides toward it.
+
+None of it changes how large the type is drawn. The word's plane stays the window, so the type keeps
+its size and position there and only what stands in front of or behind it slides, which is what
+makes an off-center eye turn a letter's extrusion rather than distort the letter. `fov` and `eye`
+are perspective only, parallel projection having no viewpoint to move, and `eye` is clamped to ±2 —
+past that the window falls behind the viewer and the frustum turns inside out.
+
+### A face set too tight can be opened up
+
+`fire(text, { tracking })` adds extra advance after each glyph, in em; a negative value tightens
+instead. Display sizes are where a face's own spacing shows, and a pixel face especially tends to
+set too tight at them.
+
 ## 0.11.0
 
 ### An anchored sign's glow is no longer cut at its own edge

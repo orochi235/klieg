@@ -288,6 +288,23 @@ shows a sliver of the inner and reads as a glitch.
 `flicker` takes its own `spell` and `calm`, which is the better tool when flicker is all you want;
 this is for the pieces that have no such pair, `roving` and `hue` among them.
 
+**`turns({ pieces, every, deadline, stagger })`** — runs a list of pieces one at a time instead of
+layering them, so a sign flickers for a few seconds, then chases, then shifts hue, and round again.
+`pieces` takes names or built pieces, `every` is how long each one holds, and one pass is a step per
+piece. A factory rather than a name, for the reason `roving` is one: a name cannot carry the pieces
+it runs.
+
+A part swaps at the first moment the outgoing piece is at rest, which is what lets a handover need
+no crossfade — at rest there is nothing on screen to cut away from. `deadline` is how long an overdue
+part waits before it is made to swap anyway, and it is there for the pieces that never rest: `hue` is
+always mid-shift, and without it would hold its part for good. It is clamped below one step, because
+past that a part can fall two steps behind and skip a piece outright — that letter never chases.
+
+`stagger` spreads the handover across the word, as a share of one step, so the change sweeps instead
+of snapping the whole sign at once; 0 switches everything together. It is the piece's own, not the
+`stagger` on the effect spec — the frame planner spends that one before the piece is called, so
+setting both compounds them.
+
 **`lamp({ source, radius, strength, color, duration })`** — puts light on the parts near a position
 rather than changing what they are made of. `radius` is its reach in em of layout space, `strength`
 the light at the centre falling to nothing at that edge, and `color` the lamp's own, multiplied
@@ -518,6 +535,7 @@ const bounce = transition(700, { from: { scale: 0 }, ease: easeElasticOut });
 | `idleTimeoutMs` | `8000` | idle milliseconds before the GL context is torn down; the next fire brings it back |
 | `warmLook` | `'gold'` | the look whose shader programs are linked on an idle callback after construction, so the first fire does not pay for them. The link is the driver's and lands per look: a page that only fires `neon` should say so, or the warm buys it nothing |
 | `framing` | `{ width: 0.62, height: 0.3 }` | share of the box the type may fill, per axis — the viewport, or the anchor under an element `placement`; raise it on a page that is nothing but the type. `align: 'start' \| 'center' \| 'end'` places the word in the box at that size, in reading order: an anchored word meets the page's own text edge by default, an overlay stays centred |
+| `camera` | perspective, `fov` 38 | the lens. `{ projection: 'ortho' }` draws the type in parallel projection, so every letter's extrusion runs parallel instead of converging; on a perspective lens `fov` in degrees sets how much perspective a word shows, and `eye: { x, y }` moves the viewer off center, as a share of the window's own half-width and half-height — `{ x: 1 }` puts the eye over the right edge, and the letters turn their sides toward it. `fov` and `eye` are perspective only, parallel projection having no viewpoint to move, and `eye` is clamped to ±2, past which the window would fall behind the viewer. None of the three changes how large the type is drawn |
 | `bleed` | `0.5` | how far the canvas reaches past an element `placement`, as a share of the tallest the type may be, so a glow is not cut at the edge the type is aligned against. Never less than the blur's own reach, so a small word in a large anchor does not pay for one; `0` pins the canvas to the anchor. Ignored by a fullscreen overlay, which has nothing outside the viewport to reach into |
 | `placement` | `{ kind: 'fullscreen' }` | fullscreen overlay, or `{ kind: 'element', el }` to anchor the type inside one element; fixed for the instance's lifetime |
 
@@ -559,6 +577,7 @@ you called it, as `fire()` does.
 | `bloom` | look's choice | adds a glow pass, at the cost of three render targets while the effect runs |
 | `wrap` | `false` | break long text into the arrangement that renders largest |
 | `lineAlign` | `'start'` | how the lines of a multi-line block range against each other, in reading order — `'start' \| 'center' \| 'end'`. Distinct from `framing.align`, which places the whole block in the box |
+| `tracking` | none | extra advance after each glyph, in em; a negative value tightens instead. A face whose own advances are too tight at display sizes — a pixel face especially — wants a little here |
 | `modal` | `false` | while a `'click'` hold waits, let the overlay swallow the dismissing press |
 | `onPhase` | none | called as the effect crosses each boundary — `{ phase: 'active' }` when the word has landed, `{ phase: 'exit' }` when the hold is over, `{ phase: 'stage', index }` as each stage settles |
 | `dismiss` | `'window'` | who dismisses a `'click'` hold; `'host'` attaches no window listeners and leaves `advance()` as the only way out |

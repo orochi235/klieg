@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { along, fixed, fromPointer, lamp, orbit } from '../../src/effects/lamp.js';
+import { lamp } from '../../src/effects/lamp.js';
+import { along, fixed, fromPointer, orbit } from '../../src/effects/source.js';
 import type { PartInfo } from '../../src/effects/types.js';
 import { AT, NO_CTX } from './ctx.js';
 

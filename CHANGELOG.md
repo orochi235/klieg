@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### An effect can hinge on where the cursor is
+
+`hinge(signal, piece)` makes an effect piece a function of a signal as well as of time, and `near()`
+is the first signal: how close a part is to the cursor, on the same falloff curve and in the same
+layout space a `lamp` already lights with. `hinge(near(), (k) => flicker({ unrest: 0.02 + k * 0.8 }))`
+is a sign whose tubes fail harder the nearer you get to them. `near` takes the same pluggable
+`LightSource` a lamp does, so `near({ source: orbit() })` is a signal that sweeps the word on a clock
+with no cursor involved at all.
+
+It takes either a factory or a piece, and that choice is what decides how far the signal reaches. A
+**factory** is rebuilt once per `stops` level at construction — eight by default — and the nearest
+level answers each frame. That is the only way to reach a knob the piece settles internally:
+`flicker`'s `unrest` is a probability tested before anything is emitted, so a wrapper downstream sees
+rest and has nothing to scale. A **piece** instead runs unchanged while `blend` scales what it
+emitted, continuously and with no quantization, across the channels that have a rest to fade toward —
+`gain`, `scale`, `position`, `rotation`, `crawl`, `dark`, and a lamp's `amount`. `color` is a
+replacement rather than a contribution, so it passes through and goes only when the signal reaches
+zero and the whole contribution goes with it.
+
+The two modes exist because a piece's `duration` is read once per effect rather than once per part,
+so a piece rebuilt continuously would have no coherent pass. Stops whose durations disagree throw at
+construction, rather than each quietly running on its own clock under one published pass.
+
 ### One effect can hand over to the next
 
 `turns({ pieces, every, deadline, stagger })` runs a list of effect pieces one at a time instead of

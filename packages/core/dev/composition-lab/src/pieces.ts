@@ -1,5 +1,6 @@
-import { fixed, lamp, orbit } from '@core/effects/lamp.js';
+import { lamp } from '@core/effects/lamp.js';
 import { chase, flicker, hue } from '@core/effects/pieces.js';
+import { fixed, orbit } from '@core/effects/source.js';
 import type { EffectPiece } from '@core/effects/types.js';
 import { type Look, specOf } from '@core/render/looks.js';
 import { compileDraft } from './draft.js';

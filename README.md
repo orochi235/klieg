@@ -35,7 +35,7 @@ await bk.fire('JACKPOT!', { enter: 'slam', active: 'float', exit: 'shatter', loo
 bk.destroy();
 ```
 
-`fire()` resolves once the effect has left the screen, whether it played out or was cancelled.
+`fire()` resolves once the effect has left the screen, whether it played out or was canceled.
 It rejects if the font cannot be fetched or parsed — the next `fire()` retries the load rather
 than failing forever. A `font` naming nothing in `fonts` throws where you call it, listing what is
 registered: that is a typo in your own code, not a runtime condition to handle. `destroy()` cancels everything in flight and releases the GL context once
@@ -164,8 +164,8 @@ await bk.fire('YOU WIN', { look: { metalness: 1, roughness: 0.3, color: 0x00e5ff
 
 Every field is a number, so nothing about three appears in your types. Out-of-range values clamp
 rather than throw. `tintTarget` overrides which channel `tint` writes to when the default
-routing guesses wrong, and `tintSpecular: true` colours the specular highlight with the look's hue
-instead of leaving it white — worth setting on a transmissive look, whose colour would otherwise
+routing guesses wrong, and `tintSpecular: true` colors the specular highlight with the look's hue
+instead of leaving it white — worth setting on a transmissive look, whose color would otherwise
 come through the glass from a scene klieg does not render.
 
 ### gradient
@@ -233,7 +233,7 @@ fire('JACKPOT!', {
   effects: [
     // One run of the whole sign, picked by seed, stutters like failing glass.
     { piece: 'flicker', target: { kind: 'run', by: 'index', count: 1 } },
-    // Every run cycles colour together.
+    // Every run cycles color together.
     { piece: 'hue', target: { kind: 'run', by: 'index', amount: 1 } },
   ],
 });
@@ -247,7 +247,7 @@ fire('JACKPOT!', {
 | `seed` | fixes the selection, so a pinned frame is reproducible |
 
 The pool is word-wide, so `{ count: 1 }` picks one bad tube in the sign rather than one in every
-letter. A `body` part only reads brightness; colour reaches `run` parts only. A `chunk` part is a
+letter. A `body` part only reads brightness; color reaches `run` parts only. A `chunk` part is a
 letter's whole scattered field — `sequin`'s sequins — which is one instanced draw sharing one
 material, so it moves and lights per letter rather than per scatterer. Target it rather than
 `body` on a scattered look: the body sits near-black underneath and barely shows a light.
@@ -259,7 +259,7 @@ between them, so a tube can stutter for four seconds and sit quiet for fifteen. 
 and both snap to whole stutter steps; the pass then becomes the nearest whole number of cycles, which
 may be longer than the `duration` asked for or shorter.
 
-**`hue`** — a colour sweep across the sign. `EFFECTS.hue({ from, span, spread, luminance, duration })`,
+**`hue`** — a color sweep across the sign. `EFFECTS.hue({ from, span, spread, luminance, duration })`,
 in turns: `span` of 1 is the whole wheel and the only value that meets itself at the loop seam, and
 `spread` offsets the hue along the word to make a travelling gradient rather than one synchronized
 sign. The sweep holds Rec.709 luminance rather than saturation, so blues and violets come out paler
@@ -307,7 +307,7 @@ setting both compounds them.
 
 **`lamp({ source, radius, strength, color, duration })`** — puts light on the parts near a position
 rather than changing what they are made of. `radius` is its reach in em of layout space, `strength`
-the light at the centre falling to nothing at that edge, and `color` the lamp's own, multiplied
+the light at the center falling to nothing at that edge, and `color` the lamp's own, multiplied
 against the look's hue. `source` says where the light is on each pass: `fromPointer()` is the
 default and follows the cursor — the canvas's whole extent maps onto the word's ink, so the
 cursor's whole travel is compressed onto the letters: the light runs ahead of the cursor at one end
@@ -319,13 +319,35 @@ to `fixed` or `fromPointer`, which ignore it. A pointer source stays dark until 
 been inside the canvas, so an untouched page gets no lamp rather than one parked at the origin.
 
 **A lamp does not follow a `stages` regroup.** It lights by position, and the part pool is fixed at
-construction, so after the letters re-lay the light still lands where they used to be — on a centred
+construction, so after the letters re-lay the light still lands where they used to be — on a centered
 sign that has dropped letters, a cursor over the type can light nothing at all. Combine the two and
 the lamp is a silent no-op, not a smaller effect.
 
-Effects layer. Brightness multiplies and colour is replaced, so `flicker` and `hue` compose without
-either knowing about the other — but two pieces both writing colour fight, and the last one wins.
-A hue piece writes colour every frame, which overrides `tint`: `tubing` tints its decoration, so a
+**`hinge(signal, make, { stops })`** and **`hinge(signal, piece, { blend })`** — make a piece a
+function of a signal as well as of time. `near({ radius, source })` is the first signal: how close a
+part is to the cursor, measured to its ink on the same curve a lamp lights with, 1 on the source and
+0 at `radius`. So `hinge(near(), (k) => flicker({ unrest: 0.02 + k * 0.8 }))` is a sign whose tubes
+fail harder the nearer you get to them. `near` takes the same `LightSource` a lamp does, so
+`near({ source: orbit() })` sweeps the word on a clock with no cursor involved at all.
+
+Which of the two forms you hand it decides how far the signal reaches. A **factory** is rebuilt once
+per `stops` level at construction, eight by default, and the nearest level answers each frame — the
+only way to reach a knob the piece settles internally, `flicker`'s `unrest` being a probability
+tested before anything is emitted. A **piece** runs unchanged while `blend` scales what it emitted,
+continuously and with no quantization, over the channels that have a rest to fade toward: `gain`,
+`scale`, `position`, `rotation`, `crawl`, `dark` and a lamp's `amount`. `color` is a replacement
+rather than a contribution, so it passes through, and goes only at zero when the whole contribution
+goes with it.
+
+**Stops that disagree on duration are refused at construction.** A pass is read once per effect
+rather than once per part, so the levels cannot each run on their own clock under one published
+pass — vary a knob that leaves the pass alone, `unrest` or `depth` rather than `spell` or `calm`.
+`near` also inherits a lamp's blind spot: it measures against the layout the word was built with, so
+it does not follow a `stages` regroup either.
+
+Effects layer. Brightness multiplies and color is replaced, so `flicker` and `hue` compose without
+either knowing about the other — but two pieces both writing color fight, and the last one wins.
+A hue piece writes color every frame, which overrides `tint`: `tubing` tints its decoration, so a
 hue sweep and a tint on that look are the same fight, and the sweep wins.
 
 ## Keeping an anchored sign alive
@@ -455,7 +477,7 @@ yours — spread the options and override whatever you like.
 | field | default | |
 |---|---|---|
 | `caps` | cyan | how the capitals are styled, in the block and after they gather |
-| `body` | the look's own colour | how everything else is styled while it is still up |
+| `body` | the look's own color | how everything else is styled while it is still up |
 | `read` | `'click'` | the pause after the block renders, before the lower case leaves |
 | `settle` | `0` | an extra pause after the lower case has gone, before the capitals gather |
 | `hold` | `'click'` | how long the gathered acronym stays |
@@ -463,7 +485,7 @@ yours — spread the options and override whatever you like.
 | `active` | `'none'` | what the gathered acronym does while it holds |
 | `tween` | none | timing for the gather |
 
-`caps` and `body` are objects rather than colours — today each carries a `tint`, and taking an
+`caps` and `body` are objects rather than colors — today each carries a `tint`, and taking an
 object means a richer per-letter style can be added without changing the signature.
 
 A capital is a character whose lower case differs from itself, so digits and punctuation are
@@ -534,7 +556,7 @@ const bounce = transition(700, { from: { scale: 0 }, ease: easeElasticOut });
 | `policy` | `'queue'` | what a fire does when one is already running (below) |
 | `idleTimeoutMs` | `8000` | idle milliseconds before the GL context is torn down; the next fire brings it back |
 | `warmLook` | `'gold'` | the look whose shader programs are linked on an idle callback after construction, so the first fire does not pay for them. The link is the driver's and lands per look: a page that only fires `neon` should say so, or the warm buys it nothing |
-| `framing` | `{ width: 0.62, height: 0.3 }` | share of the box the type may fill, per axis — the viewport, or the anchor under an element `placement`; raise it on a page that is nothing but the type. `align: 'start' \| 'center' \| 'end'` places the word in the box at that size, in reading order: an anchored word meets the page's own text edge by default, an overlay stays centred |
+| `framing` | `{ width: 0.62, height: 0.3 }` | share of the box the type may fill, per axis — the viewport, or the anchor under an element `placement`; raise it on a page that is nothing but the type. `align: 'start' \| 'center' \| 'end'` places the word in the box at that size, in reading order: an anchored word meets the page's own text edge by default, an overlay stays centered |
 | `camera` | perspective, `fov` 38 | the lens. `{ projection: 'ortho' }` draws the type in parallel projection, so every letter's extrusion runs parallel instead of converging; on a perspective lens `fov` in degrees sets how much perspective a word shows, and `eye: { x, y }` moves the viewer off center, as a share of the window's own half-width and half-height — `{ x: 1 }` puts the eye over the right edge, and the letters turn their sides toward it. `fov` and `eye` are perspective only, parallel projection having no viewpoint to move, and `eye` is clamped to ±2, past which the window would fall behind the viewer. None of the three changes how large the type is drawn |
 | `bleed` | `0.5` | how far the canvas reaches past an element `placement`, as a share of the tallest the type may be, so a glow is not cut at the edge the type is aligned against. Never less than the blur's own reach, so a small word in a large anchor does not pay for one; `0` pins the canvas to the anchor. Ignored by a fullscreen overlay, which has nothing outside the viewport to reach into |
 | `placement` | `{ kind: 'fullscreen' }` | fullscreen overlay, or `{ kind: 'element', el }` to anchor the type inside one element; fixed for the instance's lifetime |

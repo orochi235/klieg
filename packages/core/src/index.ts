@@ -65,20 +65,21 @@ export {
   type SpringParams,
   spring,
 } from './easing.js';
+export { type Blend, type BlendSpec, fade, hinge, type StopsSpec } from './effects/hinge.js';
 export { type IntermittentSpec, intermittent } from './effects/intermittent.js';
+export { type LampSpec, lamp } from './effects/lamp.js';
+export { type ChaseSpec, EFFECTS, type FlickerSpec, type HueSpec } from './effects/pieces.js';
+export { type RovingSpec, roving } from './effects/roving.js';
+export { type NearSpec, near, type Signal } from './effects/signal.js';
 export {
   along,
   fixed,
   fromPointer,
-  type LampSpec,
   type LightPose,
   type LightSource,
-  lamp,
   type OrbitSpec,
   orbit,
-} from './effects/lamp.js';
-export { type ChaseSpec, EFFECTS, type FlickerSpec, type HueSpec } from './effects/pieces.js';
-export { type RovingSpec, roving } from './effects/roving.js';
+} from './effects/source.js';
 export { type TurnsSpec, turns } from './effects/turns.js';
 export type {
   EffectName,

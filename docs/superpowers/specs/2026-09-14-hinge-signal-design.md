@@ -4,8 +4,10 @@
 something outside the clock — the cursor, to begin with — and why that takes two modes rather than
 one.
 
-**Status: unbuilt.** Nothing below is implemented. Written 2026-09-14 against `main` at klieg
-0.11.0.
+**Status: built**, in the session that designed it — `effects/source.ts`, `effects/signal.ts` and
+`effects/hinge.ts`, against `main` at klieg 0.11.0 on 2026-09-14. One departure from what is
+written below: `inkCenter` was factored out alongside `falloff` so `near` and `lamp` measure
+through the same function rather than two copies of the same two lines.
 
 ## What this is
 

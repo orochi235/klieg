@@ -6,22 +6,21 @@ next.
 
 ## In flight, 2026-09-15
 
-**Next:** two things wait on Mike. **Publishing 0.12.0** — the bump is committed on `main`
-(`e35ac76`) and unpushed; pushing it with a `v0.12.0` tag publishes to npm through `release.yml`, and
-the masthead deploy waits on that (magicsmoke has already published). **Merging `tube-power`**, the
-power states and spark kicks, after 0.12.0 ships, so they land under a later version.
+**Next:** publishing 0.12.0 waits on Mike. The bump is committed on `main` (`e35ac76`) and
+unpushed; pushing it with a `v0.12.0` tag publishes to npm through `release.yml`, and the masthead
+deploy waits on that (magicsmoke has already published). `main` also carries the tube power states
+(`e3674e3`) on top of the bump, so **the tag goes on `e35ac76`, never on `main`'s tip**, or the
+power states ship as 0.12.0.
 
 ### Branches
 
 Run `git log --oneline main..<branch>` for what a branch carries; don't trust a count written here.
 
-- **`main`**, pushed through `4e019d9`: `hinge`, `near`, `dwell` with `FrameCtx.now`, `attach`,
-  `pointOn`. `e35ac76` (bump to 0.12.0) is local only.
-- **`tube-power`**, this checkout, cut from `e35ac76`. `power()` with `short`/`up`/`start`/`trip`,
-  the `strike`/`thinning`/`glow` warm-ups, `level()`, `kicks()`, `peak()`, `flicker({ drop })` and
-  `pointOn(...).inWord`. Spec:
-  [2026-09-15-tube-power-design.md](specs/2026-09-15-tube-power-design.md). Its CHANGELOG entry sits
-  under a new Unreleased heading above 0.12.0.
+- **`main`**, this checkout, pushed through `4e019d9`: `hinge`, `near`, `dwell` with `FrameCtx.now`,
+  `attach`, `pointOn`. Local only: `e35ac76` (bump to 0.12.0) and `e3674e3`, the tube power states —
+  `power()` with `short`/`up`/`start`/`trip`, the `strike`/`thinning`/`glow` warm-ups, `level()`,
+  `kicks()`, `peak()`, `flicker({ drop })` and `pointOn(...).inWord`. Spec:
+  [2026-09-15-tube-power-design.md](specs/2026-09-15-tube-power-design.md).
 - **`counters`**, worktree `.claude/worktrees/counters`, cut from `main` before the merges, parked.
   `TubeSpec.contours`, spec `specs/2026-09-14-counters-design.md` on that branch only. **Owed:** the
   Playwright visual run. `look-tubing` and `offaxis-tubing` will move, because Archivo Black's `A`
@@ -31,7 +30,7 @@ Run `git log --oneline main..<branch>` for what a branch carries; don't trust a 
 
 ### Masthead wiring owed (`sparky-b1`, `~/src/portfolio`)
 
-The portfolio's `mastheadSparks.ts` and `mastheadLook.ts` are not wired to `tube-power` yet: a
+The portfolio's `mastheadSparks.ts` and `mastheadLook.ts` are not wired to the tube power states yet: a
 `level()` fed from magicsmoke's hover value driving `power({ trip: { on, at: 1, holdMs: 3000 } })`;
 `kicks()` fed from `onDischarge` at the last hit's `inWord`; `peak(dwell(...), sparks)` with a
 `drop` in the proximity flicker; and the sign's own effects hinged on `tube.warm`.
@@ -44,7 +43,7 @@ The portfolio's `mastheadSparks.ts` and `mastheadLook.ts` are not wired to `tube
 - **Sparks are clipped to the masthead's canvas box.** Whether to raise `bleed` or give layers a
   way past the anchor is Mike's call, asked and unanswered.
 - **Between fires there is no bloom**, by design: bloom belongs to a fire.
-- **No full suite on `tube-power`.** The touched test files, `tsc -b` and a mutation pass ran.
+- **No full suite since the tube power states merged.** The touched test files, `tsc -b` and a mutation pass ran.
   `main` passed the full suite, the build and the dist tests before its push.
 
 ### Decided in conversation, and in no file

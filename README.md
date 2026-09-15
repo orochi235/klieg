@@ -413,6 +413,41 @@ it hangs in: an anchor under an `overflow: hidden` ancestor has the room clipped
 wants it as padding instead, and a page that scrolls to its own right edge can gain a few pixels of
 overflow. `bleed: 0` pins the canvas back to the anchor.
 
+## Drawing in the type's scene
+
+`attach(layer)` puts a three.js object of your own in the scene the type is drawn in — sparks off a
+tube, dust off a slam — so it shares the type's camera and depth buffer and, during a fire with
+bloom, its glow. `pointOn(clientX, clientY)` finds where on the letters a client position lands.
+
+```ts
+const detach = bk.attach({
+  object: sparks, // any THREE.Object3D
+  update: (dt) => sparks.step(dt), // dt in seconds
+  get live() {
+    return sparks.count > 0;
+  },
+});
+
+addEventListener('pointerdown', (e) => {
+  const hit = bk.pointOn(e.clientX, e.clientY);
+  // A spark six CSS pixels across, on the letter under the cursor.
+  if (hit) sparks.emit(hit, 6 * hit.unitsPerPx);
+});
+```
+
+The object joins the scene before its first `update`, which then runs once a frame for as long as the
+layer is attached, live or not — so something the layer starts on its own is drawn from the next
+frame, at the cost of a frame callback until you detach it. While `live` is true, frames keep coming
+between fires and after the fire that set it off, and the WebGL context is held; once it goes quiet
+with no fire running, one frame clears it and the stage idles as usual. Detaching takes the object
+out and leaves disposing it to you. **Between fires there is no bloom**: bloom belongs to a fire, so
+sparks thrown after the word has gone draw without their glow.
+
+`pointOn` hits the geometry as drawn, so it follows a `transform`, the letters' pose and a moved
+`eye`, and passes through a letter that has faded out. It answers for the fired word only, never a
+backdrop, and returns null off the letters. `unitsPerPx` is how many world units one CSS pixel spans
+at the depth of the hit, for sizing whatever you put there in pixels.
+
 ## Stages
 
 An effect can exit part of its word and lay the survivors out again as a word of their own — a

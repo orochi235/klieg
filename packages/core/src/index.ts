@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { type Clock, RafClock } from './clock.js';
 import type { Easing } from './easing.js';
 import { EFFECTS } from './effects/pieces.js';
@@ -452,6 +453,28 @@ export interface FireHandle extends Promise<void> {
   advance(): void;
 }
 
+/**
+ * Something drawn in klieg's own scene beside the type — sparks, smoke, anything a three.js object
+ * can carry. Structural, so klieg depends on nothing that builds one.
+ */
+export interface SceneLayer {
+  /** Joins the scene on `attach`, before the first `update`. */
+  readonly object: THREE.Object3D;
+  /** Advances the layer by `dt` seconds. Called once a frame for as long as it is attached. */
+  update(dt: number): void;
+  /** Whether it has anything left on screen. While any attached layer is live, frames keep coming. */
+  readonly live: boolean;
+}
+
+/** A point on the drawn type in world units, and how large a CSS pixel is at its depth. */
+export interface TypePoint {
+  x: number;
+  y: number;
+  z: number;
+  /** World units one CSS pixel spans at `z`, for sizing in pixels whatever is placed there. */
+  unitsPerPx: number;
+}
+
 export interface Klieg {
   readonly supported: boolean;
   /** Resolves when the effect leaves the screen, whether it played out or was cancelled. */
@@ -478,6 +501,25 @@ export interface Klieg {
    * same failure the next fire would hit.
    */
   preheat(chars: string, font?: string): Promise<void>;
+  /**
+   * Adds a layer's object to the scene the type is drawn in, so it shares the type's camera, depth
+   * buffer and, during a fire that asks for it, bloom. Returns a function that takes it out again;
+   * disposing the layer stays the caller's job.
+   *
+   * While the layer is `live`, frames keep coming — between fires, and after the fire that set it
+   * off has ended — and the WebGL context is held. Once it goes quiet with no fire running, one
+   * frame clears it and the stage idles as usual. Between fires the scene is drawn without bloom,
+   * which belongs to a fire. `update` runs every frame while attached, live or not, so a layer that
+   * starts something on its own is drawn from the next frame; that costs a frame callback for as
+   * long as it stays attached. A no-op where WebGL is unsupported and after `destroy()`.
+   */
+  attach(layer: SceneLayer): () => void;
+  /**
+   * The point on the fired word drawn under a client position, or null where there is none — off
+   * the letters, outside the canvas, or with nothing on screen. Hit against the geometry as drawn,
+   * so it follows a `transform`, the letters' pose and a moved `eye`. A backdrop is never answered.
+   */
+  pointOn(clientX: number, clientY: number): TypePoint | null;
   /** Cancels everything in flight; the stage comes down once the running effect has settled. */
   destroy(): void;
 }
@@ -504,6 +546,15 @@ function registryFor(options: KliegOptions): FontRegistry {
   if (options.fontUrl === undefined) throw new Error('klieg: fonts is required');
   console.warn('klieg: fontUrl is deprecated — pass fonts: { display: url } instead');
   return new FontRegistry({ default: options.fontUrl });
+}
+
+/** Whether a mesh is on screen: every ancestor visible and some opacity left. A letter mid-exit
+ * keeps its geometry at zero opacity. */
+function drawn(object: THREE.Object3D): boolean {
+  for (let o: THREE.Object3D | null = object; o; o = o.parent) if (!o.visible) return false;
+  const material = (object as THREE.Mesh).material;
+  const materials = Array.isArray(material) ? material : material ? [material] : [];
+  return materials.some((m) => m.visible && m.opacity > 0);
 }
 
 export function createKlieg(options: KliegOptions): Klieg {
@@ -560,6 +611,74 @@ export function createKlieg(options: KliegOptions): Klieg {
     if (!pointerAttached) return;
     pointerAttached = false;
     globalThis.removeEventListener('pointermove', onMove);
+  }
+
+  const layers = new Set<SceneLayer>();
+  let stopLayers: (() => void) | null = null;
+  let steppedAt: number | null = null;
+  let layersWereLive = false;
+  /** Fires with a frame subscription, and the words they put on screen for `pointOn`. */
+  let liveFires = 0;
+  const heroes = new Set<Word>();
+  let drawnAt: number | null = null;
+  const raycaster = new THREE.Raycaster();
+  const aim = new THREE.Vector2();
+
+  function layersLive(): boolean {
+    for (const layer of layers) if (layer.live) return true;
+    return false;
+  }
+
+  /** Once a frame, from whichever of the layer loop and a fire's tick reaches it first, and always
+   * before that frame is drawn. */
+  function stepLayers(now: number): void {
+    if (layers.size === 0 || steppedAt === now) return;
+    const dt = steppedAt === null ? 0 : Math.max(0, now - steppedAt) / 1000;
+    steppedAt = now;
+    for (const layer of [...layers]) {
+      try {
+        layer.update(dt);
+      } catch (err) {
+        detachLayer(layer);
+        queueMicrotask(() => {
+          throw err;
+        });
+      }
+    }
+  }
+
+  function drawLayers(now: number): void {
+    const renderer = stage.mount();
+    renderer.setRenderTarget(null);
+    renderer.clear();
+    renderer.render(stage.scene, stage.camera);
+    drawnAt = now;
+  }
+
+  /** A running fire draws the layers with everything else; between fires this is all that does. */
+  function layerTick(now: number): void {
+    stepLayers(now);
+    const live = layersLive();
+    if ((live || layersWereLive) && liveFires === 0) {
+      if (drawnAt !== now) drawLayers(now);
+      if (!live) stage.scheduleIdleTeardown();
+    }
+    layersWereLive = live;
+  }
+
+  function detachLayer(layer: SceneLayer): void {
+    if (!layers.delete(layer)) return;
+    stage.scene.remove(layer.object);
+    if (layers.size === 0) {
+      stopLayers?.();
+      stopLayers = null;
+      layersWereLive = false;
+    }
+    // Whatever it drew last stays on the canvas until something draws over it.
+    if (!destroyed && liveFires === 0 && stage.renderer) {
+      drawLayers(clock.now());
+      if (!layersLive()) stage.scheduleIdleTeardown();
+    }
   }
 
   function font(name?: string): Promise<LoadedFont> {
@@ -784,6 +903,8 @@ export function createKlieg(options: KliegOptions): Klieg {
         settled = true;
         control.dismiss = null;
         off();
+        liveFires--;
+        heroes.delete(word);
         detachDismiss();
         stage.scene.remove(word.group);
         if (backdrop) stage.scene.remove(backdrop.group);
@@ -791,7 +912,8 @@ export function createKlieg(options: KliegOptions): Klieg {
         word.dispose();
         backdrop?.dispose();
         bloom?.dispose();
-        stage.scheduleIdleTeardown();
+        // A live layer holds the stage; the layer loop arms this once it goes quiet.
+        if (!layersLive()) stage.scheduleIdleTeardown();
         done();
       };
       const finish = () => settle(resolve);
@@ -843,6 +965,8 @@ export function createKlieg(options: KliegOptions): Klieg {
 
       let lastTick = clock.now();
 
+      liveFires++;
+      heroes.add(word);
       const off = clock.subscribe((now) => {
         if (signal.aborted) return finish();
 
@@ -944,6 +1068,7 @@ export function createKlieg(options: KliegOptions): Klieg {
           word.setEnvRotation(env.pitch, env.yaw);
           backdrop?.setEnvRotation(env.pitch, env.yaw);
 
+          stepLayers(now);
           if (bloom) {
             bloom.render(stage.scene, stage.camera);
           } else {
@@ -951,6 +1076,7 @@ export function createKlieg(options: KliegOptions): Klieg {
             renderer.clear();
             renderer.render(stage.scene, stage.camera);
           }
+          drawnAt = now;
 
           const stillDone = typeof hold === 'number' ? since >= hold : released;
           if (still ? stillDone : driver.isFinished(since)) finish();
@@ -1033,10 +1159,44 @@ export function createKlieg(options: KliegOptions): Klieg {
         if (!destroyed) caches.preheat(loaded, chars);
       });
     },
+    attach(layer) {
+      if (!supported || destroyed) return () => {};
+      if (!layers.has(layer)) {
+        // First: three.quarks disposes a particle system that has no Scene above it when it updates.
+        stage.scene.add(layer.object);
+        layers.add(layer);
+        if (!stopLayers) {
+          steppedAt = null;
+          stopLayers = clock.subscribe(layerTick);
+        }
+      }
+      return () => detachLayer(layer);
+    },
+    pointOn(clientX, clientY) {
+      const canvas = stage.canvas;
+      if (destroyed || !canvas || heroes.size === 0) return null;
+      const box = canvas.getBoundingClientRect();
+      if (box.width <= 0 || box.height <= 0) return null;
+      const nx = ((clientX - box.left) / box.width) * 2 - 1;
+      const ny = ((clientY - box.top) / box.height) * 2 - 1;
+      if (Math.abs(nx) > 1 || Math.abs(ny) > 1) return null;
+
+      stage.camera.updateMatrixWorld();
+      raycaster.setFromCamera(aim.set(nx, -ny), stage.camera);
+      const groups = [...heroes].map((word) => {
+        word.group.updateWorldMatrix(true, true);
+        return word.group;
+      });
+      const hit = raycaster.intersectObjects(groups, true).find((h) => drawn(h.object));
+      if (!hit) return null;
+      const { x, y, z } = hit.point;
+      return { x, y, z, unitsPerPx: stage.unitsPerPixel(z, box.height) };
+    },
     destroy() {
       destroyed = true;
       warmer?.cancel();
       releasePointer();
+      for (const layer of [...layers]) detachLayer(layer);
       // A running effect only notices the abort on its next tick, and tearing down first would
       // leave it re-arming idle teardown against a stage that is already gone.
       void queue.cancelAll().then(() => {

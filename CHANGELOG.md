@@ -33,6 +33,19 @@ Every `FrameCtx` now carries `now`, the clock time its frame was drawn at, ident
 drawn in that frame. `dwell` keys on it to step once a frame however many times a word, a backdrop, a
 concurrent fire or `turns` asks it. A `FrameCtx` built by hand, in a test or a lab, needs a `now`.
 
+### Something else can draw in the type's scene
+
+`attach(layer)` adds a three.js object to the scene klieg draws the type in, so it shares the type's
+camera, its depth buffer and a fire's bloom, and returns a function that takes it out again. A layer
+is anything with an `object`, an `update(dt)` in seconds and a `live` flag, so klieg depends on
+nothing that builds one. While a layer is live, frames keep coming between fires and after the fire
+that set it off, and idle teardown waits; once it goes quiet, one frame clears it. Between fires the
+scene is drawn without bloom.
+
+`pointOn(clientX, clientY)` returns the point on the fired word drawn under a client position, hit
+against the geometry as drawn, together with `unitsPerPx`: how many world units a CSS pixel spans at
+that depth, for sizing in pixels whatever is placed there. Off the letters it returns null.
+
 ### One effect can hand over to the next
 
 `turns({ pieces, every, deadline, stagger })` runs a list of effect pieces one at a time instead of

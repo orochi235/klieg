@@ -6,16 +6,17 @@ next.
 
 ## In flight, 2026-09-15
 
-**Next:** klieg 0.12.0 is published (`v0.12.0` on `e35ac76`, on npm since 2026-09-15 17:42Z), and
-`main` is pushed. The tube power states (`e3674e3`) are on `main` but not in any release; the
-portfolio masthead is being wired to them, so it needs a 0.13.0 — Mike's call — or a local tarball.
+**Next:** nothing in flight for the masthead on klieg's side. klieg 0.13.0 is published (`v0.13.0` on
+`6be56dc`, on npm since 2026-09-15 ~18:02Z) with the tube power states; 0.12.0 (`v0.12.0` on
+`e35ac76`) shipped just before it without them. `sparky-b1` is switching the portfolio masthead to
+the published packages.
 
 ### Branches
 
 Run `git log --oneline main..<branch>` for what a branch carries; don't trust a count written here.
 
 - **`main`**, this checkout, pushed: `hinge`, `near`, `dwell` with `FrameCtx.now`,
-  `attach`, `pointOn`. `e35ac76` is the 0.12.0 bump and tag; `e3674e3`, after it and unreleased, holds the tube power states —
+  `attach`, `pointOn`. `e35ac76` is the 0.12.0 bump and tag; `e3674e3` holds the tube power states, released in 0.13.0 (`6be56dc`) —
   `power()` with `short`/`up`/`start`/`trip`, the `strike`/`thinning`/`glow` warm-ups, `level()`,
   `kicks()`, `peak()`, `flicker({ drop })` and `pointOn(...).inWord`. Spec:
   [2026-09-15-tube-power-design.md](specs/2026-09-15-tube-power-design.md).

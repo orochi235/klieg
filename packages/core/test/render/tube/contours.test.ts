@@ -246,3 +246,30 @@ describe('real faces under tubing', () => {
     expect(untouched).toBeGreaterThan(0);
   });
 });
+
+describe('the thinner rungs, on shipped faces', () => {
+  const spec = tubing();
+  const floor = spec.radius * 0.5;
+  const files = readdirSync(`${LAB}fonts`).filter((f) => f.endsWith('.ttf'));
+  let thinned = 0;
+
+  it.each(files)('thin only counters, and never below the floor: %s', (file) => {
+    const font = faceAt(`${LAB}fonts/${file}`);
+    for (const char of 'ABDOPQRabdegopq08@&') {
+      const bp = buildTubeBlueprint(glyphToShapes(font as never, char, 1), spec, 0.3, 0);
+      for (const run of bp.runs) {
+        if (run.radius === undefined) continue;
+        expect(run.role, char).toBe('counter');
+        expect(run.radius, char).toBeGreaterThanOrEqual(floor);
+        expect(run.radius, char).toBeLessThan(spec.radius);
+        thinned++;
+      }
+      bp.dispose();
+    }
+  });
+
+  // The synthetic ring proves the rung works; this proves real outlines reach it.
+  it('bring back some counter on thinner glass somewhere', () => {
+    expect(thinned).toBeGreaterThan(0);
+  });
+});

@@ -7,7 +7,8 @@ one.
 **Status: built**, in the session that designed it — `effects/source.ts`, `effects/signal.ts` and
 `effects/hinge.ts`, against `main` at klieg 0.11.0 on 2026-09-14. One departure from what is
 written below: `inkCenter` was factored out alongside `falloff` so `near` and `lamp` measure
-through the same function rather than two copies of the same two lines.
+through the same function rather than two copies of the same two lines. `dwell` and `FrameCtx.now`
+followed on 2026-09-15, built — see the last section.
 
 ## What this is
 
@@ -155,3 +156,22 @@ a mechanism.
 - Continuous mode at `k = 0` satisfies `isRest`; a color-writing piece included.
 - Continuous mode lerps `gain` toward 1 and scales `position` toward 0.
 - `hinge` inside `turns` hands over, in both modes.
+
+## `dwell`, and a frame key
+
+Added for magicsmoke, whose tube flicker builds with how long the cursor rests.
+`dwell({ of, riseMs, fallMs })` climbs linearly toward its input — `near()` by default — and drains
+once the input goes, never past what the input reads. It is the first signal that keeps state:
+
+- **State is per part, keyed by the `PartInfo` object.** A `Word` builds its pool once, and no two
+  words share a part, so one `dwell` can serve every word and fire it is used on.
+- **It steps once per frame.** A signal is asked many times a frame: `resolve` runs per word and
+  per concurrent fire, and `turns` probes its inner up to 12 times a step. `FrameCtx.now` is the
+  key — every `RafClock` subscriber in a tick receives the identical timestamp, so everything drawn
+  in one frame reads the same value. Later calls in a frame return the first one's answer,
+  whatever their `t`.
+- **It steps by the gap in `now`, not by `ctx.dt`**, so a part a `turns` rotation leaves unasked
+  catches up on the time that passed rather than resuming where it paused. Under reduced motion,
+  where `dt` is infinite, it snaps to its input instead, so it cannot go `NaN`.
+
+`now` is a required field, so a `FrameCtx` built by hand needs one; the labs' and tests' own did.

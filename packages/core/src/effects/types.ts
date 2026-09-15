@@ -88,16 +88,22 @@ export interface ResolvedOffset {
 export interface FrameCtx {
   /** -1..1 over the canvas box, +y down, or null until the pointer has been inside it. */
   pointer: { x: number; y: number } | null;
-  /** The same pointer stretched onto the word's layout space — the em, block-relative space
-   * `PartInfo.x/y` uses, +y up. The canvas's whole -1..1 covers the word's extent per axis
-   * rather than projecting onto it, so on a sign that does not fill the canvas the point
-   * travels further than the cursor. The extent is the one the word was built with, so after a
-   * `stages` regroup this addresses the original layout rather than where the letters now are.
-   * Null whenever `pointer` is. */
+  /** The same pointer in the word's layout space — the em, block-relative space `PartInfo.x/y`
+   * uses, +y up — projected through the camera onto the letters' front face, so on a front-on
+   * sign it sits under the cursor. It ignores the word's `transform`, its pose and a moved `eye`,
+   * and addresses the layout the word was built with, so after a `stages` regroup it points at
+   * where the letters used to be. Null whenever `pointer` is, and before the word has a fit. */
   pointerInWord: { x: number; y: number } | null;
   /** Milliseconds since the previous frame, and `Infinity` under reduced motion. Read it to snap
    * to a target, never to integrate: one infinite frame leaves an accumulator `NaN` for good. */
   dt: number;
+  /**
+   * Milliseconds on the instance's clock when this frame was drawn. Everything drawn in one frame
+   * reads the same value — the hero and its backdrop, every concurrent fire, each of the many
+   * probes `turns` makes — so it is what keys state that must advance once a frame however often a
+   * piece is asked.
+   */
+  now: number;
 }
 
 export interface EffectPiece {

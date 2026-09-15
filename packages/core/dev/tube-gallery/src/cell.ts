@@ -40,7 +40,7 @@ export function buildCell(input: CellInput): GalleryCell {
   // No debug hooks: a `tubeMaterial` override clears `readsRunColor`, and the tube builder's
   // color write returns early on that, which stops the sweep without failing.
   const word = new Word(input.letter, input.font, input.look, viewBudget(), false);
-  const ctx: FrameCtx = { pointer: null, pointerInWord: null, dt: 0 };
+  const ctx: FrameCtx = { pointer: null, pointerInWord: null, dt: 0, now: 0 };
   word.apply(STILL, 0, ctx);
   pivot.add(word.group);
 

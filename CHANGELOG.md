@@ -25,6 +25,14 @@ The two modes exist because a piece's `duration` is read once per effect rather 
 so a piece rebuilt continuously would have no coherent pass. Stops whose durations disagree throw at
 construction, rather than each quietly running on its own clock under one published pass.
 
+`dwell()` is the second signal: how long a part has stayed near the cursor, rather than how near it
+is now. It climbs toward its input over `riseMs` and drains over `fallMs`, so a hover builds a letter
+up and a pass over it barely registers. Its input defaults to `near()` and can be any signal.
+
+Every `FrameCtx` now carries `now`, the clock time its frame was drawn at, identical for everything
+drawn in that frame. `dwell` keys on it to step once a frame however many times a word, a backdrop, a
+concurrent fire or `turns` asks it. A `FrameCtx` built by hand, in a test or a lab, needs a `now`.
+
 ### One effect can hand over to the next
 
 `turns({ pieces, every, deadline, stagger })` runs a list of effect pieces one at a time instead of

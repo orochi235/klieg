@@ -11,7 +11,7 @@ import {
   track,
 } from '../../src/render/lighting.js';
 
-const CTX = { pointer: null, pointerInWord: null, dt: 16 };
+const CTX = { pointer: null, pointerInWord: null, dt: 16, now: 0 };
 
 const NAMES: LightingName[] = ['sweep', 'static', 'pointer'];
 const TAU = Math.PI * 2;
@@ -68,7 +68,7 @@ describe('layered env pieces', () => {
   it('takes yaw from both layers and pitch from the only piece that sets it', () => {
     const rake = sweep({ periodMs: 1000 });
     const aim = track({ yawRange: 1, pitchRange: 0.1, followMs: 0 });
-    const ctx = { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 16 };
+    const ctx = { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 16, now: 0 };
 
     const merged = mergeEnv([rake.env(0.5, ctx), aim.env(0, ctx)]);
 
@@ -89,7 +89,7 @@ describe('track', () => {
     piece.env(0, CTX);
     expect(piece.env(0, CTX)).toEqual({ yaw: 0, pitch: 0 });
 
-    const ctx = { pointer: { x: 1, y: 1 }, pointerInWord: null, dt: 16 };
+    const ctx = { pointer: { x: 1, y: 1 }, pointerInWord: null, dt: 16, now: 0 };
     const out = mergeEnv([piece.env(0, ctx)]);
     expect(out.yaw).toBeGreaterThan(0);
     expect(out.pitch).toBeGreaterThan(0);
@@ -97,7 +97,7 @@ describe('track', () => {
 
   it('swings less on pitch than on yaw', () => {
     const piece = track();
-    const ctx = { pointer: { x: -1, y: -1 }, pointerInWord: null, dt: 100_000 };
+    const ctx = { pointer: { x: -1, y: -1 }, pointerInWord: null, dt: 100_000, now: 0 };
     piece.env(0, ctx);
     const out = piece.env(0, ctx);
     expect(Math.abs(out.pitch as number)).toBeLessThan(Math.abs(out.yaw as number));
@@ -105,7 +105,7 @@ describe('track', () => {
 
   it('takes its ranges from the caller', () => {
     const piece = track({ yawRange: 1, pitchRange: 0.5, followMs: 1 });
-    const ctx = { pointer: { x: 1, y: 1 }, pointerInWord: null, dt: 100_000 };
+    const ctx = { pointer: { x: 1, y: 1 }, pointerInWord: null, dt: 100_000, now: 0 };
     piece.env(0, ctx);
     const out = piece.env(0, ctx);
     expect(out.yaw).toBeCloseTo(1);
@@ -115,7 +115,7 @@ describe('track', () => {
   // A symmetric pointer cannot tell yaw-from-x apart from yaw-from-y.
   it('drives yaw from x and pitch from y', () => {
     const piece = track({ yawRange: 1, pitchRange: 0.5, followMs: 1 });
-    const ctx = { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 100_000 };
+    const ctx = { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 100_000, now: 0 };
     piece.env(0, ctx);
     const out = piece.env(0, ctx);
     expect(out.yaw).toBeCloseTo(1);
@@ -125,14 +125,14 @@ describe('track', () => {
   // followMs 0 on a dt 0 frame is exp(-0/0) = NaN, and the closure never recovers.
   it('snaps rather than going NaN when the follow period is zero', () => {
     const piece = track({ yawRange: 1, pitchRange: 0.5, followMs: 0 });
-    const out = piece.env(0, { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 0 });
+    const out = piece.env(0, { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 0, now: 0 });
     expect(out.yaw).toBeCloseTo(1);
     expect(out.pitch).toBeCloseTo(-0.5);
   });
 
   it('snaps rather than diverging when the follow period is negative', () => {
     const piece = track({ yawRange: 1, pitchRange: 0.5, followMs: -100 });
-    const ctx = { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 16 };
+    const ctx = { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 16, now: 0 };
     for (let i = 0; i < 5; i++) piece.env(0, ctx);
     const out = piece.env(0, ctx);
     expect(out.yaw).toBeCloseTo(1);
@@ -142,7 +142,12 @@ describe('track', () => {
   // The value FrameCtx.dt carries under reduced motion, where one frame stands for the whole run.
   it('snaps rather than diverging on the infinite frame reduced motion renders', () => {
     const piece = track({ yawRange: 1, pitchRange: 0.5 });
-    const ctx = { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: Number.POSITIVE_INFINITY };
+    const ctx = {
+      pointer: { x: 1, y: -1 },
+      pointerInWord: null,
+      dt: Number.POSITIVE_INFINITY,
+      now: 0,
+    };
     const out = piece.env(0, ctx);
     expect(out.yaw).toBeCloseTo(1);
     expect(out.pitch).toBeCloseTo(-0.5);
@@ -150,7 +155,7 @@ describe('track', () => {
 
   it('snaps rather than going NaN when the follow period is NaN', () => {
     const piece = track({ yawRange: 1, pitchRange: 0.5, followMs: Number.NaN });
-    const out = piece.env(0, { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 16 });
+    const out = piece.env(0, { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 16, now: 0 });
     expect(out.yaw).toBeCloseTo(1);
     expect(out.pitch).toBeCloseTo(-0.5);
   });
@@ -159,8 +164,8 @@ describe('track', () => {
     const pointer = { x: 0.5, y: 0.5 };
     for (const followMs of [0, -100, Number.NaN]) {
       const piece = track({ followMs });
-      piece.env(0, { pointer, pointerInWord: null, dt: 0 });
-      const out = mergeEnv([piece.env(0, { pointer, pointerInWord: null, dt: 16 })]);
+      piece.env(0, { pointer, pointerInWord: null, dt: 0, now: 0 });
+      const out = mergeEnv([piece.env(0, { pointer, pointerInWord: null, dt: 16, now: 0 })]);
       expect(out.yaw).toBeCloseTo(0.5 * (Math.PI / 2));
       expect(out.pitch).toBeCloseTo(0.5 * (Math.PI / 9));
     }
@@ -168,12 +173,12 @@ describe('track', () => {
 
   it('freezes at its last pose when the pointer leaves rather than easing back to rest', () => {
     const piece = track({ yawRange: 1, pitchRange: 0.5, followMs: 1 });
-    const ctx = { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 100_000 };
+    const ctx = { pointer: { x: 1, y: -1 }, pointerInWord: null, dt: 100_000, now: 0 };
     piece.env(0, ctx);
     const aimed = mergeEnv([piece.env(0, ctx)]);
     expect(aimed.yaw).toBeCloseTo(1);
 
-    const gone = { pointer: null, pointerInWord: null, dt: 100_000 };
+    const gone = { pointer: null, pointerInWord: null, dt: 100_000, now: 0 };
     piece.env(0, gone);
     expect(mergeEnv([piece.env(0, gone)])).toEqual(aimed);
   });
@@ -182,7 +187,7 @@ describe('track', () => {
   it('eases by elapsed time rather than by frame, so refresh rate does not set the speed', () => {
     const slow = track({ yawRange: 1, followMs: 100 });
     const fast = track({ yawRange: 1, followMs: 100 });
-    const at = (dt: number) => ({ pointer: { x: 1, y: 0 }, pointerInWord: null, dt });
+    const at = (dt: number) => ({ pointer: { x: 1, y: 0 }, pointerInWord: null, dt, now: 0 });
 
     for (let i = 0; i < 30; i++) slow.env(0, at(16.7));
     for (let i = 0; i < 60; i++) fast.env(0, at(8.35));
@@ -192,7 +197,7 @@ describe('track', () => {
 
   it('follows the pointer partway in a single short frame', () => {
     const piece = track({ yawRange: 1, pitchRange: 1, followMs: 100 });
-    const ctx = { pointer: { x: 1, y: 1 }, pointerInWord: null, dt: 100 };
+    const ctx = { pointer: { x: 1, y: 1 }, pointerInWord: null, dt: 100, now: 0 };
     const out = piece.env(0, ctx);
     expect(out.yaw).toBeCloseTo(1 - Math.exp(-1), 6);
   });
@@ -200,7 +205,7 @@ describe('track', () => {
   it('never turns on the clock', () => {
     const piece = track();
     expect(piece.duration).toBe(0);
-    const ctx = { pointer: { x: 1, y: 0 }, pointerInWord: null, dt: 100_000 };
+    const ctx = { pointer: { x: 1, y: 0 }, pointerInWord: null, dt: 100_000, now: 0 };
     piece.env(0, ctx);
     const settled = mergeEnv([piece.env(0.6, ctx)]);
     expect(mergeEnv([piece.env(0.9, ctx)]).yaw).toBeCloseTo(settled.yaw, 10);
@@ -227,7 +232,7 @@ describe('ENV_PIECES', () => {
     expect(mergeEnv([ENV_PIECES.static().env(0.5, CTX)])).toEqual({ yaw: 0, pitch: 0 });
 
     const pointer = ENV_PIECES.pointer();
-    const ctx = { pointer: { x: 1, y: 0 }, pointerInWord: null, dt: 100_000 };
+    const ctx = { pointer: { x: 1, y: 0 }, pointerInWord: null, dt: 100_000, now: 0 };
     pointer.env(0, ctx);
     expect(mergeEnv([pointer.env(0, ctx)]).yaw).toBeGreaterThan(0);
   });

@@ -13,7 +13,7 @@ import type { PanelMeta } from '../panels.js';
  * which renders tubing's 0.08 backing as a solid wall over its own tube.
  */
 const REST = new Timeline({ enter: NONE, active: NONE, exit: NONE, hold: 0, blendMs: 0 });
-const NO_CTX: FrameCtx = { pointer: null, pointerInWord: null, dt: 0 };
+const NO_CTX: FrameCtx = { pointer: null, pointerInWord: null, dt: 0, now: 0 };
 
 export interface Cell {
   /** What this cell was built from; a change to it is what makes the cell stale. */

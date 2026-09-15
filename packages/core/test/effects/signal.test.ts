@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { near } from '../../src/effects/signal.js';
+import { describe, expect, it, vi } from 'vitest';
+import { dwell, near, type Signal } from '../../src/effects/signal.js';
 import { fixed, orbit } from '../../src/effects/source.js';
-import type { PartInfo } from '../../src/effects/types.js';
+import type { FrameCtx, PartInfo } from '../../src/effects/types.js';
 import { AT, NO_CTX } from './ctx.js';
 
 const partAt = (x: number, y = 0): PartInfo => ({
@@ -69,5 +69,96 @@ describe('near', () => {
     const left = signal(0.5, partAt(1, 0), NO_CTX);
     expect(right).toBeCloseTo(1);
     expect(left).toBe(0);
+  });
+});
+
+describe('dwell', () => {
+  /** An input a test sets directly, so dwell is read rather than the proximity behind it. */
+  function input(start = 1) {
+    const box = { level: start };
+    const signal: Signal = () => box.level;
+    return { box, signal };
+  }
+  const frame = (now: number, dt = 16): FrameCtx => ({ ...NO_CTX, now, dt });
+
+  it('starts empty even with its input already full', () => {
+    const { signal } = input(1);
+    expect(dwell({ of: signal })(0, partAt(0), frame(0))).toBe(0);
+  });
+
+  it('climbs at riseMs per unit while the input holds', () => {
+    const { signal } = input(1);
+    const d = dwell({ of: signal, riseMs: 1000 });
+    const part = partAt(0);
+    d(0, part, frame(0));
+    expect(d(0, part, frame(250))).toBeCloseTo(0.25);
+    expect(d(0, part, frame(500))).toBeCloseTo(0.5);
+    expect(d(0, part, frame(5000))).toBe(1);
+  });
+
+  it('drains at fallMs per unit once the input goes', () => {
+    const { box, signal } = input(1);
+    const d = dwell({ of: signal, riseMs: 0, fallMs: 400 });
+    const part = partAt(0);
+    d(0, part, frame(0));
+    expect(d(0, part, frame(16))).toBe(1);
+    box.level = 0;
+    expect(d(0, part, frame(116))).toBeCloseTo(0.75);
+    expect(d(0, part, frame(1000))).toBe(0);
+  });
+
+  it('never climbs past what its input reads', () => {
+    const { signal } = input(0.4);
+    const d = dwell({ of: signal, riseMs: 100 });
+    const part = partAt(0);
+    d(0, part, frame(0));
+    expect(d(0, part, frame(10_000))).toBeCloseTo(0.4);
+  });
+
+  // `turns` probes its inner up to 12 times a step, and a hero and its backdrop each resolve: a
+  // signal stepped per call would climb as fast as it is asked rather than as time passes.
+  it('steps once per frame however often it is asked', () => {
+    const { signal } = input(1);
+    const spy = vi.fn(signal);
+    const d = dwell({ of: spy, riseMs: 1000 });
+    const part = partAt(0);
+    d(0, part, frame(0));
+    let k = 0;
+    for (let i = 0; i < 12; i++) k = d(i / 12, part, frame(100));
+    expect(k).toBeCloseTo(0.1);
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps each part to itself', () => {
+    const { signal } = input(1);
+    const d = dwell({ of: signal, riseMs: 1000 });
+    const early = partAt(0);
+    const late = partAt(1);
+    d(0, early, frame(0));
+    d(0, early, frame(500));
+    d(0, late, frame(500));
+    expect(d(0, early, frame(600))).toBeCloseTo(0.6);
+    expect(d(0, late, frame(600))).toBeCloseTo(0.1);
+  });
+
+  it('snaps to its input under reduced motion, and never goes NaN', () => {
+    const { box, signal } = input(0.7);
+    const d = dwell({ of: signal });
+    const part = partAt(0);
+    const still = (now: number) => frame(now, Number.POSITIVE_INFINITY);
+    expect(d(0, part, still(0))).toBeCloseTo(0.7);
+    box.level = Number.NaN;
+    expect(d(0, part, still(16))).toBe(0);
+    box.level = 1;
+    expect(d(0, part, still(32))).toBe(1);
+    expect(d(0, part, frame(48))).toBe(1);
+  });
+
+  it('reads the cursor by default, and stays empty until it has been inside', () => {
+    const d = dwell({ riseMs: 0 });
+    const part = partAt(1.2, 0.3);
+    d(0, part, frame(0));
+    expect(d(0, part, frame(16))).toBe(0);
+    expect(d(0, part, { ...AT, now: 32 })).toBeCloseTo(1);
   });
 });

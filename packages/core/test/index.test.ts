@@ -1947,6 +1947,20 @@ describe('the pointer in the frame context', () => {
     effects: [spec],
   });
 
+  it('stamps every frame with the clock time it was drawn at', async () => {
+    const seen = capture();
+    const bk = create();
+    void bk.fire('HI', LOOKING(seen.spec));
+    await flush();
+    clock.advance(16);
+    const first = last(seen.frames).now;
+    clock.advance(16);
+
+    expect(first).toBe(clock.now() - 16);
+    expect(last(seen.frames).now).toBe(clock.now());
+    bk.destroy();
+  });
+
   it('leaves both pointers null until one has moved', async () => {
     const seen = capture();
     const bk = create();

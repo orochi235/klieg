@@ -345,6 +345,14 @@ pass — vary a knob that leaves the pass alone, `unrest` or `depth` rather than
 `near` also inherits a lamp's blind spot: it measures against the layout the word was built with, so
 it does not follow a `stages` regroup either.
 
+**`dwell({ of, riseMs, fallMs })`** — how long a part has stayed near the cursor, rather than how
+near it is now. It climbs toward its input over `riseMs`, 1500 by default, and drains over `fallMs`,
+600, once the input goes, so a cursor resting on a letter builds it up and one sweeping past barely
+registers. The input defaults to `near()` and can be any signal; `dwell` never climbs past what it
+reads. `hinge(dwell(), (k) => flicker({ unrest: 0.02 + k * 0.8 }))` is a tube that fails harder the
+longer you hover on it. It steps once a frame however often it is asked, and under reduced motion it
+follows its input rather than climbing.
+
 Effects layer. Brightness multiplies and color is replaced, so `flicker` and `hue` compose without
 either knowing about the other — but two pieces both writing color fight, and the last one wins.
 A hue piece writes color every frame, which overrides `tint`: `tubing` tints its decoration, so a

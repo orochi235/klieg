@@ -70,7 +70,13 @@ export { type IntermittentSpec, intermittent } from './effects/intermittent.js';
 export { type LampSpec, lamp } from './effects/lamp.js';
 export { type ChaseSpec, EFFECTS, type FlickerSpec, type HueSpec } from './effects/pieces.js';
 export { type RovingSpec, roving } from './effects/roving.js';
-export { type NearSpec, near, type Signal } from './effects/signal.js';
+export {
+  type DwellSpec,
+  dwell,
+  type NearSpec,
+  near,
+  type Signal,
+} from './effects/signal.js';
 export {
   along,
   fixed,
@@ -888,6 +894,7 @@ export function createKlieg(options: KliegOptions): Klieg {
               return place().pointerInWord;
             },
             dt: still ? Number.POSITIVE_INFINITY : dt,
+            now,
           };
           word.apply(driver, elapsed, ctx);
           // Never the driver: the backdrop takes no motion slot, so it is at full presence from

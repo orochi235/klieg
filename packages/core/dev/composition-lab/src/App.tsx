@@ -25,7 +25,7 @@ const TAIL_MS = 2000;
 
 /** The lab's own frame context. There is no pointer surface: `pointerFrame` needs a `PlacedWord`
  * only the running fire has, and both lamp sources on offer ignore the cursor. */
-const CTX: FrameCtx = { pointer: null, pointerInWord: null, dt: 16.7 };
+const CTX: FrameCtx = { pointer: null, pointerInWord: null, dt: 16.7, now: 0 };
 
 export function App() {
   const [composition, setComposition] = useState<Composition>(restore);

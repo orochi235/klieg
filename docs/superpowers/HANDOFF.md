@@ -6,18 +6,16 @@ next.
 
 ## In flight, 2026-09-15
 
-**Next:** publishing 0.12.0 waits on Mike. The bump is committed on `main` (`e35ac76`) and
-unpushed; pushing it with a `v0.12.0` tag publishes to npm through `release.yml`, and the masthead
-deploy waits on that (magicsmoke has already published). `main` also carries the tube power states
-(`e3674e3`) on top of the bump, so **the tag goes on `e35ac76`, never on `main`'s tip**, or the
-power states ship as 0.12.0.
+**Next:** klieg 0.12.0 is published (`v0.12.0` on `e35ac76`, on npm since 2026-09-15 17:42Z), and
+`main` is pushed. The tube power states (`e3674e3`) are on `main` but not in any release; the
+portfolio masthead is being wired to them, so it needs a 0.13.0 — Mike's call — or a local tarball.
 
 ### Branches
 
 Run `git log --oneline main..<branch>` for what a branch carries; don't trust a count written here.
 
-- **`main`**, this checkout, pushed through `4e019d9`: `hinge`, `near`, `dwell` with `FrameCtx.now`,
-  `attach`, `pointOn`. Local only: `e35ac76` (bump to 0.12.0) and `e3674e3`, the tube power states —
+- **`main`**, this checkout, pushed: `hinge`, `near`, `dwell` with `FrameCtx.now`,
+  `attach`, `pointOn`. `e35ac76` is the 0.12.0 bump and tag; `e3674e3`, after it and unreleased, holds the tube power states —
   `power()` with `short`/`up`/`start`/`trip`, the `strike`/`thinning`/`glow` warm-ups, `level()`,
   `kicks()`, `peak()`, `flicker({ drop })` and `pointOn(...).inWord`. Spec:
   [2026-09-15-tube-power-design.md](specs/2026-09-15-tube-power-design.md).

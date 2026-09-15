@@ -72,6 +72,9 @@ export { type Kicks, type KicksSpec, kicks } from './effects/kick.js';
 export { type LampSpec, lamp } from './effects/lamp.js';
 export { type ChaseSpec, EFFECTS, type FlickerSpec, type HueSpec } from './effects/pieces.js';
 export {
+  type BlowoutSpec,
+  blowout,
+  type Flare,
   type GlowSpec,
   glow,
   type PowerControl,

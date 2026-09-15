@@ -361,8 +361,11 @@ every part it targets and passes nothing through once on — and hinge the sign'
 longer until the tube catches, or `thinning()` or `glow()`, each with a `duration`.
 `start: 'warming'` powers a sign up as it arrives. `trip: { on, at, holdMs, outMs }` shorts the sign
 by itself when a signal holds at `at` for `holdMs`, and relights it `outMs` later. The trip is
-watched through `tube.piece`, so it does nothing until that is in the effects. Under reduced motion
-a warm-up is skipped rather than flashed.
+watched through `tube.piece`, so it does nothing until that is in the effects. Every short from a lit sign begins with a `flare`, `blowout()` by default: the sign spikes to three
+times its own glow and collapses to dark over 400ms, and `flare: null` goes straight to dark.
+`onState(state, previous)` is called on the frame the state changes, which is the moment to fire
+sound or sparks with the flare. Under reduced motion the flare and the warm-up are both skipped
+rather than flashed.
 
 ```ts
 import { EFFECTS, hinge, level, power } from 'klieg';

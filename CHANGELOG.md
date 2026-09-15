@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### An overload blows out before it goes dark
+
+A `power()` short now flares first: `blowout()`, the default `flare`, spikes the sign to three times
+its own glow and collapses it to dark over 400ms. `flare: null` keeps the old straight-to-dark short.
+`PowerState` gains `'flaring'`, so code matching on it needs the new case. `onState(state, previous)`
+reports each change on the frame it lands, for sound or sparks that must fire with the flare. A
+second short during a flare lets it finish, `up()` during one warms up at once, and under reduced
+motion the flare is skipped.
+
 ## 0.13.0
 
 ### A tube sign can short out, power back up, and flinch at sparks

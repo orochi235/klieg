@@ -61,3 +61,23 @@ signals and effect pieces rather than as methods on a fire:
   the running pieces' phase.
 - **Tripping on klieg's own `dwell`**: it follows `near`, which reads 1 only at a letter's ink
   center, so "held at 100%" would almost never happen.
+
+## The flare
+
+Added the same day, when Mike asked for an overload to be "very loud and bright for a moment before
+it dies". Built.
+
+- **Every short from a lit sign flares first**, through a `flare` curve shaped like a warm-up but
+  allowed past 1. `blowout()` is the default: up to 3× over its first quarter, then collapsing to
+  dark by 400ms. `flare: null` restores the direct short. A new `'flaring'` state sits between on and
+  shorted.
+- **A timed short's dark starts when the flare ends.** A second short during a flare lets it finish;
+  `up()` during one warms up at once.
+- **`onState(state, previous)` fires on the frame the state changes**, so the loud half — magicsmoke
+  one-shots at full energy — can land with the flare. A listener that throws is reported in a
+  microtask rather than stopping the frame.
+- **Under reduced motion the flare is skipped**, as the warm-up already was.
+- **No page flash.** magicsmoke's full-page white pulse was offered and Mike declined it: the sign's
+  flare carries the brightness, and a page-wide flash is a photosensitivity risk.
+- **Loud is the host's job.** magicsmoke clamps one-shot energy to 1 and limits its output, so the
+  masthead fires `shower`, `burst` and `arc` at full energy on `'flaring'` rather than raising volume.

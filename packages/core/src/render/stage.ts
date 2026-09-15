@@ -260,6 +260,17 @@ export class Stage {
     return { fov: this.camera.fov, cameraZ: this.camera.position.z, aspect };
   }
 
+  /** World units one CSS pixel spans at depth `z`, on a canvas `cssHeight` pixels tall. An
+   * off-center eye skews the frustum without changing its height at any depth. */
+  unitsPerPixel(z: number, cssHeight: number): number {
+    if (cssHeight <= 0) return 0;
+    if (this.camera instanceof THREE.OrthographicCamera) {
+      return (this.camera.top - this.camera.bottom) / cssHeight;
+    }
+    const distance = this.camera.position.z - z;
+    return (2 * Math.tan((this.camera.fov * Math.PI) / 360) * distance) / cssHeight;
+  }
+
   /** Idempotent: repeated fires reuse one context rather than allocating a new one. */
   mount(): THREE.WebGLRenderer {
     this.cancelIdle();

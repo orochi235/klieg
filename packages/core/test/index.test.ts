@@ -1,5 +1,5 @@
 import type { Font } from 'opentype.js';
-import type * as THREE from 'three';
+import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type Clock, ManualClock, type Tick } from '../src/clock.js';
 import type { FrameCtx, PartInfo } from '../src/effects/types.js';
@@ -16,6 +16,7 @@ import {
   MAX_BACKDROP_ROWS,
   type PhaseEvent,
   POLICY_NAMES,
+  type TypePoint,
   wantsBloom,
 } from '../src/index.js';
 import type { Vec3 } from '../src/pose.js';
@@ -2623,5 +2624,251 @@ describe('firing styled runs', () => {
     );
     clock.advance(16);
     await done;
+  });
+});
+
+describe('attach', () => {
+  const HELD = { ...INSTANT, hold: 5000 } as const;
+
+  /** A layer whose liveness a test sets, recording every step and where its object was then. */
+  function layer(live = true) {
+    const steps: number[] = [];
+    const parents: (THREE.Object3D | null)[] = [];
+    const object = new THREE.Group();
+    const made = {
+      object,
+      live,
+      update(dt: number) {
+        steps.push(dt);
+        parents.push(object.parent);
+      },
+    };
+    return { layer: made, steps, parents };
+  }
+
+  it('puts the object in the scene before its first update, and steps it in seconds', () => {
+    const bk = create();
+    const { layer: l, steps, parents } = layer();
+    bk.attach(l);
+    clock.advance(16);
+    clock.advance(16);
+
+    expect(parents[0]).not.toBeNull();
+    expect(steps).toEqual([0, 0.016]);
+    bk.destroy();
+  });
+
+  it('draws frames between fires only while a layer is live, then clears and idles', () => {
+    const bk = create();
+    const { layer: l } = layer(false);
+    bk.attach(l);
+    clock.advance(16);
+    expect(renders).toBe(0);
+
+    l.live = true;
+    clock.advance(16);
+    clock.advance(16);
+    expect(renders).toBe(2);
+    expect(calls).toContain('mount');
+    expect(calls).not.toContain('idle');
+
+    l.live = false;
+    clock.advance(16);
+    expect(renders).toBe(3);
+    expect(calls.at(-1)).toBe('idle');
+    clock.advance(16);
+    expect(renders).toBe(3);
+    bk.destroy();
+  });
+
+  it('holds idle teardown past the fire that set it off, and keeps drawing after it', async () => {
+    const bk = create();
+    const { layer: l } = layer();
+    bk.attach(l);
+    const done = bk.fire('HI', INSTANT);
+    await flush();
+    clock.advance(16);
+    await done;
+    expect(calls).not.toContain('idle');
+
+    const before = renders;
+    clock.advance(16);
+    expect(renders).toBe(before + 1);
+
+    l.live = false;
+    clock.advance(16);
+    expect(calls.at(-1)).toBe('idle');
+    bk.destroy();
+  });
+
+  it('draws once and steps once a frame while a fire is drawing too', async () => {
+    const bk = create();
+    const { layer: l, steps } = layer();
+    bk.attach(l);
+    void bk.fire('HI', HELD);
+    await flush();
+    clock.advance(16);
+
+    const renders0 = renders;
+    const steps0 = steps.length;
+    clock.advance(16);
+    expect(renders - renders0).toBe(1);
+    expect(steps.length - steps0).toBe(1);
+    bk.destroy();
+  });
+
+  it('takes the object out on detach and stops stepping it', () => {
+    const bk = create();
+    const { layer: l, steps } = layer();
+    const detach = bk.attach(l);
+    clock.advance(16);
+    detach();
+    const seen = steps.length;
+    clock.advance(16);
+
+    expect(l.object.parent).toBeNull();
+    expect(steps).toHaveLength(seen);
+    bk.destroy();
+  });
+
+  it('detaches every layer on destroy', () => {
+    const bk = create();
+    const { layer: l } = layer();
+    bk.attach(l);
+    bk.destroy();
+    expect(l.object.parent).toBeNull();
+  });
+
+  it('does nothing where WebGL is unsupported', () => {
+    stubWebgl(false);
+    const bk = create();
+    const { layer: l, steps } = layer();
+    bk.attach(l);
+    clock.advance(16);
+
+    expect(steps).toEqual([]);
+    expect(l.object.parent).toBeNull();
+  });
+
+  it('drops a layer whose update throws, reports it, and keeps stepping the rest', () => {
+    const reported: unknown[] = [];
+    vi.stubGlobal('queueMicrotask', (fn: () => void) => {
+      try {
+        fn();
+      } catch (err) {
+        reported.push(err);
+      }
+    });
+    const bk = create();
+    const bad = {
+      object: new THREE.Group(),
+      live: true,
+      update() {
+        throw new Error('boom');
+      },
+    };
+    const { layer: good, steps } = layer();
+    bk.attach(bad);
+    bk.attach(good);
+    clock.advance(16);
+    clock.advance(16);
+
+    expect(reported).toHaveLength(1);
+    expect(bad.object.parent).toBeNull();
+    expect(steps).toHaveLength(2);
+    bk.destroy();
+  });
+});
+
+describe('pointOn', () => {
+  const BOX = { left: 0, top: 0, width: 100, height: 100 };
+  const HELD = { ...INSTANT, hold: 5000 } as const;
+
+  /** Where a world point is drawn on the stubbed canvas — projected, where `pointOn` unprojects. */
+  function clientOf(world: THREE.Vector3): { x: number; y: number } {
+    const camera = stage().camera;
+    camera.updateMatrixWorld();
+    const ndc = world.clone().project(camera);
+    return { x: ((ndc.x + 1) / 2) * BOX.width, y: ((1 - ndc.y) / 2) * BOX.height };
+  }
+
+  function firstLetterBox(): THREE.Box3 {
+    (words()[0] as THREE.Group).updateWorldMatrix(true, true);
+    return new THREE.Box3().setFromObject(firstMesh());
+  }
+
+  async function onScreen(options: FireOptions = HELD) {
+    const bk = create();
+    const done = bk.fire('HI', options);
+    await flush();
+    stubCanvas(BOX);
+    clock.advance(16);
+    return { bk, done };
+  }
+
+  it('is null with nothing on screen', () => {
+    expect(create().pointOn(50, 50)).toBeNull();
+  });
+
+  it('lands on the front face of the letter drawn under the cursor', async () => {
+    const { bk } = await onScreen();
+    const box = firstLetterBox();
+    const aim = clientOf(box.getCenter(new THREE.Vector3()));
+    const at = bk.pointOn(aim.x, aim.y) as TypePoint;
+
+    expect(at).not.toBeNull();
+    expect(at.z).toBeCloseTo(box.max.z, 5);
+    const back = clientOf(new THREE.Vector3(at.x, at.y, at.z));
+    expect(back.x).toBeCloseTo(aim.x, 3);
+    expect(back.y).toBeCloseTo(aim.y, 3);
+    bk.destroy();
+  });
+
+  it('reports how many world units a pixel spans at the depth of the hit', async () => {
+    const { bk } = await onScreen();
+    const aim = clientOf(firstLetterBox().getCenter(new THREE.Vector3()));
+    const at = bk.pointOn(aim.x, aim.y) as TypePoint;
+
+    const a = clientOf(new THREE.Vector3(at.x, at.y, at.z));
+    const b = clientOf(new THREE.Vector3(at.x + 10 * at.unitsPerPx, at.y, at.z));
+    expect(b.x - a.x).toBeCloseTo(10, 3);
+    bk.destroy();
+  });
+
+  it('is null off the letters and outside the canvas', async () => {
+    const { bk } = await onScreen();
+    expect(bk.pointOn(1, 1)).toBeNull();
+    expect(bk.pointOn(500, 50)).toBeNull();
+    bk.destroy();
+  });
+
+  // The layout-space pointer projects onto one plane and ignores a transform; the hit must not.
+  it('follows a transform onto a letter turned out of the plane', async () => {
+    const { bk } = await onScreen({ ...HELD, transform: fromEuler(0, 0.6, 0) });
+    const box = firstLetterBox();
+    const aim = clientOf(box.getCenter(new THREE.Vector3()));
+    const at = bk.pointOn(aim.x, aim.y) as TypePoint;
+
+    expect(at).not.toBeNull();
+    const back = clientOf(new THREE.Vector3(at.x, at.y, at.z));
+    expect(back.x).toBeCloseTo(aim.x, 3);
+    expect(at.z).toBeLessThan(box.max.z - 1e-3);
+    expect(at.z).toBeGreaterThan(box.min.z + 1e-3);
+    bk.destroy();
+  });
+
+  it('passes through letters that have faded out', async () => {
+    const { bk } = await onScreen();
+    const aim = clientOf(firstLetterBox().getCenter(new THREE.Vector3()));
+    for (const material of wordMaterials()) material.opacity = 0;
+    expect(bk.pointOn(aim.x, aim.y)).toBeNull();
+    bk.destroy();
+  });
+
+  it('answers nothing once the fire has left', async () => {
+    const { bk, done } = await onScreen(INSTANT);
+    await done;
+    expect(bk.pointOn(50, 50)).toBeNull();
+    bk.destroy();
   });
 });

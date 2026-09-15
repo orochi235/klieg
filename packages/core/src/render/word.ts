@@ -587,6 +587,13 @@ export class Word {
       .decompose(this.inner.position, this.inner.quaternion, this.inner.scale);
   }
 
+  /** A world point in the layout space parts are measured in, with the fit and `transform` undone.
+   * Reads the world matrices as last updated. */
+  layoutOf(world: THREE.Vector3): { x: number; y: number } {
+    const local = this.inner.worldToLocal(world.clone());
+    return { x: local.x, y: local.y };
+  }
+
   /** The live letters' layout, in em, with the fit that maps em to world units. */
   readout(): { chars: string[]; x: number[]; y: number[]; line: number[]; fit: Fit } {
     const chars: string[] = [];

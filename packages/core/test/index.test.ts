@@ -2886,3 +2886,38 @@ describe('pointOn', () => {
     bk.destroy();
   });
 });
+
+describe('pointOn inWord', () => {
+  const BOX = { left: 0, top: 0, width: 100, height: 100 };
+
+  async function hitFirstLetter(options: FireOptions) {
+    const bk = create();
+    void bk.fire('HI', options);
+    await flush();
+    stubCanvas(BOX);
+    clock.advance(16);
+    const camera = stage().camera;
+    camera.updateMatrixWorld();
+    (words()[0] as THREE.Group).updateWorldMatrix(true, true);
+    const center = new THREE.Box3().setFromObject(firstMesh()).getCenter(new THREE.Vector3());
+    const ndc = center.project(camera);
+    const at = bk.pointOn(((ndc.x + 1) / 2) * BOX.width, ((1 - ndc.y) / 2) * BOX.height);
+    return { bk, at: at as TypePoint };
+  }
+
+  // The stub glyph is a 0.5 em box standing on the letter's origin, so the hit's layout point has
+  // to land inside that box: in world units, or with the transform left in, it lands far outside.
+  for (const [name, transform] of [
+    ['front-on', undefined],
+    ['turned', fromEuler(0, 0.6, 0)],
+  ] as const) {
+    it(`reports the hit in the word's layout space, ${name}`, async () => {
+      const { bk, at } = await hitFirstLetter({ ...INSTANT, hold: 5000, transform });
+      const origin = firstCell().position;
+      expect(at.inWord.x).toBeGreaterThanOrEqual(origin.x - 0.05);
+      expect(at.inWord.x).toBeLessThanOrEqual(origin.x + 0.55);
+      expect(Math.abs(at.inWord.y - origin.y)).toBeLessThanOrEqual(1);
+      bk.destroy();
+    });
+  }
+});

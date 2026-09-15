@@ -68,14 +68,32 @@ export {
 } from './easing.js';
 export { type Blend, type BlendSpec, fade, hinge, type StopsSpec } from './effects/hinge.js';
 export { type IntermittentSpec, intermittent } from './effects/intermittent.js';
+export { type Kicks, type KicksSpec, kicks } from './effects/kick.js';
 export { type LampSpec, lamp } from './effects/lamp.js';
 export { type ChaseSpec, EFFECTS, type FlickerSpec, type HueSpec } from './effects/pieces.js';
+export {
+  type GlowSpec,
+  glow,
+  type PowerControl,
+  type PowerSpec,
+  type PowerState,
+  power,
+  type StrikeSpec,
+  strike,
+  type ThinningSpec,
+  type TripSpec,
+  thinning,
+  type Warmup,
+} from './effects/power.js';
 export { type RovingSpec, roving } from './effects/roving.js';
 export {
   type DwellSpec,
   dwell,
+  type Level,
+  level,
   type NearSpec,
   near,
+  peak,
   type Signal,
 } from './effects/signal.js';
 export {
@@ -473,6 +491,9 @@ export interface TypePoint {
   z: number;
   /** World units one CSS pixel spans at `z`, for sizing in pixels whatever is placed there. */
   unitsPerPx: number;
+  /** The same point in the word's layout space, where effects measure distance — a `kick` lands
+   * here. The fit and `transform` are undone; a letter's own motion is not. */
+  inWord: { x: number; y: number };
 }
 
 export interface Klieg {
@@ -1189,8 +1210,18 @@ export function createKlieg(options: KliegOptions): Klieg {
       });
       const hit = raycaster.intersectObjects(groups, true).find((h) => drawn(h.object));
       if (!hit) return null;
+      let owner: Word | undefined;
+      hit.object.traverseAncestors((o) => {
+        owner ??= [...heroes].find((word) => word.group === o);
+      });
       const { x, y, z } = hit.point;
-      return { x, y, z, unitsPerPx: stage.unitsPerPixel(z, box.height) };
+      return {
+        x,
+        y,
+        z,
+        unitsPerPx: stage.unitsPerPixel(z, box.height),
+        inWord: owner ? owner.layoutOf(hit.point) : { x: 0, y: 0 },
+      };
     },
     destroy() {
       destroyed = true;

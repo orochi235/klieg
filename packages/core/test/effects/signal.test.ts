@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { dwell, near, type Signal } from '../../src/effects/signal.js';
+import { dwell, level, near, peak, type Signal } from '../../src/effects/signal.js';
 import { fixed, orbit } from '../../src/effects/source.js';
 import type { FrameCtx, PartInfo } from '../../src/effects/types.js';
 import { AT, NO_CTX } from './ctx.js';
@@ -160,5 +160,36 @@ describe('dwell', () => {
     d(0, part, frame(0));
     expect(d(0, part, frame(16))).toBe(0);
     expect(d(0, part, { ...AT, now: 32 })).toBeCloseTo(1);
+  });
+});
+
+describe('level', () => {
+  it('reads the value your code set, for every part', () => {
+    const hover = level();
+    expect(hover(0, partAt(0), NO_CTX)).toBe(0);
+    hover.set(0.6);
+    expect(hover(0, partAt(0), NO_CTX)).toBe(0.6);
+    expect(hover(0.5, partAt(9, 9), NO_CTX)).toBe(0.6);
+    expect(hover.value).toBe(0.6);
+  });
+
+  it('clamps to 0..1 and reads a non-finite value as 0', () => {
+    const hover = level(3);
+    expect(hover.value).toBe(1);
+    hover.set(-1);
+    expect(hover.value).toBe(0);
+    hover.set(Number.NaN);
+    expect(hover.value).toBe(0);
+  });
+});
+
+describe('peak', () => {
+  it('reads the highest of its signals, per part', () => {
+    const low = level(0.2);
+    const reach = near({ source: fixed(0, 0), radius: 1 });
+    const both = peak(low, reach);
+    expect(both(0, partAt(0), NO_CTX)).toBeCloseTo(1);
+    expect(both(0, partAt(5), NO_CTX)).toBeCloseTo(0.2);
+    expect(peak()(0, partAt(0), NO_CTX)).toBe(0);
   });
 });

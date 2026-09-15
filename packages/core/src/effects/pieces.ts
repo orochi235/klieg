@@ -15,6 +15,9 @@ export interface FlickerSpec {
   /** Milliseconds held steady between bouts. Needs a `spell`, and lengthens the pass to fit whole
    * cycles of the two. 0, the default, flickers throughout. */
   calm?: number;
+  /** Milliseconds each dim lasts, snapped to whole steps. Default one step, ~58ms. It leaves the
+   * pass alone, so it can vary across `hinge` stops. */
+  drop?: number;
 }
 
 /** One step is ~58ms, so the shortest drop covers about three frames at 60fps; a one-frame drop
@@ -57,14 +60,15 @@ export function flicker(spec: FlickerSpec = {}): EffectPiece {
   const duration = gated ? cycles * cycleSteps * STEP_MS : wanted;
   const steps = stepsFor(duration);
   const spellShare = spellSteps / cycleSteps;
+  const block = Math.max(1, Math.round(finiteMs(spec.drop) / (duration / steps)));
 
   return {
     duration,
     at(t, part) {
       if (gated && (t * cycles) % 1 >= spellShare) return { gain: 1 };
-      const step = Math.floor(t * steps) % steps;
-      if (hash01(step + part.index * 977.3) > unrest) return { gain: 1 };
-      const bite = hash01(step * 3.7 + part.index * 131.1);
+      const beat = Math.floor((Math.floor(t * steps) % steps) / block);
+      if (hash01(beat + part.index * 977.3) > unrest) return { gain: 1 };
+      const bite = hash01(beat * 3.7 + part.index * 131.1);
       return { gain: depth + (1 - depth) * bite * BITE };
     },
   };

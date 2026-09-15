@@ -6,33 +6,46 @@ next.
 
 ## In flight, 2026-09-15
 
-**Next:** nothing of magicsmoke's is left to build in klieg. All three additions are on `main`,
-merged locally and not pushed, and `sparky-b1` is wiring the portfolio masthead against them. The
-one branch still open is `counters`.
+**Next:** two things wait on Mike. **Publishing 0.12.0** — the bump is committed on `main`
+(`e35ac76`) and unpushed; pushing it with a `v0.12.0` tag publishes to npm through `release.yml`, and
+the masthead deploy waits on that (magicsmoke has already published). **Merging `tube-power`**, the
+power states and spark kicks, after 0.12.0 ships, so they land under a later version.
 
 ### Branches
 
 Run `git log --oneline main..<branch>` for what a branch carries; don't trust a count written here.
 
-- **`main`**, this checkout. Carries `hinge`, `near`, `dwell` with `FrameCtx.now`, `attach` and
-  `pointOn`. Specs: [2026-09-14-hinge-signal-design.md](specs/2026-09-14-hinge-signal-design.md) and
-  [2026-09-15-attach-pointon-design.md](specs/2026-09-15-attach-pointon-design.md). Not pushed.
-- **`counters`**, worktree `.claude/worktrees/counters`, cut from `main` before the merge, parked.
+- **`main`**, pushed through `4e019d9`: `hinge`, `near`, `dwell` with `FrameCtx.now`, `attach`,
+  `pointOn`. `e35ac76` (bump to 0.12.0) is local only.
+- **`tube-power`**, this checkout, cut from `e35ac76`. `power()` with `short`/`up`/`start`/`trip`,
+  the `strike`/`thinning`/`glow` warm-ups, `level()`, `kicks()`, `peak()`, `flicker({ drop })` and
+  `pointOn(...).inWord`. Spec:
+  [2026-09-15-tube-power-design.md](specs/2026-09-15-tube-power-design.md). Its CHANGELOG entry sits
+  under a new Unreleased heading above 0.12.0.
+- **`counters`**, worktree `.claude/worktrees/counters`, cut from `main` before the merges, parked.
   `TubeSpec.contours`, spec `specs/2026-09-14-counters-design.md` on that branch only. **Owed:** the
   Playwright visual run. `look-tubing` and `offaxis-tubing` will move, because Archivo Black's `A`
   counter now lights. Mike looks at the new shots before they're re-blessed; never bless them
   unseen. It touches `README.md` and `CHANGELOG.md`, so expect text merges, and any `FrameCtx` it
   builds by hand now needs a `now`.
 
+### Masthead wiring owed (`sparky-b1`, `~/src/portfolio`)
+
+The portfolio's `mastheadSparks.ts` and `mastheadLook.ts` are not wired to `tube-power` yet: a
+`level()` fed from magicsmoke's hover value driving `power({ trip: { on, at: 1, holdMs: 3000 } })`;
+`kicks()` fed from `onDischarge` at the last hit's `inWord`; `peak(dwell(...), sparks)` with a
+`drop` in the proximity flicker; and the sign's own effects hinged on `tube.warm`.
+
 ### Not verified
 
-- **Nothing has drawn an attached layer on a real WebGL canvas.** The tests use a stubbed renderer
-  and `ManualClock`; `pointOn`'s raycast does run against real three geometry. The masthead is the
-  first browser run.
-- **Between fires there is no bloom**, by design: bloom belongs to a fire. It is the likeliest thing
-  to disappoint on the masthead, and a `hold: 'forever'` fire with bloom avoids it.
-- **No full suite on the merged `main`.** The test files the merge touches, `tsc -b`, and a mutation
-  pass on each branch before it merged ran. The suite is the pre-push gate.
+- **Nothing has drawn `power` or `kicks` on a real canvas.** Their tests run the pieces directly
+  against a stepped `ctx.now`, and `inWord` runs against real three geometry under a stubbed
+  renderer. `attach`, `pointOn` and `dwell` have had one headless-Chromium run in the masthead.
+- **Sparks are clipped to the masthead's canvas box.** Whether to raise `bleed` or give layers a
+  way past the anchor is Mike's call, asked and unanswered.
+- **Between fires there is no bloom**, by design: bloom belongs to a fire.
+- **No full suite on `tube-power`.** The touched test files, `tsc -b` and a mutation pass ran.
+  `main` passed the full suite, the build and the dist tests before its push.
 
 ### Decided in conversation, and in no file
 
@@ -47,6 +60,10 @@ Run `git log --oneline main..<branch>` for what a branch carries; don't trust a 
   alongside `stops`, and stops that disagree on duration throw.
 - **Dwell, attach and pointOn were built with no review gates**, at Mike's instruction. Every design
   call in their specs was the building session's, and none has been put to him.
+- **Tube power was designed with Mike, then built under "gogogo".** He chose: runtime switch plus
+  effects (C), strike-and-catch as the default warm-up with all three built, per-spark kicks plus
+  the hover build (C), shorts ended by code or a timer (C), and signals your code drives (A). The
+  overload trip, `level()`, `peak()` and `drop` are the building session's shape for his asks.
 
 ### Found on the way, not fixed
 

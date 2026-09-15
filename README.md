@@ -353,6 +353,48 @@ reads. `hinge(dwell(), (k) => flicker({ unrest: 0.02 + k * 0.8 }))` is a tube th
 longer you hover on it. It steps once a frame however often it is asked, and under reduced motion it
 follows its input rather than climbing.
 
+**`power({ warmup, start, trip })`** — a sign-wide power switch your code holds. `short()` takes the
+sign dark until `up()`, `short({ for: 1200 })` comes back by itself, and `up()` plays the warm-up
+and hands back to the sign's own effects. Put `tube.piece` in the effects list — it darkens or warms
+every part it targets and passes nothing through once on — and hinge the sign's other effects on
+`tube.warm` so they wait for the warm-up. The warm-up is `strike()` by default, blinks that stay lit
+longer until the tube catches, or `thinning()` or `glow()`, each with a `duration`.
+`start: 'warming'` powers a sign up as it arrives. `trip: { on, at, holdMs, outMs }` shorts the sign
+by itself when a signal holds at `at` for `holdMs`, and relights it `outMs` later. The trip is
+watched through `tube.piece`, so it does nothing until that is in the effects. Under reduced motion
+a warm-up is skipped rather than flashed.
+
+```ts
+import { EFFECTS, hinge, level, power } from 'klieg';
+
+const hover = level(); // hover.set(v) from your own pointer code
+const tube = power({ trip: { on: hover, at: 1, holdMs: 3000, outMs: 3000 } });
+
+await bk.fire('klieg', {
+  look: 'tubing',
+  hold: 'forever',
+  effects: [
+    { piece: tube.piece, target: { kind: 'run', by: 'seed', amount: 1 } },
+    {
+      piece: hinge(tube.warm, EFFECTS.flicker({ unrest: 0.1 })),
+      target: { kind: 'run', by: 'seed', amount: 1 },
+    },
+  ],
+});
+```
+
+**`kicks({ radius, recoverMs })`** and **`peak(...signals)`** — a signal for events your code
+reports, and a way to combine it. Each `sparks.kick(at, energy)` lifts the parts within `radius` of
+`at` and lets them drain back over `recoverMs` per unit; `at` is in the word's layout space, which
+`pointOn(...).inWord` reports. `peak` reads the highest of its signals, so a hover's slow build and a
+spark's spike can drive one flicker. `flicker`'s `drop` is how long each dim lasts in milliseconds,
+one ~58ms step by default; it leaves the pass alone, so it can vary with a signal:
+
+```ts
+const sparks = kicks();
+hinge(peak(dwell(), sparks), (k) => EFFECTS.flicker({ unrest: k * 0.8, drop: 58 + k * 400 }));
+```
+
 Effects layer. Brightness multiplies and color is replaced, so `flicker` and `hue` compose without
 either knowing about the other — but two pieces both writing color fight, and the last one wins.
 A hue piece writes color every frame, which overrides `tint`: `tubing` tints its decoration, so a
@@ -446,7 +488,8 @@ sparks thrown after the word has gone draw without their glow.
 `pointOn` hits the geometry as drawn, so it follows a `transform`, the letters' pose and a moved
 `eye`, and passes through a letter that has faded out. It answers for the fired word only, never a
 backdrop, and returns null off the letters. `unitsPerPx` is how many world units one CSS pixel spans
-at the depth of the hit, for sizing whatever you put there in pixels.
+at the depth of the hit, for sizing whatever you put there in pixels. `inWord` is the same point in the word's layout space, where effects measure distance — what a
+`kick` takes.
 
 ## Stages
 

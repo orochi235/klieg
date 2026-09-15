@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { hinge } from '../../src/effects/hinge.js';
 import { chase, EFFECTS, flicker, hue } from '../../src/effects/pieces.js';
+import { near } from '../../src/effects/signal.js';
+import { fixed } from '../../src/effects/source.js';
 import type { EffectPiece, PartInfo } from '../../src/effects/types.js';
 import { NO_CTX } from './ctx.js';
 
@@ -285,5 +288,26 @@ describe('chase', () => {
 
   it('is usable with no spec, which is all a name lookup can supply', () => {
     expect(EFFECTS.chase().duration).toBeGreaterThan(0);
+  });
+});
+
+describe('flicker drop', () => {
+  it('leaves flicker exactly as it was at one step', () => {
+    expect(gainsAcrossOnePass(flicker({ drop: 1400 / 24 }))).toEqual(gainsAcrossOnePass(flicker()));
+  });
+
+  it('holds each dim for at least the drop', () => {
+    const piece = flicker({ drop: 350, unrest: 0.5 });
+    const runs = darkRuns(gainsAcrossOnePass(piece, part, 4000));
+    expect(runs.length).toBeGreaterThan(0);
+    expect(Math.min(...runs) * (piece.duration / 4000)).toBeGreaterThanOrEqual(340);
+  });
+
+  // hinge refuses stops that disagree on duration, and a drop that moved the pass would be refused.
+  it('keeps its pass whatever the drop, so hinge can vary it', () => {
+    expect(flicker({ drop: 400 }).duration).toBe(1400);
+    expect(() =>
+      hinge(near({ source: fixed(0, 0) }), (k) => flicker({ drop: 58 + k * 400 })),
+    ).not.toThrow();
   });
 });

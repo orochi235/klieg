@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### A tube sign can short out, power back up, and flinch at sparks
+
+`power()` is a sign-wide switch your code holds: `short()` takes the sign dark, `short({ for })` comes
+back by itself, and `up()` plays a warm-up before the sign's own effects resume. The warm-up is
+`strike()` by default, blinks that stay lit longer until the tube catches, or `thinning()` or
+`glow()`. A `trip` shorts the sign when a signal holds high for long enough, and relights it after
+`outMs`; `level()` is a signal your code sets, for a hover intensity measured outside klieg.
+
+`kicks()` turns events your code reports into a signal: each `kick(at, energy)` lifts the nearby
+parts, which drain back over `recoverMs`. `peak()` reads the highest of several signals.
+`flicker({ drop })` sets how long each dim lasts without moving the pass, and `pointOn` now reports
+`inWord`, the hit in layout space, where a kick lands.
+
 ## 0.12.0
 
 ### An effect can hinge on where the cursor is

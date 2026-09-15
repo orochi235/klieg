@@ -35,6 +35,37 @@ export function near(spec: NearSpec = {}): Signal {
   };
 }
 
+/** A sign-wide signal your code sets. */
+export interface Level extends Signal {
+  set(value: number): void;
+  readonly value: number;
+}
+
+/** One value every part reads, set from outside a frame — a hover intensity, a volume. Clamped to
+ * 0..1, and a non-finite value reads as 0. */
+export function level(initial = 0): Level {
+  const clean = (v: number) => (Number.isFinite(v) ? clamp01(v) : 0);
+  let value = clean(initial);
+  const signal = (() => value) as unknown as Level;
+  Object.defineProperties(signal, {
+    set: { value: (v: number) => (value = clean(v)) },
+    value: { get: () => value },
+  });
+  return signal;
+}
+
+/** The highest of several signals, per part — a hover's slow build with a spark's spike on top. */
+export function peak(...signals: Signal[]): Signal {
+  return (t, part, ctx) => {
+    let k = 0;
+    for (const signal of signals) {
+      const v = signal(t, part, ctx);
+      if (v > k) k = v;
+    }
+    return k;
+  };
+}
+
 export interface DwellSpec {
   /** What accumulates. Defaults to `near()`, so a part fills while the cursor rests on it. */
   of?: Signal;

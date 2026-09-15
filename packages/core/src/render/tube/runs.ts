@@ -1,14 +1,18 @@
 import * as THREE from 'three';
 import { rng } from '../../rng.js';
 import {
+  BEND_FLOOR,
   biarcBlend,
   type Corner,
   cornersByBend,
+  DEFAULT_BEND,
   type Fillet,
   filletAt,
   minBendRadius,
   STYLE_FACTOR,
+  vertexBends,
 } from './bend.js';
+import { type ContourPolicies, type ContourRole, DEFAULT_FLOOR } from './contours.js';
 import type { GeneratedPath } from './generators.js';
 import {
   apexLoss,
@@ -49,6 +53,12 @@ export interface Run {
   index: number;
   lit: boolean;
   color: number;
+  /** Which contour this run traces. Set only where the spec has a policy for that role. */
+  role?: ContourRole;
+  /** The radius this run sweeps at, when a rescue thinned the glass. Absent is the spec's own. */
+  radius?: number;
+  /** The path this run was cut from, beside `role`. @internal */
+  path?: number;
 }
 
 export type CornerStrategy = 'break' | 'connect' | 'return' | 'hairpin';
@@ -144,6 +154,8 @@ export interface CutOptions {
    * report instead.
    */
   onRepair?(id: CutRepairId, site: RepairSite | null, ran: boolean): void;
+  /** Per-role treatment of contours whose path knows its role. Absent treats every path alike. */
+  contours?: ContourPolicies;
 }
 
 /** A weight factor never fully zeroes an option biasing can't rule out entirely. */
@@ -1350,6 +1362,34 @@ function slice(span: THREE.Vector3[], pieces: number): THREE.Vector3[][] {
  * guarantee — it cannot go below the count of spans a corner's `break` draws produce, and the
  * floor can take the result lower still.
  */
+type Report = (id: CutRepairId, site: RepairSite | null, ran: boolean) => void;
+type Stitched = ReturnType<typeof stitchPath>;
+
+/** Repairs held back until an attempt is known to be the one kept. */
+function listen(): { report: Report; replay(to: Report): void } {
+  const heard: Parameters<Report>[] = [];
+  return {
+    report: (id, site, ran) => {
+      heard.push([id, site, ran]);
+    },
+    replay: (to) => {
+      for (const [id, site, ran] of heard) to(id, site, ran);
+    },
+  };
+}
+
+/** Whether any span could light and clear the `minRun` floor: whether the contour reaches the screen. */
+function lightable(spans: readonly Span[], minRun: number): boolean {
+  return spans.some((s) => !s.dark && s.points.length > 1 && polyLength(s.points) >= minRun);
+}
+
+/** Glass thin enough that the path's tightest bend clears the material's limit, never thicker than `radius`. */
+function fitRadius(path: GeneratedPath, radius: number, bend: number | undefined): number {
+  let tightest = Number.POSITIVE_INFINITY;
+  for (const b of vertexBends(path.points, path.closed)) tightest = Math.min(tightest, b.rho);
+  return Math.min(radius, tightest / Math.max(BEND_FLOOR, bend ?? DEFAULT_BEND));
+}
+
 export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult {
   const weights = opts.corners ?? ALL_BREAK;
   const radius = opts.radius ?? FALLBACK_RADIUS;
@@ -1384,33 +1424,80 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
   };
 
   const cornerRecords: CornerRecord[] = [];
-  const spans: { points: THREE.Vector3[]; surface: SurfaceKind; dark?: boolean }[] = [];
-  for (const path of paths) {
-    const raw = rawSpansOf(path, rhoMin, rhoStyle);
-    const { spans: stitched, decisions } = stitchPath(
-      raw,
-      weights,
-      rhoMin,
-      spacing,
-      opts.blockout ?? DEFAULT_BLOCKOUT,
-      rejoin,
-      shape,
-      drawAt,
-      inherit,
-      on,
-      report,
-    );
-    cornerBase += decisions.length;
-    for (const d of decisions) {
+  const spans: {
+    points: THREE.Vector3[];
+    surface: SurfaceKind;
+    dark?: boolean;
+    role?: ContourRole;
+    radius?: number;
+    path?: number;
+  }[] = [];
+  const blockout = opts.blockout ?? DEFAULT_BLOCKOUT;
+  for (const [p, path] of paths.entries()) {
+    const stitchAt = (r: number, b: number, heard: Report): Stitched => {
+      const min = r === radius ? rhoMin : minBendRadius(r, opts.bend);
+      const style = r === radius ? rhoStyle : r * STYLE_FACTOR;
+      return stitchPath(
+        rawSpansOf(path, min, style),
+        weights,
+        min,
+        spacing,
+        b,
+        rejoin,
+        shape,
+        drawAt,
+        inherit,
+        on,
+        heard,
+      );
+    };
+
+    const policy = path.role === undefined ? undefined : opts.contours?.[path.role];
+    let thinned: number | undefined;
+    let stitched: Stitched;
+    if (!policy?.rescue?.length) {
+      stitched = stitchAt(radius, blockout, report);
+    } else {
+      // A discarded attempt's repairs never happened, so only the kept attempt's reach the caller.
+      let kept = listen();
+      stitched = stitchAt(radius, blockout, kept.report);
+      if (!lightable(stitched.spans, opts.minRun)) {
+        const floor = radius * (policy.floor ?? DEFAULT_FLOOR);
+        for (const rung of policy.rescue) {
+          const r =
+            rung.radius === 'fit'
+              ? fitRadius(path, radius, opts.bend)
+              : radius * (rung.radius ?? 1);
+          if (!(r >= floor)) continue;
+          const tried = listen();
+          const attempt = stitchAt(r, rung.blockout ?? blockout, tried.report);
+          if (!lightable(attempt.spans, opts.minRun)) continue;
+          stitched = attempt;
+          kept = tried;
+          if (r !== radius) thinned = r;
+          break;
+        }
+      }
+      kept.replay(report);
+    }
+
+    cornerBase += stitched.decisions.length;
+    for (const d of stitched.decisions) {
       cornerRecords.push({
         point: d.at ?? (path.points[d.index] as THREE.Vector3),
         strategy: d.strategy,
         turn: d.turn,
       });
     }
-    for (const span of stitched) {
+    for (const span of stitched.spans) {
       if (span.points.length > 1) {
-        spans.push({ points: span.points, surface: path.surface, dark: span.dark });
+        spans.push({
+          points: span.points,
+          surface: path.surface,
+          dark: span.dark,
+          ...(policy ? { role: path.role, path: p } : {}),
+          ...(thinned === undefined ? {} : { radius: thinned }),
+        });
       }
     }
   }
@@ -1455,6 +1542,8 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
         lit: true,
         dark: span.dark,
         color: 0,
+        ...(span.role ? { role: span.role, path: span.path } : {}),
+        ...(span.radius === undefined ? {} : { radius: span.radius }),
       });
     }
   });

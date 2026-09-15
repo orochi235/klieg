@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { ContourRole } from './contours.js';
 import { type Field, isoContours, type Point2, refineExact, signedDistanceField } from './field.js';
 import { offsetRing, orientRings } from './offset.js';
 import { resample } from './resample.js';
@@ -9,6 +10,11 @@ export interface GeneratedPath {
   surface: SurfaceKind;
   /** True when the path closes on itself, which decides whether cutting must wrap. */
   closed: boolean;
+  /**
+   * Which contour the path traces. Only the direct source knows: `field` and `exact` re-extract
+   * from a grid, where a path is no particular contour.
+   */
+  role?: ContourRole;
 }
 
 /**
@@ -32,6 +38,12 @@ export interface GenerateOptions {
   source?: PathSource;
 }
 
+/** One traced contour, and its role where the source can tell. */
+interface Traced {
+  line: Point2[];
+  role?: ContourRole;
+}
+
 export function generatePaths(
   surfaces: Surface[],
   enabled: SurfaceKind[],
@@ -44,16 +56,17 @@ export function generatePaths(
   // `surfacesOf` hands front and back the same `polygons` array — they are one contour at two
   // depths — so everything up to the z assignment is shared. Keyed by identity rather than by
   // value: two faces of one glyph are the same object, and nothing else is.
-  const cooked = new Map<Point2[][], Point2[][]>();
-  const contoursOf = (polygons: Point2[][]): Point2[][] => {
+  const cooked = new Map<Point2[][], Traced[]>();
+  const contoursOf = (polygons: Point2[][], roles: readonly ContourRole[]): Traced[] => {
     const hit = cooked.get(polygons);
     if (hit) return hit;
-    const lines: Point2[][] = [];
+    const lines: Traced[] = [];
     if (source === 'direct') {
-      for (const ring of orientRings(polygons)) {
+      // `orientRings` maps ring for ring, so each ring's role stays beside it through the offset.
+      orientRings(polygons).forEach((ring, i) => {
         const line = resample(offsetRing(ring, opts.level), opts.spacing);
-        if (line.length >= 4) lines.push(line);
-      }
+        if (line.length >= 4) lines.push({ line, role: roles[i] });
+      });
     } else {
       const base = signedDistanceField(polygons, { resolution: opts.resolution, pad: opts.pad });
       const field: Field = source === 'exact' ? refineExact(base, polygons, opts.level) : base;
@@ -61,7 +74,7 @@ export function generatePaths(
         // Deliberately unsmoothed: cutting detects corners on these points, and smoothing a
         // square's 90 degree corner down to 26 degrees puts it under the detection threshold.
         const line = resample(raw, opts.spacing);
-        if (line.length >= 4) lines.push(line);
+        if (line.length >= 4) lines.push({ line });
       }
     }
     cooked.set(polygons, lines);
@@ -81,17 +94,18 @@ export function generatePaths(
         const depth = Math.min(1, Math.max(0, opts.wallDepth + wave));
         points.push(wallPointAt(surface, along, depth));
       }
-      out.push({ points, surface: 'wall', closed: true });
+      out.push({ points, surface: 'wall', closed: true, role: surface.role });
       continue;
     }
 
-    for (const line of contoursOf(surface.polygons)) {
+    for (const { line, role } of contoursOf(surface.polygons, surface.roles)) {
       // A fresh Vector3 per surface: wander moves run points in place, and the two faces must not
       // share the points it moves.
       out.push({
         points: line.map((p) => new THREE.Vector3(p.x, p.y, surface.z)),
         surface: surface.kind,
         closed: true,
+        ...(role ? { role } : {}),
       });
     }
   }

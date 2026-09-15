@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import type { MaterialSpec } from '../decoration.js';
 import type { SelectSpec } from './assign.js';
+import type { ContourPolicies } from './contours.js';
 import type { GeneratedPath, PathSource } from './generators.js';
 import type { GradientSpec } from './gradient.js';
 import type { HairpinShape } from './hairpin.js';
@@ -11,6 +12,8 @@ import { TUBE_STAGES } from './stages.js';
 import type { SurfaceKind } from './surfaces.js';
 
 export type { SelectSpec } from './assign.js';
+export type { ContourPolicies, ContourPolicy, ContourRole, RescueRung } from './contours.js';
+export { DEFAULT_FLOOR, RESCUE_LADDER } from './contours.js';
 export type { PathSource } from './generators.js';
 export type { GradientDomain, GradientSpec } from './gradient.js';
 export type { HairpinShape } from './hairpin.js';
@@ -72,6 +75,11 @@ export interface TubeSpec {
    */
   amplitude?: number;
   select: SelectSpec;
+  /**
+   * What to do for a letter's outline and for the counters punched through it. Only the `direct`
+   * path source can tell them apart. Absent leaves every blueprint as it was.
+   */
+  contours?: ContourPolicies;
   colors: number[];
   /** Per-surface palettes, each falling back to `colors`. Omit for one palette across every layer. */
   surfaceColors?: Partial<Record<SurfaceKind, number[]>>;

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { type SelectSpec, selectIndices } from '../../select.js';
+import type { ContourPolicies } from './contours.js';
 import { type GradientSpec, perRunT, rampAt } from './gradient.js';
 import type { Run } from './runs.js';
 import type { SurfaceKind } from './surfaces.js';
@@ -18,6 +19,7 @@ export function assign(
   surfaceColors?: Partial<Record<SurfaceKind, number[]>>,
   surfaces: readonly SurfaceKind[] = [],
   gradient?: GradientSpec,
+  contours?: ContourPolicies,
 ): Run[] {
   if (runs.length === 0) return runs;
   // Blockout is paint, not selection: a return carries the tube past a corner unlit whatever
@@ -28,6 +30,7 @@ export function assign(
   for (const run of runs) run.lit = chosen.has(run.index);
 
   for (const run of runs) if (run.dark) run.lit = false;
+  if (contours) lightOne(runs, contours);
 
   const palette = colors.length > 0 ? colors : [0xffffff];
   if (!surfaceColors) {
@@ -88,4 +91,25 @@ function applyPerRunGradient(
     }
   }
   return runs;
+}
+
+/**
+ * A contour whose policy asks for one lit run, and that `select` left entirely dark, gets its
+ * longest lightable run lit. The other runs keep whatever `select` gave them.
+ */
+function lightOne(runs: Run[], contours: ContourPolicies): void {
+  const byPath = new Map<number, Run[]>();
+  for (const run of runs) {
+    if (run.path === undefined || run.role === undefined) continue;
+    if (contours[run.role]?.lit !== 'one') continue;
+    const group = byPath.get(run.path);
+    if (group) group.push(run);
+    else byPath.set(run.path, [run]);
+  }
+  for (const group of byPath.values()) {
+    if (group.some((r) => r.lit)) continue;
+    let longest: Run | undefined;
+    for (const r of group) if (!r.dark && (!longest || r.length > longest.length)) longest = r;
+    if (longest) longest.lit = true;
+  }
 }

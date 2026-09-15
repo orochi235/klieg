@@ -103,13 +103,14 @@ export const TUBE_STAGES: readonly TubeStage[] = [
         repairs,
         onRepair,
         seed,
+        contours: spec.contours,
       });
       state.runs.push(...cut.runs);
       // Cloned after wander, not before: wander moves path points in place, and every corner
       // interior to a run — every `connect` and `loop` — moves with them.
       state.corners.push(...cut.corners.map((c) => ({ ...c, point: c.point.clone() })));
     },
-    bypass(state) {
+    bypass(state, { spec }) {
       state.paths.forEach((path, index) => {
         if (path.points.length < 2) return;
         state.runs.push({
@@ -120,6 +121,7 @@ export const TUBE_STAGES: readonly TubeStage[] = [
           index: state.runs.length,
           lit: true,
           color: 0,
+          ...(path.role && spec.contours?.[path.role] ? { role: path.role, path: index } : {}),
         });
       });
     },
@@ -136,6 +138,7 @@ export const TUBE_STAGES: readonly TubeStage[] = [
         spec.surfaceColors,
         spec.surfaces,
         spec.gradient,
+        spec.contours,
       );
     },
   },
@@ -161,7 +164,7 @@ export const TUBE_STAGES: readonly TubeStage[] = [
         const place = spec.gradient && run.lit ? spans.get(run.index) : undefined;
         const geo = sweepRun(
           run,
-          spec.radius,
+          run.radius ?? spec.radius,
           spec.segments,
           spec.gradient && place ? { domain: spec.gradient.domain, place } : undefined,
         );

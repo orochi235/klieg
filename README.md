@@ -218,6 +218,41 @@ Omit `gradient` and every run is flat, which is what the built-in looks do. `tub
 itself, and the glow fills a dim tube end, so a ramp that darkens its ends reads flatter than it is;
 `bloom: false` shows it plainly.
 
+### contours
+
+A counter is the hole punched through a letter: the inside of an `o`, a `B`, an `8`. `tubing`'s
+glass can't bend tighter than 0.044 em, so a small counter used to draw no tube at all, and the
+letter read as a blob. `contours` gives outlines and counters their own treatment:
+
+```ts
+import { RESCUE_LADDER, specOf, type TubeSpec } from 'klieg';
+
+const tubing = specOf('tubing');
+const tube = tubing.decoration as TubeSpec;
+
+await bk.fire('BOOK', {
+  look: {
+    ...tubing,
+    decoration: {
+      ...tube,
+      contours: {
+        counter: { rescue: [...RESCUE_LADDER, { radius: 'fit' }], floor: 0.4, lit: 'one' },
+      },
+    },
+  },
+});
+```
+
+- **`rescue`** runs only on a contour that would otherwise not reach the screen. Its rungs are tried
+  in order, and the first one that brings the contour back wins. `RESCUE_LADDER`, which `tubing`
+  ships with, turns blockout off at full thickness, then steps the glass down to half.
+- **`{ radius: 'fit' }`** thins the glass until the contour's tightest bend clears the material.
+- **`floor`** is the thinnest glass any rung may use, as a share of `radius`.
+- **`lit: 'one'`** lights a counter's longest run when `select` left all of it dark.
+
+Pass `contours: {}` to draw every contour the old way. Either way, a letter whose counters already
+drew doesn't change. Only the default `direct` path source can tell a counter from an outline.
+
 ### effects
 
 Effects drive a sign's appearance over time, below the level of a letter. A `look` sets what every

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { ContourRole } from './contours.js';
 import type { Point2 } from './field.js';
 import { pathLength, resample } from './resample.js';
 
@@ -9,6 +10,8 @@ export interface FaceSurface {
   z: number;
   /** Outer contour first, then holes — the polygons the field rasterises. */
   polygons: Point2[][];
+  /** Index-parallel to `polygons`: which contour each ring is. */
+  roles: ContourRole[];
 }
 
 export interface WallSurface {
@@ -17,6 +20,7 @@ export interface WallSurface {
   ring: Point2[];
   perimeter: number;
   depth: number;
+  role: ContourRole;
 }
 
 export type Surface = FaceSurface | WallSurface;
@@ -39,24 +43,32 @@ function contourPoints(contour: THREE.Shape | THREE.Path): Point2[] {
 
 export function surfacesOf(shapes: readonly THREE.Shape[], depth: number): Surface[] {
   const polygons: Point2[][] = [];
+  const roles: ContourRole[] = [];
   const walls: WallSurface[] = [];
 
   for (const shape of shapes) {
     for (const contour of [shape, ...shape.holes]) {
       const ring = contourPoints(contour);
       if (ring.length < 3) continue;
+      const role: ContourRole = contour === shape ? 'outline' : 'counter';
       polygons.push(ring);
+      roles.push(role);
       walls.push({
         kind: 'wall',
         ring,
         perimeter: pathLength([...ring, ring[0] as Point2]),
         depth,
+        role,
       });
     }
   }
 
   if (polygons.length === 0) return [];
-  return [{ kind: 'front', z: depth, polygons }, { kind: 'back', z: 0, polygons }, ...walls];
+  return [
+    { kind: 'front', z: depth, polygons, roles },
+    { kind: 'back', z: 0, polygons, roles },
+    ...walls,
+  ];
 }
 
 /**

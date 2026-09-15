@@ -6,108 +6,58 @@ next.
 
 ## In flight, 2026-09-15
 
-**Next:** build magicsmoke's three klieg additions. Mike wants them built, not gated section by
-section: design the calls yourself, build, test, commit, and report once at the end.
+**Next:** merge. magicsmoke's three klieg additions are built and committed on two branches; nothing
+is merged or pushed. The magicsmoke session `sparky-b1` has been told, and the portfolio masthead
+waits on one klieg build carrying all three.
 
 ### Branches
 
-Nothing below is merged or pushed. Run `git log --oneline main..<branch>` for what each carries;
-don't trust a count written here.
+Run `git log --oneline main..<branch>` for what each carries; don't trust a count written here.
 
-- **`hinge-signal`**, this checkout (`~/src/klieg`). `hinge(signal, piece | make)`, `near()`, the
-  `Signal` type, and `LightSource` split out into `effects/source.ts`. Spec:
-  [2026-09-14-hinge-signal-design.md](specs/2026-09-14-hinge-signal-design.md). `Signal` is
-  unpublished, so its contract can still change without breaking anyone, and dwell needs it to.
-- **`counters`**, worktree `.claude/worktrees/counters`, cut from `main`. `TubeSpec.contours` is a
-  role-keyed policy: a rescue ladder (blockout off, then thinner glass down to a floor) plus a lit
-  guarantee. `tubing` opts its counters in. The spec,
-  `specs/2026-09-14-counters-design.md`, exists on that branch only.
-  **Owed:** the Playwright visual run. `look-tubing` and `offaxis-tubing` will move, because
-  Archivo Black's `A` counter now lights. Mike looks at the new shots before they're re-blessed;
-  never bless them unseen.
-- The two branches are independent. Both touch `README.md`, so expect a text merge there.
-  `hinge-signal` also rewrote the README's British spellings.
+- **`hinge-signal`**, this checkout. `hinge`, `near`, and `dwell` with `FrameCtx.now` (`e9b2f44`).
+  Spec: [2026-09-14-hinge-signal-design.md](specs/2026-09-14-hinge-signal-design.md), whose last
+  section covers dwell. `FrameCtx.now` is required, so a `FrameCtx` built by hand on another branch
+  needs one once they meet.
+- **`attach-point`**, worktree `.claude/worktrees/attach`, cut from `main`. `attach(layer)` and
+  `pointOn(clientX, clientY)` (`327c675`). Spec: `specs/2026-09-15-attach-pointon-design.md`, on that
+  branch only.
+- **`counters`**, worktree `.claude/worktrees/counters`, cut from `main`, parked. `TubeSpec.contours`,
+  spec `specs/2026-09-14-counters-design.md` on that branch only. **Owed:** the Playwright visual
+  run. `look-tubing` and `offaxis-tubing` will move, because Archivo Black's `A` counter now lights.
+  Mike looks at the new shots before they're re-blessed; never bless them unseen.
+- All three touch `README.md` and `CHANGELOG.md`, so expect text merges there. `hinge-signal` also
+  rewrote the README's British spellings.
+
+### Not verified
+
+- **Nothing has drawn an attached layer on a real WebGL canvas.** The tests use a stubbed renderer
+  and `ManualClock`; `pointOn`'s raycast does run against real three geometry. The masthead is the
+  first browser run.
+- **Between fires there is no bloom**, by design: bloom belongs to a fire. It is the likeliest thing
+  to disappoint on the masthead, and a `hold: 'forever'` fire with bloom avoids it.
+- **No full suite on either branch.** The touched test files, a mutation pass over the lines they
+  name, and `tsc -b` ran. The suite is the pre-push gate.
 
 ### Decided in conversation, and in no file
 
 - **In klieg, Mike is always asking for the mechanism.** Build the axis and make the requested
   behavior one setting of it.
 - **Counters.** `contours` is keyed by role (`counter` and `outline`) because Mike said "just build"
-  while that question was still open. A flat `counters` field was the alternative, and it's a
-  cheap rename. The guarantee holds at blueprint time, not frame time: an effect knocking a
-  counter's *illumination* out is fine, in Mike's words "if the counters are knocked out as part of
-  an effect that knocks out random segments".
+  while that question was still open. A flat `counters` field was the alternative, and it's a cheap
+  rename. The guarantee holds at blueprint time, not frame time: an effect knocking a counter's
+  *illumination* out is fine, in Mike's words "if the counters are knocked out as part of an effect
+  that knocks out random segments".
 - **Hinge.** The name `hinge` (over `drive`). The continuous `blend` mode is the escape hatch
   alongside `stops`, and stops that disagree on duration throw.
-- **Magicsmoke, go-ahead.** It came from Mike, relayed by the magicsmoke session `sparky-b1`: "so
-  tell it to do them". That covers all three additions, dwell included, after counters. The
-  portfolio masthead waits for them ("we'll wait for its additions"). When they land, tell
-  `sparky-b1` or Mike, and the masthead gets wired.
-
-### The three additions
-
-These come from `~/src/magicsmoke` (`67b40a5`), spec section "What klieg needs to add".
-
-1. **`klieg.attach(layer)`**, returning a detach function. The layer is typed structurally as
-   `{ object: Object3D; update(dt: number): void; readonly live: boolean }`, with `dt` in seconds.
-   klieg takes no dependency on magicsmoke. Detach removes the object; disposing the layer stays the
-   caller's job. The object must be in the scene *before* the first `update`, because three.quarks
-   disposes a particle system with no `Scene` ancestor.
-2. **`klieg.pointOn(clientX, clientY)`**, returning the world point on the rendered type (the
-   nearest ink is fine) or `null` off the type, plus world units per CSS pixel at the type's depth.
-   magicsmoke's `createLayer({ scale })` takes that ratio.
-3. **`dwell`**, a signal beside `near`. It rises 0→1 while the pointer stays within reach of a part
-   and falls again after it leaves.
-
-**Requirements, not open questions:**
-
-- Dwell integrates once per frame, and never goes NaN under reduced motion.
-- `attach` holds off idle teardown while `layer.live` is true, and keeps frames coming after the
-  fire that threw the sparks has ended.
-- `pointOn` returns the pixel ratio along with the point.
-- All three are real public API. Nothing reaches into `stage.scene`.
-
-**Where they land:** dwell, and the frame identity it needs on `FrameCtx`, go on `hinge-signal`
-before it merges. `attach` and `pointOn` get their own branch.
-
-### Code survey for the additions (2026-09-14, this checkout)
-
-- **Frames render only while a fire is in flight.** A `RafClock` subscription is made per fire and
-  dropped at settle (`src/index.ts`, the subscribe and `settle` in `run()`). Nothing renders between
-  fires, so `attach` needs a clock subscription of its own. It also needs `Stage.mount()`, because
-  unmount destroys the renderer (`render/stage.ts` `unmount`). Idle teardown is
-  `scheduleIdleTeardown`, 8 s by default. `cancelIdle` is private.
-- **The scene is created once per `Stage`** (a field initializer) and survives unmount. Mount
-  rebuilds the canvas, the renderer and the PMREM environment. There are no THREE lights; lighting
-  is the environment map.
-- **No frame counter or tick id exists anywhere** (`clock.ts`). Every `RafClock` subscriber in one
-  tick receives the identical `now`, which is a candidate frame key. `track`
-  (`render/lighting.ts`) is the one existing piece that steps state per frame, and it already
-  snaps an infinite `dt`.
-- **`EffectFrame.resolve` runs once per `Word.apply`.** That's once for the hero word, once for the
-  backdrop, and again for each live fire under the concurrent policy. `turns` probes its inner piece
-  up to 12 times per step, and `roving` re-evaluates its inner. A signal nested under either runs
-  many times a frame, at different `t`.
-- **`pointerFrame`** (`src/pointer.ts`) maps client pixels to NDC over the canvas rect, then to
-  layout em (+y up, with `y` *not* re-centered). The `PlacedWord` is assembled per tick from
-  `word.placement` and `stage.lens()`. Layout to world is `worldX = x*scale + offsetX`,
-  `worldY = (y - midY)*scale`. That mapping ignores `transform`, pose, run sizes, effect offsets
-  and the camera `eye`, since `lens()` doesn't report `eye`.
-- **Pixels per world unit already exist internally.** `projectLetters` (`text/projection.ts`)
-  computes `height / faceHeight`, where `faceHeight = cameraZ - (depth + bevel) * scale`.
-- **Runtime ink exists only as axis-aligned boxes** (`Word.inkOf`, `meshInk`). Nearest ink finer
-  than a box needs glyph or tube geometry.
-- **The only public API that returns a teardown function** is `Clock.subscribe`, which returns
-  `Unsubscribe`. `Unsubscribe` itself isn't exported.
+- **Dwell, attach and pointOn were built with no review gates**, at Mike's instruction. Every design
+  call in their specs was the building session's, and none has been put to him.
 
 ### Found on the way, not fixed
 
 - **Idle teardown can fire under a live effect.** Under the `concurrent` policy, one fire settling
   arms teardown while another fire is still running. `warm()` during a `hold: 'forever'` fire
-  re-arms it too.
+  re-arms it too. `attach` only stops a settle arming it while a layer is live.
 - **Docstrings that contradict their code:**
-  - `FrameCtx.pointerInWord` says the pointer is stretched over the build extent; it actually
-    projects through the live camera, and `test/pointer.test.ts` asserts the code.
   - `scheduleWarm` says it returns a function; it returns a `Warmer` object.
   - `PartInfo.y` says it is block-centered; it's the raw `baseY`.
   - Two docstrings in `render/word.ts` sit on the wrong declarations (`WordExtent`, and
@@ -121,12 +71,14 @@ before it merges. `attach` and `pointOn` get their own branch.
 - **`spikes/counter-{loss,cut,rescue}.mjs` here are untracked copies** of files committed on
   `counters`, alongside their generated `.md` outputs. Before merging `counters` into this checkout,
   delete the copies, or git will refuse to overwrite them.
-- **A session isolated in a worktree has its git commands refused** when they sit in a compound
-  command or a heredoc. Use plain commands and `git commit -F <file>`.
+- **A worktree has no `node_modules`.** From its root, call `../../../node_modules/.bin/<tool>`.
+- **A session isolated in a worktree has commands refused** when they chain, use a heredoc, or pass
+  a shell variable where a path goes. Use plain commands, `git commit -F <file>`, and the Write tool
+  for multi-line content.
 - **The shell is zsh:** the exit status of a pipeline is `$pipestatus`, not `${PIPESTATUS[@]}`.
 - **`npm` and `npx` are broken under this harness.** Call `node_modules/.bin/<tool>` directly.
-- **The box ran at load averages of 20–75 on 2026-09-14** (mds_stores, Mail, other sessions'
-  builds). Check `uptime` before any suite, and run only the tests covering your diff.
+- **The box ran at load averages of 20–75 on 2026-09-14 and 2026-09-15** (mds_stores, Mail, other
+  sessions' builds). Check `uptime` before any suite, and run only the tests covering your diff.
 
 ## In flight, 2026-09-12
 

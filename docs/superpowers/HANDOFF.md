@@ -6,9 +6,9 @@ next.
 
 ## In flight, 2026-09-15
 
-**Next:** the overload flare is built on branch `flare`, unmerged and unreleased; shipping it is
-0.14.0, since `PowerState` gains `'flaring'` and a default short now flares. `sparky-b1` wires the loud
-half in the portfolio. klieg 0.13.0 is published (`v0.13.0` on
+**Next:** the overload flare ships in klieg 0.13.1 — `power()`'s `flare` and `onState`. Mike chose a
+patch although `PowerState` gained `'flaring'` and a default short now flares. `sparky-b1` wires the
+loud half in the portfolio. klieg 0.13.0 is published (`v0.13.0` on
 `6be56dc`, on npm since 2026-09-15 18:04Z) with the tube power states; 0.12.0 (`v0.12.0` on
 `e35ac76`) shipped just before it without them. `sparky-b1` is switching the portfolio masthead to
 the published packages.

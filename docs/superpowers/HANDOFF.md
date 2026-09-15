@@ -6,27 +6,23 @@ next.
 
 ## In flight, 2026-09-15
 
-**Next:** merge. magicsmoke's three klieg additions are built and committed on two branches; nothing
-is merged or pushed. The magicsmoke session `sparky-b1` has been told, and the portfolio masthead
-waits on one klieg build carrying all three.
+**Next:** nothing of magicsmoke's is left to build in klieg. All three additions are on `main`,
+merged locally and not pushed, and `sparky-b1` is wiring the portfolio masthead against them. The
+one branch still open is `counters`.
 
 ### Branches
 
-Run `git log --oneline main..<branch>` for what each carries; don't trust a count written here.
+Run `git log --oneline main..<branch>` for what a branch carries; don't trust a count written here.
 
-- **`hinge-signal`**, this checkout. `hinge`, `near`, and `dwell` with `FrameCtx.now` (`e9b2f44`).
-  Spec: [2026-09-14-hinge-signal-design.md](specs/2026-09-14-hinge-signal-design.md), whose last
-  section covers dwell. `FrameCtx.now` is required, so a `FrameCtx` built by hand on another branch
-  needs one once they meet.
-- **`attach-point`**, worktree `.claude/worktrees/attach`, cut from `main`. `attach(layer)` and
-  `pointOn(clientX, clientY)` (`327c675`). Spec: `specs/2026-09-15-attach-pointon-design.md`, on that
-  branch only.
-- **`counters`**, worktree `.claude/worktrees/counters`, cut from `main`, parked. `TubeSpec.contours`,
-  spec `specs/2026-09-14-counters-design.md` on that branch only. **Owed:** the Playwright visual
-  run. `look-tubing` and `offaxis-tubing` will move, because Archivo Black's `A` counter now lights.
-  Mike looks at the new shots before they're re-blessed; never bless them unseen.
-- All three touch `README.md` and `CHANGELOG.md`, so expect text merges there. `hinge-signal` also
-  rewrote the README's British spellings.
+- **`main`**, this checkout. Carries `hinge`, `near`, `dwell` with `FrameCtx.now`, `attach` and
+  `pointOn`. Specs: [2026-09-14-hinge-signal-design.md](specs/2026-09-14-hinge-signal-design.md) and
+  [2026-09-15-attach-pointon-design.md](specs/2026-09-15-attach-pointon-design.md). Not pushed.
+- **`counters`**, worktree `.claude/worktrees/counters`, cut from `main` before the merge, parked.
+  `TubeSpec.contours`, spec `specs/2026-09-14-counters-design.md` on that branch only. **Owed:** the
+  Playwright visual run. `look-tubing` and `offaxis-tubing` will move, because Archivo Black's `A`
+  counter now lights. Mike looks at the new shots before they're re-blessed; never bless them
+  unseen. It touches `README.md` and `CHANGELOG.md`, so expect text merges, and any `FrameCtx` it
+  builds by hand now needs a `now`.
 
 ### Not verified
 
@@ -35,8 +31,8 @@ Run `git log --oneline main..<branch>` for what each carries; don't trust a coun
   first browser run.
 - **Between fires there is no bloom**, by design: bloom belongs to a fire. It is the likeliest thing
   to disappoint on the masthead, and a `hold: 'forever'` fire with bloom avoids it.
-- **No full suite on either branch.** The touched test files, a mutation pass over the lines they
-  name, and `tsc -b` ran. The suite is the pre-push gate.
+- **No full suite on the merged `main`.** The test files the merge touches, `tsc -b`, and a mutation
+  pass on each branch before it merged ran. The suite is the pre-push gate.
 
 ### Decided in conversation, and in no file
 

@@ -3,13 +3,20 @@ import type { ResolvedOffset } from '../../effects/types.js';
 import { DEFAULT_GLYPH_OPTIONS, EM, glyphToShapes } from '../../text/glyphs.js';
 import { buildTubeBlueprint, type TubeBlueprint, type TubeSpec } from '../decoration.js';
 import { seedFlake } from '../flake.js';
-import { applyLook, type FrameOwnedBase, litEmissive, setEmissiveIntensity } from '../looks.js';
+import {
+  applyLook,
+  baseColor,
+  type FrameOwnedBase,
+  litEmissive,
+  setEmissiveIntensity,
+} from '../looks.js';
 import { CRAWL_ATTRIBUTE, rampTexture } from '../tube/gradient.js';
 import {
   GRADIENT_BOUNDS_UNIFORM,
   GRADIENT_ORIGIN_UNIFORM,
   positionalDomain,
   RUN_COLOR_ATTRIBUTE,
+  RUN_DARK_ATTRIBUTE,
   tintByRunColor,
   tintChannelOf,
 } from '../tube/tint.js';
@@ -91,6 +98,7 @@ export class TubeBuilder implements DecorationBuilder {
         spec.gradient,
         this.gradientRamp ?? undefined,
         spec.look.rim,
+        baseColor(spec.dark),
       );
       if (spec.gradient && positionalDomain(spec.gradient)) {
         decorMaterial.userData[GRADIENT_BOUNDS_UNIFORM] = new THREE.Vector4(0, 0, 1, 1);
@@ -280,6 +288,18 @@ export class TubeBuilder implements DecorationBuilder {
       array[v + 2] = color.b;
     }
     attribute.needsUpdate = true;
+
+    // The fill the glow sits in: a run pulled toward the dark look is glass with the gas out of it.
+    const darkness = mesh.geometry.getAttribute(RUN_DARK_ATTRIBUTE) as
+      | THREE.BufferAttribute
+      | undefined;
+    if (darkness) {
+      const buffer = darkness.array as Float32Array;
+      if (buffer[0] !== out.dark) {
+        buffer.fill(out.dark);
+        darkness.needsUpdate = true;
+      }
+    }
 
     // Only present when the look declared a gradient; without a ramp there is nothing to shift.
     const crawl = mesh.geometry.getAttribute(CRAWL_ATTRIBUTE) as THREE.BufferAttribute | undefined;

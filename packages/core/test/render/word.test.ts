@@ -1939,6 +1939,39 @@ describe('effects', () => {
     expect(runColorOf(word, 0)).toBe(once);
   });
 
+  /** A run's darkness: the fill the glow sits in, rather than the glow. */
+  function runDarkOf(word: Word, ordinal: number): number {
+    const meshes = groups(word).flatMap((cell) => {
+      const lit = (drawn(cell).children[1] as THREE.Mesh).material;
+      return (drawn(cell).children.slice(1) as THREE.Mesh[]).filter((m) => m.material === lit);
+    });
+    const mesh = meshes[ordinal];
+    if (!mesh) throw new Error(`the word has no run ${ordinal}`);
+    return mesh.geometry.getAttribute('runDark').getX(0);
+  }
+
+  it('drains a targeted run toward the dark glass and leaves an untargeted one lit', () => {
+    const drained = { duration: 1000, at: () => ({ dark: 1 }) };
+    const word = tubingWith([{ piece: drained, target: { kind: 'run', ...FIRST } }]);
+
+    word.apply(STILL, 0, NO_CTX);
+
+    expect(runDarkOf(word, 0)).toBe(1);
+    expect(runDarkOf(word, 1)).toBe(0);
+  });
+
+  it('fills a run back in once its darkness falls away', () => {
+    let dark = 1;
+    const fading = { duration: 1000, at: () => ({ dark }) };
+    const word = tubingWith([{ piece: fading, target: { kind: 'run', ...FIRST } }]);
+
+    word.apply(STILL, 0, NO_CTX);
+    dark = 0;
+    word.apply(STILL, 16, NO_CTX);
+
+    expect(runDarkOf(word, 0)).toBe(0);
+  });
+
   it('layers two effects onto the part they both target', () => {
     const word = tubingWith([
       { piece: half, target: { kind: 'run', ...FIRST } },

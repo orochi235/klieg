@@ -243,6 +243,46 @@ describe('tintByRunColor with a gradient', () => {
   });
 });
 
+describe('tintByRunColor with unlit glass to darken toward', () => {
+  const GLASS = 0x1c2410;
+
+  it('carries each run’s darkness through from the vertex shader', () => {
+    const m = new THREE.MeshPhysicalMaterial();
+    tintByRunColor(m, 'emissive', undefined, undefined, undefined, GLASS);
+    const s = compiled(m);
+    expect(s.vertexShader).toContain('attribute float runDark;');
+    expect(s.vertexShader).toContain('vRunDark = runDark;');
+  });
+
+  it('mixes the fill toward the glass and takes the glow down with it', () => {
+    const m = new THREE.MeshPhysicalMaterial();
+    tintByRunColor(m, 'emissive', undefined, undefined, undefined, GLASS);
+    const s = compiled(m);
+    expect(s.fragmentShader).toContain('mix(diffuseColor.rgb, vec3(');
+    // Linear, as the run color is: the shader works in linear space, `setHex` converts from sRGB.
+    expect(s.fragmentShader).toContain(String(new THREE.Color(GLASS).r));
+    expect(s.fragmentShader).toContain('totalEmissiveRadiance *= (1.0 - vRunDark);');
+  });
+
+  it('writes a color look’s fill after the tint it shares an anchor with', () => {
+    const m = new THREE.MeshPhysicalMaterial();
+    tintByRunColor(m, 'color', undefined, undefined, undefined, GLASS);
+    const s = compiled(m);
+    const tinted = s.fragmentShader.indexOf('diffuseColor.rgb *= vRunColor;');
+    expect(tinted).toBeGreaterThan(-1);
+    expect(s.fragmentShader.indexOf('mix(diffuseColor.rgb')).toBeGreaterThan(tinted);
+    expect(s.fragmentShader).not.toContain('totalEmissiveRadiance');
+  });
+
+  it('parts the program cache from a material with no glass to darken toward', () => {
+    const glassy = new THREE.MeshPhysicalMaterial();
+    tintByRunColor(glassy, 'emissive', undefined, undefined, undefined, GLASS);
+    const plain = new THREE.MeshPhysicalMaterial();
+    tintByRunColor(plain, 'emissive');
+    expect(glassy.customProgramCacheKey?.()).not.toBe(plain.customProgramCacheKey?.());
+  });
+});
+
 describe('tintByRunColor emits the pre-gradient GLSL verbatim without a gradient', () => {
   // Byte-for-byte golden strings. 24 Playwright baselines depend on no shipped look's GLSL moving,
   // and no shipped look sets `gradient`.

@@ -15,6 +15,9 @@ export type TintChannel = 'emissive' | 'color';
 
 export const RUN_COLOR_ATTRIBUTE = 'runColor';
 
+/** How far a run is pulled toward its decoration's unlit glass, 0..1, per vertex. */
+export const RUN_DARK_ATTRIBUTE = 'runDark';
+
 export const GRADIENT_BOUNDS_UNIFORM = 'uGradBounds';
 export const GRADIENT_ORIGIN_UNIFORM = 'uGradOrigin';
 const GRADIENT_RAMP_UNIFORM = 'uGradRamp';
@@ -28,6 +31,19 @@ export function positionalDomain(gradient: GradientSpec): boolean {
 function glslFloat(n: number): string {
   const s = String(Number.isFinite(n) ? n : 0);
   return /[.eE]/.test(s) ? s : `${s}.0`;
+}
+
+const COLOR_ANCHOR = '#include <color_fragment>';
+
+/**
+ * GLSL pulling the fill toward a decoration's unlit glass by `vRunDark`, or '' where no glass was
+ * given. The color converts to linear as the run color does, which is the space the shader works in.
+ */
+function darkGlass(dark?: number): string {
+  if (dark === undefined) return '';
+  const glass = new THREE.Color(dark);
+  const channels = [glass.r, glass.g, glass.b].map(glslFloat).join(', ');
+  return `diffuseColor.rgb = mix(diffuseColor.rgb, vec3(${channels}), vRunDark);`;
 }
 
 /**
@@ -114,6 +130,7 @@ export function tintByRunColor(
   gradient?: GradientSpec,
   ramp?: THREE.Texture,
   rim?: number,
+  dark?: number,
 ): void {
   // Emissive only. `color_fragment` runs before three has a shading normal, and a cord is a solid
   // body rather than a column of gas, so a rim there would be a knob with nothing behind it.
@@ -132,6 +149,10 @@ export function tintByRunColor(
 
   let head = `attribute vec3 ${RUN_COLOR_ATTRIBUTE};\nvarying vec3 vRunColor;\n`;
   let body = `#include <begin_vertex>\n  vRunColor = ${RUN_COLOR_ATTRIBUTE};`;
+  if (dark !== undefined) {
+    head += `attribute float ${RUN_DARK_ATTRIBUTE};\nvarying float vRunDark;\n`;
+    body += `\n  vRunDark = ${RUN_DARK_ATTRIBUTE};`;
+  }
   if (gradient) {
     head += 'varying float vGradT;\n';
     if (onPosition) {
@@ -155,17 +176,23 @@ export function tintByRunColor(
     : gradient.mode === 'modulate'
       ? `vRunColor * ${sample}`
       : sample;
-  const fragHead = gradient
-    ? `varying vec3 vRunColor;\nvarying float vGradT;\nuniform sampler2D ${GRADIENT_RAMP_UNIFORM};\n`
-    : 'varying vec3 vRunColor;\n';
+  const fragHead =
+    (gradient
+      ? `varying vec3 vRunColor;\nvarying float vGradT;\nuniform sampler2D ${GRADIENT_RAMP_UNIFORM};\n`
+      : 'varying vec3 vRunColor;\n') + (dark === undefined ? '' : 'varying float vRunDark;\n');
+  // Baked rather than a uniform: the glass a run darkens toward is fixed when the material is built,
+  // and the cache key below parts two looks that darken toward different glass.
+  const darkMix = darkGlass(dark);
   const anchor =
     channel === 'emissive' ? '#include <emissivemap_fragment>' : '#include <color_fragment>';
+  // A darkened run stops glowing as well as filling: the glass it moves toward has no emissive.
+  const damped = darkMix ? '\n  totalEmissiveRadiance *= (1.0 - vRunDark);' : '';
   const write =
     channel === 'emissive'
-      ? limb > 0
-        ? `${GRAZING}\n  totalEmissiveRadiance *= ${tinted} * ${limbFactor(limb)};`
-        : `totalEmissiveRadiance *= ${tinted};`
-      : `diffuseColor.rgb *= ${tinted};`;
+      ? (limb > 0
+          ? `${GRAZING}\n  totalEmissiveRadiance *= ${tinted} * ${limbFactor(limb)};`
+          : `totalEmissiveRadiance *= ${tinted};`) + damped
+      : `diffuseColor.rgb *= ${tinted};${darkMix ? `\n  ${darkMix}` : ''}`;
 
   material.onBeforeCompile = (shader) => {
     shader.vertexShader = `${head}${shader.vertexShader}`.replace('#include <begin_vertex>', body);
@@ -173,6 +200,14 @@ export function tintByRunColor(
       anchor,
       `${anchor}\n  ${write}`,
     );
+    // An emissive look writes its tint at the emissive anchor, so the fill it darkens toward needs
+    // the color anchor of its own; a color look already carried it in `write`.
+    if (darkMix && channel === 'emissive') {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        COLOR_ANCHOR,
+        `${COLOR_ANCHOR}\n  ${darkMix}`,
+      );
+    }
     if (texture) {
       shader.uniforms[GRADIENT_RAMP_UNIFORM] = { value: texture };
       if (onPosition) {
@@ -198,7 +233,7 @@ export function tintByRunColor(
   material.customProgramCacheKey = () =>
     `klieg-run-${channel}-${gradient ? `${gradient.domain.of}-${gradient.mode}${baked}` : 'flat'}${
       limb > 0 ? `-rim${limb}` : ''
-    }`;
+    }${dark === undefined ? '' : `-dark${dark.toString(16)}`}`;
   material.needsUpdate = true;
 }
 

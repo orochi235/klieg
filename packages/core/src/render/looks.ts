@@ -687,6 +687,11 @@ export function litEmissive(base: number, hue: number, light: Vec3): number {
   return (ch(16, lr) << 16) | (ch(8, lg) << 8) | ch(0, lb);
 }
 
+/** A look's resolved base color, for code that needs the hex rather than a material to write it on. */
+export function baseColor(look: Look, tint?: number): number {
+  return tintedParams(specOf(look), tint).params.color;
+}
+
 export function lightBase(look: Look, tint?: number): LightBase {
   const { params, hue } = tintedParams(specOf(look), tint);
   return { emissive: params.emissive, hue: params[hue] };

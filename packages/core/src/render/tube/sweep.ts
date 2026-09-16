@@ -10,7 +10,7 @@ import {
 } from './gradient.js';
 import { minCurvatureRadius3, smooth } from './resample.js';
 import type { Run } from './runs.js';
-import { RUN_COLOR_ATTRIBUTE } from './tint.js';
+import { RUN_COLOR_ATTRIBUTE, RUN_DARK_ATTRIBUTE } from './tint.js';
 
 /** Smoothing happens here rather than upstream: a run ends at a corner, so it never crosses one. */
 const SMOOTH_PASSES = 3;
@@ -174,6 +174,12 @@ function buildTubeGeometry(
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geo.setAttribute(RUN_COLOR_ATTRIBUTE, new THREE.Float32BufferAttribute(colors, 3));
+  // Zeroed: at 0 the shader shows the lit glass it always did, so a word nothing darkens renders
+  // byte-identically.
+  geo.setAttribute(
+    RUN_DARK_ATTRIBUTE,
+    new THREE.Float32BufferAttribute(new Float32Array(positions.length / 3), 1),
+  );
   if (ts.length > 0) {
     geo.setAttribute(GRADIENT_T_ATTRIBUTE, new THREE.Float32BufferAttribute(ts, 1));
     // Zeroed: at 0 the shader reads the clamped gradientT it always did, so a word with no crawl

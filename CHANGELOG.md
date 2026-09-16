@@ -2,6 +2,13 @@
 
 ## 0.14.0
 
+### An effect's `dark` now empties the glass, not just the glow
+
+`PartOffset.dark` has always been composited and then dropped. It now renders: a run pulled toward
+1 fades its fill to the tube decoration's own `dark` glass and takes its emissive down with it, so a
+piece can drain a run rather than only dimming what it throws. `gain` is unchanged — it still scales
+the glow alone, and a piece writing neither renders byte-identically.
+
 ### `power()`'s `short()` is renamed `overload()`
 
 `short()` and `short({ for })` are now `overload()` and `overload({ for })`, with no alias left

@@ -335,7 +335,9 @@ per `stops` level at construction, eight by default, and the nearest level answe
 only way to reach a knob the piece settles internally, `flicker`'s `unrest` being a probability
 tested before anything is emitted. A **piece** runs unchanged while `blend` scales what it emitted,
 continuously and with no quantization, over the channels that have a rest to fade toward: `gain`,
-`scale`, `position`, `rotation`, `crawl`, `dark` and a lamp's `amount`. `color` is a replacement
+`scale`, `position`, `rotation`, `crawl`, `dark` and a lamp's `amount`. `dark` pulls a tube run
+toward the unlit glass its decoration declares, fill and glow together, where `gain` scales only the
+glow. `color` is a replacement
 rather than a contribution, so it passes through, and goes only at zero when the whole contribution
 goes with it.
 

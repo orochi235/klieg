@@ -22,7 +22,7 @@ Every ask needs a running sign to change on something outside klieg, and all of 
 signals and effect pieces rather than as methods on a fire:
 
 - **`power({ warmup, start, trip })`** holds a sign-wide state, `on → shorted → warming → on`.
-  `short()`, `short({ for })` and `up()` change it. `piece` darkens (`gain: 0`) or warms every
+  `overload()`, `overload({ for })` and `up()` change it. `piece` darkens (`gain: 0`) or warms every
   part it targets and contributes nothing when on; `warm` is a signal, 1 when on, for `hinge` to
   hold a sign's own effects off until warm.
 - **`strike`, `thinning`, `glow`** are `Warmup`s: a duration and a gain against milliseconds. They
@@ -55,7 +55,7 @@ signals and effect pieces rather than as methods on a fire:
 
 ## Decided against
 
-- **Methods on the fire handle** (`handle.short()`): tube verbs in the core fire API, closed to
+- **Methods on the fire handle** (`handle.overload()`): tube verbs in the core fire API, closed to
   `hinge` and out of reach of a backdrop.
 - **Swapping a live fire's effect list**: the caller times the warm-up, and every swap restarts
   the running pieces' phase.

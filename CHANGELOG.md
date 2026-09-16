@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.0
+
+### `power()`'s `short()` is renamed `overload()`
+
+`short()` and `short({ for })` are now `overload()` and `overload({ for })`, with no alias left
+behind; what they do is unchanged. `PowerState` keeps `'shorted'` for the dark an overload leads to.
+
 ## 0.13.1
 
 ### An overload blows out before it goes dark

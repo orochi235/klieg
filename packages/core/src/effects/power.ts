@@ -151,8 +151,8 @@ export interface PowerControl {
   /** The state asked for most recently, which reaches the sign on its next frame. */
   readonly state: PowerState;
   /** Flares, then dark until `up()` — or for `for` milliseconds of dark, then warming by itself. A
-   * short during a flare lets the flare finish. */
-  short(options?: { for?: number }): void;
+   * second overload during a flare lets the flare finish. */
+  overload(options?: { for?: number }): void;
   /** Warms a shorted or flaring sign up. Does nothing to one already on or warming. */
   up(): void;
 }
@@ -271,7 +271,7 @@ export function power(spec: PowerSpec = {}): PowerControl {
     get state() {
       return asked?.state ?? state;
     },
-    short(options = {}) {
+    overload(options = {}) {
       const ms = options.for;
       asked = { state: 'shorted', for: Number.isFinite(ms) ? Math.max(0, ms as number) : null };
     },

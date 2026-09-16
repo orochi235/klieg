@@ -110,7 +110,7 @@ describe('power', () => {
   it('goes dark on the next frame after a short, and stays dark until up', () => {
     const c = power({ flare: null });
     draw(c, 0);
-    c.short();
+    c.overload();
     expect(c.state).toBe('shorted');
     expect(draw(c, 16)).toEqual({ gain: 0 });
     expect(draw(c, 60_000)).toEqual({ gain: 0 });
@@ -119,7 +119,7 @@ describe('power', () => {
 
   it('warms up from the frame after up, then comes back on', () => {
     const c = power({ flare: null, warmup: strike({ duration: 1000 }) });
-    c.short();
+    c.overload();
     draw(c, 0);
     c.up();
     expect(draw(c, 100)).toEqual({ gain: 0 });
@@ -131,7 +131,7 @@ describe('power', () => {
 
   it('warms up by itself after a timed short, counted from the end of the dark', () => {
     const c = power({ flare: null, warmup: strike({ duration: 400 }) });
-    c.short({ for: 1000 });
+    c.overload({ for: 1000 });
     draw(c, 0);
     expect(draw(c, 999)).toEqual({ gain: 0 });
     // 1300 is 300ms into the warm-up whichever frame first saw the dark end.
@@ -160,7 +160,7 @@ describe('power', () => {
     const seen: PowerState[] = [];
     const c = power({ onState: (s) => seen.push(s) });
     draw(c, 0, Number.POSITIVE_INFINITY);
-    c.short();
+    c.overload();
     expect(draw(c, 16, Number.POSITIVE_INFINITY)).toEqual({ gain: 0 });
     c.up();
     expect(draw(c, 32, Number.POSITIVE_INFINITY)).toEqual({});
@@ -175,7 +175,7 @@ describe('power flare', () => {
     const f = blowout({ duration: 400 });
     const c = power({ flare: f, onState: (s, p) => seen.push(`${p}>${s}`) });
     draw(c, 0);
-    c.short();
+    c.overload();
     expect(draw(c, 16)).toEqual({ gain: f.gain(0) });
     expect(draw(c, 216)).toEqual({ gain: f.gain(200) });
     expect(c.warm(0, partAt(0), frame(216))).toBe(0);
@@ -186,7 +186,7 @@ describe('power flare', () => {
   it("counts a timed short's dark from the end of the flare", () => {
     const c = power({ flare: blowout({ duration: 400 }), warmup: strike({ duration: 100 }) });
     draw(c, 0);
-    c.short({ for: 1000 });
+    c.overload({ for: 1000 });
     draw(c, 16);
     // Seen 84ms after the flare ended at 416: the dark still counts from 416, not from this frame.
     expect(draw(c, 500)).toEqual({ gain: 0 });
@@ -220,7 +220,7 @@ describe('power flare', () => {
   it('warms up straight from a flare when told to', () => {
     const c = power({ warmup: strike({ duration: 500 }) });
     draw(c, 0);
-    c.short();
+    c.overload();
     draw(c, 16);
     expect(c.state).toBe('flaring');
     c.up();
@@ -232,9 +232,9 @@ describe('power flare', () => {
     const f = blowout({ duration: 400 });
     const c = power({ flare: f, warmup: strike({ duration: 100 }) });
     draw(c, 0);
-    c.short();
+    c.overload();
     draw(c, 16);
-    c.short({ for: 100 });
+    c.overload({ for: 100 });
     expect(draw(c, 100)).toEqual({ gain: f.gain(84) });
     expect(draw(c, 416)).toEqual({ gain: 0 });
     draw(c, 516);
@@ -257,7 +257,7 @@ describe('power flare', () => {
         },
       });
       draw(c, 0);
-      c.short();
+      c.overload();
       expect(() => draw(c, 16)).not.toThrow();
       expect(reported).toHaveLength(1);
       expect(c.state).toBe('flaring');

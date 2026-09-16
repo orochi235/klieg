@@ -353,8 +353,8 @@ reads. `hinge(dwell(), (k) => flicker({ unrest: 0.02 + k * 0.8 }))` is a tube th
 longer you hover on it. It steps once a frame however often it is asked, and under reduced motion it
 follows its input rather than climbing.
 
-**`power({ warmup, start, trip })`** — a sign-wide power switch your code holds. `short()` takes the
-sign dark until `up()`, `short({ for: 1200 })` comes back by itself, and `up()` plays the warm-up
+**`power({ warmup, start, trip })`** — a sign-wide power switch your code holds. `overload()` takes the
+sign dark until `up()`, `overload({ for: 1200 })` comes back by itself, and `up()` plays the warm-up
 and hands back to the sign's own effects. Put `tube.piece` in the effects list — it darkens or warms
 every part it targets and passes nothing through once on — and hinge the sign's other effects on
 `tube.warm` so they wait for the warm-up. The warm-up is `strike()` by default, blinks that stay lit

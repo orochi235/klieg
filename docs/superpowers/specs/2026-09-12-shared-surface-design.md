@@ -72,18 +72,30 @@ first.
 
 ## Traps
 
-**Keep clearing the whole buffer.** labkit 1.4.4 has no seam for a tenant to clear the gutters: a
-tile that moves leaves its old picture where nothing paints over it. `SurfaceHandle.registerClear`
-and `SurfaceFrame.retiled` fix it and are unreleased. klieg's existing full-buffer clear each frame
-sidesteps the bug entirely, which is why the surface can be adopted on 1.4.4 today — but only while
-that clear stays. Dropping it for per-tile painting before those land reintroduces the bug.
+**Clear the whole buffer on a re-tile, and only then.** labkit 1.4.4 has no seam for a tenant to
+clear the gutters: a tile that moves leaves its old picture where nothing paints over it.
+`SurfaceHandle.registerClear` and `SurfaceFrame.retiled` fix it and are unreleased. Until they ship,
+the host tells a re-tile from an ordinary repaint by comparing this frame's rects against the last
+with the exported `rectsEqual`, and clears only when they differ.
 
-**A tile that moves without resizing is missed, and klieg has this latently today.**
+**Clearing every frame is the trap, not the answer.** It is correct, and it makes `frame.dirty`
+worth nothing — every frame repaints every panel, which is affordable at a handful of cheap tiles
+and not at sixteen tube panels with an environment map and bloom. tube-lab already has a
+single-panel redraw (`drawOne`) that repaints one tile without clearing and leans on
+`preserveDrawingBuffer` for the rest; an unconditional clear would delete that. This is staging with
+a known exit: when `registerClear` lands, register one per tile and drop the comparison.
+
+**A tile that moves without resizing is missed, and tube-lab already fixes it — keep that fix.**
 `node.placementChanged` fires when a move is ordered, not when it lands, and a `ResizeObserver` has
-nothing to report for a pure move — so a panel whose size settles while its position animates paints
-for the rest of its life where it was caught mid-flight. labkit's unreleased fix keeps measuring
-until two measurements agree. Until then, call `invalidateRects()` on anything moved that the grid
-does not know about.
+nothing to report for a pure move, so a panel whose size settles while its position animates paints
+for the rest of its life where it was caught mid-flight. labkit's unreleased `46f4b55b` keeps
+measuring until two measurements agree; **tube-lab's `scheduleMeasure` already does the same thing**
+(`App.tsx:301-318` — re-measure on rAF until two passes agree), and the migration must port it to
+drive `invalidateRects()` rather than delete it. labkit sanctions this outright: a host that moves
+something the grid does not know about calls `invalidateRects()` itself.
+
+tube-gallery needs none of it. Its tiles are a CSS grid that moves only when the container resizes,
+which a plain `ResizeObserver` catches, which is why it has no settle loop to lose.
 
 **A tile id is scoped to its trial.** `useSurfaceTile` registers under `useTileId(id)` —
 `<trial>/<id>` inside a trial — and a frame's `rects` are keyed the same way. Unscoped, the second

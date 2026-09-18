@@ -1,0 +1,3 @@
+# How `onto test` runs this repository's suite on another node.
+setup: npm ci
+run: npm test

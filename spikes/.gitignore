@@ -8,3 +8,4 @@ sheet*.png
 svg-tube/*.svg
 svg-tube/out/
 hairpin.html
+_*.mjs

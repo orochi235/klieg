@@ -86,6 +86,26 @@ scene is drawn without bloom.
 against the geometry as drawn, together with `unitsPerPx`: how many world units a CSS pixel spans at
 that depth, for sizing in pixels whatever is placed there. Off the letters it returns null.
 
+### A tube keeps the counters its glass is too thick to go round
+
+Under `tubing`, a small counter (the hole in an `e`, a `B`, an `8`) could draw no tube at all.
+Fifteen letters across the shipped faces lost every counter they have and read as solid blobs.
+Nothing was simplifying them away: at `radius 0.022` and `bend 2`, the glass can't bend tighter
+than 0.044 em, so the corner stage ate the loop and what was left fell under `minRun`. Other
+counters drew only dark glass, because blockout had turned their one surviving span into an unlit
+return.
+
+`TubeSpec.contours` gives outlines and counters their own treatment. A policy's `rescue` is a ladder
+of overrides, tried on a contour that would otherwise not reach the screen. `RESCUE_LADDER` turns
+blockout off at full thickness, then steps the glass down to half. `lit: 'one'` lights a counter's
+longest run when `select` left all of it dark. `tubing` now opts its counters in. A letter that was
+drawn as a blob changes; a letter whose counters already lit does not. Only the `direct` path source
+can tell a counter from an outline, so `field` and `exact` ignore the policy.
+
+A counter too small even for half-thickness glass is still lost: vegapunk's loops, lobster's `Q`,
+satisfy's `R`. Adding a `{ radius: 'fit' }` rung and lowering `floor` brings some of them back, on
+glass thin enough that it may no longer read as the same sign.
+
 ### One effect can hand over to the next
 
 `turns({ pieces, every, deadline, stagger })` runs a list of effect pieces one at a time instead of

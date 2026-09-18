@@ -1,4 +1,6 @@
+import { RESCUE_LADDER } from '@core/render/tube/contours.js';
 import type {
+  ContourPolicy,
   CornerWeights,
   GradientSpec,
   PathSource,
@@ -357,6 +359,9 @@ export function Rail(props: RailProps) {
     ...(spec.connectors && spec.connectors > 0 ? (['connector'] as SurfaceKind[]) : []),
   ];
   const patch = (part: Partial<TubeSpec>) => onSpec({ ...spec, ...part });
+  const counter = spec.contours?.counter ?? {};
+  const patchCounter = (part: ContourPolicy) =>
+    patch({ contours: { ...spec.contours, counter: { ...counter, ...part } } });
   const gradient = spec.gradient;
   const stops = gradient?.stops ?? GRADIENT_STOPS.slice(0, 2);
   const applyGradient = (next: GradientSpec | null) => {
@@ -530,6 +535,37 @@ export function Rail(props: RailProps) {
             type="checkbox"
             checked={props.bloom}
             onChange={(e) => props.onBloom(e.target.checked)}
+          />
+        </label>
+      </section>
+
+      <section className="rail__group">
+        <h2 title="What a counter the glass cannot go round does. A rescue turns blockout off, then steps the glass thinner down to the floor, and one lit keeps select from leaving a drawn counter dark.">
+          counters
+        </h2>
+        <label>
+          rescue
+          <input
+            type="checkbox"
+            checked={Boolean(counter.rescue?.length)}
+            onChange={(e) => patchCounter({ rescue: e.target.checked ? RESCUE_LADDER : [] })}
+          />
+        </label>
+        <Range
+          label="floor"
+          hint="The thinnest glass a rescue may use, as a share of radius. The shipped ladder stops at half, so below 50 changes nothing unless a rung asks to fit."
+          min={0}
+          max={100}
+          step={5}
+          value={Math.round((counter.floor ?? 0.5) * 100)}
+          onCommit={(next) => patchCounter({ floor: next / 100 })}
+        />
+        <label>
+          one lit
+          <input
+            type="checkbox"
+            checked={counter.lit === 'one'}
+            onChange={(e) => patchCounter({ lit: e.target.checked ? 'one' : 'select' })}
           />
         </label>
       </section>

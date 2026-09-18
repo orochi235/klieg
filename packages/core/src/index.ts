@@ -149,16 +149,20 @@ export type { LookParams, TintTarget } from './render/looks.js';
 /** The spec behind a built-in name, for building a variation on one. */
 export { specOf } from './render/looks.js';
 export type {
+  ContourPolicies,
+  ContourPolicy,
+  ContourRole,
   CornerStrategy,
   CornerWeights,
   PathSource,
+  RescueRung,
   Run,
   SelectSpec,
   ShortRun,
   SurfaceKind,
   TubeSpec,
 } from './render/tube/index.js';
-export { ALL_BREAK, ALL_CONNECT } from './render/tube/index.js';
+export { ALL_BREAK, ALL_CONNECT, RESCUE_LADDER } from './render/tube/index.js';
 export type { SelectableMode } from './text/dom-layer.js';
 export type { Arrangement } from './text/placement.js';
 export { compose, fromAxisAngle, fromEuler, type Transform } from './transform.js';

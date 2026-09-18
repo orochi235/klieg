@@ -10,6 +10,7 @@ import {
   writeFlakeUniforms,
 } from './flake.js';
 import type { InflateOptions } from './inflate.js';
+import { RESCUE_LADDER } from './tube/contours.js';
 
 export type LookName =
   | 'gold'
@@ -226,6 +227,9 @@ export const LOOKS: Record<LookName, LookSpec> = {
       // glass would take the corner outright.
       corners: { break: 0.7, connect: 0.3 },
       select: { by: 'seed', amount: 0.85 },
+      // Glass too thick to go round a small counter otherwise draws nothing there, and an `O` reads
+      // as a blob.
+      contours: { counter: { rescue: RESCUE_LADDER, lit: 'one' } },
       // Tennis-ball optic yellow.
       colors: [0xa0ff00],
       look: {

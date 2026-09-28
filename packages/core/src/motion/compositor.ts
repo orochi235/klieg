@@ -1,5 +1,7 @@
-import type { Pose, PoseOffset } from '../pose.js';
-import { REST } from '../pose.js';
+import { type Mix, mix, patch } from 'blits';
+import type { Pose } from '../pose.js';
+import { POSE_CHANNELS, POSE_RIG, REST } from '../pose.js';
+
 import type { LetterInfo, MotionPiece } from './types.js';
 
 /** A fresh pose at rest, for callers that do not keep their own scratch. */
@@ -27,26 +29,6 @@ export const PLACED = {
     return out;
   },
 };
-
-/**
- * `scaleOffset` then `accumulate`, fused and in place. Additive channels fade toward 0 and
- * multiplicative ones toward 1 — scaling those toward 0 would collapse the word rather than
- * remove the contribution.
- */
-function addScaled(out: Pose, o: PoseOffset, weight: number): void {
-  if (o.position) {
-    for (let i = 0; i < 3; i++) {
-      out.position[i] = (out.position[i] as number) + (o.position[i] as number) * weight;
-    }
-  }
-  if (o.rotation) {
-    for (let i = 0; i < 3; i++) {
-      out.rotation[i] = (out.rotation[i] as number) + (o.rotation[i] as number) * weight;
-    }
-  }
-  if (o.scale !== undefined) out.scale *= 1 + (o.scale - 1) * weight;
-  if (o.opacity !== undefined) out.opacity *= 1 + (o.opacity - 1) * weight;
-}
 
 /** One piece, or several layered together — `['float', 'shimmer']` runs both at once. */
 export type Slot = MotionPiece | MotionPiece[];
@@ -90,7 +72,10 @@ export function slotMovesLetters(slot: Slot): boolean {
   return false;
 }
 
+type SlotName = 'enter' | 'active' | 'exit';
+
 interface Segment {
+  name: SlotName;
   pieces: MotionPiece[];
   start: number;
   end: number;
@@ -108,6 +93,15 @@ export class Timeline {
   private readonly blend: number;
   private readonly opts: TimelineOptions;
   private held: boolean;
+  /**
+   * One voice per layer of each slot, all on this timeline's own mix. The segments are the score
+   * — which layer is on and how far in it is — and the mix owns the arithmetic: every channel's
+   * rest, how two layers join, and how a weight fades one toward rest.
+   */
+  private readonly mix: Mix<LetterInfo, Pose>;
+  /** `norm` for one reading, memoized: every voice asks for it and it is the same answer. */
+  private normAt = Number.NaN;
+  private norm = 1;
 
   constructor(opts: TimelineOptions) {
     this.opts = opts;
@@ -118,6 +112,35 @@ export class Timeline {
     this.activeEnd = 0;
     this.segments = [];
     this.build(this.held ? Number.POSITIVE_INFINITY : (opts.hold as number));
+    this.mix = mix<LetterInfo, Pose>(POSE_RIG, {});
+    this.cue();
+  }
+
+  /**
+   * A voice per layer rather than one per slot, and no group: layers and phases both stack, so the
+   * mix must join them the way the channel says. Grouping them would fold them as alternatives.
+   */
+  private cue(): void {
+    for (const name of ['enter', 'active', 'exit'] as const) {
+      for (const piece of layers(this.opts[name])) {
+        this.mix.cue({
+          patch: patch<LetterInfo, Pose>(
+            0,
+            (_phase, letter, setting) => {
+              const seg = this.segmentOf(name);
+              if (!seg) return {};
+              return piece.offset(this.localT(seg, setting.elapsed), letter);
+            },
+            { writes: POSE_CHANNELS },
+          ),
+          weight: (_letter, setting) => this.weightAt(name, setting.elapsed),
+        });
+      }
+    }
+  }
+
+  private segmentOf(name: SlotName): Segment | undefined {
+    return this.segments.find((seg) => seg.name === name);
   }
 
   private build(hold: number): void {
@@ -126,23 +149,35 @@ export class Timeline {
     this.activeEnd = activeEnd;
     const activeFor = slotDuration(this.opts.active);
     this.duration = activeEnd + slotDuration(this.opts.exit);
-    this.segments = [
-      { pieces: layers(this.opts.enter), start: 0, end: enterEnd, loop: false, duration: enterEnd },
-      {
-        pieces: layers(this.opts.active),
-        start: enterEnd,
-        end: activeEnd,
-        loop: true,
-        duration: activeFor,
-      },
-      {
-        pieces: layers(this.opts.exit),
-        start: activeEnd,
-        end: this.duration,
-        loop: false,
-        duration: slotDuration(this.opts.exit),
-      },
-    ].filter((seg) => seg.end > seg.start);
+    this.segments = (
+      [
+        {
+          name: 'enter',
+          pieces: layers(this.opts.enter),
+          start: 0,
+          end: enterEnd,
+          loop: false,
+          duration: enterEnd,
+        },
+        {
+          name: 'active',
+          pieces: layers(this.opts.active),
+          start: enterEnd,
+          end: activeEnd,
+          loop: true,
+          duration: activeFor,
+        },
+        {
+          name: 'exit',
+          pieces: layers(this.opts.exit),
+          start: activeEnd,
+          end: this.duration,
+          loop: false,
+          duration: slotDuration(this.opts.exit),
+        },
+      ] satisfies Segment[]
+    ).filter((seg) => seg.end > seg.start);
+    this.normAt = Number.NaN;
   }
 
   /**
@@ -165,34 +200,27 @@ export class Timeline {
    * trap for the next caller who retains what they were handed.
    */
   poseAt(elapsed: number, letter: LetterInfo, out: Pose = blankPose()): Pose {
-    let total = 0;
-    for (const seg of this.segments) total += Math.max(0, this.weight(seg, elapsed));
+    this.mix.sync(elapsed);
+    return this.mix.sample(letter, out);
+  }
 
-    // Pairwise-complementary ramps sum to 1, but a `hold` shorter than `blendMs` overlaps all
-    // three phases at once and the total runs past 1 — which reads as the word lurching.
-    const norm = total > 1 ? 1 / total : 1;
-
-    out.position[0] = 0;
-    out.position[1] = 0;
-    out.position[2] = 0;
-    out.rotation[0] = 0;
-    out.rotation[1] = 0;
-    out.rotation[2] = 0;
-    out.scale = 1;
-    out.opacity = 1;
-
-    for (const seg of this.segments) {
-      const weight = this.weight(seg, elapsed);
-      if (weight <= 0) continue;
-      const t = this.localT(seg, elapsed);
-      // Layers within a slot share its weight; `accumulate` already took a list, so nothing about
-      // the blend math changes.
-      for (const piece of seg.pieces) {
-        addScaled(out, piece.offset(t, letter), weight * norm);
-      }
+  /**
+   * The segment's own ramp, times the guard against three phases overlapping at once. Pairwise-
+   * complementary ramps sum to 1, but a `hold` shorter than `blendMs` overlaps all three and the
+   * total runs past 1 — which reads as the word lurching.
+   */
+  private weightAt(name: SlotName, elapsed: number): number {
+    const seg = this.segmentOf(name);
+    if (!seg) return 0;
+    const own = this.weight(seg, elapsed);
+    if (own <= 0) return 0;
+    if (this.normAt !== elapsed) {
+      let total = 0;
+      for (const other of this.segments) total += Math.max(0, this.weight(other, elapsed));
+      this.norm = total > 1 ? 1 / total : 1;
+      this.normAt = elapsed;
     }
-
-    return out;
+    return own * this.norm;
   }
 
   /** Ramps 0→1 over the blend window at the segment's leading edge and back down at its trailing. */

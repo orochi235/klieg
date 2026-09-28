@@ -22,9 +22,9 @@ import { BloomPath } from './render/bloom.js';
 import { WordCaches } from './render/caches.js';
 import {
   ENV_PIECES,
+  EnvFrame,
   type LightingName,
   type LightingSlot,
-  mergeEnv,
   resolveLighting,
 } from './render/lighting.js';
 import { LOOKS, type Look, type LookName, type LookSpec, specOf } from './render/looks.js';
@@ -873,7 +873,7 @@ export function createKlieg(options: KliegOptions): Klieg {
       });
     }
 
-    const envPieces = resolveLighting(opts.lighting ?? 'sweep');
+    const envFrame = new EnvFrame(resolveLighting(opts.lighting ?? 'sweep'));
     const hold = opts.hold ?? 1200;
     const untilClick = hold === 'click';
     const exit = resolveSlot(opts.exit ?? 'fade', EXIT);
@@ -1084,11 +1084,7 @@ export function createKlieg(options: KliegOptions): Klieg {
             }
           }
 
-          const env = mergeEnv(
-            envPieces.map((piece) =>
-              piece.env(piece.duration > 0 ? (elapsed % piece.duration) / piece.duration : 0, ctx),
-            ),
-          );
+          const env = envFrame.at(elapsed, ctx);
           stage.scene.environmentRotation.x = env.pitch;
           stage.scene.environmentRotation.y = env.yaw;
           // The scene write above reaches only a material with no `envMap` of its own; every

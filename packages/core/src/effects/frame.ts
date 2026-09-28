@@ -1,16 +1,13 @@
+import { type Mix, mix, patch } from 'blits';
 import type { StaggerSpec } from '../motion/types.js';
 import { stagger } from '../motion/types.js';
 import { selectIndices } from '../select.js';
-import { mergeOffsets } from './compositor.js';
 import { EFFECTS } from './pieces.js';
-import type {
-  EffectPiece,
-  EffectSpec,
-  FrameCtx,
-  PartInfo,
-  PartOffset,
-  ResolvedOffset,
-} from './types.js';
+import { asDelta, PART_CHANNELS, PART_RIG } from './rig.js';
+import type { EffectPiece, EffectSpec, FrameCtx, PartInfo, ResolvedOffset } from './types.js';
+
+/** Stands in until the first frame reports one. Nothing samples a piece before then. */
+const NO_FRAME: FrameCtx = { pointer: null, pointerInWord: null, dt: 0, now: 0 };
 
 /** One spec resolved against a pool: the built piece, and which pool positions it drives. */
 export interface ResolvedEffect {
@@ -49,18 +46,60 @@ export function planEffects(
 }
 
 /**
- * Layers every effect that reaches a part and merges each targeted part once. Holds its own
- * buffers: the targeted set is fixed at plan time, so rebuilding it per frame is wasted work.
+ * Layers every effect that reaches a part and merges each targeted part once. One voice per
+ * effect on a mix over the part rig: the effects are the score — which parts each reaches and how
+ * far into its pass it is — and the mix owns how two layers join on every channel.
+ *
+ * Holds its own buffers: the targeted set is fixed at plan time, so rebuilding it per frame is
+ * wasted work.
  */
 export class EffectFrame {
-  private readonly layers = new Map<number, PartOffset[]>();
+  private readonly touched: number[] = [];
   private readonly out = new Map<number, ResolvedOffset>();
+  private readonly mix: Mix<PartInfo, ResolvedOffset>;
+  /** The pool the voices were targeted against, so a caller passing a new one gets new voices. */
+  private pool: readonly PartInfo[] | null = null;
+  /** This frame's context, which a piece still reads as its third argument. */
+  private ctx: FrameCtx = NO_FRAME;
 
   constructor(private readonly effects: readonly ResolvedEffect[]) {
+    const seen = new Set<number>();
     for (const effect of effects) {
       for (const index of effect.parts) {
-        if (!this.layers.has(index)) this.layers.set(index, []);
+        if (seen.has(index)) continue;
+        seen.add(index);
+        this.touched.push(index);
       }
+    }
+    this.mix = mix<PartInfo, ResolvedOffset>(PART_RIG, {});
+  }
+
+  /**
+   * Cues one voice per effect against this pool. A voice's reach is a fixed set of parts, so it is
+   * the pool that decides it: a caller handing over a different array re-cues from scratch.
+   */
+  private retarget(parts: readonly PartInfo[]): void {
+    this.pool = parts;
+    this.mix.clear();
+    for (const effect of this.effects) {
+      const reached = new Set<PartInfo>();
+      for (const index of effect.parts) {
+        const part = parts[index];
+        if (part) reached.add(part);
+      }
+      const duration = effect.piece.duration;
+      this.mix.cue({
+        patch: patch<PartInfo, ResolvedOffset>(
+          0,
+          (_phase, part, setting) => {
+            const pass = duration > 0 ? (setting.elapsed % duration) / duration : 0;
+            const t = effect.stagger === undefined ? pass : stagger(pass, part, effect.stagger);
+            return asDelta(effect.piece.at(t, part, this.ctx));
+          },
+          { writes: PART_CHANNELS },
+        ),
+        target: (part) => reached.has(part),
+      });
     }
   }
 
@@ -71,23 +110,16 @@ export class EffectFrame {
     ctx: FrameCtx,
     skip?: (index: number) => boolean,
   ): Map<number, ResolvedOffset> {
-    for (const layers of this.layers.values()) layers.length = 0;
+    if (this.pool !== parts) this.retarget(parts);
+    this.ctx = ctx;
     this.out.clear();
+    this.mix.sync(elapsed);
 
-    for (const effect of this.effects) {
-      const duration = effect.piece.duration;
-      const pass = duration > 0 ? (elapsed % duration) / duration : 0;
-      for (const index of effect.parts) {
-        if (skip?.(index)) continue;
-        const part = parts[index] as PartInfo;
-        const t = effect.stagger === undefined ? pass : stagger(pass, part, effect.stagger);
-        (this.layers.get(index) as PartOffset[]).push(effect.piece.at(t, part, ctx));
-      }
-    }
-
-    for (const [index, layers] of this.layers) {
+    for (const index of this.touched) {
       if (skip?.(index)) continue;
-      this.out.set(index, mergeOffsets(layers));
+      const part = parts[index];
+      if (!part) continue;
+      this.out.set(index, this.mix.sample(part));
     }
     return this.out;
   }

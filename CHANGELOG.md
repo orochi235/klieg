@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Five visual baselines no longer match what the lab draws
+
+`looks › tubing`, `off axis › tubing`, `effects › flicker`, `effects › hue` and
+`effects › roving` fail against their committed screenshots, by 335 to 3336 pixels. Measured:
+they fail with the same pixel counts on `main` and on a branch that rewrote the whole composition
+path, so nothing about what is composed has moved. Inferred, for the two tubing shots: the counters
+rescue above redraws glass the baselines still show as a blob. The other three are unexplained and
+want a look at the diff before anything is re-blessed.
+
 ### A tube keeps the counters its glass is too thick to go round
 
 Under `tubing`, a small counter (the hole in an `e`, a `B`, an `8`) could draw no tube at all.

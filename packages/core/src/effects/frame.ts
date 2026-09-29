@@ -80,7 +80,7 @@ export class EffectFrame {
    */
   private retarget(parts: readonly PartInfo[]): void {
     this.pool = parts;
-    this.mix.clear();
+    this.mix.mute();
     for (const effect of this.effects) {
       const reached = new Set<PartInfo>();
       for (const index of effect.parts) {
@@ -119,7 +119,7 @@ export class EffectFrame {
       if (skip?.(index)) continue;
       const part = parts[index];
       if (!part) continue;
-      this.out.set(index, this.mix.sample(part));
+      this.out.set(index, this.mix.probe(part));
     }
     return this.out;
   }

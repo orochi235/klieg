@@ -1,4 +1,4 @@
-import { type Channel, type Mix, mix, patch, rig, sum } from 'blits';
+import { type Channel, type Mix, mix, patch, kit, sum } from 'blits';
 import type { FrameCtx } from '../effects/types.js';
 
 export type LightingName = 'sweep' | 'static' | 'pointer';
@@ -35,7 +35,7 @@ export interface ResolvedEnv {
 }
 
 /** Both axes add, matching the pose rig: layering two pieces must show both. */
-export const ENV_RIG = rig<ResolvedEnv>({ yaw: sum(), pitch: sum() });
+export const ENV_RIG = kit<ResolvedEnv>({ yaw: sum(), pitch: sum() });
 
 const ENV_CHANNELS = ['yaw', 'pitch'] as const;
 
@@ -45,7 +45,7 @@ export function mergeEnv(offsets: readonly EnvOffset[]): ResolvedEnv {
   for (const o of offsets) {
     for (const key of ENV_CHANNELS) {
       const value = o[key];
-      if (value !== undefined) out[key] = (ENV_RIG[key] as Channel<number>).join(out[key], value);
+      if (value !== undefined) out[key] = (ENV_RIG[key] as Channel<number>).merge(out[key], value);
     }
   }
   return out;
@@ -80,7 +80,7 @@ export class EnvFrame {
   at(elapsed: number, ctx: FrameCtx): ResolvedEnv {
     this.ctx = ctx;
     this.mix.sync(elapsed);
-    return this.mix.sample(SIGN);
+    return this.mix.probe(SIGN);
   }
 }
 

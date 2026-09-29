@@ -1,4 +1,4 @@
-import { type Channel, hex, max, mul, rig, sum, vec } from 'blits';
+import { type Channel, hex, kit, max, mul, sum, vec } from 'blits';
 import type { Vec3 } from '../pose.js';
 import type { PartOffset, ResolvedOffset } from './types.js';
 
@@ -7,7 +7,7 @@ import type { PartOffset, ResolvedOffset } from './types.js';
  * two layers each half-dead should not read as dead — and `color` replaces, having no arithmetic
  * of its own to contribute with.
  */
-export const PART_RIG = rig<ResolvedOffset>({
+export const PART_RIG = kit<ResolvedOffset>({
   gain: mul(),
   color: hex(),
   dark: max(),

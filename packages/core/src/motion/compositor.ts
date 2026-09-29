@@ -201,7 +201,7 @@ export class Timeline {
    */
   poseAt(elapsed: number, letter: LetterInfo, out: Pose = blankPose()): Pose {
     this.mix.sync(elapsed);
-    return this.mix.sample(letter, out);
+    return this.mix.probe(letter, out);
   }
 
   /**

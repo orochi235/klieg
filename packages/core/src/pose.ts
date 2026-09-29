@@ -1,4 +1,4 @@
-import { type Channel, mul, rig, sum, vec } from 'blits';
+import { type Channel, mul, kit, sum, vec } from 'blits';
 
 export type Vec3 = [number, number, number];
 
@@ -29,7 +29,7 @@ export const REST: Pose = {
  * at 1: scaling `scale` or `opacity` toward 0 would collapse the word rather than remove the
  * contribution.
  */
-export const POSE_RIG = rig<Pose>({
+export const POSE_RIG = kit<Pose>({
   position: vec(3, sum()) as unknown as Channel<Vec3>,
   rotation: vec(3, sum()) as unknown as Channel<Vec3>,
   scale: mul(),
@@ -50,7 +50,7 @@ export function accumulate(base: Pose, offsets: readonly PoseOffset[]): Pose {
     for (const key of POSE_CHANNELS) {
       const value = (offset as Record<string, unknown>)[key];
       if (value === undefined) continue;
-      out[key] = (POSE_RIG[key] as Channel<unknown>).join(out[key], value);
+      out[key] = (POSE_RIG[key] as Channel<unknown>).merge(out[key], value);
     }
   }
   return out as unknown as Pose;

@@ -29,7 +29,7 @@ export function mergeOffsets(offsets: readonly PartOffset[]): ResolvedOffset {
       const value = delta[key];
       if (value === undefined) continue;
       const channel = PART_RIG[key as keyof ResolvedOffset] as Channel<unknown>;
-      out[key] = out[key] === undefined ? value : channel.join(out[key], value);
+      out[key] = out[key] === undefined ? value : channel.merge(out[key], value);
     }
   }
   return out as unknown as ResolvedOffset;

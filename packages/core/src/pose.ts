@@ -1,4 +1,4 @@
-import { type Channel, mul, kit, sum, vec } from 'blits';
+import { type Channel, mul, kit, sum, vec } from '@msb235/blits';
 
 export type Vec3 = [number, number, number];
 

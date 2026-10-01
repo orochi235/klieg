@@ -65,7 +65,7 @@
   "dependencies": {
     "@weasel-js/font": "1.4.4",
     "@weasel-js/text": "1.4.4",
-    "blits": "file:../../../blits",
+    "@msb235/blits": "file:../../../blits",
     "opentype.js": "^2.0.0",
     "polygon-clipping": "^0.15.7"
   },

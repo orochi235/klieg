@@ -1,4 +1,4 @@
-import { type Mix, mix, patch } from 'blits';
+import { type Mix, mix, patch } from '@msb235/blits';
 import type { StaggerSpec } from '../motion/types.js';
 import { stagger } from '../motion/types.js';
 import { selectIndices } from '../select.js';

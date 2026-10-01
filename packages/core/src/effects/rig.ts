@@ -1,4 +1,4 @@
-import { type Channel, hex, kit, max, mul, sum, vec } from 'blits';
+import { type Channel, hex, kit, max, mul, sum, vec } from '@msb235/blits';
 import type { Vec3 } from '../pose.js';
 import type { PartOffset, ResolvedOffset } from './types.js';
 

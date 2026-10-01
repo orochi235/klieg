@@ -1,4 +1,4 @@
-import { type Mix, mix, patch } from 'blits';
+import { type Mix, mix, patch } from '@msb235/blits';
 import type { Pose } from '../pose.js';
 import { POSE_CHANNELS, POSE_RIG, REST } from '../pose.js';
 

@@ -1,4 +1,4 @@
-import type { Channel } from 'blits';
+import type { Channel } from '@msb235/blits';
 import { asDelta, PART_CHANNELS, PART_RIG } from './rig.js';
 import type { PartOffset, ResolvedOffset } from './types.js';
 

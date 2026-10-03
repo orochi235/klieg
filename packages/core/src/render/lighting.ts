@@ -1,3 +1,4 @@
+import { type Channel, type Mix, mix, patch, kit, sum } from '@msb235/blits';
 import type { FrameCtx } from '../effects/types.js';
 
 export type LightingName = 'sweep' | 'static' | 'pointer';
@@ -33,15 +34,54 @@ export interface ResolvedEnv {
   pitch: number;
 }
 
-/** Additive, matching the pose compositor: layering two pieces must show both. */
+/** Both axes add, matching the pose rig: layering two pieces must show both. */
+export const ENV_RIG = kit<ResolvedEnv>({ yaw: sum(), pitch: sum() });
+
+const ENV_CHANNELS = ['yaw', 'pitch'] as const;
+
+/** Layers env offsets by the rig's own arithmetic — the fold with every weight at 1. */
 export function mergeEnv(offsets: readonly EnvOffset[]): ResolvedEnv {
-  let yaw = 0;
-  let pitch = 0;
+  const out: ResolvedEnv = { yaw: 0, pitch: 0 };
   for (const o of offsets) {
-    yaw += o.yaw ?? 0;
-    pitch += o.pitch ?? 0;
+    for (const key of ENV_CHANNELS) {
+      const value = o[key];
+      if (value !== undefined) out[key] = (ENV_RIG[key] as Channel<number>).merge(out[key], value);
+    }
   }
-  return { yaw, pitch };
+  return out;
+}
+
+/** A sign has one environment, so the mix over it has one subject and this is it. */
+const SIGN = Object.freeze({});
+
+/** Stands in until the first frame reports one. Nothing samples a piece before then. */
+const NO_FRAME: FrameCtx = { pointer: null, pointerInWord: null, dt: 0, now: 0 };
+
+/**
+ * The lighting system: one voice per env piece over the environment rig, each on its own period
+ * rather than a shared one, and no subject dimension to speak of.
+ */
+export class EnvFrame {
+  private readonly mix: Mix<object, ResolvedEnv>;
+  /** This frame's context, which a piece still reads as its second argument. */
+  private ctx: FrameCtx = NO_FRAME;
+
+  constructor(pieces: readonly EnvPiece[]) {
+    this.mix = mix<object, ResolvedEnv>(ENV_RIG, {});
+    for (const piece of pieces) {
+      this.mix.cue({
+        patch: patch<object, ResolvedEnv>(piece.duration, (phase) => piece.env(phase, this.ctx), {
+          writes: ENV_CHANNELS,
+        }),
+      });
+    }
+  }
+
+  at(elapsed: number, ctx: FrameCtx): ResolvedEnv {
+    this.ctx = ctx;
+    this.mix.sync(elapsed);
+    return this.mix.probe(SIGN);
+  }
 }
 
 export interface SweepSpec {

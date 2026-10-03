@@ -1,5 +1,5 @@
 enlist: 2
 # How `onto test` runs this repository's suite on another node.
-setup: npm ci
+plugin: node
 run: npm test
 runner: vitest

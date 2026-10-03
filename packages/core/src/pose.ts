@@ -1,3 +1,5 @@
+import { type Channel, mul, kit, sum, vec } from '@msb235/blits';
+
 export type Vec3 = [number, number, number];
 
 export interface Pose {
@@ -22,37 +24,49 @@ export const REST: Pose = {
   opacity: 1,
 };
 
+/**
+ * The channel set behind every composed pose. Additive channels rest at 0 and multiplicative ones
+ * at 1: scaling `scale` or `opacity` toward 0 would collapse the word rather than remove the
+ * contribution.
+ */
+export const POSE_RIG = kit<Pose>({
+  position: vec(3, sum()) as unknown as Channel<Vec3>,
+  rotation: vec(3, sum()) as unknown as Channel<Vec3>,
+  scale: mul(),
+  opacity: mul(),
+});
+
+export const POSE_CHANNELS = ['position', 'rotation', 'scale', 'opacity'] as const;
+
+/** Layers offsets onto a pose by the rig's own arithmetic — the fold with every weight at 1. */
 export function accumulate(base: Pose, offsets: readonly PoseOffset[]): Pose {
-  const position: Vec3 = [...base.position];
-  const rotation: Vec3 = [...base.rotation];
-  let scale = base.scale;
-  let opacity = base.opacity;
-
-  for (const o of offsets) {
-    // Vec3 is a fixed 3-tuple, so indices 0..2 are always populated; the `as number`
-    // casts are safe despite noUncheckedIndexedAccess widening variable-index reads to T | undefined.
-    if (o.position) {
-      for (let i = 0; i < 3; i++) position[i] = (position[i] as number) + (o.position[i] as number);
+  const out: Record<string, unknown> = {
+    position: [...base.position],
+    rotation: [...base.rotation],
+    scale: base.scale,
+    opacity: base.opacity,
+  };
+  for (const offset of offsets) {
+    for (const key of POSE_CHANNELS) {
+      const value = (offset as Record<string, unknown>)[key];
+      if (value === undefined) continue;
+      out[key] = (POSE_RIG[key] as Channel<unknown>).merge(out[key], value);
     }
-    if (o.rotation) {
-      for (let i = 0; i < 3; i++) rotation[i] = (rotation[i] as number) + (o.rotation[i] as number);
-    }
-    if (o.scale !== undefined) scale *= o.scale;
-    if (o.opacity !== undefined) opacity *= o.opacity;
   }
-
-  return { position, rotation, scale, opacity };
+  return out as unknown as Pose;
 }
 
 /**
- * Fade an offset toward identity. Additive fields go to 0; multiplicative fields go to 1 —
- * scaling them toward 0 would collapse the word instead of removing the contribution.
+ * Fade an offset toward its channels' rests. Additive fields go to 0; multiplicative fields go to
+ * 1 — scaling them toward 0 would collapse the word instead of removing the contribution.
  */
 export function scaleOffset(o: PoseOffset, weight: number): PoseOffset {
-  const out: PoseOffset = {};
-  if (o.position) out.position = o.position.map((v) => v * weight) as Vec3;
-  if (o.rotation) out.rotation = o.rotation.map((v) => v * weight) as Vec3;
-  if (o.scale !== undefined) out.scale = 1 + (o.scale - 1) * weight;
-  if (o.opacity !== undefined) out.opacity = 1 + (o.opacity - 1) * weight;
-  return out;
+  const out: Record<string, unknown> = {};
+  for (const key of POSE_CHANNELS) {
+    const value = (o as Record<string, unknown>)[key];
+    if (value === undefined) continue;
+    const channel = POSE_RIG[key] as Channel<unknown>;
+    out[key] = channel.scale ? channel.scale(value, weight) : value;
+  }
+  return out as PoseOffset;
 }

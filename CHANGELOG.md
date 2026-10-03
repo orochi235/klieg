@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Runs on @msb235/blits 0.3.0
+
+klieg pins `@msb235/blits` at exactly `0.3.0`. Nothing in klieg changes to fit it: no system
+declares `Engine.runs`, reads `patch.form`, builds a blits `spring` or `glide`, or retargets one.
+The `color` channel is now an OKLCH `hex`, but it only ever replaces: every effect voice plays at
+full weight with no crossfade, so the blend is never taken and no part's color moves.
+
+### Five visual baselines no longer match what the lab draws
+
+`looks › tubing`, `off axis › tubing`, `effects › flicker`, `effects › hue` and
+`effects › roving` fail against their committed screenshots, by 335 to 3336 pixels. Measured:
+they fail with the same pixel counts on `main` and on a branch that rewrote the whole composition
+path, so nothing about what is composed has moved. Inferred, for the two tubing shots: the counters
+rescue above redraws glass the baselines still show as a blob. The other three are unexplained and
+want a look at the diff before anything is re-blessed.
+
 ### A tube keeps the counters its glass is too thick to go round
 
 Under `tubing`, a small counter (the hole in an `e`, a `B`, an `8`) could draw no tube at all.

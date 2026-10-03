@@ -7,7 +7,11 @@ import { defineConfig } from '@playwright/test';
 const digest = createHash('sha1')
   .update(import.meta.dirname)
   .digest();
-const port = 5180 + ((digest[0] ?? 0) % 64);
+// Deriving the port from the path keeps two worktrees of this repo apart; it does nothing about
+// another project's dev server landing on the same number, and `reuseExistingServer` then judges
+// that app against these baselines. The symptom is every test failing, including the ones that
+// never start the renderer. `KLIEG_LAB_PORT` is the way out when it happens.
+const port = Number(process.env.KLIEG_LAB_PORT ?? 5180 + ((digest[0] ?? 0) % 64));
 
 export default defineConfig({
   testDir: './apps/lab/test',

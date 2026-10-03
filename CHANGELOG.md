@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Runs on @msb235/blits 0.3.0
+
+klieg pins `@msb235/blits` at exactly `0.3.0`. Nothing in klieg changes to fit it: no system
+declares `Engine.runs`, reads `patch.form`, builds a blits `spring` or `glide`, or retargets one.
+The `color` channel is now an OKLCH `hex`, but it only ever replaces: every effect voice plays at
+full weight with no crossfade, so the blend is never taken and no part's color moves.
+
 ### Five visual baselines no longer match what the lab draws
 
 `looks › tubing`, `off axis › tubing`, `effects › flicker`, `effects › hue` and

@@ -54,7 +54,9 @@ export function planEffects(
  * wasted work.
  */
 export class EffectFrame {
-  private readonly touched: number[] = [];
+  private touched: number[] = [];
+  /** Pool positions `drop` took out of play, kept so a re-cue against a new pool leaves them out. */
+  private readonly dropped = new Set<number>();
   private readonly out = new Map<number, ResolvedOffset>();
   private readonly mix: Mix<PartInfo, ResolvedOffset>;
   /** The pool the voices were targeted against, so a caller passing a new one gets new voices. */
@@ -85,7 +87,7 @@ export class EffectFrame {
       const reached = new Set<PartInfo>();
       for (const index of effect.parts) {
         const part = parts[index];
-        if (part) reached.add(part);
+        if (part && !this.dropped.has(index)) reached.add(part);
       }
       const duration = effect.piece.duration;
       this.mix.cue({
@@ -103,20 +105,30 @@ export class EffectFrame {
     }
   }
 
-  /** Every targeted part's merged offset. `skip` drops one the caller no longer wants written. */
-  resolve(
-    parts: readonly PartInfo[],
-    elapsed: number,
-    ctx: FrameCtx,
-    skip?: (index: number) => boolean,
-  ): Map<number, ResolvedOffset> {
+  /**
+   * Takes pool positions out of every effect for good: the mix forgets them, and `resolve` no
+   * longer reports them, so whatever the caller last wrote to them stays.
+   */
+  drop(indices: readonly number[]): void {
+    let changed = false;
+    for (const index of indices) {
+      if (this.dropped.has(index)) continue;
+      this.dropped.add(index);
+      changed = true;
+      const part = this.pool?.[index];
+      if (part) this.mix.drop(part);
+    }
+    if (changed) this.touched = this.touched.filter((index) => !this.dropped.has(index));
+  }
+
+  /** Every targeted part's merged offset, leaving out those `drop` took out of play. */
+  resolve(parts: readonly PartInfo[], elapsed: number, ctx: FrameCtx): Map<number, ResolvedOffset> {
     if (this.pool !== parts) this.retarget(parts);
     this.ctx = ctx;
     this.out.clear();
     this.mix.sync(elapsed);
 
     for (const index of this.touched) {
-      if (skip?.(index)) continue;
       const part = parts[index];
       if (!part) continue;
       this.out.set(index, this.mix.probe(part));

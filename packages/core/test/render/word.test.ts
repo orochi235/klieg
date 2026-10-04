@@ -1997,6 +1997,32 @@ describe('effects', () => {
     expect(materialOf(word).emissiveIntensity).toBeCloseTo(1.9 * 0.5, 6);
   });
 
+  it('stops writing an effect to a letter a regroup dropped, which shows its base again', () => {
+    const rising: EffectPiece = { duration: 1000, at: (t) => ({ gain: t }) };
+    const word = new Word(
+      'AB',
+      stubFont(),
+      { ...specOf('neon'), effects: [{ piece: rising, target: { kind: 'body', by: 'index' } }] },
+      ROOMY,
+    );
+    const intensity = () =>
+      meshes(word).map((m) => (m.material as THREE.MeshPhysicalMaterial).emissiveIntensity);
+
+    const plain = new Word('AB', stubFont(), 'neon', ROOMY);
+    plain.apply(STILL, 0, NO_CTX);
+    const base = materialOf(plain).emissiveIntensity;
+
+    word.apply(STILL, 250, NO_CTX);
+    const [, lit] = intensity();
+    word.regroup((l) => l.index === 0, 'place');
+    word.apply(STILL, 750, NO_CTX);
+    const [kept, dropped] = intensity();
+
+    expect(lit).not.toBe(base);
+    expect(dropped).toBe(base);
+    expect(kept).toBeCloseTo(base * 0.75, 6);
+  });
+
   const lamplight: EffectPiece = {
     duration: 1000,
     at: () => ({ light: { color: 0xffffff, amount: 0.5 } }),

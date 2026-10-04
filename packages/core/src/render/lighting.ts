@@ -1,4 +1,4 @@
-import { type Channel, type Mix, mix, patch, kit, sum } from '@msb235/blits';
+import { type Channel, kit, type Mix, mix, patch, sum } from '@msb235/blits';
 import type { FrameCtx } from '../effects/types.js';
 
 export type LightingName = 'sweep' | 'static' | 'pointer';

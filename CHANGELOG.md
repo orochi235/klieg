@@ -26,9 +26,11 @@ nothing. A held sign with no exit still leaves at once.
 did nothing: it fired under the default `queue` policy with a 40-second hold, so each press waited
 behind the last. The lab now ships the tuning page, `show` and `sign`.
 
-### Runs on @msb235/blits 0.3.0
+### Runs on @msb235/blits 0.4.0
 
-klieg pins `@msb235/blits` at exactly `0.3.0`. Nothing in klieg changes to fit it: no system
+klieg pins `@msb235/blits` at exactly `0.4.0`, which the timeline's `hold` and the regroup's
+`mix.drop` need. Its two breaking changes miss klieg: nothing reads a tween's `MotionSpec` or
+switches over `Handle.state`. Nothing in klieg changed to fit 0.3.0 either: no system
 declares `Engine.runs`, reads `patch.form`, builds a blits `spring` or `glide`, or retargets one.
 The `color` channel is now an OKLCH `hex`, but it only ever replaces: every effect voice plays at
 full weight with no crossfade, so the blend is never taken and no part's color moves.

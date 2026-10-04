@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### The anchored-strip lab page is gone
+
+`/strip/` was the only page that showed `placement: { kind: 'element' }`, and most of its controls
+did nothing: it fired under the default `queue` policy with a 40-second hold, so each press waited
+behind the last. The lab now ships the tuning page, `show` and `sign`.
+
 ### Runs on @msb235/blits 0.3.0
 
 klieg pins `@msb235/blits` at exactly `0.3.0`. Nothing in klieg changes to fit it: no system

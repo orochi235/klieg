@@ -24,18 +24,16 @@ export default defineConfig({
       },
     ],
   },
-  // Pages out of one app: the tuning lab at the root, and `show` (the no-chrome demo), `strip`
-  // (the anchored-placement route) and `sign` (the custom element) one directory down, served
-  // from the same artifact.
+  // Pages out of one app: the tuning lab at the root, and `show` (the no-chrome demo) and `sign`
+  // (the custom element) one directory down, served from the same artifact.
   build: {
     rollupOptions: {
       input: {
         main: entry('./index.html'),
         show: entry('./show/index.html'),
-        strip: entry('./strip/index.html'),
         sign: entry('./sign/index.html'),
       },
     },
   },
-  server: { port: 5180 },
+  server: { host: '::', port: 5180 },
 });

@@ -182,12 +182,14 @@ export class Timeline {
 
   /**
    * Ends the held active phase at `elapsed` and lets the exit run. A no-op on a numeric hold or a
-   * second call, so a double click cannot truncate an exit already underway.
+   * second call, so a double click cannot truncate an exit already underway. The active phase ends
+   * half a blend later, so the crossfade into the exit starts at `elapsed` rather than before it.
    */
   release(elapsed: number): void {
     if (!this.held) return;
     this.held = false;
-    this.build(Math.max(0, elapsed - this.enterEnd));
+    const lead = slotDuration(this.opts.exit) > 0 ? this.blend / 2 : 0;
+    this.build(Math.max(0, elapsed + lead - this.enterEnd));
   }
 
   isFinished(elapsed: number): boolean {

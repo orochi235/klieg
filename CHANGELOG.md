@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Releasing a held sign no longer jumps the exit to half weight
+
+A click hold ended its active phase at the release instant, and the crossfade into the exit is
+centered on that end, so its first half was already over: the exit went from 0 to half weight in
+one frame. The active phase now ends half a blend after the release, and the exit ramps up from
+nothing. A held sign with no exit still leaves at once.
+
 ### The anchored-strip lab page is gone
 
 `/strip/` was the only page that showed `placement: { kind: 'element' }`, and most of its controls

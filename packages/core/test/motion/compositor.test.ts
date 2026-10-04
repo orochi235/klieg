@@ -91,6 +91,24 @@ describe('Timeline held until release', () => {
     expect(tl.duration).toBe(200);
   });
 
+  // The crossfade straddles where the active phase ends. Ending it at the release instant would put
+  // the ramp's first half in the past, and the exit would jump to half weight in one frame.
+  it('starts the exit from nothing at the release instant and ramps it over the blend', () => {
+    const tl = new Timeline({
+      enter: piece(100, 1),
+      active: piece(50, 10),
+      exit: piece(100, 100),
+      hold: 'until-release',
+      blendMs: 20,
+    });
+    tl.poseAt(499, L);
+    tl.release(500);
+
+    expect(tl.poseAt(500, L).position[0]).toBeCloseTo(10);
+    expect(tl.poseAt(510, L).position[0]).toBeCloseTo(55);
+    expect(tl.poseAt(520, L).position[0]).toBeCloseTo(100);
+  });
+
   it('leaves a numeric hold alone', () => {
     const tl = build(100);
     tl.release(10);
@@ -163,10 +181,11 @@ describe('Timeline', () => {
     expect(held.activeEnd).toBe(Number.POSITIVE_INFINITY);
 
     held.release(500);
-    // The enter is fixed; the hold it was released at is what sets where the exit begins.
+    // The enter is fixed; the release sets where the exit begins, half a blend later, so the
+    // crossfade it centers on starts at the release itself.
     expect(held.enterEnd).toBe(100);
-    expect(held.activeEnd).toBe(500);
-    expect(held.duration).toBe(600);
+    expect(held.activeEnd).toBe(510);
+    expect(held.duration).toBe(610);
   });
 });
 

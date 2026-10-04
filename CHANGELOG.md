@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### A timeline's phases start, loop and hold through blits
+
+Each layer of `enter`, `active` and `exit` is a blits voice with its own `start`, `loop` and
+`hold: 'both'`, where klieg used to work out every phase's position from `elapsed` itself. The
+crossfade weights and the guard against three phases overlapping stay klieg's. One thing moves:
+in the half blend before the enter ends, the active loop shows its first frame where it used to
+wrap back to its last. For the built-in actives that is at most 0.0011 in any channel.
+
+A letter a regroup drops leaves the effect mix once, through blits' `mix.drop`, where every frame
+used to ask whether to skip it.
+
 ### Releasing a held sign no longer jumps the exit to half weight
 
 A click hold ended its active phase at the release instant, and the crossfade into the exit is

@@ -152,6 +152,21 @@ describe('Timeline', () => {
     expect(tl.poseAt(220, L)).toEqual(tl.poseAt(270, L));
   });
 
+  it('reads the same pose at a time whether it is reached going forward or going back', () => {
+    const tl = new Timeline({
+      enter: { duration: 100, offset: (t) => ({ position: [t, 0, 0] }) },
+      active: { duration: 50, offset: (t) => ({ position: [10 + t, 0, 0] }) },
+      exit: { duration: 100, offset: (t) => ({ position: [100 * t, 0, 0] }) },
+      hold: 100,
+      blendMs: 20,
+    });
+    const times = [0, 50, 95, 100, 105, 160, 195, 200, 250, 299, 300];
+    const forward = times.map((t) => tl.poseAt(t, L).position[0]);
+    const back = [...times].reverse().map((t) => tl.poseAt(t, L).position[0]);
+
+    expect(back.reverse()).toEqual(forward);
+  });
+
   it('samples the looping active piece at its wrapped phase point', () => {
     const tl = new Timeline({
       enter: piece(100, 1),

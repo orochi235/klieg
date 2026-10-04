@@ -76,11 +76,11 @@ type SlotName = 'enter' | 'active' | 'exit';
 
 interface Segment {
   name: SlotName;
-  pieces: MotionPiece[];
   start: number;
   end: number;
   loop: boolean;
-  duration: number;
+  /** One pass, ms: the slot's own length for the looping active phase, the whole span otherwise. */
+  period: number;
 }
 
 export class Timeline {
@@ -94,11 +94,13 @@ export class Timeline {
   private readonly opts: TimelineOptions;
   private held: boolean;
   /**
-   * One voice per layer of each slot, all on this timeline's own mix. The segments are the score
-   * — which layer is on and how far in it is — and the mix owns the arithmetic: every channel's
-   * rest, how two layers join, and how a weight fades one toward rest.
+   * One voice per layer of each segment, which the mix starts, loops and holds at its edges; its
+   * weight is this timeline's crossfade. No voice fades, and each holds both edges, so none ever
+   * leaves the mix and `poseAt` can read back in time. `release` re-cues rather than retimes.
    */
-  private readonly mix: Mix<LetterInfo, Pose>;
+  private mix: Mix<LetterInfo, Pose>;
+  /** The reading in progress, which every voice's weight is asked about. */
+  private at = 0;
   /** `norm` for one reading, memoized: every voice asks for it and it is the same answer. */
   private normAt = Number.NaN;
   private norm = 1;
@@ -112,68 +114,54 @@ export class Timeline {
     this.activeEnd = 0;
     this.segments = [];
     this.build(this.held ? Number.POSITIVE_INFINITY : (opts.hold as number));
-    this.mix = mix<LetterInfo, Pose>(POSE_RIG, {});
-    this.cue();
+    this.mix = this.cue();
   }
 
   /**
-   * A voice per layer rather than one per slot, and no group: layers and phases both stack, so the
-   * mix must join them the way the channel says. Grouping them would fold them as alternatives.
+   * A voice per layer rather than one per slot, and no locus: layers and phases both stack, so the
+   * mix must join them the way the channel says. A shared locus would fold them as alternatives.
    */
-  private cue(): void {
-    for (const name of ['enter', 'active', 'exit'] as const) {
-      for (const piece of layers(this.opts[name])) {
-        this.mix.cue({
+  private cue(): Mix<LetterInfo, Pose> {
+    const cued = mix<LetterInfo, Pose>(POSE_RIG, {});
+    for (const seg of this.segments) {
+      for (const piece of layers(this.opts[seg.name])) {
+        cued.cue({
           patch: patch<LetterInfo, Pose>(
-            0,
-            (_phase, letter, setting) => {
-              const seg = this.segmentOf(name);
-              if (!seg) return {};
-              return piece.offset(this.localT(seg, setting.elapsed), letter);
-            },
+            seg.period,
+            (phase, letter) => piece.offset(phase, letter),
             { writes: POSE_CHANNELS },
           ),
-          weight: (_letter, setting) => this.weightAt(name, setting.elapsed),
+          start: seg.start,
+          loop: seg.loop && seg.period > 0 ? true : 1,
+          hold: 'both',
+          weight: () => this.weightAt(seg, this.at),
         });
       }
     }
-  }
-
-  private segmentOf(name: SlotName): Segment | undefined {
-    return this.segments.find((seg) => seg.name === name);
+    return cued;
   }
 
   private build(hold: number): void {
     const enterEnd = this.enterEnd;
     const activeEnd = enterEnd + hold;
     this.activeEnd = activeEnd;
-    const activeFor = slotDuration(this.opts.active);
     this.duration = activeEnd + slotDuration(this.opts.exit);
     this.segments = (
       [
-        {
-          name: 'enter',
-          pieces: layers(this.opts.enter),
-          start: 0,
-          end: enterEnd,
-          loop: false,
-          duration: enterEnd,
-        },
+        { name: 'enter', start: 0, end: enterEnd, loop: false, period: enterEnd },
         {
           name: 'active',
-          pieces: layers(this.opts.active),
           start: enterEnd,
           end: activeEnd,
           loop: true,
-          duration: activeFor,
+          period: slotDuration(this.opts.active),
         },
         {
           name: 'exit',
-          pieces: layers(this.opts.exit),
           start: activeEnd,
           end: this.duration,
           loop: false,
-          duration: slotDuration(this.opts.exit),
+          period: this.duration - activeEnd,
         },
       ] satisfies Segment[]
     ).filter((seg) => seg.end > seg.start);
@@ -190,6 +178,7 @@ export class Timeline {
     this.held = false;
     const lead = slotDuration(this.opts.exit) > 0 ? this.blend / 2 : 0;
     this.build(Math.max(0, elapsed + lead - this.enterEnd));
+    this.mix = this.cue();
   }
 
   isFinished(elapsed: number): boolean {
@@ -202,6 +191,7 @@ export class Timeline {
    * trap for the next caller who retains what they were handed.
    */
   poseAt(elapsed: number, letter: LetterInfo, out: Pose = blankPose()): Pose {
+    this.at = elapsed;
     this.mix.sync(elapsed);
     return this.mix.probe(letter, out);
   }
@@ -211,9 +201,7 @@ export class Timeline {
    * complementary ramps sum to 1, but a `hold` shorter than `blendMs` overlaps all three and the
    * total runs past 1 — which reads as the word lurching.
    */
-  private weightAt(name: SlotName, elapsed: number): number {
-    const seg = this.segmentOf(name);
-    if (!seg) return 0;
+  private weightAt(seg: Segment, elapsed: number): number {
     const own = this.weight(seg, elapsed);
     if (own <= 0) return 0;
     if (this.normAt !== elapsed) {
@@ -245,17 +233,5 @@ export class Timeline {
 
   private ramp(into: number): number {
     return this.blend > 0 ? Math.min(1, into / this.blend) : 1;
-  }
-
-  private localT(seg: Segment, elapsed: number): number {
-    const into = elapsed - seg.start;
-
-    if (seg.loop) {
-      const d = seg.duration;
-      if (d <= 0) return 0;
-      return (((into % d) + d) % d) / d;
-    }
-
-    return Math.max(0, Math.min(1, into / (seg.end - seg.start)));
   }
 }

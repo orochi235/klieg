@@ -117,12 +117,25 @@ describe('EffectFrame', () => {
     expect(out.get(0)?.scale).not.toBeCloseTo(out.get(1)?.scale as number);
   });
 
-  it('skips a part the caller disowns, leaving it out of the result entirely', () => {
+  it('leaves a dropped part out of the result entirely, before or after its first frame', () => {
+    const parts = pool(3, 0);
+    const specs: EffectSpec[] = [{ piece: HALF, target: { kind: 'run', by: 'index', amount: 1 } }];
+    const frame = new EffectFrame(planEffects(specs, parts));
+    frame.drop([1]);
+    expect([...frame.resolve(parts, 0, NO_CTX).keys()]).toEqual([0, 2]);
+    frame.drop([2]);
+    const out = frame.resolve(parts, 16, NO_CTX);
+    expect([...out.keys()]).toEqual([0]);
+    expect(out.get(0)?.gain).toBeCloseTo(0.5);
+  });
+
+  it('keeps a dropped part out when a new pool re-cues every effect', () => {
     const parts = pool(2, 0);
     const specs: EffectSpec[] = [{ piece: HALF, target: { kind: 'run', by: 'index', amount: 1 } }];
     const frame = new EffectFrame(planEffects(specs, parts));
-    const out = frame.resolve(parts, 0, NO_CTX, (i) => i === 1);
-    expect([...out.keys()]).toEqual([0]);
+    frame.resolve(parts, 0, NO_CTX);
+    frame.drop([1]);
+    expect([...frame.resolve([...parts], 16, NO_CTX).keys()]).toEqual([0]);
   });
 
   it('does not leak one frame layers into the next', () => {

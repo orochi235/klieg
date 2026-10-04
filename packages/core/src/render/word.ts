@@ -383,21 +383,11 @@ export class Word {
     this.effectFrame = specs.length > 0 ? new EffectFrame(planEffects(specs, this.parts)) : null;
   }
 
-  /**
-   * Layers every effect that reached a part, then writes each targeted part once. A part whose
-   * letter a regroup dropped is skipped: it is playing its exit against a pool position that no
-   * longer describes it, and the mesh it would write is on its way off screen.
-   */
+  /** Layers every effect that reached a part, then writes each targeted part once. */
   private applyEffects(elapsed: number, ctx: FrameCtx): void {
-    const resolved = this.effectFrame?.resolve(this.parts, elapsed, ctx, (index) =>
-      this.retiredPart(index),
-    );
+    const resolved = this.effectFrame?.resolve(this.parts, elapsed, ctx);
     if (!resolved) return;
     for (const [index, out] of resolved) this.writePart(index, out);
-  }
-
-  private retiredPart(index: number): boolean {
-    return this.leavingAt(this.partSlot[index] as number);
   }
 
   /**
@@ -672,6 +662,14 @@ export class Word {
 
     // Frozen before the renumbering below, so each keeps the count its exit was staggered against.
     for (const i of dropped) this.frozenInfo[i] = this.letterInfo(i);
+    // Out of every effect too: a dropped letter's parts play their exit against pool positions that
+    // no longer describe them, and the meshes they would write are on their way off screen.
+    if (dropped.length > 0 && this.effectFrame) {
+      const leaving = new Set(dropped);
+      this.effectFrame.drop(
+        this.partSlot.flatMap((slot, index) => (leaving.has(slot) ? [index] : [])),
+      );
+    }
 
     // `place` renumbers the survivors as their own group but leaves every position, line and
     // column describing where they still physically are — which is what each of those fields

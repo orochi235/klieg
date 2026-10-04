@@ -2,15 +2,35 @@
 
 ## Unreleased
 
+### A timeline's phases start, loop and hold through blits
+
+Each layer of `enter`, `active` and `exit` is a blits voice with its own `start`, `loop` and
+`hold: 'both'`, where klieg used to work out every phase's position from `elapsed` itself. The
+crossfade weights and the guard against three phases overlapping stay klieg's. One thing moves:
+in the half blend before the enter ends, the active loop shows its first frame where it used to
+wrap back to its last. For the built-in actives that is at most 0.0011 in any channel.
+
+A letter a regroup drops leaves the effect mix once, through blits' `mix.drop`, where every frame
+used to ask whether to skip it.
+
+### Releasing a held sign no longer jumps the exit to half weight
+
+A click hold ended its active phase at the release instant, and the crossfade into the exit is
+centered on that end, so its first half was already over: the exit went from 0 to half weight in
+one frame. The active phase now ends half a blend after the release, and the exit ramps up from
+nothing. A held sign with no exit still leaves at once.
+
 ### The anchored-strip lab page is gone
 
 `/strip/` was the only page that showed `placement: { kind: 'element' }`, and most of its controls
 did nothing: it fired under the default `queue` policy with a 40-second hold, so each press waited
 behind the last. The lab now ships the tuning page, `show` and `sign`.
 
-### Runs on @msb235/blits 0.3.0
+### Runs on @msb235/blits 0.4.0
 
-klieg pins `@msb235/blits` at exactly `0.3.0`. Nothing in klieg changes to fit it: no system
+klieg pins `@msb235/blits` at exactly `0.4.0`, which the timeline's `hold` and the regroup's
+`mix.drop` need. Its two breaking changes miss klieg: nothing reads a tween's `MotionSpec` or
+switches over `Handle.state`. Nothing in klieg changed to fit 0.3.0 either: no system
 declares `Engine.runs`, reads `patch.form`, builds a blits `spring` or `glide`, or retargets one.
 The `color` channel is now an OKLCH `hex`, but it only ever replaces: every effect voice plays at
 full weight with no crossfade, so the blend is never taken and no part's color moves.

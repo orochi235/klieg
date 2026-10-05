@@ -1,6 +1,12 @@
 # Changelog
 
+From 0.15.0 on, klieg follows [semantic versioning](https://semver.org): a fix bumps the patch
+version, a new feature the minor. A breaking change bumps the major, and majors are chosen
+deliberately, so a breaking change waits under Unreleased until one is cut.
+
 ## Unreleased
+
+## 0.15.0
 
 ### Breaking: klieg uses blits' words for what blits does
 

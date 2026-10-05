@@ -14,9 +14,9 @@ export interface Block {
 
 export interface Lane {
   id: string;
-  /** The piece and the wrappers over it, outermost last. */
+  /** The patch and the wrappers over it, outermost last. */
   label: string;
-  /** One pass of the layer's piece, wrappers included, in milliseconds. */
+  /** One pass of the layer's patch, wrappers included, in milliseconds. */
   passMs: number;
   /** Passes the span holds, fractional. Below 1 the pass outruns the fire. */
   passes: number;
@@ -51,7 +51,7 @@ function blocksOf(passes: number, width: number): Block[] {
 
 /**
  * The fire's own clock with a lane per enabled layer on it. Every other panel describes one pass
- * of a piece; this describes how much of that pass the fire is long enough to play.
+ * of a patch; this describes how much of that pass the fire is long enough to play.
  */
 export function timelineOf(c: Composition, tailMs: number): Timeline {
   const spanMs = Math.max(1, c.hold + tailMs);
@@ -60,10 +60,10 @@ export function timelineOf(c: Composition, tailMs: number): Timeline {
   for (const layer of c.effects) {
     if (!layer.enabled) continue;
     const built = buildLayer(layer);
-    // A draft that has not compiled contributes no piece to the fire either.
-    if (!built || !(built.piece.duration > 0)) continue;
+    // A draft that has not compiled contributes no patch to the fire either.
+    if (!built || !(built.patch.period > 0)) continue;
 
-    const passMs = built.piece.duration;
+    const passMs = built.patch.period;
     const passes = spanMs / passMs;
     lanes.push({
       id: layer.id,

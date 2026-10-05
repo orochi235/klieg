@@ -1,5 +1,5 @@
 import type * as THREE from 'three';
-import type { PartInfo, ResolvedOffset } from '../../effects/types.js';
+import type { PartInfo, PartPose } from '../../effects/types.js';
 import type { LoadedFont } from '../../text/font.js';
 import type { WordCaches } from '../caches.js';
 import type { DecorationSpec } from '../decoration.js';
@@ -92,7 +92,7 @@ export interface DecorationBuilder {
    * `Word` owns transform; this owns colour. Taking the part rather than its letter slot is what
    * lets a builder carry per-part state on its own `DecorationPart` instead of a side table.
    */
-  writePart(part: DecorationPart, out: ResolvedOffset): void;
+  writePart(part: DecorationPart, out: PartPose): void;
   /** This letter's decoration bounds in its own em space, or null. Drives the gradient span. */
   boundsAt(index: number): THREE.Box2 | null;
   /** The live letters' union bounds, once known, so a positional gradient can be mapped. */

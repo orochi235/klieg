@@ -56,7 +56,7 @@ async function measure(look: LookName, rows: number): Promise<Row> {
       scale: 1.6,
       dim: 0.35,
       effects: [
-        { piece: 'chase', target: { kind: 'run', by: 'index' }, stagger: { from: 'line' } },
+        { patch: 'chase', target: { kind: 'run', by: 'index' }, stagger: { from: 'line' } },
       ],
     },
   });
@@ -143,7 +143,7 @@ async function demo(): Promise<void> {
       dim: 0.35,
       transform: fromEuler(0, 0, -12 * (Math.PI / 180)),
       effects: [
-        { piece: 'chase', target: { kind: 'run', by: 'index' }, stagger: { from: 'line' } },
+        { patch: 'chase', target: { kind: 'run', by: 'index' }, stagger: { from: 'line' } },
       ],
     },
   });

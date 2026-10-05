@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accumulate, REST, scaleOffset } from '../src/pose.js';
+import { accumulate, REST, scaleDelta } from '../src/pose.js';
 
 describe('pose algebra', () => {
   it('accumulating no offsets leaves the rest pose untouched', () => {
@@ -21,18 +21,18 @@ describe('pose algebra', () => {
     expect(accumulate(REST, [{ scale: 2 }])).toEqual({ ...REST, scale: 2 });
   });
 
-  it('scaleOffset at weight 0 is the identity offset', () => {
-    const o = scaleOffset({ position: [4, 4, 4], scale: 3, opacity: 0 }, 0);
+  it('scaleDelta at weight 0 is the identity offset', () => {
+    const o = scaleDelta({ position: [4, 4, 4], scale: 3, opacity: 0 }, 0);
     expect(accumulate(REST, [o])).toEqual(REST);
   });
 
-  it('scaleOffset at weight 1 is unchanged', () => {
+  it('scaleDelta at weight 1 is unchanged', () => {
     const o = { position: [4, 0, 0] as [number, number, number], scale: 3 };
-    expect(scaleOffset(o, 1)).toEqual(o);
+    expect(scaleDelta(o, 1)).toEqual(o);
   });
 
-  it('scaleOffset interpolates scale toward 1, not toward 0', () => {
-    expect(scaleOffset({ scale: 3 }, 0.5).scale).toBe(2);
+  it('scaleDelta interpolates scale toward 1, not toward 0', () => {
+    expect(scaleDelta({ scale: 3 }, 0.5).scale).toBe(2);
   });
 
   it('does not mutate its base pose, its offsets, or the shared REST singleton', () => {
@@ -92,8 +92,8 @@ describe('pose algebra', () => {
     expect(shuffled).toEqual(forward);
   });
 
-  it('scaleOffset on an empty offset returns an empty offset with no spurious keys', () => {
-    const scaled = scaleOffset({}, 0.5);
+  it('scaleDelta on an empty offset returns an empty offset with no spurious keys', () => {
+    const scaled = scaleDelta({}, 0.5);
     expect(scaled).toEqual({});
     expect(Object.keys(scaled)).toHaveLength(0);
     expect(accumulate(REST, [scaled])).toEqual(REST);

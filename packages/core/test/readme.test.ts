@@ -63,8 +63,8 @@ describe('documented surface', () => {
     });
 
     expect(swoop.duration).toBe(800);
-    expect(swoop.offset(0, { index: 0, count: 4 }).opacity).toBeCloseTo(0, 6);
-    expect(swoop.offset(1, { index: 0, count: 4 }).opacity).toBeCloseTo(1, 6);
+    expect(swoop.at(0, { index: 0, count: 4 }).opacity).toBeCloseTo(0, 6);
+    expect(swoop.at(1, { index: 0, count: 4 }).opacity).toBeCloseTo(1, 6);
   });
 });
 

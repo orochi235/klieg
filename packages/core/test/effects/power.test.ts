@@ -9,8 +9,8 @@ import {
   thinning,
 } from '../../src/effects/power.js';
 import { level } from '../../src/effects/signal.js';
-import type { FrameCtx, PartInfo } from '../../src/effects/types.js';
-import { NO_CTX } from './ctx.js';
+import type { PartInfo, Setting } from '../../src/effects/types.js';
+import { voice } from './ctx.js';
 
 const partAt = (index: number): PartInfo => ({
   kind: 'run',
@@ -24,11 +24,11 @@ const partAt = (index: number): PartInfo => ({
   span: 1,
 });
 const PARTS = [partAt(0), partAt(1), partAt(2)];
-const frame = (now: number, dt = 16): FrameCtx => ({ ...NO_CTX, now, dt });
+const frame = (now: number, dt = 16): Setting => voice()({ now, dt });
 
 /** Every part asked once at `now`, as `EffectFrame` does; returns what the first part got. */
 function draw(control: PowerControl, now: number, dt = 16) {
-  const outs = PARTS.map((p) => control.piece.at(0, p, frame(now, dt)));
+  const outs = PARTS.map((p) => control.patch.at(0, p, frame(now, dt)));
   return outs[0];
 }
 
@@ -104,7 +104,7 @@ describe('power', () => {
   it('contributes nothing while on', () => {
     const c = power();
     expect(draw(c, 0)).toEqual({});
-    expect(c.warm(0, partAt(0), frame(0))).toBe(1);
+    expect(c.warm(partAt(0), frame(0))).toBe(1);
   });
 
   it('goes dark on the next frame after a short, and stays dark until up', () => {
@@ -114,7 +114,7 @@ describe('power', () => {
     expect(c.state).toBe('shorted');
     expect(draw(c, 16)).toEqual({ gain: 0 });
     expect(draw(c, 60_000)).toEqual({ gain: 0 });
-    expect(c.warm(0, partAt(0), frame(60_000))).toBe(0);
+    expect(c.warm(partAt(0), frame(60_000))).toBe(0);
   });
 
   it('warms up from the frame after up, then comes back on', () => {
@@ -124,9 +124,9 @@ describe('power', () => {
     c.up();
     expect(draw(c, 100)).toEqual({ gain: 0 });
     expect(draw(c, 1099)).toEqual({ gain: 1 });
-    expect(c.warm(0, partAt(0), frame(1099))).toBe(0);
+    expect(c.warm(partAt(0), frame(1099))).toBe(0);
     expect(draw(c, 1100)).toEqual({});
-    expect(c.warm(0, partAt(0), frame(1100))).toBe(1);
+    expect(c.warm(partAt(0), frame(1100))).toBe(1);
   });
 
   it('warms up by itself after a timed short, counted from the end of the dark', () => {
@@ -178,7 +178,7 @@ describe('power flare', () => {
     c.overload();
     expect(draw(c, 16)).toEqual({ gain: f.gain(0) });
     expect(draw(c, 216)).toEqual({ gain: f.gain(200) });
-    expect(c.warm(0, partAt(0), frame(216))).toBe(0);
+    expect(c.warm(partAt(0), frame(216))).toBe(0);
     expect(draw(c, 416)).toEqual({ gain: 0 });
     expect(seen).toEqual(['on>flaring', 'flaring>shorted']);
   });
@@ -277,7 +277,7 @@ describe('power trip', () => {
     });
     expect(run(c, 0, 2900)).toEqual({});
     expect(draw(c, 3000)).toEqual({ gain: 0 });
-    expect(PARTS.map((p) => c.piece.at(0, p, frame(3000)))).toEqual(PARTS.map(() => ({ gain: 0 })));
+    expect(PARTS.map((p) => c.patch.at(0, p, frame(3000)))).toEqual(PARTS.map(() => ({ gain: 0 })));
     expect(run(c, 3100, 4900)).toEqual({ gain: 0 });
     expect(draw(c, 5000)).toEqual({ gain: 0 });
     expect(c.state).toBe('warming');
@@ -289,7 +289,7 @@ describe('power trip', () => {
   it('trips when a single part holds high while the rest read low', () => {
     const c = power({
       flare: null,
-      trip: { on: (_t, part) => (part.index === 0 ? 1 : 0), holdMs: 1000 },
+      trip: { on: (part) => (part.index === 0 ? 1 : 0), holdMs: 1000 },
     });
     expect(run(c, 0, 900)).toEqual({});
     expect(draw(c, 1000)).toEqual({ gain: 0 });

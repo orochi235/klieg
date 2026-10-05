@@ -1,9 +1,9 @@
 import { intermittent } from '@core/effects/intermittent.js';
 import { roving } from '@core/effects/roving.js';
-import type { EffectPiece, EffectSpec, PartKind } from '@core/effects/types.js';
+import type { EffectPatch, EffectSpec, PartKind } from '@core/effects/types.js';
 import type { ActiveName, EnterName, ExitName } from '@core/motion/types.js';
 import type { LookName } from '@core/render/looks.js';
-import { buildPiece, type LampSourceKind, type PieceKind } from './pieces.js';
+import { buildPatch, type LampSourceKind, type PatchKind } from './patches.js';
 
 export interface RovingWrap {
   dwell: number;
@@ -22,7 +22,7 @@ export type PoolSource = 'real' | 'synthetic';
 
 export interface EffectLayer {
   id: string;
-  kind: PieceKind;
+  kind: PatchKind;
   enabled: boolean;
   params: Record<string, number>;
   target: PartKind;
@@ -34,7 +34,7 @@ export interface EffectLayer {
   intermittent?: IntermittentWrap;
   /** Set only when `kind` is `'lamp'`. */
   lampSource?: LampSourceKind;
-  /** Source for a hand-authored piece; set only when `kind` is `'draft'`. */
+  /** Source for a hand-authored patch; set only when `kind` is `'draft'`. */
   source?: string;
 }
 
@@ -60,7 +60,7 @@ export const DEFAULT_COMPOSITION: Composition = {
   pool: 'real',
 };
 
-/** `roving` substitutes a part's index and leaves its x/y alone, so a position-dependent piece
+/** `roving` substitutes a part's index and leaves its x/y alone, so a position-dependent patch
  * such as `lamp` would light the part it is standing on rather than the one holding the fault. */
 export function carriesRoving(layer: EffectLayer): layer is EffectLayer & { roving: RovingWrap } {
   return layer.roving !== undefined && layer.kind !== 'lamp';
@@ -68,44 +68,44 @@ export function carriesRoving(layer: EffectLayer): layer is EffectLayer & { rovi
 
 export interface BuiltLayer {
   /** What the frame gets, wrappers included. */
-  piece: EffectPiece;
+  patch: EffectPatch;
   /**
-   * The innermost piece's own pass. This, not `piece.duration`, is what a sampler has to resolve:
-   * `roving` at `epochs: 96` publishes a pass two hundred times longer than the piece inside it.
+   * The innermost patch's own pass. This, not `patch.period`, is what a sampler has to resolve:
+   * `roving` at `epochs: 96` publishes a pass two hundred times longer than the patch inside it.
    */
   innerPass: number;
   /** The slot `roving` settled `dwell` on, for a layer that rovs. Null for one that does not. */
   epochMs: number | null;
 }
 
-/** A layer's piece and the two durations a panel needs to read it. Null when it will not build. */
+/** A layer's patch and the two periods a panel needs to read it. Null when it will not build. */
 export function buildLayer(layer: EffectLayer): BuiltLayer | null {
-  const inner = buildPiece(layer.kind, layer.params, {
+  const inner = buildPatch(layer.kind, layer.params, {
     source: layer.source,
     lampSource: layer.lampSource,
   });
   if (!inner) return null;
 
   const roved = carriesRoving(layer) ? roving(inner, layer.roving) : null;
-  const piece = roved ?? inner;
+  const patch = roved ?? inner;
   const epochMs = roved?.epoch ?? null;
-  if (!layer.intermittent) return { piece, innerPass: inner.duration, epochMs };
+  if (!layer.intermittent) return { patch, innerPass: inner.period, epochMs };
   try {
-    return { piece: intermittent(piece, layer.intermittent), innerPass: inner.duration, epochMs };
+    return { patch: intermittent(patch, layer.intermittent), innerPass: inner.period, epochMs };
   } catch {
     return null;
   }
 }
 
-/** The piece a layer contributes, wrappers included. Null when it will not build. */
-export function layerPiece(layer: EffectLayer): EffectPiece | null {
-  return buildLayer(layer)?.piece ?? null;
+/** The patch a layer contributes, wrappers included. Null when it will not build. */
+export function layerPatch(layer: EffectLayer): EffectPatch | null {
+  return buildLayer(layer)?.patch ?? null;
 }
 
 /** A composition with no layer still needs a grid to plot the hold against. */
 const NO_LAYERS_PASS = 1000;
 
-/** The shortest pass any enabled layer's inner piece runs, which is what fixes the sample rate. */
+/** The shortest pass any enabled layer's inner patch runs, which is what fixes the sample rate. */
 export function finestPass(c: Composition): number {
   const passes = c.effects
     .filter((l) => l.enabled)
@@ -128,10 +128,10 @@ export function toFireOptions(c: Composition): FireArgs {
   const effects: EffectSpec[] = [];
   for (const layer of c.effects) {
     if (!layer.enabled) continue;
-    const piece = layerPiece(layer);
-    if (!piece) continue;
+    const patch = layerPatch(layer);
+    if (!patch) continue;
     effects.push({
-      piece,
+      patch,
       target: { kind: layer.target, by: 'index', amount: layer.amount },
       seed: layer.seed,
       ...(layer.stagger === undefined ? {} : { stagger: layer.stagger }),

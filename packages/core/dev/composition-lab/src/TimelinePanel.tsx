@@ -116,13 +116,13 @@ export function Timeline({ composition, tailMs, elapsed, onSeek }: TimelineProps
     <div className="cl-panel">
       <h2>timeline</h2>
       {lanes.length === 0 ? (
-        <p className="cl-note">no enabled layer builds a piece, so there is nothing to lay out</p>
+        <p className="cl-note">no enabled layer builds a patch, so there is nothing to lay out</p>
       ) : (
         <canvas ref={ref} onPointerDown={seek} onPointerMove={seek} />
       )}
       <p className="cl-note">
         0 to {(spanMs / 1000).toFixed(1)}s, hold at {((spanMs * holdAt) / 1000).toFixed(1)}s. A
-        block is one pass; a lane says the piece ran, not that a part moved.
+        block is one pass; a lane says the patch ran, not that a part moved.
       </p>
       {over.map((lane) => (
         <p className="cl-warn" key={lane.id}>

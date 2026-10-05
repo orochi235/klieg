@@ -5,30 +5,30 @@ import {
   Timeline,
   type TimelineOptions,
 } from '../../src/motion/compositor.js';
-import type { MotionPiece } from '../../src/motion/types.js';
+import type { MotionPatch } from '../../src/motion/types.js';
 import { NONE } from '../../src/motion/types.js';
-import { REST } from '../../src/pose.js';
+import { type PoseDelta, REST } from '../../src/pose.js';
 
-const piece = (duration: number, x: number): MotionPiece => ({
+const patch = (duration: number, x: number): MotionPatch => ({
   duration,
-  offset: () => ({ position: [x, 0, 0] }),
+  at: () => ({ position: [x, 0, 0] }),
 });
 
 const build = (hold = 100) =>
   new Timeline({
-    enter: piece(100, 1),
-    active: piece(50, 10),
-    exit: piece(100, 100),
+    enter: patch(100, 1),
+    active: patch(50, 10),
+    exit: patch(100, 100),
     hold,
     blendMs: 20,
   });
 
 const L = { index: 0, count: 1 };
 
-/** Every phase contributes 1, so `poseAt(t).position[0]` reads back the total phase weight. */
-const unit = (duration: number): MotionPiece => ({
+/** Every segment contributes 1, so `poseAt(t).position[0]` reads back the total segment weight. */
+const unit = (duration: number): MotionPatch => ({
   duration,
-  offset: () => ({ position: [1, 0, 0] }),
+  at: () => ({ position: [1, 0, 0] }),
 });
 
 const expectUnitWeight = (over: Partial<TimelineOptions> = {}) => {
@@ -48,9 +48,9 @@ const expectUnitWeight = (over: Partial<TimelineOptions> = {}) => {
 describe('Timeline held until release', () => {
   const held = () =>
     new Timeline({
-      enter: piece(100, 1),
-      active: piece(50, 10),
-      exit: piece(100, 100),
+      enter: patch(100, 1),
+      active: patch(50, 10),
+      exit: patch(100, 100),
       hold: 'until-release',
       blendMs: 0,
     });
@@ -62,7 +62,7 @@ describe('Timeline held until release', () => {
     expect(tl.isFinished(1e9)).toBe(false);
   });
 
-  it('keeps looping the active phase while held', () => {
+  it('keeps looping the active segment while held', () => {
     expect(held().poseAt(1e6, L).position[0]).toBe(10);
   });
 
@@ -91,13 +91,13 @@ describe('Timeline held until release', () => {
     expect(tl.duration).toBe(200);
   });
 
-  // The crossfade straddles where the active phase ends. Ending it at the release instant would put
+  // The crossfade straddles where the active segment ends. Ending it at the release instant would put
   // the ramp's first half in the past, and the exit would jump to half weight in one frame.
   it('starts the exit from nothing at the release instant and ramps it over the blend', () => {
     const tl = new Timeline({
-      enter: piece(100, 1),
-      active: piece(50, 10),
-      exit: piece(100, 100),
+      enter: patch(100, 1),
+      active: patch(50, 10),
+      exit: patch(100, 100),
       hold: 'until-release',
       blendMs: 20,
     });
@@ -128,7 +128,7 @@ describe('Timeline', () => {
     expect(tl.isFinished(300)).toBe(true);
   });
 
-  it('applies only enter in the middle of the enter phase', () => {
+  it('applies only enter in the middle of the enter segment', () => {
     expect(build().poseAt(50, L).position[0]).toBe(1);
   });
 
@@ -136,17 +136,17 @@ describe('Timeline', () => {
     expect(build().poseAt(150, L).position[0]).toBe(10);
   });
 
-  it('blends both phases evenly at the midpoint of the crossfade window', () => {
+  it('blends both segments evenly at the midpoint of the crossfade window', () => {
     // Halfway through the 20ms window straddling the enter/active boundary at t=100:
     // 0.5 of enter's 1, plus 0.5 of active's 10 sampled at its loop start.
     expect(build().poseAt(100, L).position[0]).toBeCloseTo(5.5);
   });
 
-  it('holds total phase weight at 1 for the whole timeline', () => {
+  it('holds total segment weight at 1 for the whole timeline', () => {
     expectUnitWeight();
   });
 
-  it('loops the active piece rather than running it once', () => {
+  it('loops the active patch rather than running it once', () => {
     const tl = build(200);
     // active duration is 50ms, so 120ms and 170ms into the hold are the same phase point
     expect(tl.poseAt(220, L)).toEqual(tl.poseAt(270, L));
@@ -154,9 +154,15 @@ describe('Timeline', () => {
 
   it('reads the same pose at a time whether it is reached going forward or going back', () => {
     const tl = new Timeline({
-      enter: { duration: 100, offset: (t) => ({ position: [t, 0, 0] }) },
-      active: { duration: 50, offset: (t) => ({ position: [10 + t, 0, 0] }) },
-      exit: { duration: 100, offset: (t) => ({ position: [100 * t, 0, 0] }) },
+      enter: { duration: 100, at: (phase: number): PoseDelta => ({ position: [phase, 0, 0] }) },
+      active: {
+        duration: 50,
+        at: (phase: number): PoseDelta => ({ position: [10 + phase, 0, 0] }),
+      },
+      exit: {
+        duration: 100,
+        at: (phase: number): PoseDelta => ({ position: [100 * phase, 0, 0] }),
+      },
       hold: 100,
       blendMs: 20,
     });
@@ -167,11 +173,11 @@ describe('Timeline', () => {
     expect(back.reverse()).toEqual(forward);
   });
 
-  it('samples the looping active piece at its wrapped phase point', () => {
+  it('samples the looping active patch at its wrapped phase point', () => {
     const tl = new Timeline({
-      enter: piece(100, 1),
-      active: { duration: 50, offset: (t) => ({ position: [t, 0, 0] }) },
-      exit: piece(100, 100),
+      enter: patch(100, 1),
+      active: { duration: 50, at: (phase: number): PoseDelta => ({ position: [phase, 0, 0] }) },
+      exit: patch(100, 100),
       hold: 200,
       blendMs: 20,
     });
@@ -186,9 +192,9 @@ describe('Timeline', () => {
     expect(numeric.activeEnd).toBe(200);
 
     const held = new Timeline({
-      enter: piece(100, 1),
-      active: piece(50, 10),
-      exit: piece(100, 100),
+      enter: patch(100, 1),
+      active: patch(50, 10),
+      exit: patch(100, 100),
       hold: 'until-release',
       blendMs: 20,
     });
@@ -207,16 +213,16 @@ describe('Timeline', () => {
 describe('Timeline with degenerate durations', () => {
   const degenerate = (over: Partial<TimelineOptions>) =>
     new Timeline({
-      enter: piece(100, 1),
-      active: piece(50, 10),
-      exit: piece(100, 100),
+      enter: patch(100, 1),
+      active: patch(50, 10),
+      exit: patch(100, 100),
       hold: 100,
       blendMs: 20,
       ...over,
     });
 
-  it('gives a zero-length phase no weight at all', () => {
-    const tl = degenerate({ enter: piece(0, 1) });
+  it('gives a zero-length segment no weight at all', () => {
+    const tl = degenerate({ enter: patch(0, 1) });
     expect(tl.duration).toBe(200);
     expect(tl.poseAt(0, L).position[0]).toBe(10);
     expectUnitWeight({ enter: unit(0) });
@@ -241,11 +247,11 @@ describe('Timeline with degenerate durations', () => {
     expect(tl.poseAt(200, L).position[0]).toBe(100);
   });
 
-  it('is finished immediately when every phase is empty', () => {
+  it('is finished immediately when every segment is empty', () => {
     const tl = degenerate({
-      enter: piece(0, 1),
-      active: piece(0, 10),
-      exit: piece(0, 100),
+      enter: patch(0, 1),
+      active: patch(0, 10),
+      exit: patch(0, 100),
       hold: 0,
     });
     expect(tl.duration).toBe(0);
@@ -255,7 +261,7 @@ describe('Timeline with degenerate durations', () => {
 });
 
 describe('Timeline layers', () => {
-  const layered = (active: MotionPiece[]) =>
+  const layered = (active: MotionPatch[]) =>
     new Timeline({
       enter: NONE,
       active,
@@ -264,15 +270,15 @@ describe('Timeline layers', () => {
       blendMs: 0,
     });
 
-  it('sums the offsets of every piece in a slot', () => {
-    const tl = layered([piece(100, 1), piece(100, 10)]);
+  it('sums the deltas of every patch in a slot', () => {
+    const tl = layered([patch(100, 1), patch(100, 10)]);
 
     expect(tl.poseAt(50, L).position[0]).toBe(11);
   });
 
   it('takes the longest duration in the slot', () => {
     const tl = new Timeline({
-      enter: [piece(100, 1), piece(400, 1)],
+      enter: [patch(100, 1), patch(400, 1)],
       active: NONE,
       exit: NONE,
       hold: 0,
@@ -282,20 +288,20 @@ describe('Timeline layers', () => {
     expect(tl.duration).toBe(400);
   });
 
-  it('loops a layered active phase on the longest of its pieces', () => {
-    const short: MotionPiece = { duration: 100, offset: (t) => ({ position: [t, 0, 0] }) };
-    const long: MotionPiece = { duration: 400, offset: () => ({}) };
+  it('loops a layered active segment on the longest of its patches', () => {
+    const short: MotionPatch = { duration: 100, at: (phase) => ({ position: [phase, 0, 0] }) };
+    const long: MotionPatch = { duration: 400, at: () => ({}) };
     const tl = layered([short, long]);
 
     // Local t runs over 400ms, so 200ms in is halfway rather than back at the start.
     expect(tl.poseAt(200, L).position[0]).toBeCloseTo(0.5, 10);
   });
 
-  it('takes a bare piece exactly as it did before slots held layers', () => {
+  it('takes a bare patch exactly as it did before slots held layers', () => {
     const one = new Timeline({
-      enter: piece(100, 1),
-      active: piece(50, 10),
-      exit: piece(100, 100),
+      enter: patch(100, 1),
+      active: patch(50, 10),
+      exit: patch(100, 100),
       hold: 100,
       blendMs: 20,
     });
@@ -334,13 +340,13 @@ describe('poseAt out-parameter', () => {
 });
 
 describe('slotMovesLetters', () => {
-  const drift: MotionPiece = { duration: 1000, offset: (t) => ({ position: [0, t, 0] }) };
-  const tilt: MotionPiece = { duration: 1000, offset: () => ({ rotation: [0, 0.2, 0] }) };
-  const breathe: MotionPiece = { duration: 1000, offset: (t) => ({ scale: 1 + t * 0.1 }) };
-  const dim: MotionPiece = { duration: 1000, offset: () => ({ opacity: 0.5 }) };
-  const perLetter: MotionPiece = {
+  const drift: MotionPatch = { duration: 1000, at: (phase) => ({ position: [0, phase, 0] }) };
+  const tilt: MotionPatch = { duration: 1000, at: () => ({ rotation: [0, 0.2, 0] }) };
+  const breathe: MotionPatch = { duration: 1000, at: (phase) => ({ scale: 1 + phase * 0.1 }) };
+  const dim: MotionPatch = { duration: 1000, at: () => ({ opacity: 0.5 }) };
+  const perLetter: MotionPatch = {
     duration: 1000,
-    offset: (_t, letter) => (letter.index === 3 ? { position: [1, 0, 0] } : {}),
+    at: (_t, letter) => (letter.index === 3 ? { position: [1, 0, 0] } : {}),
   };
 
   it('clears a slot that never leaves rest', () => {
@@ -362,13 +368,12 @@ describe('slotMovesLetters', () => {
     expect(slotMovesLetters([NONE, drift])).toBe(true);
   });
 
-  it('catches a piece that only moves one letter of the word', () => {
+  it('catches a patch that only moves one letter of the word', () => {
     expect(slotMovesLetters(perLetter)).toBe(true);
   });
 
   it('catches a constant offset, which misaligns without ever animating', () => {
-    expect(slotMovesLetters({ duration: 1000, offset: () => ({ position: [0, 2, 0] }) })).toBe(
-      true,
-    );
+    const lifted: MotionPatch = { duration: 1000, at: () => ({ position: [0, 2, 0] }) };
+    expect(slotMovesLetters(lifted)).toBe(true);
   });
 });

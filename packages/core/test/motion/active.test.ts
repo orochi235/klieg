@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { ACTIVE } from '../../src/motion/active.js';
-import type { MotionPiece } from '../../src/motion/types.js';
+import type { MotionPatch } from '../../src/motion/types.js';
 
 const L = { index: 2, count: 6 };
 
 // Seamlessness must be checked with a tolerance, not toEqual. Math.sin(2*PI) is -2.45e-16,
-// not 0, so exact comparison fails for every sine-driven piece — which is most of them.
-function expectSeamless(name: string, piece: MotionPiece): void {
-  const a = piece.offset(0, L);
-  const b = piece.offset(1, L);
+// not 0, so exact comparison fails for every sine-driven patch — which is most of them.
+function expectSeamless(name: string, patch: MotionPatch): void {
+  const a = patch.at(0, L);
+  const b = patch.at(1, L);
   expect(Object.keys(a).sort(), `${name} contributes different keys at 0 and 1`).toEqual(
     Object.keys(b).sort(),
   );
@@ -22,15 +22,15 @@ function expectSeamless(name: string, piece: MotionPiece): void {
   }
 }
 
-describe('active pieces', () => {
-  it('loop seamlessly: offset(0) matches offset(1)', () => {
-    for (const [name, piece] of Object.entries(ACTIVE)) expectSeamless(name, piece);
+describe('active patches', () => {
+  it('loop seamlessly: at(0) matches at(1)', () => {
+    for (const [name, patch] of Object.entries(ACTIVE)) expectSeamless(name, patch);
   });
 
   it('stay near rest — active is an idle, not a journey', () => {
-    for (const [name, piece] of Object.entries(ACTIVE)) {
+    for (const [name, patch] of Object.entries(ACTIVE)) {
       for (let i = 0; i <= 20; i++) {
-        const o = piece.offset(i / 20, L);
+        const o = patch.at(i / 20, L);
         for (const v of o.position ?? []) {
           expect(Math.abs(v), `${name} position`).toBeLessThan(0.6);
         }
@@ -41,6 +41,6 @@ describe('active pieces', () => {
   });
 
   it('none contributes nothing', () => {
-    expect(ACTIVE.none.offset(0.5, L)).toEqual({});
+    expect(ACTIVE.none.at(0.5, L)).toEqual({});
   });
 });

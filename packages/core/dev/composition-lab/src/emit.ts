@@ -11,28 +11,29 @@ function lampSource(layer: EffectLayer): string {
     layer.lampSource === 'orbit'
       ? `orbit({ radius: ${p.sweep ?? 0.3}, x: ${p.x ?? 0}, y: ${p.y ?? 0} })`
       : `fixed(${p.x ?? 0}, ${p.y ?? 0})`;
-  return `lamp({ source: ${src}, duration: ${p.duration ?? 4000}, radius: ${p.radius ?? 0.5}, strength: ${p.strength ?? 2} })`;
+  return `lamp({ source: ${src}, period: ${p.period ?? 4000}, radius: ${p.radius ?? 0.5}, strength: ${p.strength ?? 2} })`;
 }
 
 function layerSource(layer: EffectLayer): string {
-  let piece: string;
+  let patch: string;
   if (layer.kind === 'draft') {
-    piece = `{\n        duration: 1000,\n        at(t, part) {\n${layer.source ?? ''}\n        },\n      }`;
+    // The pane holds a factory body returning `{ period, at }`, so the paste calls it in place.
+    patch = `(() => {\n${layer.source ?? ''}\n})()`;
   } else if (layer.kind === 'lamp') {
-    piece = lampSource(layer);
+    patch = lampSource(layer);
   } else {
     // klieg exports `roving` by name but reaches the built-ins only through `EFFECTS`.
-    piece = `EFFECTS.${layer.kind}({ ${args(layer.params)} })`;
+    patch = `EFFECTS.${layer.kind}({ ${args(layer.params)} })`;
   }
   if (carriesRoving(layer)) {
-    piece = `roving(${piece}, { dwell: ${layer.roving.dwell}, seed: ${layer.roving.seed}, epochs: ${layer.roving.epochs} })`;
+    patch = `roving(${patch}, { dwell: ${layer.roving.dwell}, seed: ${layer.roving.seed}, epochs: ${layer.roving.epochs} })`;
   }
   if (layer.intermittent) {
-    piece = `intermittent(${piece}, { spell: ${layer.intermittent.spell}, calm: ${layer.intermittent.calm}, bouts: ${layer.intermittent.bouts} })`;
+    patch = `intermittent(${patch}, { spell: ${layer.intermittent.spell}, calm: ${layer.intermittent.calm}, bouts: ${layer.intermittent.bouts} })`;
   }
   const stagger = layer.stagger === undefined ? '' : `\n      stagger: ${layer.stagger},`;
   return `    {
-      piece: ${piece},
+      patch: ${patch},
       target: { kind: '${layer.target}', by: 'index', amount: ${layer.amount} },
       seed: ${layer.seed},${stagger}
     },`;

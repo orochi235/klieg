@@ -7,7 +7,7 @@ const LAYER: EffectLayer = {
   id: 'a',
   kind: 'flicker',
   enabled: true,
-  params: { duration: 1000 },
+  params: { period: 1000 },
   target: 'run',
   amount: 1,
   seed: 0,
@@ -26,14 +26,14 @@ describe('timelineOf', () => {
     expect(t.holdAt).toBeCloseTo(0.75);
   });
 
-  it('lays one block per pass of the piece', () => {
+  it('lays one block per pass of the patch', () => {
     const t = timelineOf(composition(LAYER), TAIL);
     expect(t.lanes[0]?.blocks).toHaveLength(8);
     expect(t.lanes[0]?.blocks[0]).toEqual({ at: 0, width: 0.125 });
   });
 
   it('clips the last block at the edge rather than running it past', () => {
-    const t = timelineOf(composition({ ...LAYER, params: { duration: 3000 } }), TAIL);
+    const t = timelineOf(composition({ ...LAYER, params: { period: 3000 } }), TAIL);
     const last = t.lanes[0]?.blocks.at(-1);
     expect((last?.at ?? 0) + (last?.width ?? 0)).toBeCloseTo(1);
   });
@@ -43,7 +43,7 @@ describe('timelineOf', () => {
   it('says what share of a pass plays when the pass outruns the fire', () => {
     const roved: EffectLayer = {
       ...LAYER,
-      params: { duration: 1400 },
+      params: { period: 1400 },
       roving: { dwell: 3200, seed: 0, epochs: 96 },
     };
     const lane = timelineOf(composition(roved), TAIL).lanes[0];
@@ -59,14 +59,14 @@ describe('timelineOf', () => {
 
   // Drawing 8000 one-millisecond blocks says nothing a solid band does not.
   it('draws no blocks at all when there are more than the eye can separate', () => {
-    const fast = { ...LAYER, params: { duration: 1 } };
+    const fast = { ...LAYER, params: { period: 1 } };
     const lane = timelineOf(composition(fast), TAIL).lanes[0];
     expect(lane?.blocks).toEqual([]);
     expect(lane?.passes).toBeGreaterThan(MAX_BLOCKS);
   });
 
   // `intermittent` refuses a spell under one pass of what it wraps, and what it wraps here is the
-  // roved piece, not the flicker inside it.
+  // roved patch, not the flicker inside it.
   it('names the wrappers a layer carries, in the order they wrap', () => {
     const wrapped: EffectLayer = {
       ...LAYER,
@@ -78,7 +78,7 @@ describe('timelineOf', () => {
     );
   });
 
-  it('gives no lane to a disabled layer, which contributes no piece', () => {
+  it('gives no lane to a disabled layer, which contributes no patch', () => {
     expect(timelineOf(composition({ ...LAYER, enabled: false }), TAIL).lanes).toEqual([]);
   });
 

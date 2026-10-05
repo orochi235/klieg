@@ -86,7 +86,7 @@ export function sign(anchor: HTMLElement, options: SignOptions): Sign {
     setLit(true);
     void klieg
       .fire(text, {
-        // An anchored canvas crops to its box and every enter piece travels outside it.
+        // An anchored canvas crops to its box and every enter patch travels outside it.
         enter: 'none',
         hold: 'forever',
         // The page already carries the word whenever the anchor supplied it; a second copy is

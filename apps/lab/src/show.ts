@@ -9,8 +9,8 @@ import {
   type FireOptions,
   fromEuler,
   type LookName,
-  type MotionPiece,
-  type PoseOffset,
+  type MotionPatch,
+  type PoseDelta,
 } from 'klieg';
 import * as THREE from 'three';
 import { CATALOG, fontUrl } from './fonts/catalog.js';
@@ -117,16 +117,16 @@ const SETTLE_MS = 620;
 const view = { yaw: 0, pitch: 0 };
 const euler = new THREE.Euler(0, 0, 0, 'XYZ');
 const point = new THREE.Vector3();
-const turned: PoseOffset = { position: [0, 0, 0], rotation: [0, 0, 0] };
+const turned: PoseDelta = { position: [0, 0, 0], rotation: [0, 0, 0] };
 
 /**
  * Turns the whole word as one rigid body: every letter takes the shared rotation and moves to
  * where that rotation carries its own layout position. `transform` does this in one step, but it
  * is read once when the effect fires and this has to follow a live drag.
  */
-const pivot: MotionPiece = {
+const pivot: MotionPatch = {
   duration: 1,
-  offset(_t, letter) {
+  at(_phase, letter) {
     const x = letter.x ?? 0;
     const y = letter.y ?? 0;
     euler.set(view.pitch, view.yaw, 0);

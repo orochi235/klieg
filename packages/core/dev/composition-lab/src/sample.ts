@@ -1,14 +1,14 @@
 import type { EffectFrame } from '@core/effects/frame.js';
-import type { FrameCtx, PartInfo, ResolvedOffset } from '@core/effects/types.js';
+import type { Host, PartInfo, PartPose } from '@core/effects/types.js';
 
 /**
- * Samples one pass of the finest piece has to get. Below about 20 a `flicker` drop falls between
+ * Samples one pass of the finest patch has to get. Below about 20 a `flicker` drop falls between
  * two samples, the holder reads as unmoved for the whole epoch, and the handovers either side of
  * it merge into one — which is how tenure came to report a number four times the truth.
  */
-export const PER_PIECE_PASS = 32;
+export const PER_PATCH_PASS = 32;
 
-/** Enough to plot smoothly, whatever the pieces are doing. */
+/** Enough to plot smoothly, whatever the patches are doing. */
 export const MIN_SAMPLES = 600;
 
 /** A ceiling on the wait. Past this the panels stop responding to a slider; the tenure panel says
@@ -16,14 +16,14 @@ export const MIN_SAMPLES = 600;
 export const MAX_SAMPLES = 8000;
 
 /**
- * How many samples one pass needs, given the shortest piece in it. The sweep and the live panels
+ * How many samples one pass needs, given the shortest patch in it. The sweep and the live panels
  * must derive this the same way, or their numbers do not compare — a shared rule rather than a
  * shared constant, because a constant is a step size only for one pass length, and `roving` at
- * `epochs: 96` makes the pass two hundred times the piece it wraps.
+ * `epochs: 96` makes the pass two hundred times the patch it wraps.
  */
 export function passSamples(pass: number, finest: number): number {
   if (!(pass > 0) || !(finest > 0)) return MIN_SAMPLES;
-  const wanted = Math.ceil((pass / finest) * PER_PIECE_PASS);
+  const wanted = Math.ceil((pass / finest) * PER_PATCH_PASS);
   return Math.min(MAX_SAMPLES, Math.max(MIN_SAMPLES, wanted));
 }
 
@@ -36,20 +36,20 @@ export interface PassSamples {
   dark: number[][];
   crawl: number[][];
   /** Length of the merged lamp vector. A lamp writes nothing else, so without this a lamp layer
-   * reads on every other channel exactly as a piece that does nothing does. */
+   * reads on every other channel exactly as a patch that does nothing does. */
   light: number[][];
   /** Packed 0xRRGGBB, or -1 where no layer wrote a colour. */
   color: number[][];
   /** Whether any layer ever MOVED this part across the whole pass. Being targeted is not enough:
-   * a piece like `roving` addresses the whole pool and afflicts one part of it, and counting the
+   * a patch like `roving` addresses the whole pool and afflicts one part of it, and counting the
    * pool would make this blind to exactly the fault it exists to show. */
   touched: boolean[];
   /** The same question per sample. Tenure is a run of trues; a handover is where the set changes. */
   moved: boolean[][];
 }
 
-/** Whether a merged offset is doing anything. Multiplicative channels rest at 1, additive at 0. */
-function moved(o: ResolvedOffset): boolean {
+/** Whether a merged pose is doing anything. Multiplicative channels rest at 1, additive at 0. */
+function moved(o: PartPose): boolean {
   if (o.gain !== 1 || o.scale !== 1 || o.dark !== 0 || o.crawl !== 0) return true;
   if (o.color !== undefined) return true;
   if (o.position.some((n) => n !== 0) || o.rotation.some((n) => n !== 0)) return true;
@@ -63,9 +63,9 @@ function moved(o: ResolvedOffset): boolean {
 export function samplePass(
   frame: EffectFrame,
   parts: readonly PartInfo[],
-  duration: number,
+  pass: number,
   samples: number,
-  ctx: FrameCtx,
+  host: Host,
 ): PassSamples {
   const grid = (fill: number) =>
     Array.from({ length: parts.length }, () => new Array<number>(samples).fill(fill));
@@ -85,7 +85,7 @@ export function samplePass(
   };
 
   for (let s = 0; s < samples; s++) {
-    const resolved = frame.resolve(parts, (s / samples) * duration, ctx);
+    const resolved = frame.resolve(parts, (s / samples) * pass, host);
     for (const [index, o] of resolved) {
       const active = moved(o);
       if (active) out.touched[index] = true;

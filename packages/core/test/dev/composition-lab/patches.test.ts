@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasGradient } from '../../../dev/composition-lab/src/pieces.js';
+import { hasGradient } from '../../../dev/composition-lab/src/patches.js';
 import { type LookSpec, specOf } from '../../../src/render/looks.js';
 import type { TubeSpec } from '../../../src/render/tube/index.js';
 

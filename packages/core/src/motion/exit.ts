@@ -1,6 +1,6 @@
 import { easeInCubic, linear } from '../easing.js';
 import { transition } from './build.js';
-import type { ExitName, MotionPiece } from './types.js';
+import type { ExitName, MotionPatch } from './types.js';
 import { NONE } from './types.js';
 
 /** Golden angle: consecutive letters fly apart without an RNG, so screenshots stay stable. */
@@ -39,7 +39,7 @@ const fade = transition(500, {
   ease: linear,
 });
 
-export const EXIT: Record<ExitName, MotionPiece> = {
+export const EXIT: Record<ExitName, MotionPatch> = {
   shatter,
   drop,
   recede,

@@ -1,17 +1,22 @@
-import { type Mix, mix, patch } from '@msb235/blits';
+import { type Signal as BlitsSignal, type Mix, mix, type Patch, patch } from '@msb235/blits';
 import type { StaggerSpec } from '../motion/types.js';
 import { stagger } from '../motion/types.js';
 import { selectIndices } from '../select.js';
-import { EFFECTS } from './pieces.js';
-import { asDelta, PART_CHANNELS, PART_RIG } from './rig.js';
-import type { EffectPiece, EffectSpec, FrameCtx, PartInfo, ResolvedOffset } from './types.js';
+import { EFFECTS } from './patches.js';
+import { asDelta, PART_CHANNELS, PART_KIT } from './rig.js';
+import {
+  type EffectPatch,
+  type EffectSpec,
+  type Host,
+  type PartInfo,
+  type PartPose,
+  relay,
+  type Setting,
+} from './types.js';
 
-/** Stands in until the first frame reports one. Nothing samples a piece before then. */
-const NO_FRAME: FrameCtx = { pointer: null, pointerInWord: null, dt: 0, now: 0 };
-
-/** One spec resolved against a pool: the built piece, and which pool positions it drives. */
+/** One spec resolved against a pool: the built patch, and which pool positions it drives. */
 export interface ResolvedEffect {
-  piece: EffectPiece;
+  patch: EffectPatch;
   /** Indices into the `parts` array this was planned against, not `PartInfo.index`. */
   parts: number[];
   stagger?: number | StaggerSpec;
@@ -38,7 +43,7 @@ export function planEffects(
       spec.seed ?? 0,
     );
     return {
-      piece: typeof spec.piece === 'string' ? EFFECTS[spec.piece]() : spec.piece,
+      patch: typeof spec.patch === 'string' ? EFFECTS[spec.patch]() : spec.patch,
       stagger: spec.stagger,
       parts: pool.filter(({ part }) => chosen.has(part.index)).map(({ index }) => index),
     };
@@ -57,12 +62,12 @@ export class EffectFrame {
   private touched: number[] = [];
   /** Pool positions `drop` took out of play, kept so a re-cue against a new pool leaves them out. */
   private readonly dropped = new Set<number>();
-  private readonly out = new Map<number, ResolvedOffset>();
-  private readonly mix: Mix<PartInfo, ResolvedOffset>;
+  private readonly out = new Map<number, PartPose>();
+  private readonly mix: Mix<PartInfo, PartPose>;
   /** The pool the voices were targeted against, so a caller passing a new one gets new voices. */
   private pool: readonly PartInfo[] | null = null;
-  /** This frame's context, which a piece still reads as its third argument. */
-  private ctx: FrameCtx = NO_FRAME;
+  private frame: Host = NO_HOST;
+  private reduced = false;
 
   constructor(private readonly effects: readonly ResolvedEffect[]) {
     const seen = new Set<number>();
@@ -73,12 +78,19 @@ export class EffectFrame {
         this.touched.push(index);
       }
     }
-    this.mix = mix<PartInfo, ResolvedOffset>(PART_RIG, {});
+    this.mix = mix<PartInfo, PartPose>(PART_KIT, {
+      host: relay(() => this.frame),
+      reduce: () => this.reduced,
+      // `color` has no rest to scale toward, so a weighed voice passes it whole at any weight above
+      // zero, as `hinge`'s own `weigh` does.
+      band: { on: Number.MIN_VALUE, off: 0 },
+    });
   }
 
   /**
-   * Cues one voice per effect against this pool. A voice's reach is a fixed set of parts, so it is
-   * the pool that decides it: a caller handing over a different array re-cues from scratch.
+   * Cues each effect against this pool: one voice, a weighed one for a hinged patch, or a blend of
+   * a hinge's stops. A voice's reach is a fixed set of parts, so it is the pool that decides it: a
+   * caller handing over a different array re-cues from scratch.
    */
   private retarget(parts: readonly PartInfo[]): void {
     this.pool = parts;
@@ -89,19 +101,23 @@ export class EffectFrame {
         const part = parts[index];
         if (part && !this.dropped.has(index)) reached.add(part);
       }
-      const duration = effect.piece.duration;
-      this.mix.cue({
-        patch: patch<PartInfo, ResolvedOffset>(
-          0,
-          (_phase, part, setting) => {
-            const pass = duration > 0 ? (setting.elapsed % duration) / duration : 0;
-            const t = effect.stagger === undefined ? pass : stagger(pass, part, effect.stagger);
-            return asDelta(effect.piece.at(t, part, this.ctx));
-          },
-          { writes: PART_CHANNELS },
-        ),
-        target: (part) => reached.has(part),
-      });
+      const target = (part: PartInfo) => reached.has(part);
+      const hinged = effect.patch.hinged;
+      if (hinged && 'stops' in hinged) {
+        this.mix.blend(
+          hinged.stops.map((stop) => voiceOf(stop, effect.stagger)),
+          hinged.by as BlitsSignal<PartInfo>,
+          { target },
+        );
+      } else if (hinged) {
+        this.mix.cue({
+          patch: voiceOf(hinged.patch, effect.stagger),
+          weight: hinged.by as BlitsSignal<PartInfo>,
+          target,
+        });
+      } else {
+        this.mix.cue({ patch: voiceOf(effect.patch, effect.stagger), target });
+      }
     }
   }
 
@@ -121,10 +137,19 @@ export class EffectFrame {
     if (changed) this.touched = this.touched.filter((index) => !this.dropped.has(index));
   }
 
-  /** Every targeted part's merged offset, leaving out those `drop` took out of play. */
-  resolve(parts: readonly PartInfo[], elapsed: number, ctx: FrameCtx): Map<number, ResolvedOffset> {
+  /**
+   * Every targeted part's merged pose, leaving out those `drop` took out of play. `elapsed` is the
+   * fire's clock, and `host` what this frame's patches read on `setting.host`.
+   */
+  resolve(
+    parts: readonly PartInfo[],
+    elapsed: number,
+    host: Host,
+    reduced = false,
+  ): Map<number, PartPose> {
     if (this.pool !== parts) this.retarget(parts);
-    this.ctx = ctx;
+    this.frame = host;
+    this.reduced = reduced;
     this.out.clear();
     this.mix.sync(elapsed);
 
@@ -135,4 +160,27 @@ export class EffectFrame {
     }
     return this.out;
   }
+}
+
+/** Stands in until the first frame reports one. Nothing samples a patch before then. */
+const NO_HOST: Host = { pointer: null, pointerInWord: null, now: 0 };
+
+/**
+ * An effect patch as a blits patch: its pass taken from the voice's clock, warped per part by the
+ * effect's stagger, which blits' own `stagger` — a delay in milliseconds — is not.
+ */
+function voiceOf(
+  effect: EffectPatch,
+  spread: number | StaggerSpec | undefined,
+): Patch<PartInfo, PartPose> {
+  const period = effect.period;
+  return patch<PartInfo, PartPose>(
+    0,
+    (_phase, part, setting) => {
+      const pass = period > 0 ? (setting.elapsed % period) / period : 0;
+      const phase = spread === undefined ? pass : stagger(pass, part, spread);
+      return asDelta(effect.at(phase, part, setting as Setting));
+    },
+    { writes: PART_CHANNELS },
+  );
 }

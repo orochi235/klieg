@@ -34,7 +34,7 @@ function diagnosticsFor(state: EditorState, message: string, line: number | null
 }
 
 /**
- * The body of a factory returning `{ duration, at }`. Compiling is a module — every compile makes
+ * The body of a factory returning `{ period, at }`. Compiling is a module — every compile makes
  * and imports a blob URL — so it happens on the keystroke and the blur, never per character.
  */
 export function DraftPane({ layer, onSource, faults }: DraftPaneProps) {
@@ -127,7 +127,7 @@ export function DraftPane({ layer, onSource, faults }: DraftPaneProps) {
         </p>
       ) : null}
       <p className="cl-note">
-        Return <code>{'{ duration, at }'}</code>. A throw inside <code>at</code> rests that call and
+        Return <code>{'{ period, at }'}</code>. A throw inside <code>at</code> rests that call and
         is counted here rather than killing the frame.
       </p>
     </div>

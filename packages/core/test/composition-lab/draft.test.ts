@@ -5,7 +5,7 @@ import {
   guarded,
   lineOfError,
 } from '../../dev/composition-lab/src/draft.js';
-import type { EffectPiece } from '../../src/effects/types.js';
+import type { EffectPatch } from '../../src/effects/types.js';
 import { NO_CTX } from '../effects/ctx.js';
 
 const part = {
@@ -20,8 +20,8 @@ const part = {
   span: 1,
 };
 
-const THROWS: EffectPiece = {
-  duration: 1000,
+const THROWS: EffectPatch = {
+  period: 1000,
   at: () => {
     throw new Error('nope');
   },
@@ -37,33 +37,33 @@ describe('guarded', () => {
   });
 
   it('keeps the pass it was given', () => {
-    expect(guarded(THROWS).duration).toBe(1000);
+    expect(guarded(THROWS).period).toBe(1000);
   });
 
   it('counts the calls that threw and keeps the first message', () => {
-    const piece = guarded(THROWS);
-    piece.at(0, part, NO_CTX);
-    piece.at(0.5, part, NO_CTX);
+    const patch = guarded(THROWS);
+    patch.at(0, part, NO_CTX);
+    patch.at(0.5, part, NO_CTX);
     expect(draftFaults()).toEqual({ throws: 2, message: 'nope' });
   });
 
   it('keeps the first message rather than the last, which is the one nearest the cause', () => {
     let n = 0;
-    const piece = guarded({
-      duration: 1,
+    const patch = guarded({
+      period: 1,
       at: () => {
         n += 1;
         throw new Error(`throw ${n}`);
       },
     });
-    piece.at(0, part, NO_CTX);
-    piece.at(0, part, NO_CTX);
+    patch.at(0, part, NO_CTX);
+    patch.at(0, part, NO_CTX);
     expect(draftFaults().message).toBe('throw 1');
   });
 
-  it('passes a working piece straight through', () => {
-    const piece = guarded({ duration: 1, at: () => ({ gain: 0.5 }) });
-    expect(piece.at(0, part, NO_CTX)).toEqual({ gain: 0.5 });
+  it('passes a working patch straight through', () => {
+    const patch = guarded({ period: 1, at: () => ({ gain: 0.5 }) });
+    expect(patch.at(0, part, NO_CTX)).toEqual({ gain: 0.5 });
     expect(draftFaults().throws).toBe(0);
   });
 });

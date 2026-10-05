@@ -1,3 +1,4 @@
+import type { Setting as BlitsSetting, Signal as BlitsSignal } from '@msb235/blits';
 import type { LetterInfo, StaggerSpec } from '../motion/types.js';
 import type { Vec3 } from '../pose.js';
 import type { SelectSpec } from '../select.js';
@@ -23,14 +24,14 @@ export interface PartInfo {
   fill?: string;
   index: number;
   count: number;
-  /** The letter this part belongs to, so a piece can order by letter as well as by part. */
+  /** The letter this part belongs to, so a patch can order by letter as well as by part. */
   letter: LetterInfo;
   /** Layout position in em, relative to the block centre. This is the letter's origin, which on
    * a single line is the shared baseline -- `ink` is where the part is actually drawn. */
   x: number;
   y: number;
   /**
-   * The part's drawn bounds in the same space as `x`/`y`, so a piece measuring distance has
+   * The part's drawn bounds in the same space as `x`/`y`, so a patch measuring distance has
    * something with height to measure to. Collapses to the origin for a part that draws nothing.
    * Resolves per letter: every run of a letter reports that letter's bounds.
    */
@@ -45,8 +46,8 @@ export interface PartInfo {
   span: number;
 }
 
-/** A relative contribution. Omitted fields mean "no contribution", as `PoseOffset` does. */
-export interface PartOffset {
+/** A relative contribution. Omitted fields mean "no contribution", as `PoseDelta` does. */
+export interface PartDelta {
   /** Multiplies the part's emissive. */
   gain?: number;
   color?: number;
@@ -61,17 +62,17 @@ export interface PartOffset {
   crawl?: number;
   /** Light landing on the part, added from zero. Lamps sum. A multiplier cannot express this:
    * `emissive` defaults to black, so scaling it is a no-op on every look but `neon`. */
-  light?: LightOffset;
+  light?: LightDelta;
 }
 
 /** One lamp's contribution to a part. */
-export interface LightOffset {
+export interface LightDelta {
   color: number;
   amount: number;
 }
 
 /** Everything a merge resolved. Multiplicative channels rest at 1, additive at 0. */
-export interface ResolvedOffset {
+export interface PartPose {
   gain: number;
   color?: number;
   dark: number;
@@ -84,8 +85,8 @@ export interface ResolvedOffset {
   light: Vec3;
 }
 
-/** What every lighting piece and light source reads for one frame. */
-export interface FrameCtx {
+/** What klieg puts on `setting.host` for every patch, signal and light source it runs. */
+export interface Host {
   /** -1..1 over the canvas box, +y down, or null until the pointer has been inside it. */
   pointer: { x: number; y: number } | null;
   /** The same pointer in the word's layout space — the em, block-relative space `PartInfo.x/y`
@@ -94,30 +95,74 @@ export interface FrameCtx {
    * and addresses the layout the word was built with, so after a `stages` regroup it points at
    * where the letters used to be. Null whenever `pointer` is, and before the word has a fit. */
   pointerInWord: { x: number; y: number } | null;
-  /** Milliseconds since the previous frame, and `Infinity` under reduced motion. Read it to snap
-   * to a target, never to integrate: one infinite frame leaves an accumulator `NaN` for good. */
-  dt: number;
   /**
-   * Milliseconds on the instance's clock when this frame was drawn. Everything drawn in one frame
-   * reads the same value — the hero and its backdrop, every concurrent fire, each of the many
-   * probes `turns` makes — so it is what keys state that must advance once a frame however often a
-   * piece is asked.
+   * Milliseconds on the instance's clock when this frame was drawn. `setting.timestamp` is the
+   * fire's own clock; this one is the same for the hero and its backdrop and every concurrent fire,
+   * so it keys state shared across them, as `power`'s is.
    */
   now: number;
 }
 
-export interface EffectPiece {
-  /** Milliseconds for one pass. Loops. Zero does not hold a piece still — the pass never advances,
-   * which pins a time-driven source such as `orbit` at its starting angle for good. */
-  duration: number;
-  /** `t` is normalized 0..1 within this pass. */
-  at(t: number, part: PartInfo, ctx: FrameCtx): PartOffset;
+/**
+ * What a patch or light source reads for one frame: blits' setting, with klieg's fields on `host`.
+ * `dt` is `Infinity` under reduced motion. Valid only during the call it is handed to.
+ */
+export type Setting = BlitsSetting & { readonly host: Host };
+
+/** klieg's fields on a setting a signal is handed, which blits types without them. */
+export function hostOf(setting: BlitsSetting): Host {
+  return setting.host as Host;
 }
+
+/**
+ * A host whose fields read through to whichever frame `read` returns, so a mix holding it by
+ * reference sees each frame's values without the caller resolving a field no patch asks for.
+ */
+export function relay(read: () => Host): Host {
+  return {
+    get pointer() {
+      return read().pointer;
+    },
+    get pointerInWord() {
+      return read().pointerInWord;
+    },
+    get now() {
+      return read().now;
+    },
+  };
+}
+
+/** A scalar, usually 0..1, resolved per part per frame: blits' signal over parts. */
+export type Signal = BlitsSignal<PartInfo>;
+
+export interface EffectPatch {
+  /** Milliseconds one pass lasts, and the patch loops. Zero does not hold a patch still — the pass
+   * never advances, which pins a time-driven source such as `orbit` at its starting angle for good. */
+  period: number;
+  /** `phase` is 0..1 across one period. */
+  at(phase: number, part: PartInfo, setting: Setting): PartDelta;
+  /** Set by `hinge`: the patch as voices the mix weighs, which `at` reproduces for a caller asking
+   * it directly. */
+  readonly hinged?: Hinged;
+}
+
+/**
+ * Hands back the patch it is given, typed. A slot that also takes a built-in name cannot type an
+ * inline patch's `at` on its own: a name is a string, and a string's own `at` joins the union.
+ */
+export function effect(patch: EffectPatch): EffectPatch {
+  return patch;
+}
+
+/** A patch weighed by a signal, or a set of stops crossfaded by one. */
+export type Hinged =
+  | { readonly by: Signal; readonly patch: EffectPatch }
+  | { readonly by: Signal; readonly stops: readonly EffectPatch[] };
 
 export type EffectName = 'flicker' | 'hue' | 'chase';
 
 export interface EffectSpec {
-  piece: EffectName | EffectPiece;
+  patch: EffectName | EffectPatch;
   /**
    * Which parts, out of the word's pool. Naming a `kind` selects every part of that shape,
    * whether or not a fill built it — so nothing already written narrows when one does.

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { ResolvedOffset } from '../../effects/types.js';
+import type { PartPose } from '../../effects/types.js';
 import { DEFAULT_GLYPH_OPTIONS, EM, glyphToShapes } from '../../text/glyphs.js';
 import { buildTubeBlueprint, type TubeBlueprint, type TubeSpec } from '../decoration.js';
 import { seedFlake } from '../flake.js';
@@ -267,7 +267,7 @@ export class TubeBuilder implements DecorationBuilder {
    * the run's own base, never from the buffer: reading back last frame's value and scaling it
    * again compounds, and the sign fades to black in a few seconds.
    */
-  writePart(part: DecorationPart, out: ResolvedOffset): void {
+  writePart(part: DecorationPart, out: PartPose): void {
     const run = part as RunPart;
     if (!run.readsRunColor) return;
     const mesh = run.mesh;
@@ -276,7 +276,7 @@ export class TubeBuilder implements DecorationBuilder {
       | undefined;
     if (!attribute) return;
     // Hue and emissive are the same colour here: a lamp on a run tints by what the run is showing,
-    // so a `hue` piece sweeping the base takes the lit pool with it.
+    // so a `hue` patch sweeping the base takes the lit pool with it.
     const shown = out.color ?? run.color;
     const color = this.partColor
       .setHex(litEmissive(shown, shown, out.light))

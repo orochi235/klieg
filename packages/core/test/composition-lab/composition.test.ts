@@ -5,7 +5,7 @@ import {
   DEFAULT_COMPOSITION,
   type EffectLayer,
   finestPass,
-  layerPiece,
+  layerPatch,
   toFireOptions,
 } from '../../dev/composition-lab/src/composition.js';
 
@@ -43,10 +43,10 @@ describe('toFireOptions', () => {
         },
       ],
     };
-    const piece = toFireOptions(c).effects?.[0]?.piece;
-    expect(typeof piece).not.toBe('string');
+    const patch = toFireOptions(c).effects?.[0]?.patch;
+    expect(typeof patch).not.toBe('string');
     // roving's pass is many inner passes long; a bare flicker's is 1400ms.
-    expect((piece as { duration: number }).duration).toBeGreaterThan(100000);
+    expect((patch as { period: number }).period).toBeGreaterThan(100000);
   });
 
   it('omits effects entirely when no layer is enabled, so the look keeps its own', () => {
@@ -55,25 +55,25 @@ describe('toFireOptions', () => {
   });
 });
 
-describe('layerPiece wrappers', () => {
+describe('layerPatch wrappers', () => {
   const base = {
     id: 'a',
     kind: 'flicker' as const,
     enabled: true,
-    params: { duration: 1000 },
+    params: { period: 1000 },
     target: 'run' as const,
     amount: 1,
     seed: 0,
   };
 
   it('lengthens a pass to whole bouts under intermittent', () => {
-    const plain = layerPiece(base);
-    const gated = layerPiece({ ...base, intermittent: { spell: 2000, calm: 1000, bouts: 3 } });
-    expect(gated?.duration).toBeGreaterThan(plain?.duration as number);
+    const plain = layerPatch(base);
+    const gated = layerPatch({ ...base, intermittent: { spell: 2000, calm: 1000, bouts: 3 } });
+    expect(gated?.period).toBeGreaterThan(plain?.period as number);
   });
 
   it('will not build a layer whose spell cannot cover one inner pass', () => {
-    expect(layerPiece({ ...base, intermittent: { spell: 100, calm: 1000, bouts: 3 } })).toBeNull();
+    expect(layerPatch({ ...base, intermittent: { spell: 100, calm: 1000, bouts: 3 } })).toBeNull();
   });
 
   // The rail hides this pairing, but a composition persisted before it did still has to load.
@@ -84,9 +84,9 @@ describe('layerPiece wrappers', () => {
       params: {},
       roving: { dwell: 3200, seed: 0, epochs: 96 },
     };
-    const piece = layerPiece(layer);
-    expect(piece).not.toBeNull();
-    expect(piece?.duration).toBe(4000);
+    const patch = layerPatch(layer);
+    expect(patch).not.toBeNull();
+    expect(patch?.period).toBe(4000);
   });
 });
 
@@ -94,20 +94,20 @@ const LAYER: EffectLayer = {
   id: 'a',
   kind: 'flicker',
   enabled: true,
-  params: { duration: 1400 },
+  params: { period: 1400 },
   target: 'run',
   amount: 1,
   seed: 0,
 };
 
-// The sampler has to resolve the piece inside the wrappers, and `roving` at `epochs: 96` publishes
+// The sampler has to resolve the patch inside the wrappers, and `roving` at `epochs: 96` publishes
 // a pass two hundred times longer than the flicker in it. Reading the wrapper's pass instead is
 // how the panels came to sample a 306s pass 511ms at a time.
 describe('buildLayer', () => {
   it("reports the inner's own pass, not the wrapper's", () => {
     const built = buildLayer({ ...LAYER, roving: { dwell: 3200, seed: 0, epochs: 96 } });
     expect(built?.innerPass).toBe(1400);
-    expect(built?.piece.duration).toBeGreaterThan(100_000);
+    expect(built?.patch.period).toBeGreaterThan(100_000);
   });
 
   it("reports roving's settled epoch, so a measured tenure has something to be measured against", () => {
@@ -133,19 +133,19 @@ describe('finestPass', () => {
     const c: Composition = {
       ...DEFAULT_COMPOSITION,
       effects: [
-        { ...LAYER, id: 'a', params: { duration: 4000 } },
-        { ...LAYER, id: 'b', kind: 'chase', params: { duration: 900 } },
+        { ...LAYER, id: 'a', params: { period: 4000 } },
+        { ...LAYER, id: 'b', kind: 'chase', params: { period: 900 } },
       ],
     };
     expect(finestPass(c)).toBe(900);
   });
 
-  it('ignores a disabled layer, which contributes no piece to sample', () => {
+  it('ignores a disabled layer, which contributes no patch to sample', () => {
     const c: Composition = {
       ...DEFAULT_COMPOSITION,
       effects: [
-        { ...LAYER, id: 'a', params: { duration: 4000 } },
-        { ...LAYER, id: 'b', kind: 'chase', params: { duration: 900 }, enabled: false },
+        { ...LAYER, id: 'a', params: { period: 4000 } },
+        { ...LAYER, id: 'b', kind: 'chase', params: { period: 900 }, enabled: false },
       ],
     };
     expect(finestPass(c)).toBe(4000);

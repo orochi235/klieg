@@ -273,12 +273,12 @@ describe('<klieg-sign>', () => {
       effects?: unknown;
       options?: unknown;
     };
-    el.effects = [{ piece: 'flicker' }];
+    el.effects = [{ patch: 'flicker' }];
     el.options = { blendMs: 40 };
     await settled();
 
     expect(sign.mock.calls[0]?.[1]).toMatchObject({
-      effects: [{ piece: 'flicker' }],
+      effects: [{ patch: 'flicker' }],
       fire: { blendMs: 40 },
     });
   });

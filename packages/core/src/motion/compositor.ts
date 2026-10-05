@@ -1,8 +1,8 @@
 import { type Mix, mix, patch } from '@msb235/blits';
 import type { Pose } from '../pose.js';
-import { POSE_CHANNELS, POSE_RIG, REST } from '../pose.js';
+import { POSE_CHANNELS, POSE_KIT, REST } from '../pose.js';
 
-import type { LetterInfo, MotionPiece } from './types.js';
+import { type Layered, type LetterInfo, layersOf, type MotionPatch } from './types.js';
 
 /** A fresh pose at rest, for callers that do not keep their own scratch. */
 export const blankPose = (): Pose => ({
@@ -30,40 +30,40 @@ export const PLACED = {
   },
 };
 
-/** One piece, or several layered together — `['float', 'shimmer']` runs both at once. */
-export type Slot = MotionPiece | MotionPiece[];
+/** One patch, or several layered together — `['float', 'shimmer']` runs both at once. */
+export type Slot = MotionPatch | Layered<MotionPatch>;
 
 export interface TimelineOptions {
   enter: Slot;
   active: Slot;
   exit: Slot;
-  /** Milliseconds in the active phase, or held open until `release()`. */
+  /** Milliseconds in the active segment, or held open until `release()`. */
   hold: number | 'until-release';
-  /** Crossfade window straddling each phase boundary. */
+  /** Crossfade window straddling each segment boundary. */
   blendMs: number;
 }
 
-const layers = (slot: Slot): MotionPiece[] => (Array.isArray(slot) ? slot : [slot]);
+const layers = (slot: Slot): readonly MotionPatch[] => layersOf(slot);
 
 /** A layered slot lasts as long as its longest member. */
 export const slotDuration = (slot: Slot): number =>
   Math.max(0, ...layers(slot).map((p) => p.duration));
 
-const SAMPLE_T = [0, 0.17, 0.33, 0.5, 0.67, 0.83, 1];
+const SAMPLE_PHASES = [0, 0.17, 0.33, 0.5, 0.67, 0.83, 1];
 const SAMPLE_LETTERS = 8;
 
 const shifts = (v: readonly number[] | undefined): boolean => v?.some((n) => n !== 0) ?? false;
 
 /**
  * Whether a slot puts any letter anywhere but its layout position. Sampled rather than declared:
- * `offset` is a pure function, so a caller's own piece is judged exactly as a built-in is.
+ * `at` is a pure function, so a caller's own patch is judged exactly as a built-in is.
  * Opacity is not movement — a fading letter stays where the DOM layer put it.
  */
 export function slotMovesLetters(slot: Slot): boolean {
-  for (const piece of layers(slot)) {
-    for (const t of SAMPLE_T) {
+  for (const layer of layers(slot)) {
+    for (const phase of SAMPLE_PHASES) {
       for (let index = 0; index < SAMPLE_LETTERS; index++) {
-        const o = piece.offset(t, { index, count: SAMPLE_LETTERS, line: 0, column: index });
+        const o = layer.at(phase, { index, count: SAMPLE_LETTERS, line: 0, column: index });
         if (shifts(o.position) || shifts(o.rotation)) return true;
         if (o.scale !== undefined && o.scale !== 1) return true;
       }
@@ -79,13 +79,13 @@ interface Segment {
   start: number;
   end: number;
   loop: boolean;
-  /** One pass, ms: the slot's own length for the looping active phase, the whole span otherwise. */
+  /** One pass, ms: the slot's own length for the looping active segment, the whole span otherwise. */
   period: number;
 }
 
 export class Timeline {
   duration: number;
-  /** Where the enter piece's duration ends. Fixed: `release()` only moves what comes after it. */
+  /** Where the enter patch's duration ends. Fixed: `release()` only moves what comes after it. */
   readonly enterEnd: number;
   /** Where the hold ends and the exit begins. `Infinity` on a held timeline until `release()`. */
   activeEnd: number;
@@ -118,19 +118,17 @@ export class Timeline {
   }
 
   /**
-   * A voice per layer rather than one per slot, and no locus: layers and phases both stack, so the
+   * A voice per layer rather than one per slot, and no locus: layers and segments both stack, so the
    * mix must join them the way the channel says. A shared locus would fold them as alternatives.
    */
   private cue(): Mix<LetterInfo, Pose> {
-    const cued = mix<LetterInfo, Pose>(POSE_RIG, {});
+    const cued = mix<LetterInfo, Pose>(POSE_KIT, {});
     for (const seg of this.segments) {
-      for (const piece of layers(this.opts[seg.name])) {
+      for (const layer of layers(this.opts[seg.name])) {
         cued.cue({
-          patch: patch<LetterInfo, Pose>(
-            seg.period,
-            (phase, letter) => piece.offset(phase, letter),
-            { writes: POSE_CHANNELS },
-          ),
+          patch: patch<LetterInfo, Pose>(seg.period, (phase, letter) => layer.at(phase, letter), {
+            writes: POSE_CHANNELS,
+          }),
           start: seg.start,
           loop: seg.loop && seg.period > 0 ? true : 1,
           hold: 'both',
@@ -169,8 +167,8 @@ export class Timeline {
   }
 
   /**
-   * Ends the held active phase at `elapsed` and lets the exit run. A no-op on a numeric hold or a
-   * second call, so a double click cannot truncate an exit already underway. The active phase ends
+   * Ends the held active segment at `elapsed` and lets the exit run. A no-op on a numeric hold or a
+   * second call, so a double click cannot truncate an exit already underway. The active segment ends
    * half a blend later, so the crossfade into the exit starts at `elapsed` rather than before it.
    */
   release(elapsed: number): void {
@@ -197,7 +195,7 @@ export class Timeline {
   }
 
   /**
-   * The segment's own ramp, times the guard against three phases overlapping at once. Pairwise-
+   * The segment's own ramp, times the guard against three segments overlapping at once. Pairwise-
    * complementary ramps sum to 1, but a `hold` shorter than `blendMs` overlaps all three and the
    * total runs past 1 — which reads as the word lurching.
    */
@@ -219,7 +217,7 @@ export class Timeline {
     const head = seg.start - half;
     const tail = seg.end + half;
 
-    // Whichever phase starts at 0 and whichever ends at `duration` hold full weight past that edge
+    // Whichever segment starts at 0 and whichever ends at `duration` hold full weight past that edge
     // rather than fading to nothing; a zero-length enter makes `active` the former. Windowing them
     // would drop the word to rest on the last frame, which callers clamp to exactly `duration`.
     const atStart = seg.start === 0;

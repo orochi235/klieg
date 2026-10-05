@@ -1,22 +1,22 @@
 import { type Easing, easeOutCubic, linear } from '../easing.js';
-import type { PoseOffset, Vec3 } from '../pose.js';
-import { type LetterInfo, type MotionPiece, type StaggerSpec, stagger } from './types.js';
+import type { PoseDelta, Vec3 } from '../pose.js';
+import { type LetterInfo, type MotionPatch, type StaggerSpec, stagger } from './types.js';
 
 const TAU = Math.PI * 2;
 
 /** Channels that multiply onto the rest pose, and so rest at 1 rather than 0. */
 const IDENTITY = { position: 0, rotation: 0, scale: 1, opacity: 1 } as const;
 
-export type Keyframe = PoseOffset & { at: number; ease?: Easing };
+export type Keyframe = PoseDelta & { at: number; ease?: Easing };
 
-type Channel = keyof PoseOffset;
+type Channel = keyof PoseDelta;
 
 export interface TransitionSpec {
   /** Where letters begin, relaxing to rest. */
-  from?: PoseOffset | ((letter: LetterInfo) => PoseOffset);
+  from?: PoseDelta | ((letter: LetterInfo) => PoseDelta);
   /** Where letters end up, departing from rest. */
-  to?: PoseOffset | ((letter: LetterInfo) => PoseOffset);
-  /** N stops, each an offset from rest. `from`/`to` are the two-stop sugar. */
+  to?: PoseDelta | ((letter: LetterInfo) => PoseDelta);
+  /** N stops, each a delta from rest. `from`/`to` are the two-stop sugar. */
   keyframes?: Keyframe[];
   ease?: Easing;
   easeBy?: Partial<Record<Channel, Easing>>;
@@ -26,9 +26,9 @@ export interface TransitionSpec {
 }
 
 const resolve = (
-  spec: PoseOffset | ((letter: LetterInfo) => PoseOffset) | undefined,
+  spec: PoseDelta | ((letter: LetterInfo) => PoseDelta) | undefined,
   letter: LetterInfo,
-): PoseOffset => (typeof spec === 'function' ? spec(letter) : (spec ?? {}));
+): PoseDelta => (typeof spec === 'function' ? spec(letter) : (spec ?? {}));
 
 function lerpVec(a: Vec3 | undefined, b: Vec3 | undefined, u: number): Vec3 {
   const from = a ?? [0, 0, 0];
@@ -48,7 +48,7 @@ const lerp = (a: number | undefined, b: number | undefined, u: number, rest: num
 
 /**
  * Interpolates between two stops channel-wise, absent channels reading as identity. Reduces to
- * `scaleOffset(from, 1 - ease(s))` in the two-stop case, which is what keeps the sugar and the
+ * `scaleDelta(from, 1 - ease(s))` in the two-stop case, which is what keeps the sugar and the
  * general form the same arithmetic.
  *
  * Every curve is applied to `s`, the staggered parameter — not to the already-eased value. A
@@ -56,13 +56,13 @@ const lerp = (a: number | undefined, b: number | undefined, u: number, rest: num
  * former. A channel delay re-maps `s` the same way, before that channel's easing sees it.
  */
 function between(
-  a: PoseOffset,
-  b: PoseOffset,
+  a: PoseDelta,
+  b: PoseDelta,
   s: number,
   ease: Easing,
   easeBy: TransitionSpec['easeBy'],
   delayBy?: TransitionSpec['delayBy'],
-): PoseOffset {
+): PoseDelta {
   const at = (channel: Channel) => {
     // A delay of 1 would leave no span to travel over, so the channel never reaches rest.
     const delay = Math.min(0.999, Math.max(0, delayBy?.[channel] ?? 0));
@@ -77,14 +77,14 @@ function between(
   };
 }
 
-/** Builds an `enter` or `exit`: eased travel between a displaced offset and rest. */
-export function transition(duration: number, spec: TransitionSpec): MotionPiece {
+/** Builds an `enter` or `exit`: eased travel between a displacing delta and rest. */
+export function transition(duration: number, spec: TransitionSpec): MotionPatch {
   const ease = spec.ease ?? easeOutCubic;
 
   return {
     duration,
-    offset(t, letter) {
-      const s = spec.stagger === undefined ? t : stagger(t, letter, spec.stagger);
+    at(phase, letter) {
+      const s = spec.stagger === undefined ? phase : stagger(phase, letter, spec.stagger);
 
       if (spec.keyframes?.length) {
         const stops = [...spec.keyframes].sort((x, y) => x.at - y.at);
@@ -113,53 +113,59 @@ export function transition(duration: number, spec: TransitionSpec): MotionPiece 
 
 export interface CycleSpec {
   /** Peak deviation per channel. */
-  amplitude?: PoseOffset;
+  amplitude?: PoseDelta;
   /** Cycles per pass, per channel. Defaults to 1. */
-  harmonic?: PoseOffset;
-  phase?: (letter: LetterInfo) => number;
+  harmonic?: PoseDelta;
+  /** Radians each letter's wave is shifted by, so letters can swing out of step. */
+  shift?: (letter: LetterInfo) => number;
 }
 
-const waveVec = (amp: Vec3 | undefined, harm: Vec3 | undefined, t: number, phase: number): Vec3 => {
+const waveVec = (
+  amp: Vec3 | undefined,
+  harm: Vec3 | undefined,
+  phase: number,
+  shift: number,
+): Vec3 => {
   const a = amp ?? [0, 0, 0];
   const h = harm ?? [1, 1, 1];
   return [0, 1, 2].map((i) => {
     const cycles = (h[i] as number) ?? 1;
-    return (a[i] as number) * Math.sin(t * TAU * cycles + phase);
+    return (a[i] as number) * Math.sin(phase * TAU * cycles + shift);
   }) as Vec3;
 };
 
 /** Builds an `active`: a periodic deviation the phase loops over. */
-export function cycle(duration: number, spec: CycleSpec = {}): MotionPiece {
+export function cycle(duration: number, spec: CycleSpec = {}): MotionPatch {
   const amp = spec.amplitude ?? {};
   const harm = spec.harmonic ?? {};
 
   return {
     duration,
-    offset(t, letter) {
-      const phase = spec.phase?.(letter) ?? 0;
-      const out: PoseOffset = {};
-      if (amp.position) out.position = waveVec(amp.position, harm.position, t, phase);
-      if (amp.rotation) out.rotation = waveVec(amp.rotation, harm.rotation, t, phase);
+    at(phase, letter) {
+      const shift = spec.shift?.(letter) ?? 0;
+      const out: PoseDelta = {};
+      if (amp.position) out.position = waveVec(amp.position, harm.position, phase, shift);
+      if (amp.rotation) out.rotation = waveVec(amp.rotation, harm.rotation, phase, shift);
       // Multiplicative channels swing around 1, so an amplitude of 0 leaves the pose untouched.
       if (amp.scale !== undefined) {
-        out.scale = 1 + amp.scale * Math.sin(t * TAU * (harm.scale ?? 1) + phase);
+        out.scale = 1 + amp.scale * Math.sin(phase * TAU * (harm.scale ?? 1) + shift);
       }
       if (amp.opacity !== undefined) {
-        out.opacity = 1 + amp.opacity * Math.sin(t * TAU * (harm.opacity ?? 1) + phase);
+        out.opacity = 1 + amp.opacity * Math.sin(phase * TAU * (harm.opacity ?? 1) + shift);
       }
       return out;
     },
   };
 }
 
-/** One piece for the letters a predicate keeps, another for the rest. */
+/** One patch for the letters a predicate keeps, another for the rest. */
 export function partition(
   keep: (letter: LetterInfo) => boolean,
-  kept: MotionPiece,
-  dropped: MotionPiece,
-): MotionPiece {
+  kept: MotionPatch,
+  dropped: MotionPatch,
+): MotionPatch {
   return {
     duration: Math.max(kept.duration, dropped.duration),
-    offset: (t, letter) => (keep(letter) ? kept.offset(t, letter) : dropped.offset(t, letter)),
+    at: (phase, letter) => (keep(letter) ? kept.at(phase, letter) : dropped.at(phase, letter)),
   };
 }

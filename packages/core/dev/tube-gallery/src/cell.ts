@@ -1,4 +1,4 @@
-import type { FrameCtx } from '@core/effects/types.js';
+import type { Host } from '@core/effects/types.js';
 import { Timeline } from '@core/motion/compositor.js';
 import { NONE } from '@core/motion/types.js';
 import type { LookSpec } from '@core/render/looks.js';
@@ -19,7 +19,7 @@ export interface GalleryCell {
   /** Sizes the letter to the panel it is about to be drawn into, `w / h`. */
   fit(aspect: number): void;
   /** Drives one frame of the look's own effects. `elapsed` is the gallery's shared clock. */
-  advance(elapsed: number, dt: number): void;
+  advance(elapsed: number): void;
   dispose(): void;
 }
 
@@ -40,8 +40,8 @@ export function buildCell(input: CellInput): GalleryCell {
   // No debug hooks: a `tubeMaterial` override clears `readsRunColor`, and the tube builder's
   // color write returns early on that, which stops the sweep without failing.
   const word = new Word(input.letter, input.font, input.look, viewBudget(), false);
-  const ctx: FrameCtx = { pointer: null, pointerInWord: null, dt: 0, now: 0 };
-  word.apply(STILL, 0, ctx);
+  const host: Host = { pointer: null, pointerInWord: null, now: 0 };
+  word.apply(STILL, 0, host);
   pivot.add(word.group);
 
   const fit = fitter(pivot);
@@ -52,9 +52,9 @@ export function buildCell(input: CellInput): GalleryCell {
     fit(aspect) {
       fit(aspect);
     },
-    advance(elapsed, dt) {
-      ctx.dt = dt;
-      word.apply(STILL, elapsed, ctx);
+    advance(elapsed) {
+      host.now = elapsed;
+      word.apply(STILL, elapsed, host);
     },
     dispose() {
       pivot.remove(word.group);

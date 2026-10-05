@@ -91,15 +91,15 @@ describe('NONE', () => {
     expect(NONE.duration).toBe(0);
   });
 
-  it('offset() returns an empty object for any t and letter', () => {
-    expect(Object.keys(NONE.offset(0, letter(0, 1))).length).toBe(0);
-    expect(Object.keys(NONE.offset(0.5, letter(3, 7))).length).toBe(0);
-    expect(Object.keys(NONE.offset(1, letter(6, 7))).length).toBe(0);
+  it('at() returns an empty object for any t and letter', () => {
+    expect(Object.keys(NONE.at(0, letter(0, 1))).length).toBe(0);
+    expect(Object.keys(NONE.at(0.5, letter(3, 7))).length).toBe(0);
+    expect(Object.keys(NONE.at(1, letter(6, 7))).length).toBe(0);
   });
 
-  it('offset() returns a fresh object each call, not a shared one', () => {
+  it('at() returns a fresh object each call, not a shared one', () => {
     const l = letter(0, 1);
-    expect(NONE.offset(0, l)).not.toBe(NONE.offset(0, l));
+    expect(NONE.at(0, l)).not.toBe(NONE.at(0, l));
   });
 });
 
@@ -210,7 +210,7 @@ describe('orderKey', () => {
 describe('stagger spec forms', () => {
   const L = (index: number, count = 4): LetterInfo => ({ index, count });
 
-  it('takes a bare number as spread, which every existing piece passes', () => {
+  it('takes a bare number as spread, which every existing patch passes', () => {
     expect(stagger(0.5, L(2), 0.6)).toBe(stagger(0.5, L(2), { spread: 0.6 }));
   });
 

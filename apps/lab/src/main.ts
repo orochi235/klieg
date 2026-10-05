@@ -301,16 +301,16 @@ function setRange(id: string, value: number): void {
 
 /** One bad tube — the sign's first run, so a pinned shot always lands on the same glass. */
 const FLICKER: EffectSpec[] = [
-  { piece: 'flicker', target: { kind: 'run', by: 'index', count: 1 } },
+  { patch: 'flicker', target: { kind: 'run', by: 'index', count: 1 } },
 ];
 
 /** Every run, since the whole sign changes colour together. */
-const HUE: EffectSpec[] = [{ piece: 'hue', target: { kind: 'run', by: 'index', amount: 1 } }];
+const HUE: EffectSpec[] = [{ patch: 'hue', target: { kind: 'run', by: 'index', amount: 1 } }];
 
 /** Every run: the wrapper picks the holder out of the pool it was given, so a subset would let the
  * fault land on a part this effect does not drive. */
 const ROVING: EffectSpec[] = [
-  { piece: roving(EFFECTS.flicker()), target: { kind: 'run', by: 'index', amount: 1 } },
+  { patch: roving(EFFECTS.flicker()), target: { kind: 'run', by: 'index', amount: 1 } },
 ];
 
 function chosenEffects(): EffectSpec[] | undefined {

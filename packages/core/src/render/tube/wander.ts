@@ -18,7 +18,7 @@ function cumulativeLengths(points: THREE.Vector3[]): number[] {
  * This runs **before** the cut, not after. Wander is a bend like any other, so putting it ahead of
  * corner detection lets that stage see it and fillet or cut whatever it makes too tight; run after
  * the cut it had to carry a curvature cap of its own, and that cap bound hardest on exactly the
- * short runs a return-heavy letter is full of. It also means a contour wanders as one piece of
+ * short runs a return-heavy letter is full of. It also means a contour wanders as one patch of
  * glass rather than each run guessing separately.
  *
  * A closed path uses a whole number of periods so its seam meets itself; an open one pins both ends.

@@ -3,8 +3,8 @@ import type { Pose } from '../pose.js';
 import type { Arrangement } from '../text/placement.js';
 import { partition, transition } from './build.js';
 import { blankPose, type Slot, slotDuration, Timeline } from './compositor.js';
-import type { LetterInfo, MotionPiece } from './types.js';
-import { NONE } from './types.js';
+import type { LetterInfo, MotionPatch } from './types.js';
+import { layersOf, NONE } from './types.js';
 
 /** What a regroup told the sequence about the letters it moved. */
 export interface RegroupResult {
@@ -44,7 +44,7 @@ export interface StagePlan {
 
 export interface SequenceOptions {
   enter: Slot;
-  /** The opening phase's active slot; each stage carries its own. */
+  /** The opening's active slot; each stage carries its own. */
   active: Slot;
   stages: StagePlan[];
   exit: Slot;
@@ -53,7 +53,7 @@ export interface SequenceOptions {
   target: StageTarget;
   /**
    * Called as each stage's boundary lands, with that stage's index. Never called for the opening
-   * word, which is phase -1 and has no boundary behind it.
+   * word, which is stage -1 and has no boundary behind it.
    */
   onStage?: (index: number) => void;
 }
@@ -67,7 +67,7 @@ interface Boundary {
   span: number;
   /**
    * When the dropped letters come off screen: their exit has played out, and the blend into the
-   * next phase — which ramps that exit back off, since the slot it sits in is an enter — has not
+   * next stage — which ramps that exit back off, since the slot it sits in is an enter — has not
    * opened yet.
    */
   retireAt: number;
@@ -77,14 +77,14 @@ interface Boundary {
 }
 
 /**
- * Plays the opening phase, then one stage after another, then the exit. Each phase is an ordinary
+ * Plays the opening, then one stage after another, then the exit. Each stage is an ordinary
  * `Timeline` on its own clock; the sequence is what happens between them — the regroup, retiring
  * the letters that left, and the viewport fit catching up.
  */
 export class Sequence {
   private readonly opts: SequenceOptions;
-  private phase = -1;
-  private phaseStart = 0;
+  private stage = -1;
+  private stageStart = 0;
   private timeline: Timeline;
   private pending: Boundary | null = null;
 
@@ -104,15 +104,15 @@ export class Sequence {
     });
   }
 
-  /** Advances the stage if the current phase has run out, and keeps the fit moving. */
+  /** Advances the stage if the current stage has run out, and keeps the fit moving. */
   tick(elapsed: number): void {
     // Stops on the last stage rather than one past it: that timeline carries the closing exit, and
-    // rebasing `phaseStart` onto it would restart its clock and the sequence would never finish.
+    // rebasing `stageStart` onto it would restart its clock and the sequence would never finish.
     while (
-      this.phase < this.opts.stages.length - 1 &&
+      this.stage < this.opts.stages.length - 1 &&
       this.timeline.isFinished(this.local(elapsed))
     ) {
-      this.enterNextPhase();
+      this.enterNextStage();
     }
     const boundary = this.pending;
     if (!boundary) return;
@@ -136,10 +136,10 @@ export class Sequence {
     this.pending = null;
     this.opts.target.setFitProgress(1);
     this.retire(boundary);
-    // Last, so a listener cannot observe a half-landed boundary. `phase` is this stage's index at
-    // both call sites: `tick` settles the current phase, and `enterNextPhase` settles the outgoing
+    // Last, so a listener cannot observe a half-landed boundary. `stage` is this stage's index at
+    // both call sites: `tick` settles the current stage, and `enterNextStage` settles the outgoing
     // one before it increments.
-    this.opts.onStage?.(this.phase);
+    this.opts.onStage?.(this.stage);
   }
 
   private retire(boundary: Boundary): void {
@@ -148,14 +148,14 @@ export class Sequence {
     this.opts.target.retire(boundary.result.dropped);
   }
 
-  private enterNextPhase(): void {
+  private enterNextStage(): void {
     const outgoing = this.timeline;
-    // Rebasing on the outgoing phase's end rather than on `elapsed` is what lets `tick`'s loop
+    // Rebasing on the outgoing stage's end rather than on `elapsed` is what lets `tick`'s loop
     // catch up: a frame long enough to span several stages would otherwise advance only one.
-    this.phaseStart += this.timeline.duration;
+    this.stageStart += this.timeline.duration;
     this.settle();
-    this.phase++;
-    const plan = this.opts.stages[this.phase];
+    this.stage++;
+    const plan = this.opts.stages[this.stage];
     if (!plan) return;
 
     const keep = plan.keep ?? (() => true);
@@ -164,7 +164,7 @@ export class Sequence {
     const move = plan.tween.duration ?? DEFAULT_MOVE_MS;
     const half = this.opts.blendMs / 2;
     const leave = slotDuration(plan.exit);
-    // `partition` hands both halves the same normalized t over the longer one's duration, so the
+    // `partition` hands both halves the same phase over the longer one's duration, so the
     // shorter half must be stretched to the slot or its declared duration is silently ignored.
     // The exit also gets the blend's half-window to itself, so it can finish before `retireAt`.
     const span = Math.max(move, leave > 0 ? leave + half : 0);
@@ -190,10 +190,10 @@ export class Sequence {
     // `leaving` is the only safe discriminator; `result.kept[index]` would route it wrongly.
     const isKept = (letter: LetterInfo) => letter.leaving !== true;
 
-    const last = this.phase === this.opts.stages.length - 1;
+    const last = this.stage === this.opts.stages.length - 1;
     this.timeline = new Timeline({
       enter: [
-        partition(isKept, within(travel, span), within(asPiece(plan.exit), span)),
+        partition(isKept, within(travel, span), within(asPatch(plan.exit), span)),
         carry(outgoing, span),
       ],
       active: plan.active,
@@ -204,7 +204,7 @@ export class Sequence {
   }
 
   private local(elapsed: number): number {
-    return Math.max(0, elapsed - this.phaseStart);
+    return Math.max(0, elapsed - this.stageStart);
   }
 
   release(elapsed: number): void {
@@ -213,17 +213,17 @@ export class Sequence {
 
   isFinished(elapsed: number): boolean {
     return (
-      this.phase >= this.opts.stages.length - 1 && this.timeline.isFinished(this.local(elapsed))
+      this.stage >= this.opts.stages.length - 1 && this.timeline.isFinished(this.local(elapsed))
     );
   }
 
   /**
-   * Global elapsed at which the closing exit begins. `Infinity` while an earlier phase is running
-   * or the last phase's hold is still open, since neither has an instant to give yet.
+   * Global elapsed at which the closing exit begins. `Infinity` while an earlier stage is running
+   * or the last stage's hold is still open, since neither has an instant to give yet.
    */
   get exitAt(): number {
-    if (this.phase < this.opts.stages.length - 1) return Number.POSITIVE_INFINITY;
-    return this.phaseStart + this.timeline.activeEnd;
+    if (this.stage < this.opts.stages.length - 1) return Number.POSITIVE_INFINITY;
+    return this.stageStart + this.timeline.activeEnd;
   }
 
   poseAt(elapsed: number, letter: LetterInfo, out: Pose = blankPose()): Pose {
@@ -232,38 +232,37 @@ export class Sequence {
 }
 
 /**
- * Runs `piece` over its own duration inside a longer slot, then holds its final value. Without
+ * Runs `patch` over its own duration inside a longer slot, then holds its final value. Without
  * this a 200ms travel paired with an 800ms exit plays over the whole 800ms, since `partition`
- * hands both halves the slot's normalized `t`.
+ * hands both halves the slot's `phase`.
  */
-function within(piece: MotionPiece, total: number): MotionPiece {
-  if (total <= 0 || piece.duration >= total) return piece;
-  // A no-time piece has no span to map `t` onto, but it is finished, not unstarted: returning it
-  // unwrapped would let the slot's `t` drag it across the whole slot.
-  if (piece.duration <= 0)
-    return { duration: total, offset: (_t, letter) => piece.offset(1, letter) };
-  const fraction = piece.duration / total;
+function within(patch: MotionPatch, total: number): MotionPatch {
+  if (total <= 0 || patch.duration >= total) return patch;
+  // A no-time patch has no span to map `phase` onto, but it is finished, not unstarted: returning it
+  // unwrapped would let the slot's `phase` drag it across the whole slot.
+  if (patch.duration <= 0) return { duration: total, at: (_t, letter) => patch.at(1, letter) };
+  const fraction = patch.duration / total;
   return {
     duration: total,
-    offset: (t, letter) => piece.offset(Math.min(1, t / fraction), letter),
+    at: (phase, letter) => patch.at(Math.min(1, phase / fraction), letter),
   };
 }
 
 /**
- * The pose the outgoing phase ended on, eased away to nothing over the stage. A looping `active`
- * is mid-cycle when its phase runs out, so without this the word loses the loop's whole amplitude
+ * The pose the outgoing stage ended on, eased away to nothing over the stage. A looping `active`
+ * is mid-cycle when its stage runs out, so without this the word loses the loop's whole amplitude
  * in one frame — `float` alone drops it 0.12em and un-yaws it 0.1rad between two frames.
  *
  * The curve is in-out rather than the usual out: a loop caught mid-swing is already moving, and an
  * out curve leaves at its own top speed, which is the jolt again in miniature.
  */
-function carry(from: Timeline, span: number): MotionPiece {
+function carry(from: Timeline, span: number): MotionPatch {
   const at = from.duration;
   const scratch = blankPose();
   return {
     duration: span,
-    offset: (t, letter) => {
-      const w = 1 - easeInOutCubic(Math.min(1, Math.max(0, t)));
+    at: (phase, letter) => {
+      const w = 1 - easeInOutCubic(Math.min(1, Math.max(0, phase)));
       if (w <= 0) return {};
       const pose = from.poseAt(at, letter, scratch);
       const [x, y, z] = pose.position;
@@ -278,15 +277,16 @@ function carry(from: Timeline, span: number): MotionPiece {
   };
 }
 
-/** A layered slot collapses to one piece so `partition` can take it as a single branch. */
-function asPiece(slot: Slot): MotionPiece {
-  if (!Array.isArray(slot)) return slot;
+/** A layered slot collapses to one patch so `partition` can take it as a single branch. */
+function asPatch(slot: Slot): MotionPatch {
+  if (!Array.isArray(slot)) return slot as MotionPatch;
+  const layers = layersOf(slot);
   return {
     duration: slotDuration(slot),
-    offset: (t, letter) => {
+    at: (phase, letter) => {
       const out: Pose = blankPose();
-      for (const piece of slot) {
-        const o = piece.offset(t, letter);
+      for (const layer of layers) {
+        const o = layer.at(phase, letter);
         const { position, rotation } = o;
         if (position) {
           for (let i = 0; i < 3; i++) out.position[i] = (out.position[i] ?? 0) + (position[i] ?? 0);

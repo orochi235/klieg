@@ -286,8 +286,8 @@ interface GridEntry {
 }
 
 /**
- * A uniform spatial hash over every path point, answering "what is the nearest piece of tube that is
- * not this piece". Cell size should be the query radius, so a query touches 27 cells.
+ * A uniform spatial hash over every path point, answering "what is the nearest patch of tube that is
+ * not this patch". Cell size should be the query radius, so a query touches 27 cells.
  */
 export class ClearanceGrid {
   private readonly cells = new Map<string, GridEntry[]>();
@@ -312,7 +312,7 @@ export class ClearanceGrid {
 
   /**
    * Distance to the nearest point that is either on another path, or far enough along this one to be
-   * a genuinely different piece of tube. Infinite when nothing qualifies within one cell.
+   * a genuinely different patch of tube. Infinite when nothing qualifies within one cell.
    */
   nearest(probe: THREE.Vector3, path: number, along: number, skip = 0.09): number {
     let best = Number.POSITIVE_INFINITY;

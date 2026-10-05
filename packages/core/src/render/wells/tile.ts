@@ -32,7 +32,7 @@ export interface TileOptions {
   wall: number;
   /** How far in from the outline a pocket stays, in em. */
   bezel: number;
-  /** A piece holding less than this fraction of a whole pocket is dropped. */
+  /** A patch holding less than this fraction of a whole pocket is dropped. */
   minArea: number;
 }
 
@@ -183,10 +183,10 @@ export interface Pocket {
 
 export interface Tiling {
   pockets: Pocket[];
-  /** Cells kept whole, and pieces kept clipped by the outline. */
+  /** Cells kept whole, and patches kept clipped by the outline. */
   whole: number;
   clipped: number;
-  /** Pieces dropped for holding a hole, or for having no point the whole piece can be seen from. */
+  /** Patches dropped for holding a hole, or for having no point the whole patch can be seen from. */
   holed: number;
   bent: number;
   /** Each pocket's ring at every growth, one entry per pocket in the same order. */
@@ -365,7 +365,7 @@ export function tile(outline: Outline, box: THREE.Box2, o: TileOptions): Tiling 
     }
     const field = fieldOf(cell.cx, cell.cy);
     fields.set(`${cell.cx},${cell.cy}`, field);
-    const pieces: Pocket[] = [];
+    const patches: Pocket[] = [];
     for (const group of nest(ringsAt(field, 0))) {
       if (group.length > 1) {
         holed++;
@@ -378,22 +378,22 @@ export function tile(outline: Outline, box: THREE.Box2, o: TileOptions): Tiling 
         bent++;
         continue;
       }
-      pieces.push({ ring, at, cx: cell.cx, cy: cell.cy, whole: false });
+      patches.push({ ring, at, cx: cell.cx, cy: cell.cy, whole: false });
     }
-    // Two pieces of one cell that the widest bead would join share a rim, which no stitch closes.
+    // Two patches of one cell that the widest bead would join share a rim, which no stitch closes.
     // The field's levels nest, so a join at any growth shows up at the widest one.
-    if (pieces.length === 1) {
-      pockets.push(pieces[0] as Pocket);
+    if (patches.length === 1) {
+      pockets.push(patches[0] as Pocket);
       clipped++;
       continue;
     }
     const widest = ringsAt(field, cap);
     const claimed = new Map<Ring, Pocket>();
-    for (const piece of pieces.sort((a, b) => area(b.ring) - area(a.ring))) {
-      const rim = around(widest, piece.at);
+    for (const patch of patches.sort((a, b) => area(b.ring) - area(a.ring))) {
+      const rim = around(widest, patch.at);
       if (!rim || claimed.has(rim)) continue;
-      claimed.set(rim, piece);
-      pockets.push(piece);
+      claimed.set(rim, patch);
+      pockets.push(patch);
       clipped++;
     }
   }

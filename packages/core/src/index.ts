@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { type Clock, RafClock } from './clock.js';
 import type { Easing } from './easing.js';
-import { EFFECTS } from './effects/pieces.js';
-import type { EffectName, EffectSpec, FrameCtx } from './effects/types.js';
+import { EFFECTS } from './effects/patches.js';
+import type { EffectName, EffectSpec, Host } from './effects/types.js';
 import { ACTIVE } from './motion/active.js';
 import {
   PLACED,
@@ -13,15 +13,23 @@ import {
 } from './motion/compositor.js';
 import { ENTER } from './motion/enter.js';
 import { EXIT } from './motion/exit.js';
-import { isolate, type PhaseEvent, PhaseReporter } from './motion/phases.js';
+import { isolate, type MarkEvent, MarkReporter } from './motion/marks.js';
 import { Sequence } from './motion/sequence.js';
-import type { ActiveName, EnterName, ExitName, LetterInfo, MotionPiece } from './motion/types.js';
+import {
+  type ActiveName,
+  type EnterName,
+  type ExitName,
+  type Layered,
+  type LetterInfo,
+  layersOf,
+  type MotionPatch,
+} from './motion/types.js';
 import { type PointerFrame, pointerFrame } from './pointer.js';
 import { EffectQueue, type QueuePolicy } from './queue.js';
 import { BloomPath } from './render/bloom.js';
 import { WordCaches } from './render/caches.js';
 import {
-  ENV_PIECES,
+  ENV_PATCHES,
   EnvFrame,
   type LightingName,
   type LightingSlot,
@@ -49,6 +57,8 @@ import { projectLetters } from './text/projection.js';
 import { plainTextOf, sizeOf, type TextRun, tintOf } from './text/runs.js';
 import { isIdentity, type Transform } from './transform.js';
 
+/** blits' own signal combinators, which klieg's signals are built from and compose with. */
+export { gate, lag, peak, slew } from '@msb235/blits';
 export {
   type AcronymOptions,
   acronym,
@@ -66,11 +76,11 @@ export {
   type SpringParams,
   spring,
 } from './easing.js';
-export { type Blend, type BlendSpec, fade, hinge, type StopsSpec } from './effects/hinge.js';
+export { hinge, type StopsSpec } from './effects/hinge.js';
 export { type IntermittentSpec, intermittent } from './effects/intermittent.js';
 export { type Kicks, type KicksSpec, kicks } from './effects/kick.js';
 export { type LampSpec, lamp } from './effects/lamp.js';
-export { type ChaseSpec, EFFECTS, type FlickerSpec, type HueSpec } from './effects/pieces.js';
+export { type ChaseSpec, EFFECTS, type FlickerSpec, type HueSpec } from './effects/patches.js';
 export {
   type BlowoutSpec,
   blowout,
@@ -96,7 +106,6 @@ export {
   level,
   type NearSpec,
   near,
-  peak,
   type Signal,
 } from './effects/signal.js';
 export {
@@ -111,14 +120,17 @@ export {
 export { type TurnsSpec, turns } from './effects/turns.js';
 export type {
   EffectName,
-  EffectPiece,
+  EffectPatch,
   EffectSpec,
-  FrameCtx,
-  LightOffset,
+  Hinged,
+  Host,
+  LightDelta,
+  PartDelta,
   PartInfo,
   PartKind,
-  PartOffset,
+  Setting,
 } from './effects/types.js';
+export { effect, hostOf } from './effects/types.js';
 export {
   type CycleSpec,
   cycle,
@@ -126,19 +138,20 @@ export {
   type TransitionSpec,
   transition,
 } from './motion/build.js';
-export type { PhaseEvent, PhaseListener } from './motion/phases.js';
-export type { LetterInfo, MotionPiece, StaggerFrom, StaggerSpec } from './motion/types.js';
-export { stagger } from './motion/types.js';
-export type { Pose, PoseOffset, Vec3 } from './pose.js';
+export type { MarkEvent, MarkListener } from './motion/marks.js';
+export type { Layered, LetterInfo, MotionPatch, StaggerFrom, StaggerSpec } from './motion/types.js';
+export { motion, stagger } from './motion/types.js';
+export type { Pose, PoseDelta, Vec3 } from './pose.js';
 export { POLICY_NAMES } from './queue.js';
 export type { DecorationSpec, MaterialSpec } from './render/decoration.js';
 export type { FlakeSpec } from './render/flake.js';
 export {
-  ENV_PIECES,
-  type EnvOffset,
-  type EnvPiece,
+  ENV_PATCHES,
+  type EnvDelta,
+  type EnvPatch,
+  type EnvPose,
+  lighting,
   mergeEnv,
-  type ResolvedEnv,
   type SweepSpec,
   still,
   sweep,
@@ -184,7 +197,7 @@ export const ENTER_NAMES: readonly EnterName[] = Object.keys(ENTER) as EnterName
 export const ACTIVE_NAMES: readonly ActiveName[] = Object.keys(ACTIVE) as ActiveName[];
 export const EXIT_NAMES: readonly ExitName[] = Object.keys(EXIT) as ExitName[];
 export const LOOK_NAMES: readonly LookName[] = Object.keys(LOOKS) as LookName[];
-export const LIGHTING_NAMES: readonly LightingName[] = Object.keys(ENV_PIECES) as LightingName[];
+export const LIGHTING_NAMES: readonly LightingName[] = Object.keys(ENV_PATCHES) as LightingName[];
 export const EFFECT_NAMES: readonly EffectName[] = Object.keys(EFFECTS) as EffectName[];
 
 /** An explicit `bloom` always wins; a look may only ask when the caller said nothing. */
@@ -193,17 +206,17 @@ export function wantsBloom(explicit: boolean | undefined, look: Look): boolean {
 }
 
 /**
- * Names index the built-in record; anything else is already a piece the caller supplied. Names
+ * Names index the built-in record; anything else is already a patch the caller supplied. Names
  * inside a layered slot are resolved too — leaving a bare string in the array puts it where a
- * piece is expected, and reading `.duration` off it yields NaN rather than throwing.
+ * patch is expected, and reading `.duration` off it yields NaN rather than throwing.
  */
 function resolveSlot<N extends string>(
-  slot: N | MotionPiece | (N | MotionPiece)[],
-  builtin: Record<N, MotionPiece>,
+  slot: N | MotionPatch | Layered<N | MotionPatch>,
+  builtin: Record<N, MotionPatch>,
 ): Slot {
   if (typeof slot === 'string') return builtin[slot];
-  if (Array.isArray(slot)) return slot.map((s) => (typeof s === 'string' ? builtin[s] : s));
-  return slot;
+  if (!Array.isArray(slot)) return slot as MotionPatch;
+  return layersOf<N | MotionPatch>(slot).map((s) => (typeof s === 'string' ? builtin[s] : s));
 }
 
 /**
@@ -229,11 +242,11 @@ function onRows(text: string | TextRun[], rows: number): string | TextRun[] {
   return Array.from({ length: n }, (_, i) => (i === 0 ? text : [{ text: '\n' }, ...text])).flat();
 }
 
-/** Names a slot for a diagnostic; a caller's own piece has no name to give. */
+/** Names a slot for a diagnostic; a caller's own patch has no name to give. */
 function describeSlot(slot: EnterSlot | ActiveSlot | ExitSlot): string {
   if (typeof slot === 'string') return slot;
-  if (Array.isArray(slot)) return slot.map(describeSlot).join(' + ');
-  return 'a custom piece';
+  if (Array.isArray(slot)) return layersOf(slot).map(describeSlot).join(' + ');
+  return 'a custom patch';
 }
 
 export interface KliegOptions {
@@ -298,10 +311,10 @@ export type { CameraSpec, Framing, Placement } from './render/stage.js';
 export type { Align } from './text/layout.js';
 export type { TextRun } from './text/runs.js';
 
-/** A built-in name, your own piece, or several layered together — names and pieces may mix. */
-export type EnterSlot = EnterName | MotionPiece | (EnterName | MotionPiece)[];
-export type ActiveSlot = ActiveName | MotionPiece | (ActiveName | MotionPiece)[];
-export type ExitSlot = ExitName | MotionPiece | (ExitName | MotionPiece)[];
+/** A built-in name, your own patch, or several layered together — names and patches may mix. */
+export type EnterSlot = EnterName | MotionPatch | Layered<EnterName | MotionPatch>;
+export type ActiveSlot = ActiveName | MotionPatch | Layered<ActiveName | MotionPatch>;
+export type ExitSlot = ExitName | MotionPatch | Layered<ExitName | MotionPatch>;
 export type { LightingSlot };
 
 export interface FireOptions {
@@ -318,8 +331,8 @@ export interface FireOptions {
   /** How the environment lights the type. `sweep` rakes the highlight, `static` holds it still.
    * Layers compose: `['sweep', track({ pitchRange: 0.1 })]`, each on its own period.
    *
-   * A piece you construct carries its own state, so give each fire its own `track()` rather than
-   * sharing one; the name `'pointer'` builds a fresh piece per run and is safe to reuse. */
+   * A patch you construct carries its own state, so give each fire its own `track()` rather than
+   * sharing one; the name `'pointer'` builds a fresh patch per run and is safe to reuse. */
   lighting?: LightingSlot;
   /**
    * Recolors the look, as `0xff2d6f`. A function is consulted per letter and may return
@@ -336,7 +349,7 @@ export interface FireOptions {
    */
   transform?: Transform;
   /**
-   * Milliseconds in the active phase, `'click'` to hold until the viewer dismisses it, or
+   * Milliseconds in the active segment, `'click'` to hold until the viewer dismisses it, or
    * `'forever'` to stay until `destroy()`. A held effect blocks the queue under the default
    * `queue` policy, and its promise stays pending until it leaves the screen.
    *
@@ -380,7 +393,7 @@ export interface FireOptions {
    * whose own markup already carries this text.
    *
    * `'layer'` needs the word still — it falls back to `'hidden'` under a `transform` or a motion
-   * piece that moves the letters. Defaults to `'hidden'`.
+   * patch that moves the letters. Defaults to `'hidden'`.
    */
   selectable?: SelectableMode;
   /**
@@ -389,11 +402,11 @@ export interface FireOptions {
    */
   stages?: Stage[];
   /**
-   * Called as the effect crosses each phase boundary. `active` is the instant the word has landed
+   * Called as the effect crosses each mark. `active` is the instant the word has landed
    * and is at full presence — mid-blend, which is what a host swapping a page behind the flourish
    * wants. A listener that throws does not stop the render loop.
    */
-  onPhase?: (event: PhaseEvent) => void;
+  onMark?: (event: MarkEvent) => void;
   /**
    * The sign repeated in rows behind this one, tilted and dimmed and running effects of its own.
    * It shares this instance's caches, and adds nothing to the DOM — the hero already carries the
@@ -896,7 +909,7 @@ export function createKlieg(options: KliegOptions): Klieg {
     // A stage that holds on 'click' waits for the same press the top-level hold does, and gets no
     // listener of its own — so the whole effect stalls unless this covers both.
     const awaitsClick = untilClick || stages.some((s) => s.hold === 'click');
-    const reporter = opts.onPhase ? new PhaseReporter(isolate(opts.onPhase)) : null;
+    const reporter = opts.onMark ? new MarkReporter(isolate(opts.onMark)) : null;
     const sequence = stages.length
       ? new Sequence({
           enter,
@@ -991,21 +1004,17 @@ export function createKlieg(options: KliegOptions): Klieg {
         }
       }
 
-      let lastTick = clock.now();
-
       liveFires++;
       heroes.add(word);
       const off = clock.subscribe((now) => {
         if (signal.aborted) return finish();
 
         try {
-          const dt = now - lastTick;
-          lastTick = now;
           // rAF reports the frame's start time, which can precede a now() sampled moments earlier.
           const since = now - startedAt;
           const raw = Math.max(still ? enterEnd : since, 0);
           const elapsed = sequence ? raw : Math.min(raw, timeline.duration);
-          // Ahead of the pose, or the fit and the phase advance both lag it by a frame.
+          // Ahead of the pose, or the fit and the stage advance both lag it by a frame.
           sequence?.tick(elapsed);
 
           // Detected against this frame rather than scheduled at fire time: `release()` moves
@@ -1025,7 +1034,7 @@ export function createKlieg(options: KliegOptions): Klieg {
           }
 
           // Resolved on demand, once per frame: placing the cursor reads the canvas' box, which
-          // flushes layout, and most signs run no piece that asks for it.
+          // flushes layout, and most signs run no patch that asks for it.
           let placed: PointerFrame | null = null;
           const place = (): PointerFrame =>
             (placed ??= pointerFrame(
@@ -1038,20 +1047,19 @@ export function createKlieg(options: KliegOptions): Klieg {
                 bevel: DEFAULT_GLYPH_OPTIONS.bevelThickness,
               },
             ));
-          const ctx: FrameCtx = {
+          const host: Host = {
             get pointer() {
               return place().pointer;
             },
             get pointerInWord() {
               return place().pointerInWord;
             },
-            dt: still ? Number.POSITIVE_INFINITY : dt,
             now,
           };
-          word.apply(driver, elapsed, ctx);
+          word.apply(driver, elapsed, host, still);
           // Never the driver: the backdrop takes no motion slot, so it is at full presence from
           // its first frame. Its own effects still run, off the same clock the hero reads.
-          backdrop?.apply(PLACED, elapsed, ctx);
+          backdrop?.apply(PLACED, elapsed, host, still);
 
           if (layer && mode === 'layer' && family) {
             if (word.atRest()) {
@@ -1084,7 +1092,7 @@ export function createKlieg(options: KliegOptions): Klieg {
             }
           }
 
-          const env = envFrame.at(elapsed, ctx);
+          const env = envFrame.at(elapsed, host, still);
           stage.scene.environmentRotation.x = env.pitch;
           stage.scene.environmentRotation.y = env.yaw;
           // The scene write above reaches only a material with no `envMap` of its own; every

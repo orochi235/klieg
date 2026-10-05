@@ -1,8 +1,8 @@
 // biome-ignore-all lint/suspicious/noApproximativeNumericConstant: samples rounded to 9 places, not constants
-// biome-ignore-all format: one row per piece stays diffable; wrapped, a re-tune is unreadable
+// biome-ignore-all format: one row per patch stays diffable; wrapped, a re-tune is unreadable
 
 /**
- * Frozen samples of every motion piece, captured before the vocabulary rewrite.
+ * Frozen samples of every motion patch, captured before the vocabulary rewrite.
  *
  * Each row is 21 steps of `t` × 5 letters × [position, rotation, scale, opacity]. Regenerate only
  * to record a deliberate re-tune, and read the diff as the change to the motion that it is.

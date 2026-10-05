@@ -1,5 +1,5 @@
 import { EffectFrame, planEffects } from '@core/effects/frame.js';
-import type { FrameCtx, PartInfo } from '@core/effects/types.js';
+import type { EffectPatch, Host, PartInfo } from '@core/effects/types.js';
 import { type LoadedFont, loadFont } from '@core/text/font.js';
 import { LabBar } from '@shared/LabBar.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -23,9 +23,10 @@ import { Timeline } from './TimelinePanel.js';
 /** How far past `hold` the transport runs, so an exit is visible. */
 const TAIL_MS = 2000;
 
-/** The lab's own frame context. There is no pointer surface: `pointerFrame` needs a `PlacedWord`
- * only the running fire has, and both lamp sources on offer ignore the cursor. */
-const CTX: FrameCtx = { pointer: null, pointerInWord: null, dt: 16.7, now: 0 };
+/** What the lab's patches read on `setting.host`. There is no pointer surface: `pointerFrame`
+ * needs a `PlacedWord` only the running fire has, and both lamp sources on offer ignore the
+ * cursor. */
+const HOST: Host = { pointer: null, pointerInWord: null, now: 0 };
 
 export function App() {
   const [composition, setComposition] = useState<Composition>(restore);
@@ -90,15 +91,15 @@ export function App() {
   const sampled = useMemo(() => {
     const specs = toFireOptions(composition).effects ?? [];
     const frame = new EffectFrame(planEffects(specs, parts));
-    const pass = Math.max(1, ...specs.map((s) => (s.piece as { duration: number }).duration));
-    // The rate follows the finest piece, not the pass: `roving` at `epochs: 96` makes a 1400ms
+    const pass = Math.max(1, ...specs.map((s) => (s.patch as EffectPatch).period));
+    // The rate follows the finest patch, not the pass: `roving` at `epochs: 96` makes a 1400ms
     // flicker a 306s pass, where a fixed grid steps straight over whole drops.
     const finest = finestPass(composition);
     const count = passSamples(pass, finest);
     // Cleared either side of the pass so the count belongs to this sampling rather than to
     // however many frames the preview has drawn since the last one.
     clearDraftFaults();
-    const data = samplePass(frame, parts, pass, count, CTX);
+    const data = samplePass(frame, parts, pass, count, HOST);
     return { pass, finest, count, data, faults: draftFaults() };
   }, [composition, parts]);
 
@@ -221,9 +222,9 @@ export function App() {
             parts={parts}
             pass={sampled.pass}
             epochMs={epochMs}
-            perPiecePass={(sampled.count * sampled.finest) / sampled.pass}
+            perPatchPass={(sampled.count * sampled.finest) / sampled.pass}
           />
-          <Sweep composition={composition} parts={parts} ctx={CTX} />
+          <Sweep composition={composition} parts={parts} host={HOST} />
           {composition.effects
             .filter((l) => l.kind === 'draft')
             .map((l) => (

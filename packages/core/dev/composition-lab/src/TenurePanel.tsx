@@ -1,6 +1,6 @@
 import type { PartInfo } from '@core/effects/types.js';
 import { useMemo } from 'react';
-import { type PassSamples, PER_PIECE_PASS } from './sample.js';
+import { type PassSamples, PER_PATCH_PASS } from './sample.js';
 import { tenureAndJump } from './tenure.js';
 
 export interface TenureProps {
@@ -10,19 +10,19 @@ export interface TenureProps {
   pass: number;
   /** The slot `roving` settled on, when exactly one enabled layer rovs. */
   epochMs: number | null;
-  /** Samples the grid spends on one pass of the finest piece. */
-  perPiecePass: number;
+  /** Samples the grid spends on one pass of the finest patch. */
+  perPatchPass: number;
 }
 
 /** Past this the deferral is the reading rather than rounding in it. */
 const DEFERRED = 1.05;
 
-export function Tenure({ samples, parts, pass, epochMs, perPiecePass }: TenureProps) {
+export function Tenure({ samples, parts, pass, epochMs, perPatchPass }: TenureProps) {
   const r = useMemo(() => tenureAndJump(samples, parts, pass), [samples, parts, pass]);
 
   const held = r.handovers > 0 ? r.meanTenureMs : 0;
   const deferred = epochMs !== null && held > epochMs * DEFERRED;
-  const coarse = perPiecePass < PER_PIECE_PASS;
+  const coarse = perPatchPass < PER_PATCH_PASS;
 
   return (
     <div className="cl-panel">
@@ -64,7 +64,7 @@ export function Tenure({ samples, parts, pass, epochMs, perPiecePass }: TenurePr
       ) : null}
       {coarse ? (
         <p className="cl-note">
-          {perPiecePass.toFixed(0)} samples per inner pass, under the {PER_PIECE_PASS} the rate asks
+          {perPatchPass.toFixed(0)} samples per inner pass, under the {PER_PATCH_PASS} the rate asks
           for — the sample cap bound. Below about 20, a drop falls between two samples and the
           handovers either side of it merge, which reads as a longer tenure than the truth.
         </p>

@@ -3,7 +3,7 @@ import { syntheticPool } from '../../dev/composition-lab/src/pool.js';
 import { type PassSamples, samplePass } from '../../dev/composition-lab/src/sample.js';
 import { tenureAndJump } from '../../dev/composition-lab/src/tenure.js';
 import { EffectFrame, planEffects } from '../../src/effects/frame.js';
-import { flicker } from '../../src/effects/pieces.js';
+import { flicker } from '../../src/effects/patches.js';
 import { roving } from '../../src/effects/roving.js';
 import type { PartInfo } from '../../src/effects/types.js';
 import { NO_CTX } from '../effects/ctx.js';
@@ -131,14 +131,14 @@ describe('tenureAndJump, where the inner rests', () => {
 // that moves with the sample count is a reading of the instrument, so this pins it at two rates.
 describe('tenure under a roving flicker', () => {
   const pool = syntheticPool(24, 7);
-  const inner = flicker({ duration: 1400, depth: 0, unrest: 0.18 });
-  const piece = roving(inner, { dwell: 3200, seed: 0, epochs: 8 });
+  const inner = flicker({ period: 1400, depth: 0, unrest: 0.18 });
+  const patch = roving(inner, { dwell: 3200, seed: 0, epochs: 8 });
 
   const read = (rate: number): number => {
-    const specs = [{ piece, target: { kind: 'run' as const, by: 'index' as const, amount: 1 } }];
+    const specs = [{ patch, target: { kind: 'run' as const, by: 'index' as const, amount: 1 } }];
     const frame = new EffectFrame(planEffects(specs, pool));
-    const s = samplePass(frame, pool, piece.duration, rate, NO_CTX);
-    return tenureAndJump(s, pool, piece.duration).meanTenureMs;
+    const s = samplePass(frame, pool, patch.period, rate, NO_CTX.host);
+    return tenureAndJump(s, pool, patch.period).meanTenureMs;
   };
 
   it('reads the same at twice the sample rate', () => {
@@ -147,6 +147,6 @@ describe('tenure under a roving flicker', () => {
   });
 
   it('reads at least the epoch, because a handover is deferred and never brought forward', () => {
-    expect(read(1600)).toBeGreaterThanOrEqual(piece.epoch);
+    expect(read(1600)).toBeGreaterThanOrEqual(patch.epoch);
   });
 });

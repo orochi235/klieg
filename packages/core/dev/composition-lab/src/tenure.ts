@@ -44,7 +44,7 @@ function centroid(holders: number[], parts: readonly PartInfo[]): Centroid | nul
 
 /**
  * How long a part keeps the effect, and how far it travels when it changes hands. Reads
- * `PassSamples.moved` rather than any wrapper's own arithmetic, so a hand-authored piece that
+ * `PassSamples.moved` rather than any wrapper's own arithmetic, so a hand-authored patch that
  * hands over is measured the same way `roving` is.
  *
  * Two things make it a reading of the effect rather than of the sample rate. A sample where
@@ -59,7 +59,7 @@ function centroid(holders: number[], parts: readonly PartInfo[]): Centroid | nul
 export function tenureAndJump(
   samples: PassSamples,
   parts: readonly PartInfo[],
-  duration: number,
+  pass: number,
 ): TenureReport {
   const n = samples.samples;
   const holdersAt = (s: number): number[] => {
@@ -97,7 +97,7 @@ export function tenureAndJump(
   }
 
   return {
-    meanTenureMs: handovers === 0 ? duration : duration / handovers,
+    meanTenureMs: handovers === 0 ? pass : pass / handovers,
     handovers,
     meanJumpParts: mean(jumpParts),
     meanJumpEm: mean(jumpEm),

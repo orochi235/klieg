@@ -10,7 +10,7 @@ export interface Pose {
 }
 
 /** A relative contribution. Omitted fields mean "no contribution". */
-export interface PoseOffset {
+export interface PoseDelta {
   position?: Vec3;
   rotation?: Vec3;
   scale?: number;
@@ -29,7 +29,7 @@ export const REST: Pose = {
  * at 1: scaling `scale` or `opacity` toward 0 would collapse the word rather than remove the
  * contribution.
  */
-export const POSE_RIG = kit<Pose>({
+export const POSE_KIT = kit<Pose>({
   position: vec(3, sum()) as unknown as Channel<Vec3>,
   rotation: vec(3, sum()) as unknown as Channel<Vec3>,
   scale: mul(),
@@ -38,8 +38,8 @@ export const POSE_RIG = kit<Pose>({
 
 export const POSE_CHANNELS = ['position', 'rotation', 'scale', 'opacity'] as const;
 
-/** Layers offsets onto a pose by the rig's own arithmetic — the fold with every weight at 1. */
-export function accumulate(base: Pose, offsets: readonly PoseOffset[]): Pose {
+/** Layers deltas onto a pose by the kit's own arithmetic — the fold with every weight at 1. */
+export function accumulate(base: Pose, offsets: readonly PoseDelta[]): Pose {
   const out: Record<string, unknown> = {
     position: [...base.position],
     rotation: [...base.rotation],
@@ -50,23 +50,23 @@ export function accumulate(base: Pose, offsets: readonly PoseOffset[]): Pose {
     for (const key of POSE_CHANNELS) {
       const value = (offset as Record<string, unknown>)[key];
       if (value === undefined) continue;
-      out[key] = (POSE_RIG[key] as Channel<unknown>).merge(out[key], value);
+      out[key] = (POSE_KIT[key] as Channel<unknown>).merge(out[key], value);
     }
   }
   return out as unknown as Pose;
 }
 
 /**
- * Fade an offset toward its channels' rests. Additive fields go to 0; multiplicative fields go to
+ * Fade a delta toward its channels' rests. Additive fields go to 0; multiplicative fields go to
  * 1 — scaling them toward 0 would collapse the word instead of removing the contribution.
  */
-export function scaleOffset(o: PoseOffset, weight: number): PoseOffset {
+export function scaleDelta(o: PoseDelta, weight: number): PoseDelta {
   const out: Record<string, unknown> = {};
   for (const key of POSE_CHANNELS) {
     const value = (o as Record<string, unknown>)[key];
     if (value === undefined) continue;
-    const channel = POSE_RIG[key] as Channel<unknown>;
+    const channel = POSE_KIT[key] as Channel<unknown>;
     out[key] = channel.scale ? channel.scale(value, weight) : value;
   }
-  return out as PoseOffset;
+  return out as PoseDelta;
 }

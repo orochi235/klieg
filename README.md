@@ -41,7 +41,7 @@ than failing forever. A `font` naming nothing in `fonts` throws where you call i
 registered: that is a typo in your own code, not a runtime condition to handle. `destroy()` cancels everything in flight and releases the GL context once
 the running effect has settled.
 
-`onPhase` reports the boundaries inside an effect. `{ phase: 'active' }` is the instant the word has
+`onMark` reports the boundaries inside an effect. `{ mark: 'active' }` is the instant the word has
 landed and is at full presence — the moment to swap a page behind an established flourish rather
 than during its arrival. The instants are not fixed when you fire: a `'click'` hold has no exit
 until the press lands.
@@ -49,8 +49,8 @@ until the press lands.
 ```ts
 await bk.fire('RESULTS', {
   hold: 'click',
-  onPhase: (e) => {
-    if (e.phase === 'active') swapThePage();
+  onMark: (e) => {
+    if (e.mark === 'active') swapThePage();
   },
 });
 ```
@@ -58,7 +58,7 @@ await bk.fire('RESULTS', {
 ## Motion
 
 An effect plays `enter`, then loops `active` for `hold` milliseconds, then plays `exit`,
-crossfading `blendMs` across each boundary. Enter and exit run at a fixed length per piece
+crossfading `blendMs` across each boundary. Enter and exit run at a fixed length per patch
 (500–1200ms), so total screen time is about enter + `hold` + exit.
 
 ### enter
@@ -119,14 +119,14 @@ slots.
 | `static` | holds the environment still |
 | `pointer` | aims the highlight wherever the cursor or finger is; `static` until one arrives |
 
-The slot takes a piece instead of a name, or an array mixing both — `sweep({ periodMs })`,
+The slot takes a patch instead of a name, or an array mixing both — `sweep({ periodMs })`,
 `still()` and `track({ yawRange, pitchRange, followMs })` build one. Layering here is not
-`active`'s: each piece keeps its own `duration` rather than sharing the slot's, so the pieces run
+`active`'s: each patch keeps its own `period` rather than sharing the slot's, so the patches run
 on unrelated clocks with nothing holding a phase between them.
 
-Layered pieces add per axis, so two that write the same axis give you one motion rather than two
+Layered patches add per axis, so two that write the same axis give you one motion rather than two
 you can pick apart: `['sweep', sweep({ periodMs: 1000 })]` is a single uniform turn at the summed
-rate, once every 773ms. Layer pieces that write different axes — `['sweep', track({ yawRange: 0 })]`
+rate, once every 773ms. Layer patches that write different axes — `['sweep', track({ yawRange: 0 })]`
 rakes on the clock while the pointer tips the pitch.
 
 All of these turn the one shared environment. For light on the letters near a position instead —
@@ -267,16 +267,16 @@ fire('JACKPOT!', {
   look: 'tubing',
   effects: [
     // One run of the whole sign, picked by seed, stutters like failing glass.
-    { piece: 'flicker', target: { kind: 'run', by: 'index', count: 1 } },
+    { patch: 'flicker', target: { kind: 'run', by: 'index', count: 1 } },
     // Every run cycles color together.
-    { piece: 'hue', target: { kind: 'run', by: 'index', amount: 1 } },
+    { patch: 'hue', target: { kind: 'run', by: 'index', amount: 1 } },
   ],
 });
 ```
 
 | field | meaning |
 |---|---|
-| `piece` | a name from `EFFECT_NAMES`, or a piece from a factory so it can be tuned |
+| `patch` | a name from `EFFECT_NAMES`, or a patch from a factory so it can be tuned |
 | `target` | `{ kind: 'run' \| 'body' \| 'chunk' }` plus a selection — `by` orders the pool (`'seed'`, `'length'`, `'index'`), `amount` takes a fraction of it and `count` a literal number of members, and `count` wins when both are given |
 | `stagger` | per-part phase spread, the same spec `enter` and `exit` take |
 | `seed` | fixes the selection, so a pinned frame is reproducible |
@@ -287,32 +287,32 @@ letter's whole scattered field — `sequin`'s sequins — which is one instanced
 material, so it moves and lights per letter rather than per scatterer. Target it rather than
 `body` on a scattered look: the body sits near-black underneath and barely shows a light.
 
-**`flicker`** — a tube on its way out. `EFFECTS.flicker({ depth, unrest, spell, calm, duration })`:
+**`flicker`** — a tube on its way out. `EFFECTS.flicker({ depth, unrest, spell, calm, period })`:
 `depth` is the floor of its brightness, `unrest` the share of the pass spent stuttering. `spell` and
 `calm` add the long scale — the milliseconds of one flickering bout and the milliseconds held steady
 between them, so a tube can stutter for four seconds and sit quiet for fifteen. Both need the other,
 and both snap to whole stutter steps; the pass then becomes the nearest whole number of cycles, which
-may be longer than the `duration` asked for or shorter.
+may be longer than the `period` asked for or shorter.
 
-**`hue`** — a color sweep across the sign. `EFFECTS.hue({ from, span, spread, luminance, duration })`,
+**`hue`** — a color sweep across the sign. `EFFECTS.hue({ from, span, spread, luminance, period })`,
 in turns: `span` of 1 is the whole wheel and the only value that meets itself at the loop seam, and
 `spread` offsets the hue along the word to make a travelling gradient rather than one synchronized
 sign. The sweep holds Rec.709 luminance rather than saturation, so blues and violets come out paler
 and the sign glows evenly all the way round — at constant saturation it would brighten through yellow
 and fall out of the bloom threshold through blue.
 
-**`roving(inner, { dwell, seed, epochs })`** — takes another piece and moves its affliction from one
+**`roving(inner, { dwell, seed, epochs })`** — takes another patch and moves its affliction from one
 part to another, so `roving(EFFECTS.flicker())` is one bad tube that jumps every few seconds. It is a
-factory rather than a name, because a name cannot carry the piece it wraps. Give it `{ amount: 1 }`:
+factory rather than a name, because a name cannot carry the patch it wraps. Give it `{ amount: 1 }`:
 it picks its holder from the whole pool of that kind, so against a subset the fault can land on a
 part the effect does not drive and nothing happens at all.
 
 `dwell` is roughly how long one part keeps the fault, and it picks *who* flickers, not how much —
-that is the inner piece's `unrest`. `epochs` is how many handovers fill a pass, and so the ceiling
+that is the inner patch's `unrest`. `epochs` is how many handovers fill a pass, and so the ceiling
 on how many parts a pass can reach before it loops; the default of 96 covers a pool of 29 entirely
 and most of a pool of 55, which is about as wide as a real sign gets. Raise it for a wider one.
 
-**`intermittent(inner, { spell, calm, bouts })`** — runs another piece in bouts and swallows it in
+**`intermittent(inner, { spell, calm, bouts })`** — runs another patch in bouts and swallows it in
 between, so `intermittent(roving(EFFECTS.flicker()), { spell: 4000, calm: 15000 })` is a sign that
 misbehaves for four seconds a quarter-minute and is otherwise steady. The inner is never reset: it
 keeps running against the same clock and the gate only decides what reaches the part, so each bout
@@ -321,26 +321,26 @@ pass-through. `spell` has to cover at least one inner pass, and is refused under
 shows a sliver of the inner and reads as a glitch.
 
 `flicker` takes its own `spell` and `calm`, which is the better tool when flicker is all you want;
-this is for the pieces that have no such pair, `roving` and `hue` among them.
+this is for the patches that have no such pair, `roving` and `hue` among them.
 
-**`turns({ pieces, every, deadline, stagger })`** — runs a list of pieces one at a time instead of
+**`turns({ patches, every, deadline, stagger })`** — runs a list of patches one at a time instead of
 layering them, so a sign flickers for a few seconds, then chases, then shifts hue, and round again.
-`pieces` takes names or built pieces, `every` is how long each one holds, and one pass is a step per
-piece. A factory rather than a name, for the reason `roving` is one: a name cannot carry the pieces
+`patches` takes names or built patches, `every` is how long each one holds, and one pass is a step per
+patch. A factory rather than a name, for the reason `roving` is one: a name cannot carry the patches
 it runs.
 
-A part swaps at the first moment the outgoing piece is at rest, which is what lets a handover need
+A part swaps at the first moment the outgoing patch is at rest, which is what lets a handover need
 no crossfade — at rest there is nothing on screen to cut away from. `deadline` is how long an overdue
-part waits before it is made to swap anyway, and it is there for the pieces that never rest: `hue` is
+part waits before it is made to swap anyway, and it is there for the patches that never rest: `hue` is
 always mid-shift, and without it would hold its part for good. It is clamped below one step, because
-past that a part can fall two steps behind and skip a piece outright — that letter never chases.
+past that a part can fall two steps behind and skip a patch outright — that letter never chases.
 
 `stagger` spreads the handover across the word, as a share of one step, so the change sweeps instead
-of snapping the whole sign at once; 0 switches everything together. It is the piece's own, not the
-`stagger` on the effect spec — the frame planner spends that one before the piece is called, so
+of snapping the whole sign at once; 0 switches everything together. It is the patch's own, not the
+`stagger` on the effect spec — the frame planner spends that one before the patch is called, so
 setting both compounds them.
 
-**`lamp({ source, radius, strength, color, duration })`** — puts light on the parts near a position
+**`lamp({ source, radius, strength, color, period })`** — puts light on the parts near a position
 rather than changing what they are made of. `radius` is its reach in em of layout space, `strength`
 the light at the center falling to nothing at that edge, and `color` the lamp's own, multiplied
 against the look's hue. `source` says where the light is on each pass: `fromPointer()` is the
@@ -349,7 +349,7 @@ cursor's whole travel is compressed onto the letters: the light runs ahead of th
 of the sign and behind it at the other, and sits under it only where the ink fills the canvas.
 `fixed(x, y)` pins the light, `orbit({ radius, x, y })` circles it, and `along([...])` walks a
 polyline at constant time per segment rather than constant speed.
-`duration` is one pass for the sources that read the clock, `orbit` and `along`, and does nothing
+`period` is one pass for the sources that read the clock, `orbit` and `along`, and does nothing
 to `fixed` or `fromPointer`, which ignore it. A pointer source stays dark until the pointer has
 been inside the canvas, so an untouched page gets no lamp rather than one parked at the origin.
 
@@ -358,25 +358,28 @@ construction, so after the letters re-lay the light still lands where they used 
 sign that has dropped letters, a cursor over the type can light nothing at all. Combine the two and
 the lamp is a silent no-op, not a smaller effect.
 
-**`hinge(signal, make, { stops })`** and **`hinge(signal, piece, { blend })`** — make a piece a
+**`hinge(signal, make, { stops })`** and **`hinge(signal, patch)`** — make a patch a
 function of a signal as well as of time. `near({ radius, source })` is the first signal: how close a
 part is to the cursor, measured to its ink on the same curve a lamp lights with, 1 on the source and
 0 at `radius`. So `hinge(near(), (k) => flicker({ unrest: 0.02 + k * 0.8 }))` is a sign whose tubes
 fail harder the nearer you get to them. `near` takes the same `LightSource` a lamp does, so
-`near({ source: orbit() })` sweeps the word on a clock with no cursor involved at all.
+`near({ source: orbit(), period: 6000 })` sweeps the word on a clock with no cursor involved at all.
+A signal is `(part, setting) => number`, a blits signal over parts: it does not see the patch's
+phase, which is why `near` takes its own `period` for a source on the clock, 4000ms by default.
 
 Which of the two forms you hand it decides how far the signal reaches. A **factory** is rebuilt once
-per `stops` level at construction, eight by default, and the nearest level answers each frame — the
-only way to reach a knob the piece settles internally, `flicker`'s `unrest` being a probability
-tested before anything is emitted. A **piece** runs unchanged while `blend` scales what it emitted,
-continuously and with no quantization, over the channels that have a rest to fade toward: `gain`,
+per `stops` level at construction, eight by default, and each frame crossfades the two levels either
+side of the signal — the only way to reach a knob the patch settles internally, `flicker`'s `unrest`
+being a probability tested before anything is emitted. A **patch** runs unchanged while the signal
+scales what it emitted, continuously and with no quantization, over the channels that have a rest
+to fade toward: `gain`,
 `scale`, `position`, `rotation`, `crawl`, `dark` and a lamp's `amount`. `dark` pulls a tube run
 toward the unlit glass its decoration declares, fill and glow together, where `gain` scales only the
 glow. `color` is a replacement
 rather than a contribution, so it passes through, and goes only at zero when the whole contribution
 goes with it.
 
-**Stops that disagree on duration are refused at construction.** A pass is read once per effect
+**Stops that disagree on period are refused at construction.** A pass is read once per effect
 rather than once per part, so the levels cannot each run on their own clock under one published
 pass — vary a knob that leaves the pass alone, `unrest` or `depth` rather than `spell` or `calm`.
 `near` also inherits a lamp's blind spot: it measures against the layout the word was built with, so
@@ -392,13 +395,13 @@ follows its input rather than climbing.
 
 **`power({ warmup, start, trip })`** — a sign-wide power switch your code holds. `overload()` takes the
 sign dark until `up()`, `overload({ for: 1200 })` comes back by itself, and `up()` plays the warm-up
-and hands back to the sign's own effects. Put `tube.piece` in the effects list — it darkens or warms
+and hands back to the sign's own effects. Put `tube.patch` in the effects list — it darkens or warms
 every part it targets and passes nothing through once on — and hinge the sign's other effects on
 `tube.warm` so they wait for the warm-up. The warm-up is `strike()` by default, blinks that stay lit
 longer until the tube catches, or `thinning()` or `glow()`, each with a `duration`.
 `start: 'warming'` powers a sign up as it arrives. `trip: { on, at, holdMs, outMs }` shorts the sign
 by itself when a signal holds at `at` for `holdMs`, and relights it `outMs` later. The trip is
-watched through `tube.piece`, so it does nothing until that is in the effects. Every short from a lit sign begins with a `flare`, `blowout()` by default: the sign spikes to three
+watched through `tube.patch`, so it does nothing until that is in the effects. Every short from a lit sign begins with a `flare`, `blowout()` by default: the sign spikes to three
 times its own glow and collapses to dark over 400ms, and `flare: null` goes straight to dark.
 `onState(state, previous)` is called on the frame the state changes, which is the moment to fire
 sound or sparks with the flare. Under reduced motion the flare and the warm-up are both skipped
@@ -414,9 +417,9 @@ await bk.fire('klieg', {
   look: 'tubing',
   hold: 'forever',
   effects: [
-    { piece: tube.piece, target: { kind: 'run', by: 'seed', amount: 1 } },
+    { patch: tube.patch, target: { kind: 'run', by: 'seed', amount: 1 } },
     {
-      piece: hinge(tube.warm, EFFECTS.flicker({ unrest: 0.1 })),
+      patch: hinge(tube.warm, EFFECTS.flicker({ unrest: 0.1 })),
       target: { kind: 'run', by: 'seed', amount: 1 },
     },
   ],
@@ -435,9 +438,14 @@ const sparks = kicks();
 hinge(peak(dwell(), sparks), (k) => EFFECTS.flicker({ unrest: k * 0.8, drop: 58 + k * 400 }));
 ```
 
+`peak`, `slew`, `lag` and `gate` are blits' own, re-exported: `dwell` is a `slew` over `near()` that
+starts empty, and `kicks` a `slew` that drains each lift. The mix keeps a stateful signal's state per
+effect and part, so one signal can drive several effects. A signal of your own reads the pointer
+through `hostOf(setting).pointerInWord`.
+
 Effects layer. Brightness multiplies and color is replaced, so `flicker` and `hue` compose without
-either knowing about the other — but two pieces both writing color fight, and the last one wins.
-A hue piece writes color every frame, which overrides `tint`: `tubing` tints its decoration, so a
+either knowing about the other — but two patches both writing color fight, and the last one wins.
+A hue patch writes color every frame, which overrides `tint`: `tubing` tints its decoration, so a
 hue sweep and a tint on that look are the same fight, and the sweep wins.
 
 ## Keeping an anchored sign alive
@@ -464,7 +472,7 @@ await bk.fire('klieg', {
   hold: 40000,
   effects: [
     {
-      piece: lamp({ source: orbit({ radius: 0.4 }), radius: 0.5, strength: 1.4, duration: 9000 }),
+      patch: lamp({ source: orbit({ radius: 0.4 }), radius: 0.5, strength: 1.4, period: 9000 }),
       target: { kind: 'run', by: 'index', amount: 1 },
     },
   ],
@@ -473,9 +481,8 @@ await bk.fire('klieg', {
 
 `look: 'tubing'` is load-bearing for that example: the target is a run, and only `tubing` and
 `piping` have run parts — on `gold` it selects an empty pool and does nothing, silently. A lamp
-lights body parts too, so the same one aimed at bodies works anywhere; `hue` is run-only. Build the
-pieces in the call, too: `track` carries its yaw across frames, and a shared one resumes from the
-last fire's angle rather than from rest.
+lights body parts too, so the same one aimed at bodies works anywhere; `hue` is run-only. A patch
+can be shared across fires: `track` keeps its eased yaw per fire, so each one starts from rest.
 
 **A `roving` pass that cannot reach the whole pool never will.** Its walk is identical every pass,
 so a part it misses is never afflicted at all, however long the sign runs. Raising `epochs` past
@@ -619,7 +626,7 @@ dropped along with the lower case. `isCapital` is exported if you want the same 
 
 ## Writing your own motion
 
-Every slot also takes a piece you built, or several layered together:
+Every slot also takes a patch you built, or several layered together:
 
 ```js
 import { spring, transition } from 'klieg';
@@ -633,12 +640,16 @@ const swoop = transition(800, {
 await bk.fire('YOU WIN', { enter: swoop, active: ['float', 'shimmer'] });
 ```
 
-Names and pieces mix freely in a layered slot — `active: ['float', myShimmer]`.
+Names and patches mix freely in a layered slot — `active: ['float', myShimmer]`.
 
-A `MotionPiece` is `{ duration, offset(t, letter) }` where `offset` returns a *relative* pose —
+A `MotionPatch` is `{ duration, at(phase, letter) }` where `at` returns a *relative* pose —
 position and rotation add onto rest, scale and opacity multiply. It must be a **pure function**:
-the compositor samples up to three pieces at three different points in the same frame to
-crossfade them, so a piece that remembers anything between calls will tear.
+the compositor samples up to three patches at three different points in the same frame to
+crossfade them, so a patch that remembers anything between calls will tear.
+
+Written inline in a slot, a patch wants `motion({ duration, at })` around it for TypeScript to type
+`at`: a slot also takes a name, and a string's own `at` leaves an inline patch's arguments untyped.
+`effect({ period, at })` and `lighting({ period, at })` do the same for an effect or an env patch.
 
 `letter` says where that letter sits: `index` and `count` in reading order, `line`, `column`,
 `lineCount` and `columnCount` in the block, and `x`/`y`, its layout position in em relative to
@@ -654,8 +665,8 @@ controls per-letter delay: `spread` fixes the total ramp, `each` fixes per-lette
 measuring it radially over a multiline block.
 
 `cycle(duration, spec)` builds a looping idle from a per-channel `amplitude`, an optional
-`harmonic`, and a `phase` function. Motion moves the letters; to rake the environment highlight
-instead, declare an env piece in [`lighting`](#lighting).
+`harmonic`, and a `shift` function. Motion moves the letters; to rake the environment highlight
+instead, declare an env patch in [`lighting`](#lighting).
 
 `spring({ stiffness, damping, mass })` returns a curve, not an animation — it is the closed-form
 solution, so it stays a pure `(t) => number` and can go anywhere an easing goes.
@@ -713,21 +724,21 @@ you called it, as `fire()` does.
 
 | field | default | |
 |---|---|---|
-| `enter` | `'slam'` | how it arrives — a name, your own piece, or an array of them |
+| `enter` | `'slam'` | how it arrives — a name, your own patch, or an array of them |
 | `active` | `'none'` | what it does while it holds |
 | `exit` | `'fade'` | how it leaves |
 | `look` | `'gold'` | the material — a name, or a spec of your own |
-| `lighting` | `'sweep'` | how the environment lights it — a name, an env piece, or an array of them; a `lamp` effect lights the letters instead of the scene |
+| `lighting` | `'sweep'` | how the environment lights it — a name, an env patch, or an array of them; a `lamp` effect lights the letters instead of the scene |
 | `tint` | none | recolors the look, as `0xff2d6f`, or a rule consulted per letter |
-| `hold` | `1200` | milliseconds in the active phase, `'click'` to hold until dismissed, or `'forever'` to hold until `destroy()`; under an element `placement`, `'click'` needs either `clickAnywhere` on the placement or `dismiss: 'host'`, and `'forever'` is refused alongside `stages`, which it would never advance past |
+| `hold` | `1200` | milliseconds in the active segment, `'click'` to hold until dismissed, or `'forever'` to hold until `destroy()`; under an element `placement`, `'click'` needs either `clickAnywhere` on the placement or `dismiss: 'host'`, and `'forever'` is refused alongside `stages`, which it would never advance past |
 | `stages` | none | stages played after the enter, each regrouping what survives it |
-| `blendMs` | `120` | crossfade window straddling each phase boundary |
+| `blendMs` | `120` | crossfade window straddling each segment boundary |
 | `bloom` | look's choice | adds a glow pass, at the cost of three render targets while the effect runs |
 | `wrap` | `false` | break long text into the arrangement that renders largest |
 | `lineAlign` | `'start'` | how the lines of a multi-line block range against each other, in reading order — `'start' \| 'center' \| 'end'`. Distinct from `framing.align`, which places the whole block in the box |
 | `tracking` | none | extra advance after each glyph, in em; a negative value tightens instead. A face whose own advances are too tight at display sizes — a pixel face especially — wants a little here |
 | `modal` | `false` | while a `'click'` hold waits, let the overlay swallow the dismissing press |
-| `onPhase` | none | called as the effect crosses each boundary — `{ phase: 'active' }` when the word has landed, `{ phase: 'exit' }` when the hold is over, `{ phase: 'stage', index }` as each stage settles |
+| `onMark` | none | called as the effect crosses each boundary — `{ mark: 'active' }` when the word has landed, `{ mark: 'exit' }` when the hold is over, `{ mark: 'stage', index }` as each stage settles |
 | `dismiss` | `'window'` | who dismisses a `'click'` hold; `'host'` attaches no window listeners and leaves `advance()` as the only way out |
 | `signal` | none | aborts this one effect: no exit plays, and the promise resolves rather than rejecting |
 | `selectable` | `'hidden'` | how the fired word appears in the DOM — copyable, findable and readable, or selectable (below) |
@@ -811,7 +822,7 @@ await fire('JACKPOT!', {
   backdrop: {
     rows: 7,
     look: 'tubing',
-    effects: [{ piece: 'chase', target: { kind: 'run', by: 'index' }, stagger: { from: 'line' } }],
+    effects: [{ patch: 'chase', target: { kind: 'run', by: 'index' }, stagger: { from: 'line' } }],
     transform: fromEuler(0, 0, -12 * DEG),
     scale: 1.6,
     dim: 0.35,
@@ -927,7 +938,7 @@ await bk.fire('CONGRATULATIONS', { selectable: 'layer' });
 - `'layer'` — a transparent layer over the type, one span per letter in klieg's own typeface, so a
   drag across it selects the word. A click on a letter is taken by the layer rather than reaching
   the page beneath; the gaps between letters, and whitespace, still pass a click through. It needs
-  the word to hold still — under a `transform`, or a motion piece that moves the letters, it falls
+  the word to hold still — under a `transform`, or a motion patch that moves the letters, it falls
   back to `'hidden'` and warns once on the console.
 - `'none'` — no DOM text, for a page whose own markup already carries the string, such as an
   element `placement` rendered over a real `<h1>`.

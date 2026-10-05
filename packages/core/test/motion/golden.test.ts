@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ACTIVE } from '../../src/motion/active.js';
 import { ENTER } from '../../src/motion/enter.js';
 import { EXIT } from '../../src/motion/exit.js';
-import type { MotionPiece } from '../../src/motion/types.js';
+import type { MotionPatch } from '../../src/motion/types.js';
 import { GOLDEN } from './golden.js';
 
 // The vocabulary rewrite has to reproduce these numbers exactly — a diff here is a re-tune
@@ -11,12 +11,12 @@ const COUNT = 5;
 const STEPS = 20;
 const CHANNELS = ['px', 'py', 'pz', 'rx', 'ry', 'rz', 'scale', 'opacity'];
 
-function sample(piece: MotionPiece): number[] {
+function sample(patch: MotionPatch): number[] {
   const out: number[] = [];
   for (let s = 0; s <= STEPS; s++) {
     const t = s / STEPS;
     for (let index = 0; index < COUNT; index++) {
-      const o = piece.offset(t, { index, count: COUNT });
+      const o = patch.at(t, { index, count: COUNT });
       const p = o.position ?? [0, 0, 0];
       const r = o.rotation ?? [0, 0, 0];
       out.push(...p, ...r, o.scale ?? 1, o.opacity ?? 1);
@@ -32,21 +32,21 @@ function sample(piece: MotionPiece): number[] {
 
 function capture(): Record<string, number[]> {
   const all: Record<string, number[]> = {};
-  for (const [name, piece] of Object.entries(ENTER)) all[`enter.${name}`] = sample(piece);
-  for (const [name, piece] of Object.entries(ACTIVE)) all[`active.${name}`] = sample(piece);
-  for (const [name, piece] of Object.entries(EXIT)) all[`exit.${name}`] = sample(piece);
+  for (const [name, patch] of Object.entries(ENTER)) all[`enter.${name}`] = sample(patch);
+  for (const [name, patch] of Object.entries(ACTIVE)) all[`active.${name}`] = sample(patch);
+  for (const [name, patch] of Object.entries(EXIT)) all[`exit.${name}`] = sample(patch);
   return all;
 }
 
 describe('motion golden', () => {
-  it('every piece samples as it did before the vocabulary rewrite', () => {
+  it('every patch samples as it did before the vocabulary rewrite', () => {
     const now = capture();
     const drift: string[] = [];
 
     for (const [name, want] of Object.entries(GOLDEN)) {
       const got = now[name];
       if (!got) {
-        drift.push(`${name}: piece is gone`);
+        drift.push(`${name}: patch is gone`);
         continue;
       }
       if (got.length !== want.length) {
@@ -73,8 +73,8 @@ describe('motion golden', () => {
     expect(drift, `motion drifted:\n${drift.join('\n')}`).toEqual([]);
   });
 
-  it('samples every piece the library ships', () => {
-    // Twelve real pieces plus the shared `none` under each of the three slots. `sweep` left the
+  it('samples every patch the library ships', () => {
+    // Twelve real patches plus the shared `none` under each of the three slots. `sweep` left the
     // vocabulary when lighting became its own option; it never contributed a transform.
     expect(Object.keys(capture())).toHaveLength(15);
   });

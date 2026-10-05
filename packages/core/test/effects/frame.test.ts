@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { EffectFrame, planEffects } from '../../src/effects/frame.js';
-import type { EffectPiece, EffectSpec, PartInfo } from '../../src/effects/types.js';
-import { NO_CTX } from './ctx.js';
+import { hinge } from '../../src/effects/hinge.js';
+import type { EffectPatch, EffectSpec, Host, PartInfo } from '../../src/effects/types.js';
+
+const HOST: Host = { pointer: null, pointerInWord: null, now: 0 };
 
 function pool(runs: number, bodies: number): PartInfo[] {
   const parts: PartInfo[] = [];
@@ -34,34 +36,34 @@ function pool(runs: number, bodies: number): PartInfo[] {
   return parts;
 }
 
-const HALF: EffectPiece = { duration: 1000, at: () => ({ gain: 0.5 }) };
-const DIM: EffectPiece = { duration: 1000, at: () => ({ gain: 0.2 }) };
+const HALF: EffectPatch = { period: 1000, at: () => ({ gain: 0.5 }) };
+const DIM: EffectPatch = { period: 1000, at: () => ({ gain: 0.2 }) };
 /** Reports the phase it was called at, so stagger is observable. */
-const PHASE: EffectPiece = { duration: 1000, at: (t) => ({ scale: 1 + t }) };
+const PHASE: EffectPatch = { period: 1000, at: (phase) => ({ scale: 1 + phase }) };
 
 describe('planEffects', () => {
   it('selects only parts of the spec kind, indexed into the whole pool', () => {
     const parts = pool(3, 2);
     const [effect] = planEffects(
-      [{ piece: HALF, target: { kind: 'run', by: 'index', amount: 1 } }],
+      [{ patch: HALF, target: { kind: 'run', by: 'index', amount: 1 } }],
       parts,
     );
     expect(effect?.parts).toEqual([2, 3, 4]);
   });
 
-  it('resolves a name to its built-in piece', () => {
+  it('resolves a name to its built-in patch', () => {
     const parts = pool(2, 1);
     const [effect] = planEffects(
-      [{ piece: 'flicker', target: { kind: 'run', by: 'index', amount: 1 } }],
+      [{ patch: 'flicker', target: { kind: 'run', by: 'index', amount: 1 } }],
       parts,
     );
-    expect(effect?.piece.duration).toBeGreaterThan(0);
+    expect(effect?.patch.period).toBeGreaterThan(0);
   });
 
   it('reports an empty selection rather than throwing, so a caller can warn', () => {
     const parts = pool(0, 2);
     const [effect] = planEffects(
-      [{ piece: HALF, target: { kind: 'run', by: 'index', amount: 1 } }],
+      [{ patch: HALF, target: { kind: 'run', by: 'index', amount: 1 } }],
       parts,
     );
     expect(effect?.parts).toEqual([]);
@@ -71,7 +73,7 @@ describe('planEffects', () => {
     const parts = pool(0, 2);
     (parts[1] as PartInfo).fill = 'stone';
     const [effect] = planEffects(
-      [{ piece: HALF, target: { fill: 'stone', by: 'index', amount: 1 } }],
+      [{ patch: HALF, target: { fill: 'stone', by: 'index', amount: 1 } }],
       parts,
     );
     expect(effect?.parts).toEqual([1]);
@@ -83,7 +85,7 @@ describe('planEffects', () => {
     const parts = pool(0, 2);
     (parts[1] as PartInfo).fill = 'stone';
     const [effect] = planEffects(
-      [{ piece: HALF, target: { kind: 'body', by: 'index', amount: 1 } }],
+      [{ patch: HALF, target: { kind: 'body', by: 'index', amount: 1 } }],
       parts,
     );
     expect(effect?.parts).toEqual([0, 1]);
@@ -94,66 +96,83 @@ describe('EffectFrame', () => {
   it('merges every layer that reaches a part', () => {
     const parts = pool(2, 0);
     const specs: EffectSpec[] = [
-      { piece: HALF, target: { kind: 'run', by: 'index', amount: 1 } },
-      { piece: DIM, target: { kind: 'run', by: 'index', amount: 1 } },
+      { patch: HALF, target: { kind: 'run', by: 'index', amount: 1 } },
+      { patch: DIM, target: { kind: 'run', by: 'index', amount: 1 } },
     ];
-    const out = new EffectFrame(planEffects(specs, parts)).resolve(parts, 0, NO_CTX);
+    const out = new EffectFrame(planEffects(specs, parts)).resolve(parts, 0, HOST);
     expect(out.get(0)?.gain).toBeCloseTo(0.1);
   });
 
   it('writes only targeted parts', () => {
     const parts = pool(2, 1);
-    const specs: EffectSpec[] = [{ piece: HALF, target: { kind: 'run', by: 'index', amount: 1 } }];
-    const out = new EffectFrame(planEffects(specs, parts)).resolve(parts, 0, NO_CTX);
+    const specs: EffectSpec[] = [{ patch: HALF, target: { kind: 'run', by: 'index', amount: 1 } }];
+    const out = new EffectFrame(planEffects(specs, parts)).resolve(parts, 0, HOST);
     expect([...out.keys()].sort()).toEqual([1, 2]);
   });
 
   it('staggers the phase per part rather than passing one pass to all of them', () => {
     const parts = pool(2, 0);
     const specs: EffectSpec[] = [
-      { piece: PHASE, target: { kind: 'run', by: 'index', amount: 1 }, stagger: 0.5 },
+      { patch: PHASE, target: { kind: 'run', by: 'index', amount: 1 }, stagger: 0.5 },
     ];
-    const out = new EffectFrame(planEffects(specs, parts)).resolve(parts, 500, NO_CTX);
+    const out = new EffectFrame(planEffects(specs, parts)).resolve(parts, 500, HOST);
     expect(out.get(0)?.scale).not.toBeCloseTo(out.get(1)?.scale as number);
   });
 
   it('leaves a dropped part out of the result entirely, before or after its first frame', () => {
     const parts = pool(3, 0);
-    const specs: EffectSpec[] = [{ piece: HALF, target: { kind: 'run', by: 'index', amount: 1 } }];
+    const specs: EffectSpec[] = [{ patch: HALF, target: { kind: 'run', by: 'index', amount: 1 } }];
     const frame = new EffectFrame(planEffects(specs, parts));
     frame.drop([1]);
-    expect([...frame.resolve(parts, 0, NO_CTX).keys()]).toEqual([0, 2]);
+    expect([...frame.resolve(parts, 0, HOST).keys()]).toEqual([0, 2]);
     frame.drop([2]);
-    const out = frame.resolve(parts, 16, NO_CTX);
+    const out = frame.resolve(parts, 16, HOST);
     expect([...out.keys()]).toEqual([0]);
     expect(out.get(0)?.gain).toBeCloseTo(0.5);
   });
 
   it('keeps a dropped part out when a new pool re-cues every effect', () => {
     const parts = pool(2, 0);
-    const specs: EffectSpec[] = [{ piece: HALF, target: { kind: 'run', by: 'index', amount: 1 } }];
+    const specs: EffectSpec[] = [{ patch: HALF, target: { kind: 'run', by: 'index', amount: 1 } }];
     const frame = new EffectFrame(planEffects(specs, parts));
-    frame.resolve(parts, 0, NO_CTX);
+    frame.resolve(parts, 0, HOST);
     frame.drop([1]);
-    expect([...frame.resolve([...parts], 16, NO_CTX).keys()]).toEqual([0]);
+    expect([...frame.resolve([...parts], 16, HOST).keys()]).toEqual([0]);
   });
 
   it('does not leak one frame layers into the next', () => {
     const parts = pool(1, 0);
-    const specs: EffectSpec[] = [{ piece: HALF, target: { kind: 'run', by: 'index', amount: 1 } }];
+    const specs: EffectSpec[] = [{ patch: HALF, target: { kind: 'run', by: 'index', amount: 1 } }];
     const frame = new EffectFrame(planEffects(specs, parts));
-    frame.resolve(parts, 0, NO_CTX);
-    const second = frame.resolve(parts, 0, NO_CTX);
+    frame.resolve(parts, 0, HOST);
+    const second = frame.resolve(parts, 0, HOST);
     expect(second.get(0)?.gain).toBeCloseTo(0.5);
   });
 
-  it('holds a piece with no duration at its first phase rather than dividing by zero', () => {
+  it('holds a patch with no period at its first phase rather than dividing by zero', () => {
     const parts = pool(1, 0);
-    const instant: EffectPiece = { duration: 0, at: (t) => ({ scale: 1 + t }) };
+    const instant: EffectPatch = { period: 0, at: (phase) => ({ scale: 1 + phase }) };
     const specs: EffectSpec[] = [
-      { piece: instant, target: { kind: 'run', by: 'index', amount: 1 } },
+      { patch: instant, target: { kind: 'run', by: 'index', amount: 1 } },
     ];
-    const out = new EffectFrame(planEffects(specs, parts)).resolve(parts, 9999, NO_CTX);
+    const out = new EffectFrame(planEffects(specs, parts)).resolve(parts, 9999, HOST);
     expect(out.get(0)?.scale).toBe(1);
+  });
+
+  it("asks only the two stops a hinge's signal sits between", () => {
+    const parts = pool(4, 0);
+    let asked = 0;
+    const stop = (k: number): EffectPatch => ({
+      period: 1000,
+      at: () => {
+        asked++;
+        return { gain: k };
+      },
+    });
+    const specs: EffectSpec[] = [
+      { patch: hinge(() => 0.3, stop), target: { kind: 'run', by: 'index', amount: 1 } },
+    ];
+    new EffectFrame(planEffects(specs, parts)).resolve(parts, 100, HOST);
+    expect(asked).toBe(parts.length * 2);
   });
 });

@@ -1,11 +1,11 @@
 import { hash01 } from '../motion/types.js';
 import { hueColor } from './luminance.js';
-import type { EffectName, EffectPiece } from './types.js';
+import type { EffectName, EffectPatch } from './types.js';
 
 export interface FlickerSpec {
   /** Milliseconds for one pass. With a `spell` and a `calm` the pass becomes the nearest whole
    * number of cycles of the two, which can be longer than this or shorter. */
-  duration?: number;
+  period?: number;
   /** How dark the stutter goes, as the floor of `gain`. 0 is fully out. */
   depth?: number;
   /** Share of the pass spent stuttering. The rest is held lit. */
@@ -25,8 +25,8 @@ export interface FlickerSpec {
  * pass would stretch each one into a multi-second strobe. */
 const STEP_MS = 1400 / 24;
 
-function stepsFor(duration: number): number {
-  return Math.max(1, Math.round(duration / STEP_MS));
+function stepsFor(period: number): number {
+  return Math.max(1, Math.round(period / STEP_MS));
 }
 
 /** How far above `depth` a drop is allowed to sit, so a stutter lands near dark, not half-lit. */
@@ -41,10 +41,10 @@ function finiteMs(ms: number | undefined): number {
 }
 
 /** A tube on its way out: mostly lit, with short irregular stutters. */
-export function flicker(spec: FlickerSpec = {}): EffectPiece {
+export function flicker(spec: FlickerSpec = {}): EffectPatch {
   const depth = clamp01(spec.depth ?? 0);
   const unrest = clamp01(spec.unrest ?? 0.18);
-  const wanted = spec.duration ?? 1400;
+  const wanted = spec.period ?? 1400;
   // A non-finite scale reads as absent: an infinite one would otherwise set an infinite pass, and
   // `spell` would take every gain to NaN with it.
   const calm = finiteMs(spec.calm);
@@ -57,16 +57,16 @@ export function flicker(spec: FlickerSpec = {}): EffectPiece {
   const gated = spellSteps > 0 && calmSteps > 0;
   const cycleSteps = spellSteps + calmSteps;
   const cycles = gated ? Math.max(1, Math.round(wanted / (cycleSteps * STEP_MS))) : 1;
-  const duration = gated ? cycles * cycleSteps * STEP_MS : wanted;
-  const steps = stepsFor(duration);
+  const period = gated ? cycles * cycleSteps * STEP_MS : wanted;
+  const steps = stepsFor(period);
   const spellShare = spellSteps / cycleSteps;
-  const block = Math.max(1, Math.round(finiteMs(spec.drop) / (duration / steps)));
+  const block = Math.max(1, Math.round(finiteMs(spec.drop) / (period / steps)));
 
   return {
-    duration,
-    at(t, part) {
-      if (gated && (t * cycles) % 1 >= spellShare) return { gain: 1 };
-      const beat = Math.floor((Math.floor(t * steps) % steps) / block);
+    period,
+    at(phase, part) {
+      if (gated && (phase * cycles) % 1 >= spellShare) return { gain: 1 };
+      const beat = Math.floor((Math.floor(phase * steps) % steps) / block);
       if (hash01(beat + part.index * 977.3) > unrest) return { gain: 1 };
       const bite = hash01(beat * 3.7 + part.index * 131.1);
       return { gain: depth + (1 - depth) * bite * BITE };
@@ -75,7 +75,7 @@ export function flicker(spec: FlickerSpec = {}): EffectPiece {
 }
 
 export interface HueSpec {
-  duration?: number;
+  period?: number;
   /** Where the sweep starts, in turns. */
   from?: number;
   /** How far it travels in one pass, in turns. 1 is the whole wheel, and the only value that meets
@@ -89,24 +89,24 @@ export interface HueSpec {
 }
 
 /** A sign that changes colour, at a luma the bloom threshold sees the same all the way round. */
-export function hue(spec: HueSpec = {}): EffectPiece {
-  const duration = spec.duration ?? 6000;
+export function hue(spec: HueSpec = {}): EffectPatch {
+  const period = spec.period ?? 6000;
   const from = spec.from ?? 0;
   const span = spec.span ?? 1;
   const spread = spec.spread ?? 0;
   const luminance = clamp01(spec.luminance ?? 0.5);
 
   return {
-    duration,
-    at(t, part) {
-      return { color: hueColor(from + t * span + part.at * spread, luminance) };
+    period,
+    at(phase, part) {
+      return { color: hueColor(from + phase * span + part.at * spread, luminance) };
     },
   };
 }
 
 export interface ChaseSpec {
   /** One trip of the ramp along the part, in ms. */
-  duration?: number;
+  period?: number;
   /** Ramp lengths travelled per trip. Negative runs the other way. */
   laps?: number;
   /** Ramp offset between consecutive parts, so the chase reads as a procession. */
@@ -117,19 +117,19 @@ export interface ChaseSpec {
  * Slides the colour ramp along the part. Inert on a look that declares no `gradient`: a shift of a
  * ramp that is not there changes nothing, and both shipped looks are flat.
  */
-export function chase(spec: ChaseSpec = {}): EffectPiece {
-  const duration = spec.duration ?? 2400;
+export function chase(spec: ChaseSpec = {}): EffectPatch {
+  const period = spec.period ?? 2400;
   const laps = spec.laps ?? 1;
   const spread = spec.spread ?? 0;
 
   return {
-    duration,
-    at(t, part) {
-      return { crawl: t * laps + part.at * spread };
+    period,
+    at(phase, part) {
+      return { crawl: phase * laps + part.at * spread };
     },
   };
 }
 
 // `satisfies` rather than an annotation: it holds every name to a factory usable with no spec,
-// which is all a name lookup can supply, without binding the next piece to `FlickerSpec`.
-export const EFFECTS = { flicker, hue, chase } satisfies Record<EffectName, () => EffectPiece>;
+// which is all a name lookup can supply, without binding the next patch to `FlickerSpec`.
+export const EFFECTS = { flicker, hue, chase } satisfies Record<EffectName, () => EffectPatch>;

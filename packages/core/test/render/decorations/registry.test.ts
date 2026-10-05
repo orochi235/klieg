@@ -1,7 +1,7 @@
 import type { Font, PathCommand } from 'opentype.js';
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import type { PartInfo, ResolvedOffset } from '../../../src/effects/types.js';
+import type { PartInfo, PartPose } from '../../../src/effects/types.js';
 import type { LetterInfo } from '../../../src/motion/types.js';
 import { WordCaches } from '../../../src/render/caches.js';
 import type {
@@ -379,7 +379,7 @@ function letterInfo(slot: number): LetterInfo {
 }
 
 /** A white lamp at full strength, which is what makes a lit part distinguishable from an unlit one. */
-function lamplight(): ResolvedOffset {
+function lamplight(): PartPose {
   return {
     gain: 1,
     dark: 0,

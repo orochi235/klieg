@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { EffectFrame, planEffects } from '../effects/frame.js';
-import type { EffectSpec, FrameCtx, PartInfo, PartKind, ResolvedOffset } from '../effects/types.js';
+import type { EffectSpec, Host, PartInfo, PartKind, PartPose } from '../effects/types.js';
 import { blankPose } from '../motion/compositor.js';
 import type { RegroupResult } from '../motion/sequence.js';
 import type { LetterInfo } from '../motion/types.js';
@@ -384,8 +384,8 @@ export class Word {
   }
 
   /** Layers every effect that reached a part, then writes each targeted part once. */
-  private applyEffects(elapsed: number, ctx: FrameCtx): void {
-    const resolved = this.effectFrame?.resolve(this.parts, elapsed, ctx);
+  private applyEffects(elapsed: number, host: Host, reduced: boolean): void {
+    const resolved = this.effectFrame?.resolve(this.parts, elapsed, host, reduced);
     if (!resolved) return;
     for (const [index, out] of resolved) this.writePart(index, out);
   }
@@ -395,7 +395,7 @@ export class Word {
    * the letter cell the pose drives, so the two compose without either having to know about the
    * other. A decoration's own parts take their colour write from its builder.
    */
-  private writePart(index: number, out: ResolvedOffset): void {
+  private writePart(index: number, out: PartPose): void {
     const mesh = this.partMeshes[index] as THREE.Mesh;
 
     mesh.position.set(...out.position);
@@ -622,7 +622,7 @@ export class Word {
     return true;
   }
 
-  /** Fresh each call: a caller-supplied piece receives this, and a reused object would alias. */
+  /** Fresh each call: a caller-supplied patch receives this, and a reused object would alias. */
   private letterInfo(i: number): LetterInfo {
     const frozen = this.frozenInfo[i];
     if (frozen) return { ...frozen, leaving: true };
@@ -750,7 +750,8 @@ export class Word {
   apply(
     source: { poseAt(elapsed: number, letter: LetterInfo, out?: Pose): Pose },
     elapsed: number,
-    ctx: FrameCtx,
+    host: Host,
+    reduced = false,
   ): void {
     if (this.disposed) return;
 
@@ -775,7 +776,7 @@ export class Word {
       this.builder?.frame(i, pose.opacity);
     }
 
-    if (this.effectFrame) this.applyEffects(elapsed, ctx);
+    if (this.effectFrame) this.applyEffects(elapsed, host, reduced);
   }
 
   dispose(): void {

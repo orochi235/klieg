@@ -2,7 +2,7 @@ import type { Font } from 'opentype.js';
 import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type Clock, ManualClock, type Tick } from '../src/clock.js';
-import type { FrameCtx, PartInfo } from '../src/effects/types.js';
+import type { Host, PartInfo, Setting } from '../src/effects/types.js';
 import {
   ACTIVE_NAMES,
   createKlieg,
@@ -14,14 +14,14 @@ import {
   LIGHTING_NAMES,
   LOOK_NAMES,
   MAX_BACKDROP_ROWS,
-  type PhaseEvent,
+  type MarkEvent,
   POLICY_NAMES,
   type TypePoint,
   wantsBloom,
 } from '../src/index.js';
 import type { Vec3 } from '../src/pose.js';
 import { BloomPath } from '../src/render/bloom.js';
-import { type EnvPiece, sweep, track } from '../src/render/lighting.js';
+import { type EnvPatch, sweep, track } from '../src/render/lighting.js';
 import { BASE_Z, Stage } from '../src/render/stage.js';
 import { Word } from '../src/render/word.js';
 import { DEFAULT_GLYPH_OPTIONS } from '../src/text/glyphs.js';
@@ -706,7 +706,7 @@ describe('createKlieg', () => {
     });
 
     it('plays the top-level active while the opening phase holds', async () => {
-      const lift = { duration: 1000, offset: () => ({ position: [0, 1, 0] as Vec3 }) };
+      const lift = { duration: 1000, at: () => ({ position: [0, 1, 0] as Vec3 }) };
 
       const bk = create();
       void bk.fire('AB', {
@@ -1043,15 +1043,15 @@ describe('driving an effect from the host', () => {
   });
 
   it('reports active when the enter has run its length, and exit when the hold is over', async () => {
-    const seen: PhaseEvent[] = [];
+    const seen: MarkEvent[] = [];
     const bk = create();
     const done = bk.fire('HI', {
-      enter: { duration: 100, offset: () => ({}) },
+      enter: { duration: 100, at: () => ({}) },
       active: 'none',
       exit: 'none',
       hold: 50,
       blendMs: 0,
-      onPhase: (e) => seen.push(e),
+      onMark: (e) => seen.push(e),
     });
     await flush();
 
@@ -1059,31 +1059,31 @@ describe('driving an effect from the host', () => {
     expect(seen).toEqual([]);
 
     clock.advance(60);
-    expect(seen).toEqual([{ phase: 'active' }]);
+    expect(seen).toEqual([{ mark: 'active' }]);
 
     clock.advance(100);
     await done;
-    expect(seen).toEqual([{ phase: 'active' }, { phase: 'exit' }]);
+    expect(seen).toEqual([{ mark: 'active' }, { mark: 'exit' }]);
   });
 
   it('reports exit only once a click hold is released, which no fire-time schedule can know', async () => {
-    const seen: PhaseEvent[] = [];
+    const seen: MarkEvent[] = [];
     const bk = create();
-    const done = bk.fire('HI', { ...HELD, onPhase: (e) => seen.push(e) });
+    const done = bk.fire('HI', { ...HELD, onMark: (e) => seen.push(e) });
     await flush();
 
     clock.advance(60_000);
-    expect(seen).toEqual([{ phase: 'active' }]);
+    expect(seen).toEqual([{ mark: 'active' }]);
 
     dispatch('pointerdown');
     clock.advance(16);
     await done;
 
-    expect(seen).toEqual([{ phase: 'active' }, { phase: 'exit' }]);
+    expect(seen).toEqual([{ mark: 'active' }, { mark: 'exit' }]);
   });
 
   it('reports every stage a long frame crosses, not just the last', async () => {
-    const seen: PhaseEvent[] = [];
+    const seen: MarkEvent[] = [];
     const bk = create();
     const done = bk.fire('ABCD', {
       enter: 'none',
@@ -1096,7 +1096,7 @@ describe('driving an effect from the host', () => {
         { keep: (l) => l.index < 2, exit: 'none', hold: 0, tween: { duration: 10 } },
         { keep: (l) => l.index < 1, exit: 'none', hold: 0, tween: { duration: 10 } },
       ],
-      onPhase: (e) => seen.push(e),
+      onMark: (e) => seen.push(e),
     });
     await flush();
 
@@ -1106,40 +1106,40 @@ describe('driving an effect from the host', () => {
 
     // Filtered because a single frame this long collapses the timed boundaries against the stage
     // ones; their relative order is not what this test is about.
-    expect(seen.filter((e) => e.phase === 'stage')).toEqual([
-      { phase: 'stage', index: 0 },
-      { phase: 'stage', index: 1 },
-      { phase: 'stage', index: 2 },
+    expect(seen.filter((e) => e.mark === 'stage')).toEqual([
+      { mark: 'stage', index: 0 },
+      { mark: 'stage', index: 1 },
+      { mark: 'stage', index: 2 },
     ]);
   });
 
-  it('reports both phases under reduced motion, which holds the pose without travelling', async () => {
+  it('reports both marks under reduced motion, which holds the pose without travelling', async () => {
     vi.stubGlobal('matchMedia', () => ({ matches: true }));
-    const seen: PhaseEvent[] = [];
+    const seen: MarkEvent[] = [];
     const bk = create();
     const done = bk.fire('HI', {
-      enter: { duration: 400, offset: () => ({}) },
+      enter: { duration: 400, at: () => ({}) },
       active: 'none',
-      exit: { duration: 300, offset: () => ({}) },
+      exit: { duration: 300, at: () => ({}) },
       hold: 100,
-      onPhase: (e) => seen.push(e),
+      onMark: (e) => seen.push(e),
     });
     await flush();
 
     clock.advance(16);
-    expect(seen).toEqual([{ phase: 'active' }]);
+    expect(seen).toEqual([{ mark: 'active' }]);
 
     clock.advance(100);
     await done;
-    expect(seen).toEqual([{ phase: 'active' }, { phase: 'exit' }]);
+    expect(seen).toEqual([{ mark: 'active' }, { mark: 'exit' }]);
   });
 
-  it('fires no phase event on an unsupported instance, which renders nothing', async () => {
+  it('fires no mark event on an unsupported instance, which renders nothing', async () => {
     stubWebgl(false);
-    const seen: PhaseEvent[] = [];
+    const seen: MarkEvent[] = [];
     const bk = create();
 
-    await bk.fire('HI', { onPhase: (e) => seen.push(e) });
+    await bk.fire('HI', { onMark: (e) => seen.push(e) });
 
     expect(seen).toEqual([]);
   });
@@ -1188,7 +1188,7 @@ describe('driving an effect from the host', () => {
     const done = bk.fire('HI', {
       enter: 'none',
       active: 'none',
-      exit: { duration: 500, offset: () => ({ opacity: 0 }) },
+      exit: { duration: 500, at: () => ({ opacity: 0 }) },
       hold: 5000,
       signal: ctrl.signal,
     });
@@ -1226,7 +1226,7 @@ describe('driving an effect from the host', () => {
     expect(peakWords).toBe(1);
   });
 
-  it('keeps rendering when onPhase throws, and hands the error to the microtask queue', async () => {
+  it('keeps rendering when onMark throws, and hands the error to the microtask queue', async () => {
     const queued: (() => void)[] = [];
     vi.stubGlobal('queueMicrotask', (fn: () => void) => queued.push(fn));
 
@@ -1236,7 +1236,7 @@ describe('driving an effect from the host', () => {
       active: 'none',
       exit: 'none',
       hold: 50,
-      onPhase: () => {
+      onMark: () => {
         throw new Error('host');
       },
     });
@@ -1511,7 +1511,7 @@ describe('caller-supplied effects', () => {
   /** A body-wide gain, so the emissive the frame lands on says which list was used. */
   const gain = (g: number) =>
     ({
-      piece: { duration: 1000, at: () => ({ gain: g }) },
+      patch: { period: 1000, at: () => ({ gain: g }) },
       target: { kind: 'body', by: 'index', amount: 1 },
     }) as const;
 
@@ -1685,11 +1685,11 @@ describe('framing', () => {
 });
 
 describe('caller-supplied motion', () => {
-  it('accepts a piece in place of a name', async () => {
+  it('accepts a patch in place of a name', async () => {
     const seen: number[] = [];
     const mine = {
       duration: 100,
-      offset: (t: number) => {
+      at: (t: number) => {
         seen.push(t);
         return { position: [0, 0, 0] as [number, number, number] };
       },
@@ -1705,9 +1705,9 @@ describe('caller-supplied motion', () => {
     expect(seen.length).toBeGreaterThan(0);
   });
 
-  it('layers several pieces in one slot', async () => {
-    const lift = { duration: 100, offset: () => ({ position: [0, 1, 0] as Vec3 }) };
-    const shift = { duration: 100, offset: () => ({ position: [2, 0, 0] as Vec3 }) };
+  it('layers several patches in one slot', async () => {
+    const lift = { duration: 100, at: () => ({ position: [0, 1, 0] as Vec3 }) };
+    const shift = { duration: 100, at: () => ({ position: [2, 0, 0] as Vec3 }) };
 
     const bk = create();
     // blendMs 0: at the default the enter is already crossfading at t=50 and carries <1 weight.
@@ -1731,8 +1731,8 @@ describe('caller-supplied motion', () => {
 describe('the lighting slot', () => {
   const envY = () => stage().scene.environmentRotation.y;
 
-  it('drives the environment from a caller-supplied piece', async () => {
-    const tip: EnvPiece = { duration: 0, env: () => ({ yaw: 0.4, pitch: 0.2 }) };
+  it('drives the environment from a caller-supplied patch', async () => {
+    const tip: EnvPatch = { period: 0, at: () => ({ yaw: 0.4, pitch: 0.2 }) };
 
     const bk = create();
     void bk.fire('HI', { ...LIT, lighting: tip });
@@ -1745,7 +1745,7 @@ describe('the lighting slot', () => {
   });
 
   it('turns the studio on the materials, which each carry their own copy of it', async () => {
-    const tip: EnvPiece = { duration: 0, env: () => ({ yaw: 0.4, pitch: 0.2 }) };
+    const tip: EnvPatch = { period: 0, at: () => ({ yaw: 0.4, pitch: 0.2 }) };
 
     const bk = create();
     void bk.fire('HI', { ...LIT, look: 'tubing', lighting: tip });
@@ -1762,8 +1762,8 @@ describe('the lighting slot', () => {
     bk.destroy();
   });
 
-  it('layers an array of names and pieces onto both axes at once', async () => {
-    const tip: EnvPiece = { duration: 0, env: () => ({ pitch: 0.25 }) };
+  it('layers an array of names and patches onto both axes at once', async () => {
+    const tip: EnvPatch = { period: 0, at: () => ({ pitch: 0.25 }) };
 
     const bk = create();
     void bk.fire('HI', { ...LIT, lighting: ['sweep', tip] });
@@ -1785,13 +1785,13 @@ describe('the lighting slot', () => {
     bk.destroy();
   });
 
-  it('hands a piece that holds still a finite t rather than dividing by its zero duration', async () => {
+  it('hands a patch that holds still a finite phase rather than dividing by its zero period', async () => {
     const seen: number[] = [];
-    const held: EnvPiece = {
-      duration: 0,
-      env: (t) => {
-        seen.push(t);
-        return { yaw: t };
+    const held: EnvPatch = {
+      period: 0,
+      at: (phase) => {
+        seen.push(phase);
+        return { yaw: phase };
       },
     };
 
@@ -1831,6 +1831,7 @@ describe('the lighting slot', () => {
     stubCanvas({ left: 0, top: 0, width: 100, height: 100 });
     dispatch('pointermove', { clientX: 900, clientY: -400 });
     clock.advance(16);
+    clock.advance(16);
 
     expect(envY()).toBeCloseTo(1, 6);
     expect(stage().scene.environmentRotation.x).toBeCloseTo(-1, 6);
@@ -1843,12 +1844,14 @@ describe('the lighting slot', () => {
     await flush();
     stubCanvas({ left: 0, top: 0, width: 100, height: 100 });
     dispatch('pointermove', { clientX: 100, clientY: 50 });
+    // The first frame is the run's rest; the follow starts closing on the second.
+    clock.advance(16);
     clock.advance(16);
     const afterOne = envY();
     for (let i = 0; i < 40; i++) clock.advance(16);
 
     expect(afterOne).toBeGreaterThan(0);
-    // Rebuilding the slot per frame would hand back a fresh piece easing from rest every time, so
+    // Rebuilding the slot per frame would hand back a fresh patch easing from rest every time, so
     // the yaw would sit at exactly what one frame reached and never move again.
     expect(envY()).toBeGreaterThan(afterOne * 5);
     bk.destroy();
@@ -1915,22 +1918,26 @@ describe('the lighting slot', () => {
   });
 });
 
-describe('the pointer in the frame context', () => {
+describe('the pointer in the setting', () => {
   const BOX = { left: 0, top: 0, width: 100, height: 100 };
 
-  /** A body-wide effect piece is the only thing handed the ctx the render loop builds. */
+  /** What one frame's setting carried, copied out: a setting is valid only during its call. */
+  type Seen = Host & { dt: number };
+
+  /** A body-wide effect patch is the only thing handed the setting the render loop builds. */
   function capture() {
-    const frames: FrameCtx[] = [];
+    const frames: Seen[] = [];
     const parts: PartInfo[] = [];
     return {
       frames,
       parts,
       spec: {
-        piece: {
-          duration: 1000,
-          at: (_t: number, part: PartInfo, ctx: FrameCtx) => {
+        patch: {
+          period: 1000,
+          at: (_phase: number, part: PartInfo, setting: Setting) => {
             parts.push(part);
-            frames.push(ctx);
+            const { pointer, pointerInWord, now } = setting.host;
+            frames.push({ pointer, pointerInWord, now, dt: setting.dt });
             return {};
           },
         },
@@ -2079,7 +2086,7 @@ describe('the pointer in the frame context', () => {
     // A forced layout read every frame, for a box nothing is going to be measured against.
     expect(reads).toBe(0);
 
-    // Still nothing: this sign runs no piece that asks where the cursor is.
+    // Still nothing: this sign runs no patch that asks where the cursor is.
     dispatch('pointermove', { clientX: 40, clientY: 40 });
     clock.advance(16);
 
@@ -2087,7 +2094,7 @@ describe('the pointer in the frame context', () => {
     bk.destroy();
   });
 
-  it('measures the canvas once a frame for a sign whose piece does read the pointer', async () => {
+  it('measures the canvas once a frame for a sign whose patch does read the pointer', async () => {
     let reads = 0;
     const bk = create();
     void bk.fire('HI', { ...LIT, lighting: track({ followMs: 0 }) });
@@ -2103,7 +2110,7 @@ describe('the pointer in the frame context', () => {
 
     expect(reads).toBe(1);
 
-    // Once per frame however many pieces ask, and never cached across frames: the box can move
+    // Once per frame however many patches ask, and never cached across frames: the box can move
     // without a resize or a scroll.
     clock.advance(16);
 
@@ -2136,9 +2143,9 @@ describe('the pointer in the frame context', () => {
   });
 });
 
-describe('mixed name and piece slots', () => {
-  it('resolves a built-in name sitting alongside a caller piece', async () => {
-    const lift = { duration: 1000, offset: () => ({ position: [0, 1, 0] as Vec3 }) };
+describe('mixed name and patch slots', () => {
+  it('resolves a built-in name sitting alongside a caller patch', async () => {
+    const lift = { duration: 1000, at: () => ({ position: [0, 1, 0] as Vec3 }) };
 
     const bk = create();
     void bk.fire('HI', {
@@ -2273,7 +2280,7 @@ describe('selectable', () => {
     bk.destroy();
   });
 
-  it('warns and names the piece when the active motion moves the letters', async () => {
+  it('warns and names the patch when the active motion moves the letters', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const bk = create();
     void bk.fire('AB', { selectable: 'layer', active: 'float' });

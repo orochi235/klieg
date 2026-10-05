@@ -1,4 +1,4 @@
-import { type HueSpec, hue } from '@core/effects/pieces.js';
+import { type HueSpec, hue } from '@core/effects/patches.js';
 import type { EffectSpec } from '@core/effects/types.js';
 import { type LookSpec, specOf } from '@core/render/looks.js';
 import type { TubeSpec } from '@core/render/tube/index.js';
@@ -29,7 +29,7 @@ export function sweepIsVisible(tube: TubeSpec): boolean {
 export function effectsFor(variant: Variant): EffectSpec[] {
   return [
     {
-      piece: hue(variant.sweep),
+      patch: hue(variant.sweep),
       target:
         variant.amount === undefined
           ? { kind: 'run', by: 'index' }
@@ -61,8 +61,8 @@ export function lookFor(variant: Variant): LookSpec {
 export const VARIANTS: Variant[] = [
   // How the sweep moves.
   { id: 'whole-wheel', label: 'whole wheel, 6s' },
-  { id: 'fast', label: 'whole wheel, 2s', sweep: { duration: 2000 } },
-  { id: 'slow', label: 'whole wheel, 18s', sweep: { duration: 18000 } },
+  { id: 'fast', label: 'whole wheel, 2s', sweep: { period: 2000 } },
+  { id: 'slow', label: 'whole wheel, 18s', sweep: { period: 18000 } },
   { id: 'narrow', label: 'quarter turn', sweep: { span: 0.25 } },
   { id: 'warm-only', label: 'reds through yellows', sweep: { from: 0.95, span: 0.2 } },
   { id: 'cool-only', label: 'greens through blues', sweep: { from: 0.35, span: 0.3 } },

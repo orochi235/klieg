@@ -44,10 +44,13 @@ describe('orbit', () => {
   // orbit's centre, where the render found the nearest real one — a part at the centre itself is
   // inside every radius below 0.5 and the assertion says nothing.
   it('stays inside a default lamp all the way around its pass', () => {
-    const piece = lamp({ source: orbit() });
+    const patch = lamp({ source: orbit() });
     for (let i = 0; i < 16; i++) {
-      const t = i / 16;
-      expect(piece.at(t, partAt(0.17), NO_CTX).light?.amount ?? 0, `t=${t}`).toBeGreaterThan(0);
+      const phase = i / 16;
+      expect(
+        patch.at(phase, partAt(0.17), NO_CTX).light?.amount ?? 0,
+        `phase=${phase}`,
+      ).toBeGreaterThan(0);
     }
   });
 
@@ -113,80 +116,80 @@ describe('lamp', () => {
   // The bug this replaces: every part of a single line shares one origin y, so a lamp measuring
   // to origins could not light the top of a word at all -- 153% of its reach away, at any x.
   it('measures to the part ink rather than to the baseline origin', () => {
-    const piece = lamp({ source: fixed(0, 0.5), radius: 0.4, strength: 2 });
+    const patch = lamp({ source: fixed(0, 0.5), radius: 0.4, strength: 2 });
 
-    expect(piece.at(0, standingAt(0, 1), NO_CTX).light?.amount).toBeCloseTo(2);
+    expect(patch.at(0, standingAt(0, 1), NO_CTX).light?.amount).toBeCloseTo(2);
   });
 
   it('still measures from the origin for a part that draws nothing', () => {
-    const piece = lamp({ source: fixed(3, 0), radius: 0.5, strength: 2 });
+    const patch = lamp({ source: fixed(3, 0), radius: 0.5, strength: 2 });
 
-    expect(piece.at(0, partAt(3), NO_CTX).light?.amount).toBeCloseTo(2);
+    expect(patch.at(0, partAt(3), NO_CTX).light?.amount).toBeCloseTo(2);
   });
 
   it('is brightest at its centre and dark past its radius', () => {
-    const piece = lamp({ source: fixed(0, 0), radius: 1, strength: 2 });
-    expect(piece.at(0, partAt(0), NO_CTX).light?.amount).toBeCloseTo(2);
-    expect(piece.at(0, partAt(1), NO_CTX).light?.amount ?? 0).toBeCloseTo(0);
-    expect(piece.at(0, partAt(5), NO_CTX).light?.amount ?? 0).toBeCloseTo(0);
+    const patch = lamp({ source: fixed(0, 0), radius: 1, strength: 2 });
+    expect(patch.at(0, partAt(0), NO_CTX).light?.amount).toBeCloseTo(2);
+    expect(patch.at(0, partAt(1), NO_CTX).light?.amount ?? 0).toBeCloseTo(0);
+    expect(patch.at(0, partAt(5), NO_CTX).light?.amount ?? 0).toBeCloseTo(0);
   });
 
   it('falls off between the two', () => {
-    const piece = lamp({ source: fixed(0, 0), radius: 1, strength: 1 });
-    const near = piece.at(0, partAt(0.25), NO_CTX).light?.amount as number;
-    const far = piece.at(0, partAt(0.75), NO_CTX).light?.amount as number;
+    const patch = lamp({ source: fixed(0, 0), radius: 1, strength: 1 });
+    const near = patch.at(0, partAt(0.25), NO_CTX).light?.amount as number;
+    const far = patch.at(0, partAt(0.75), NO_CTX).light?.amount as number;
     expect(near).toBeGreaterThan(far);
     expect(far).toBeGreaterThan(0);
   });
 
   it('measures distance in both axes', () => {
-    const piece = lamp({ source: fixed(0, 0), radius: 1, strength: 1 });
-    expect(piece.at(0, partAt(0, 0.5), NO_CTX).light?.amount).toBeCloseTo(
-      piece.at(0, partAt(0.5, 0), NO_CTX).light?.amount as number,
+    const patch = lamp({ source: fixed(0, 0), radius: 1, strength: 1 });
+    expect(patch.at(0, partAt(0, 0.5), NO_CTX).light?.amount).toBeCloseTo(
+      patch.at(0, partAt(0.5, 0), NO_CTX).light?.amount as number,
     );
   });
 
   it('moves with a time-driven source rather than reading it at a fixed phase', () => {
-    const piece = lamp({ source: orbit({ radius: 3 }), radius: 1 });
-    expect(piece.at(0, partAt(3), NO_CTX)).not.toEqual({});
-    expect(piece.at(0.5, partAt(3), NO_CTX)).toEqual({});
+    const patch = lamp({ source: orbit({ radius: 3 }), radius: 1 });
+    expect(patch.at(0, partAt(3), NO_CTX)).not.toEqual({});
+    expect(patch.at(0.5, partAt(3), NO_CTX)).toEqual({});
   });
 
   // A page nobody has touched must not light a letter as though the cursor were parked on it.
   it('contributes nothing when its source has nowhere to be', () => {
-    const piece = lamp({ source: fromPointer(), radius: 1, strength: 2 });
-    expect(piece.at(0, partAt(0), NO_CTX)).toEqual({});
+    const patch = lamp({ source: fromPointer(), radius: 1, strength: 2 });
+    expect(patch.at(0, partAt(0), NO_CTX)).toEqual({});
   });
 
   it('defaults to the cursor', () => {
-    const piece = lamp();
-    expect(piece.duration).toBe(4000);
-    expect(piece.at(0, partAt(1.2, 0.3), NO_CTX)).toEqual({});
-    expect(piece.at(0, partAt(1.2, 0.3), AT)).not.toEqual({});
+    const patch = lamp();
+    expect(patch.period).toBe(4000);
+    expect(patch.at(0, partAt(1.2, 0.3), NO_CTX)).toEqual({});
+    expect(patch.at(0, partAt(1.2, 0.3), AT)).not.toEqual({});
   });
 
   it('writes only the light channel, leaving every other channel to another layer', () => {
-    const piece = lamp({ source: fixed(0, 0) });
-    expect(Object.keys(piece.at(0, partAt(0), NO_CTX))).toEqual(['light']);
+    const patch = lamp({ source: fixed(0, 0) });
+    expect(Object.keys(patch.at(0, partAt(0), NO_CTX))).toEqual(['light']);
   });
 
   it('carries its own colour, at the default strength and radius', () => {
-    const piece = lamp({ source: fixed(0, 0), color: 0xff8800 });
-    const centre = piece.at(0, partAt(0), NO_CTX);
+    const patch = lamp({ source: fixed(0, 0), color: 0xff8800 });
+    const centre = patch.at(0, partAt(0), NO_CTX);
     expect(centre.light?.color).toBe(0xff8800);
     expect(centre.light?.amount).toBeCloseTo(2);
-    expect(piece.at(0, partAt(0.5), NO_CTX)).toEqual({});
+    expect(patch.at(0, partAt(0.5), NO_CTX)).toEqual({});
   });
 
   // A linear ramp passes centre/edge/near>far too; this pins the smoothstep shape specifically.
   it('follows a smoothstep curve rather than a linear ramp', () => {
-    const piece = lamp({ source: fixed(0, 0), radius: 1, strength: 1 });
-    expect(piece.at(0, partAt(0.25), NO_CTX).light?.amount).toBeCloseTo(0.84375);
+    const patch = lamp({ source: fixed(0, 0), radius: 1, strength: 1 });
+    expect(patch.at(0, partAt(0.25), NO_CTX).light?.amount).toBeCloseTo(0.84375);
   });
 
   it('contributes nothing when the radius is zero or negative', () => {
-    const piece = lamp({ source: fixed(0, 0), radius: 0, strength: 2 });
-    expect(piece.at(0, partAt(0), NO_CTX)).toEqual({});
+    const patch = lamp({ source: fixed(0, 0), radius: 0, strength: 2 });
+    expect(patch.at(0, partAt(0), NO_CTX)).toEqual({});
   });
 
   it('treats a non-finite radius or source position as no light, not full light', () => {

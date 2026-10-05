@@ -1,4 +1,4 @@
-import type { FrameCtx } from '@core/effects/types.js';
+import type { Host } from '@core/effects/types.js';
 import { Timeline } from '@core/motion/compositor.js';
 import { NONE } from '@core/motion/types.js';
 import type { LookSpec } from '@core/render/looks.js';
@@ -13,7 +13,7 @@ import type { PanelMeta } from '../panels.js';
  * which renders tubing's 0.08 backing as a solid wall over its own tube.
  */
 const REST = new Timeline({ enter: NONE, active: NONE, exit: NONE, hold: 0, blendMs: 0 });
-const NO_CTX: FrameCtx = { pointer: null, pointerInWord: null, dt: 0, now: 0 };
+const NO_HOST: Host = { pointer: null, pointerInWord: null, now: 0 };
 
 export interface Cell {
   /** What this cell was built from; a change to it is what makes the cell stale. */
@@ -72,7 +72,7 @@ export function buildCell(input: CellInput): Cell {
     undefined,
     input.tubeMaterial ? { tubeMaterial: input.tubeMaterial } : undefined,
   );
-  word.apply(REST, 0, NO_CTX);
+  word.apply(REST, 0, NO_HOST);
   pivot.add(word.group);
 
   return {

@@ -1,8 +1,13 @@
 import { bench, describe } from 'vitest';
 import { EffectFrame, planEffects } from '../../src/effects/frame.js';
-import type { EffectPiece, PartInfo } from '../../src/effects/types.js';
+import { hinge } from '../../src/effects/hinge.js';
+import { kicks } from '../../src/effects/kick.js';
+import { flicker } from '../../src/effects/patches.js';
+import { power } from '../../src/effects/power.js';
+import { dwell, near } from '../../src/effects/signal.js';
+import type { EffectPatch, PartInfo } from '../../src/effects/types.js';
 import { blankPose, Timeline } from '../../src/motion/compositor.js';
-import type { LetterInfo, MotionPiece } from '../../src/motion/types.js';
+import type { LetterInfo, MotionPatch } from '../../src/motion/types.js';
 
 /**
  * What one frame of the mix costs, so the schema's open question about `at` writing into a buffer
@@ -14,13 +19,13 @@ const LETTERS = 12;
 const PARTS = 60;
 const EFFECTS = 3;
 
-const drift: MotionPiece = {
+const drift: MotionPatch = {
   duration: 900,
-  offset: (t, letter) => ({
-    position: [Math.sin(t * 6.28 + letter.index), t * 0.1, 0],
-    rotation: [0, t * 0.2, 0],
-    scale: 1 + t * 0.05,
-    opacity: 1 - t * 0.1,
+  at: (phase, letter) => ({
+    position: [Math.sin(phase * 6.28 + letter.index), phase * 0.1, 0],
+    rotation: [0, phase * 0.2, 0],
+    scale: 1 + phase * 0.05,
+    opacity: 1 - phase * 0.1,
   }),
 };
 
@@ -45,13 +50,13 @@ const letters: LetterInfo[] = Array.from({ length: LETTERS }, (_, index) => ({
 }));
 const scratch = letters.map(() => blankPose());
 
-const flick: EffectPiece = {
-  duration: 700,
-  at: (t, part) => ({
-    gain: 0.5 + 0.5 * Math.sin(t * 6.28 + part.index),
-    dark: t * 0.2,
-    crawl: t * 0.1,
-    light: { color: 0xffcc66, amount: t },
+const flick: EffectPatch = {
+  period: 700,
+  at: (phase, part) => ({
+    gain: 0.5 + 0.5 * Math.sin(phase * 6.28 + part.index),
+    dark: phase * 0.2,
+    crawl: phase * 0.1,
+    light: { color: 0xffcc66, amount: phase },
   }),
 };
 
@@ -70,14 +75,13 @@ const parts: PartInfo[] = Array.from({ length: PARTS }, (_, index) => ({
 const frame = new EffectFrame(
   planEffects(
     Array.from({ length: EFFECTS }, () => ({
-      piece: flick,
+      patch: flick,
       target: { kind: 'run' as const, by: 'index' as const, amount: 1 },
       stagger: 0.4,
     })),
     parts,
   ),
 );
-const ctx = { pointer: null, pointerInWord: null, dt: 16, now: 0 };
 
 let now = 0;
 
@@ -91,6 +95,39 @@ describe('one frame of the mix', () => {
 
   bench(`${PARTS} parts resolved under ${EFFECTS} effects`, () => {
     now += 16;
-    frame.resolve(parts, now, { ...ctx, now });
+    frame.resolve(parts, now, { pointer: null, pointerInWord: null, now });
   });
+});
+
+/**
+ * The signal-driven patches, each as its own effect over the same parts, so a change to how a
+ * signal keeps state or how `hinge` weighs a patch shows as its own row.
+ */
+const near1 = near({ radius: 3 });
+const kicked = kicks({ radius: 3 });
+const mains = power({ trip: { on: near1, at: 2 } });
+const signalFrame = (patch: EffectPatch) =>
+  new EffectFrame(
+    planEffects(
+      [{ patch, target: { kind: 'run' as const, by: 'index' as const, amount: 1 }, stagger: 0.4 }],
+      parts,
+    ),
+  );
+const signalFrames = {
+  'hinge(dwell(near)) blend': signalFrame(hinge(dwell({ of: near1 }), flick)),
+  'hinge(near) stops': signalFrame(hinge(near1, (k) => flicker({ unrest: k }))),
+  'hinge(kicks) blend': signalFrame(hinge(kicked, flick)),
+  'power with a trip': signalFrame(mains.patch),
+};
+
+describe('one frame of a signal-driven effect', () => {
+  for (const [name, f] of Object.entries(signalFrames)) {
+    bench(`${PARTS} parts under ${name}`, () => {
+      now += 16;
+      if (now % 320 === 0) kicked.kick({ x: (now / 16) % PARTS, y: 0 }, 1);
+      const pointerInWord = { x: ((now / 16) % (PARTS * 10)) / 10, y: 0 };
+      const host = { pointer: { x: 0, y: 0 }, pointerInWord, now };
+      f.resolve(parts, now, host);
+    });
+  }
 });

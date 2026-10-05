@@ -1,11 +1,11 @@
 import { lamp } from '@core/effects/lamp.js';
-import { chase, flicker, hue } from '@core/effects/pieces.js';
+import { chase, flicker, hue } from '@core/effects/patches.js';
 import { fixed, orbit } from '@core/effects/source.js';
-import type { EffectPiece } from '@core/effects/types.js';
+import type { EffectPatch } from '@core/effects/types.js';
 import { type Look, specOf } from '@core/render/looks.js';
 import { compileDraft } from './draft.js';
 
-export type PieceKind = 'flicker' | 'hue' | 'chase' | 'lamp' | 'draft';
+export type PatchKind = 'flicker' | 'hue' | 'chase' | 'lamp' | 'draft';
 
 /** Which `LightSource` a lamp walks. `fromPointer`, the shipped default, needs a placed word the
  * lab cannot reach; see the design. */
@@ -21,10 +21,10 @@ export interface ParamSpec {
   hint: string;
 }
 
-export const PARAMS: Record<Exclude<PieceKind, 'draft'>, ParamSpec[]> = {
+export const PARAMS: Record<Exclude<PatchKind, 'draft'>, ParamSpec[]> = {
   flicker: [
     {
-      key: 'duration',
+      key: 'period',
       min: 200,
       max: 8000,
       step: 100,
@@ -66,7 +66,7 @@ export const PARAMS: Record<Exclude<PieceKind, 'draft'>, ParamSpec[]> = {
   ],
   hue: [
     {
-      key: 'duration',
+      key: 'period',
       min: 500,
       max: 20000,
       step: 100,
@@ -108,7 +108,7 @@ export const PARAMS: Record<Exclude<PieceKind, 'draft'>, ParamSpec[]> = {
   ],
   chase: [
     {
-      key: 'duration',
+      key: 'period',
       min: 200,
       max: 12000,
       step: 100,
@@ -134,7 +134,7 @@ export const PARAMS: Record<Exclude<PieceKind, 'draft'>, ParamSpec[]> = {
   ],
   lamp: [
     {
-      key: 'duration',
+      key: 'period',
       min: 200,
       max: 20000,
       step: 100,
@@ -191,7 +191,7 @@ export function hasGradient(look: Look): boolean {
 }
 
 /** Defaults for a kind, as a plain params object. */
-export function defaultParams(kind: PieceKind): Record<string, number> {
+export function defaultParams(kind: PatchKind): Record<string, number> {
   if (kind === 'draft') return {};
   return Object.fromEntries(PARAMS[kind].map((p) => [p.key, p.value]));
 }
@@ -210,11 +210,11 @@ function num(params: Record<string, number>, key: string, fallback: number): num
 }
 
 /** Null when a draft's source has not compiled; every built-in always builds. */
-export function buildPiece(
-  kind: PieceKind,
+export function buildPatch(
+  kind: PatchKind,
   params: Record<string, number>,
   opts: BuildOptions = {},
-): EffectPiece | null {
+): EffectPatch | null {
   if (kind === 'draft') return opts.source ? compileDraft(opts.source) : null;
   if (kind === 'flicker') return flicker(params);
   if (kind === 'hue') return hue(params);
@@ -227,7 +227,7 @@ export function buildPiece(
       opts.lampSource === 'orbit'
         ? orbit({ radius: num(params, 'sweep', 0.3), x, y })
         : fixed(x, y),
-    duration: num(params, 'duration', 4000),
+    period: num(params, 'period', 4000),
     radius: num(params, 'radius', 0.5),
     strength: num(params, 'strength', 2),
   });

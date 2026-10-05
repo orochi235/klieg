@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_COMPOSITION,
   type EffectLayer,
-  layerPiece,
+  layerPatch,
 } from '../../dev/composition-lab/src/composition.js';
 import { emit } from '../../dev/composition-lab/src/emit.js';
-import { EFFECTS } from '../../src/effects/pieces.js';
+import { EFFECTS } from '../../src/effects/patches.js';
 import { roving } from '../../src/effects/roving.js';
-import type { EffectSpec } from '../../src/effects/types.js';
+import type { EffectPatch, EffectSpec, PartInfo } from '../../src/effects/types.js';
+import { NO_CTX } from '../effects/ctx.js';
 
 /**
  * Runs an emitted snippet against the real `EFFECTS` and `roving`, with a stand-in `klieg`. A
@@ -27,7 +28,7 @@ function run(source: string): { text: string; options: { effects?: EffectSpec[] 
 }
 
 describe('the emitted call, run', () => {
-  it('runs, and builds the piece the composition described', () => {
+  it('runs, and builds the patch the composition described', () => {
     const out = run(
       emit({
         ...DEFAULT_COMPOSITION,
@@ -37,7 +38,7 @@ describe('the emitted call, run', () => {
             id: 'a',
             kind: 'flicker',
             enabled: true,
-            params: { duration: 1400, unrest: 0.4 },
+            params: { period: 1400, unrest: 0.4 },
             target: 'run',
             amount: 1,
             seed: 2,
@@ -49,7 +50,7 @@ describe('the emitted call, run', () => {
     const spec = out.options.effects?.[0];
     expect(spec).toBeDefined();
     expect(spec?.seed).toBe(2);
-    expect((spec as EffectSpec).piece).toHaveProperty('duration', 1400);
+    expect((spec as EffectSpec).patch).toHaveProperty('period', 1400);
   });
 
   it('runs when wrapped, and takes the wrapper pass', () => {
@@ -61,7 +62,7 @@ describe('the emitted call, run', () => {
             id: 'a',
             kind: 'flicker',
             enabled: true,
-            params: { duration: 1400 },
+            params: { period: 1400 },
             target: 'run',
             amount: 1,
             seed: 0,
@@ -70,9 +71,9 @@ describe('the emitted call, run', () => {
         ],
       }),
     );
-    const piece = out.options.effects?.[0]?.piece;
-    expect(piece).toBeDefined();
-    expect((piece as { duration: number }).duration).toBeGreaterThan(100000);
+    const patch = out.options.effects?.[0]?.patch;
+    expect(patch).toBeDefined();
+    expect((patch as { period: number }).period).toBeGreaterThan(100000);
   });
 
   it('runs with no layers at all', () => {
@@ -87,9 +88,9 @@ describe('emit', () => {
     expect(out).toContain('hold: 4000');
   });
 
-  // klieg exports `roving` by name but reaches the built-in pieces only through `EFFECTS`, so a
+  // klieg exports `roving` by name but reaches the built-in patches only through `EFFECTS`, so a
   // bare `flicker(...)` is not something the person pasting this can compile.
-  it('reaches a built-in piece the way the package actually exports it', () => {
+  it('reaches a built-in patch the way the package actually exports it', () => {
     const out = emit({
       ...DEFAULT_COMPOSITION,
       effects: [
@@ -214,12 +215,32 @@ describe('emit for the round-two shapes', () => {
           ...layer,
           kind: 'lamp' as const,
           lampSource: 'fixed' as const,
-          params: { duration: 4000, radius: 0.5, strength: 2, x: 0.4, y: 0.35, sweep: 0.3 },
+          params: { period: 4000, radius: 0.5, strength: 2, x: 0.4, y: 0.35, sweep: 0.3 },
         },
       ],
     });
     expect(out).toContain('lamp({ source: fixed(0.4, 0.35)');
+    expect(out).toContain('period: 4000');
     expect(out).toContain("import { fixed, lamp } from 'klieg';");
+  });
+
+  it('runs a draft layer, calling the pane factory for the patch it returns', () => {
+    const out = run(
+      emit({
+        ...base,
+        effects: [
+          {
+            ...layer,
+            kind: 'draft' as const,
+            params: {},
+            source: 'return { period: 1400, at: (phase) => ({ gain: phase }) };',
+          },
+        ],
+      }),
+    );
+    const patch = out.options.effects?.[0]?.patch as EffectPatch;
+    expect(patch.period).toBe(1400);
+    expect(patch.at(0.25, {} as PartInfo, NO_CTX)).toEqual({ gain: 0.25 });
   });
 
   it('prints an orbiting lamp against its sweep rather than its reach', () => {
@@ -230,37 +251,37 @@ describe('emit for the round-two shapes', () => {
           ...layer,
           kind: 'lamp' as const,
           lampSource: 'orbit' as const,
-          params: { duration: 4000, radius: 0.5, strength: 2, x: 0, y: 0, sweep: 0.8 },
+          params: { period: 4000, radius: 0.5, strength: 2, x: 0, y: 0, sweep: 0.8 },
         },
       ],
     });
     expect(out).toContain('orbit({ radius: 0.8, x: 0, y: 0 })');
   });
 
-  it('drops a stale roving wrapper on a lamp the same way in emit and layerPiece', () => {
+  it('drops a stale roving wrapper on a lamp the same way in emit and layerPatch', () => {
     const lampWithStaleRoving: EffectLayer = {
       ...layer,
       kind: 'lamp',
       lampSource: 'fixed',
-      params: { duration: 4000, radius: 0.5, strength: 2, x: 0.4, y: 0.35 },
+      params: { period: 4000, radius: 0.5, strength: 2, x: 0.4, y: 0.35 },
       roving: { dwell: 3200, seed: 0, epochs: 96 },
     };
 
     const out = emit({ ...base, effects: [lampWithStaleRoving] });
     expect(out).not.toContain('roving');
 
-    const piece = layerPiece(lampWithStaleRoving);
-    expect(piece).toHaveProperty('duration', 4000);
+    const patch = layerPatch(lampWithStaleRoving);
+    expect(patch).toHaveProperty('period', 4000);
   });
 
-  it('wraps in intermittent outside roving, matching the order layerPiece applies them', () => {
+  it('wraps in intermittent outside roving, matching the order layerPatch applies them', () => {
     const out = emit({
       ...base,
       effects: [
         {
           ...layer,
           kind: 'flicker' as const,
-          params: { duration: 1400 },
+          params: { period: 1400 },
           roving: { dwell: 3200, seed: 0, epochs: 96 },
           intermittent: { spell: 4200, calm: 2000, bouts: 3 },
         },

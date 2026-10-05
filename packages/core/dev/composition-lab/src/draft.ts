@@ -1,13 +1,13 @@
-import type { EffectPiece, PartOffset } from '@core/effects/types.js';
+import type { EffectPatch, PartDelta } from '@core/effects/types.js';
 
 export interface DraftResult {
-  piece: EffectPiece | null;
+  patch: EffectPatch | null;
   error: string | null;
   /** Line in the pane the error sits on, where the engine named one. */
   line: number | null;
 }
 
-const REST: PartOffset = {};
+const REST: PartDelta = {};
 
 export interface DraftFaults {
   /** Calls to a draft's `at` that threw since the last clear. */
@@ -32,12 +32,12 @@ export function draftFaults(): DraftFaults {
  * code that does not work yet, and one throw reaches every part of the pool through `EffectFrame`:
  * unguarded, a draft that fails on its second part takes the frame with it.
  */
-export function guarded(piece: EffectPiece): EffectPiece {
+export function guarded(patch: EffectPatch): EffectPatch {
   return {
-    duration: piece.duration,
-    at(t, part, ctx) {
+    period: patch.period,
+    at(phase, part, setting) {
       try {
-        return piece.at(t, part, ctx);
+        return patch.at(phase, part, setting);
       } catch (err) {
         faults = {
           throws: faults.throws + 1,
@@ -60,13 +60,13 @@ export function lineOfError(text: string): number | null {
 }
 
 /**
- * Compiles a hand-authored piece. The source is a function body returning `{ duration, at }`, run
+ * Compiles a hand-authored patch. The source is a function body returning `{ period, at }`, run
  * through a blob URL so it is real JS with real closures rather than a `new Function` fragment.
  */
 const cache = new Map<string, DraftResult>();
 
-export function compileDraft(source: string): EffectPiece | null {
-  return cache.get(source)?.piece ?? null;
+export function compileDraft(source: string): EffectPatch | null {
+  return cache.get(source)?.patch ?? null;
 }
 
 export function draftError(source: string): string | null {
@@ -93,15 +93,15 @@ export async function loadDraft(source: string): Promise<DraftResult> {
   let result: DraftResult;
   try {
     const mod = (await import(/* @vite-ignore */ url)) as { default: () => unknown };
-    const piece = mod.default() as EffectPiece;
+    const patch = mod.default() as EffectPatch;
     result =
-      typeof piece?.at === 'function' && typeof piece?.duration === 'number'
-        ? { piece: guarded(piece), error: null, line: null }
-        : { piece: null, error: 'must return { duration, at }', line: null };
+      typeof patch?.at === 'function' && typeof patch?.period === 'number'
+        ? { patch: guarded(patch), error: null, line: null }
+        : { patch: null, error: 'must return { period, at }', line: null };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     const where = err instanceof Error ? `${err.stack ?? ''}\n${error}` : error;
-    result = { piece: null, error, line: lineOfError(where) };
+    result = { patch: null, error, line: lineOfError(where) };
   } finally {
     URL.revokeObjectURL(url);
   }

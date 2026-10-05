@@ -1,13 +1,13 @@
-import type { FrameCtx, PartInfo } from '@core/effects/types.js';
+import type { Host, PartInfo } from '@core/effects/types.js';
 import { useState } from 'react';
 import type { Composition } from './composition.js';
-import { PARAMS } from './pieces.js';
+import { PARAMS } from './patches.js';
 import { runSweep, type SweepResult } from './sweep.js';
 
 export interface SweepPanelProps {
   composition: Composition;
   parts: readonly PartInfo[];
-  ctx: FrameCtx;
+  host: Host;
 }
 
 const COLUMNS = [
@@ -21,7 +21,7 @@ const COLUMNS = [
 
 /** On demand rather than live: a run rebuilds the frame once per step, which a slider drag would
  * do on every pointermove. */
-export function Sweep({ composition, parts, ctx }: SweepPanelProps) {
+export function Sweep({ composition, parts, host }: SweepPanelProps) {
   // Enabled only: `toFireOptions` drops the rest, so a sweep of a disabled layer would tabulate
   // six unmoved columns as a finding about the param.
   const layers = composition.effects.filter((l) => l.enabled && l.kind !== 'draft');
@@ -35,7 +35,7 @@ export function Sweep({ composition, parts, ctx }: SweepPanelProps) {
   const layer = layers.find((l) => l.id === layerId) ?? layers[0];
   const params = layer && layer.kind !== 'draft' ? PARAMS[layer.kind] : [];
   // The selection falls back when a layer is deleted, so a held param name can belong to the
-  // previous kind — sweeping it would write a key the new piece never reads.
+  // previous kind — sweeping it would write a key the new patch never reads.
   const active = params.some((p) => p.key === param) ? param : '';
   const rows = result?.rows.map((row, i) => ({ key: `${i}:${row.value}`, row })) ?? [];
 
@@ -72,7 +72,8 @@ export function Sweep({ composition, parts, ctx }: SweepPanelProps) {
           type="button"
           disabled={!layer || !active}
           onClick={() =>
-            layer && setResult(runSweep(composition, layer.id, active, min, max, steps, parts, ctx))
+            layer &&
+            setResult(runSweep(composition, layer.id, active, min, max, steps, parts, host))
           }
         >
           run

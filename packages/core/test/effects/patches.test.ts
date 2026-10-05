@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { hinge } from '../../src/effects/hinge.js';
-import { chase, EFFECTS, flicker, hue } from '../../src/effects/pieces.js';
+import { chase, EFFECTS, flicker, hue } from '../../src/effects/patches.js';
 import { near } from '../../src/effects/signal.js';
 import { fixed } from '../../src/effects/source.js';
-import type { EffectPiece, PartInfo } from '../../src/effects/types.js';
+import type { EffectPatch, PartInfo } from '../../src/effects/types.js';
 import { NO_CTX } from './ctx.js';
 
 const part: PartInfo = {
@@ -22,11 +22,11 @@ const SAMPLES = 200;
 
 /** Samples one pass at a fixed rate, so a claim about the whole cycle is not read off one frame. */
 function gainsAcrossOnePass(
-  piece: EffectPiece = flicker(),
+  patch: EffectPatch = flicker(),
   which: PartInfo = part,
   steps = SAMPLES,
 ): number[] {
-  return Array.from({ length: steps }, (_, n) => piece.at(n / steps, which, NO_CTX).gain as number);
+  return Array.from({ length: steps }, (_, n) => patch.at(n / steps, which, NO_CTX).gain as number);
 }
 
 /** Lengths, in samples, of each maximal stretch spent dark. */
@@ -75,16 +75,16 @@ describe('flicker', () => {
     expect(Math.min(...runs)).toBeGreaterThanOrEqual(SAMPLES * 0.02);
   });
 
-  it('is deterministic in t, across a whole pass and across separately built pieces', () => {
+  it('is deterministic in phase, across a whole pass and across separately built patches', () => {
     expect(gainsAcrossOnePass(flicker())).toEqual(gainsAcrossOnePass(flicker()));
   });
 
   it('gives two parts different stutters, so a pair does not blink in lockstep', () => {
-    const piece = flicker();
+    const patch = flicker();
     // Compared as timing, not as values: two parts dropping together to different depths is
     // still lockstep, and would pass a comparison of the raw gains.
     const when = (index: number) =>
-      gainsAcrossOnePass(piece, { ...part, index }).map((g) => g < 0.5);
+      gainsAcrossOnePass(patch, { ...part, index }).map((g) => g < 0.5);
     expect(when(0)).not.toEqual(when(1));
   });
 
@@ -97,9 +97,9 @@ describe('flicker', () => {
   });
 
   /** Shortest dark stretch in milliseconds, which is what a step length actually means on screen. */
-  function shortestDropMs(piece: EffectPiece, samples = 4000): number {
-    const runs = darkRuns(gainsAcrossOnePass(piece, part, samples));
-    return Math.min(...runs) * (piece.duration / samples);
+  function shortestDropMs(patch: EffectPatch, samples = 4000): number {
+    const runs = darkRuns(gainsAcrossOnePass(patch, part, samples));
+    return Math.min(...runs) * (patch.period / samples);
   }
 
   // A step is ~58ms so a drop covers about three frames. Holding 24 steps against a long pass turns
@@ -108,12 +108,12 @@ describe('flicker', () => {
     // Pinned, not banded: a 40-80ms band admits 1400/25, which moves every frame of every shipped
     // flicker() while staying green.
     expect(shortestDropMs(flicker(), 40000)).toBeCloseTo(1400 / 24, 0);
-    expect(shortestDropMs(flicker({ duration: 30000 }))).toBeLessThan(80);
+    expect(shortestDropMs(flicker({ period: 30000 }))).toBeLessThan(80);
   });
 
   /** Longest continuously-lit stretch in milliseconds — the calm, when there is one. */
-  function longestCalmMs(piece: EffectPiece, samples = 4000): number {
-    const gains = gainsAcrossOnePass(piece, part, samples);
+  function longestCalmMs(patch: EffectPatch, samples = 4000): number {
+    const gains = gainsAcrossOnePass(patch, part, samples);
     let best = 0;
     let run = 0;
     for (const g of gains) {
@@ -122,49 +122,49 @@ describe('flicker', () => {
         best = Math.max(best, run);
       } else run = 0;
     }
-    return best * (piece.duration / samples);
+    return best * (patch.period / samples);
   }
 
   // A calm alone used to invent a one-step spell, inflating the pass tenfold for an effect
   // indistinguishable from a steady tube.
   it('treats a non-finite scale as absent rather than as an endless pass', () => {
-    expect(flicker({ spell: 4000, calm: Number.POSITIVE_INFINITY }).duration).toBe(1400);
-    expect(flicker({ spell: Number.POSITIVE_INFINITY, calm: 15000 }).duration).toBe(1400);
+    expect(flicker({ spell: 4000, calm: Number.POSITIVE_INFINITY }).period).toBe(1400);
+    expect(flicker({ spell: Number.POSITIVE_INFINITY, calm: 15000 }).period).toBe(1400);
   });
 
   it('leaves the pass alone when only one of the two scales is given', () => {
-    expect(flicker({ calm: 15000 }).duration).toBe(1400);
+    expect(flicker({ calm: 15000 }).period).toBe(1400);
     expect(gainsAcrossOnePass(flicker({ calm: 15000 }))).toEqual(gainsAcrossOnePass(flicker()));
-    expect(flicker({ spell: Number.NaN, calm: 15000 }).duration).toBe(1400);
+    expect(flicker({ spell: Number.NaN, calm: 15000 }).period).toBe(1400);
   });
 
   it('leaves the pass alone when no calm is asked for', () => {
-    expect(flicker({ spell: 4000 }).duration).toBe(1400);
+    expect(flicker({ spell: 4000 }).period).toBe(1400);
     expect(gainsAcrossOnePass(flicker({ spell: 4000 }))).toEqual(gainsAcrossOnePass(flicker()));
   });
 
   // 4000ms is 69 steps and 15000ms is 257, so a cycle is 326 steps and three of them fit 60s.
   it('fits the pass to a whole number of spells', () => {
-    expect(flicker({ duration: 60000, spell: 4000, calm: 15000 }).duration).toBe(57050);
+    expect(flicker({ period: 60000, spell: 4000, calm: 15000 }).period).toBe(57050);
   });
 
   // The tube goes quiet for the calm, which is the whole point of the macro scale.
   it('holds the tube lit for the calm between spells', () => {
-    const piece = flicker({ duration: 60000, spell: 4000, calm: 15000 });
-    expect(longestCalmMs(piece)).toBeGreaterThan(13000);
-    expect(longestCalmMs(piece)).toBeLessThan(17000);
+    const patch = flicker({ period: 60000, spell: 4000, calm: 15000 });
+    expect(longestCalmMs(patch)).toBeGreaterThan(13000);
+    expect(longestCalmMs(patch)).toBeLessThan(17000);
   });
 
   // A gate boundary landing mid-step clips a drop to a single frame, which reads as noise rather
   // than as a failing tube — the thing the step length exists to prevent.
   it('lands every gate boundary on a step edge', () => {
-    const piece = flicker({ duration: 60000, spell: 4000, calm: 15000 });
-    expect(shortestDropMs(piece, 20000)).toBeGreaterThan(40);
+    const patch = flicker({ period: 60000, spell: 4000, calm: 15000 });
+    expect(shortestDropMs(patch, 20000)).toBeGreaterThan(40);
   });
 
   it('still stutters inside a spell', () => {
-    const piece = flicker({ duration: 60000, spell: 4000, calm: 15000 });
-    expect(darkRuns(gainsAcrossOnePass(piece, part, 4000)).length).toBeGreaterThan(15);
+    const patch = flicker({ period: 60000, spell: 4000, calm: 15000 });
+    expect(darkRuns(gainsAcrossOnePass(patch, part, 4000)).length).toBeGreaterThan(15);
   });
 
   // The gate and the stutter share one clock, so each bout samples a different stretch of the hash.
@@ -173,8 +173,8 @@ describe('flicker', () => {
   // lands every third sample on an edge, where float residue alone makes identical bouts compare
   // unequal and the test stops seeing the defect.
   it('gives each spell its own stutter rather than repeating one', () => {
-    const piece = flicker({ duration: 60000, spell: 4000, calm: 15000 });
-    const gains = gainsAcrossOnePass(piece, part, 2937);
+    const patch = flicker({ period: 60000, spell: 4000, calm: 15000 });
+    const gains = gainsAcrossOnePass(patch, part, 2937);
     const third = gains.length / 3;
     const drops = (from: number) => gains.slice(from, from + third).filter((g) => g < 1);
     expect(drops(0).length).toBeGreaterThan(20);
@@ -183,7 +183,7 @@ describe('flicker', () => {
 
   // cycles rounds rather than floors, so a pass that is nearer three bouts than two gets three.
   it('rounds the pass to the nearest whole number of spells rather than down', () => {
-    expect(flicker({ duration: 50000, spell: 4000, calm: 15000 }).duration).toBe(57050);
+    expect(flicker({ period: 50000, spell: 4000, calm: 15000 }).period).toBe(57050);
   });
 });
 
@@ -193,17 +193,17 @@ describe('hue', () => {
   });
 
   it('travels the whole wheel by default, and is seamless across the loop', () => {
-    const piece = hue();
+    const patch = hue();
     const seen = new Set(
-      Array.from({ length: 120 }, (_, n) => piece.at(n / 120, part, NO_CTX).color as number),
+      Array.from({ length: 120 }, (_, n) => patch.at(n / 120, part, NO_CTX).color as number),
     );
     expect(seen.size).toBeGreaterThan(90);
     // span defaults to a whole turn, so the end of a pass is the start of the next one.
-    expect(piece.at(1, part, NO_CTX).color).toBe(piece.at(0, part, NO_CTX).color);
+    expect(patch.at(1, part, NO_CTX).color).toBe(patch.at(0, part, NO_CTX).color);
   });
 
   it('takes an arc, so a look can throb rather than cycle', () => {
-    const spread = (p: EffectPiece) =>
+    const spread = (p: EffectPatch) =>
       new Set(
         Array.from(
           { length: 60 },
@@ -217,26 +217,26 @@ describe('hue', () => {
   });
 
   it('gives every part the same colour when unspread, which is one sign changing together', () => {
-    const piece = hue();
-    expect(piece.at(0.3, { ...part, index: 0, at: 0 }, NO_CTX).color).toBe(
-      piece.at(0.3, { ...part, index: 3, at: 0.75 }, NO_CTX).color,
+    const patch = hue();
+    expect(patch.at(0.3, { ...part, index: 0, at: 0 }, NO_CTX).color).toBe(
+      patch.at(0.3, { ...part, index: 3, at: 0.75 }, NO_CTX).color,
     );
   });
 
   it('offsets by arc-length share when spread, which is a gradient down the word', () => {
-    const piece = hue({ spread: 0.5 });
-    expect(piece.at(0.3, { ...part, at: 0 }, NO_CTX).color).not.toBe(
-      piece.at(0.3, { ...part, at: 0.75 }, NO_CTX).color,
+    const patch = hue({ spread: 0.5 });
+    expect(patch.at(0.3, { ...part, at: 0 }, NO_CTX).color).not.toBe(
+      patch.at(0.3, { ...part, at: 0.75 }, NO_CTX).color,
     );
     // The offset is in turns, so a part three quarters along at spread 0.5 reads the same hue the
     // whole sign reads 0.375 turns later.
-    expect(piece.at(0, { ...part, at: 0.75 }, NO_CTX).color).toBe(
-      piece.at(0.375, { ...part, at: 0 }, NO_CTX).color,
+    expect(patch.at(0, { ...part, at: 0.75 }, NO_CTX).color).toBe(
+      patch.at(0.375, { ...part, at: 0 }, NO_CTX).color,
     );
   });
 
-  it('is deterministic in t, across separately built pieces', () => {
-    const of = (p: EffectPiece) =>
+  it('is deterministic in phase, across separately built patches', () => {
+    const of = (p: EffectPatch) =>
       Array.from({ length: 50 }, (_, n) => p.at(n / 50, part, NO_CTX).color as number);
     expect(of(hue())).toEqual(of(hue()));
   });
@@ -247,12 +247,12 @@ describe('hue', () => {
 });
 
 describe('the public surface', () => {
-  it('names every registry piece in EFFECT_NAMES', async () => {
+  it('names every registry patch in EFFECT_NAMES', async () => {
     const { EFFECT_NAMES } = await import('../../src/index.js');
     expect([...EFFECT_NAMES].sort()).toEqual(['chase', 'flicker', 'hue']);
   });
 
-  it('exports roving as a factory, since no name can carry an inner piece', async () => {
+  it('exports roving as a factory, since no name can carry an inner patch', async () => {
     const api = await import('../../src/index.js');
     expect(typeof api.roving).toBe('function');
     expect(typeof api.roving(api.EFFECTS.flicker()).at).toBe('function');
@@ -273,7 +273,7 @@ describe('chase', () => {
     expect(chase({ laps: -1 }).at(0.25, P, NO_CTX).crawl).toBe(-0.25);
   });
 
-  // The shader wraps with fract, so the piece is free to hand out an unwrapped offset — and must,
+  // The shader wraps with fract, so the patch is free to hand out an unwrapped offset — and must,
   // or a spread would collapse every part onto the same phase once it crossed 1.
   it('hands out an unwrapped offset, leaving the wrap to the shader', () => {
     expect(chase({ laps: 3 }).at(1, P, NO_CTX).crawl).toBe(3);
@@ -287,7 +287,7 @@ describe('chase', () => {
   });
 
   it('is usable with no spec, which is all a name lookup can supply', () => {
-    expect(EFFECTS.chase().duration).toBeGreaterThan(0);
+    expect(EFFECTS.chase().period).toBeGreaterThan(0);
   });
 });
 
@@ -297,15 +297,15 @@ describe('flicker drop', () => {
   });
 
   it('holds each dim for at least the drop', () => {
-    const piece = flicker({ drop: 350, unrest: 0.5 });
-    const runs = darkRuns(gainsAcrossOnePass(piece, part, 4000));
+    const patch = flicker({ drop: 350, unrest: 0.5 });
+    const runs = darkRuns(gainsAcrossOnePass(patch, part, 4000));
     expect(runs.length).toBeGreaterThan(0);
-    expect(Math.min(...runs) * (piece.duration / 4000)).toBeGreaterThanOrEqual(340);
+    expect(Math.min(...runs) * (patch.period / 4000)).toBeGreaterThanOrEqual(340);
   });
 
-  // hinge refuses stops that disagree on duration, and a drop that moved the pass would be refused.
+  // hinge refuses stops that disagree on period, and a drop that moved the pass would be refused.
   it('keeps its pass whatever the drop, so hinge can vary it', () => {
-    expect(flicker({ drop: 400 }).duration).toBe(1400);
+    expect(flicker({ drop: 400 }).period).toBe(1400);
     expect(() =>
       hinge(near({ source: fixed(0, 0) }), (k) => flicker({ drop: 58 + k * 400 })),
     ).not.toThrow();

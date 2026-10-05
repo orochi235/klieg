@@ -1,7 +1,7 @@
+import type { Setting as BlitsSetting } from '@msb235/blits';
 import { clamp01 } from '../easing.js';
 import { hash01 } from '../motion/types.js';
-import type { Signal } from './signal.js';
-import type { EffectPiece, FrameCtx, PartOffset } from './types.js';
+import { type EffectPatch, hostOf, type PartDelta, type Signal } from './types.js';
 
 /** How a sign comes back on: gain against milliseconds since it began warming. */
 export interface Warmup {
@@ -118,7 +118,7 @@ export type PowerState = 'on' | 'flaring' | 'shorted' | 'warming';
 
 /** Shorts the sign when a signal holds high, as an overloaded tube does. */
 export interface TripSpec {
-  /** What is watched. It trips when any part the power piece drives reads at least `at`. */
+  /** What is watched. It trips when any part the power patch drives reads at least `at`. */
   on: Signal;
   /** Default 1. */
   at?: number;
@@ -145,7 +145,7 @@ export interface PowerSpec {
 export interface PowerControl {
   /** Add to the fire's effects: every part it targets flares, goes dark while shorted and follows
    * the warm-up while warming, and it contributes nothing once on. A trip is watched from here too. */
-  readonly piece: EffectPiece;
+  readonly patch: EffectPatch;
   /** 1 once on, 0 otherwise — for `hinge`, to hold a sign's own effects off until it is warm. */
   readonly warm: Signal;
   /** The state asked for most recently, which reaches the sign on its next frame. */
@@ -157,13 +157,13 @@ export interface PowerControl {
   up(): void;
 }
 
-const NONE: PartOffset = {};
-const DARK: PartOffset = { gain: 0 };
+const NONE: PartDelta = {};
+const DARK: PartDelta = { gain: 0 };
 
 /**
  * A sign-wide power state your code switches: on, flaring, shorted, or warming back up. Calls land
  * between frames on your clock rather than klieg's, so each takes effect on the next frame and is
- * timed from that frame's `ctx.now`. State advances once per frame however many parts and words ask.
+ * timed from that frame's `setting.host.now`. State advances once per frame however many parts and words ask.
  *
  * Under reduced motion both the flare and the warm-up are skipped: each is a whole-sign flash.
  */
@@ -180,7 +180,7 @@ export function power(spec: PowerSpec = {}): PowerControl {
   let darkFor: number | null = null;
   let asked: { state: PowerState; for: number | null } | null = null;
   let frame: number | null = null;
-  let lit: PartOffset = NONE;
+  let lit: PartDelta = NONE;
   /** The trip signal's highest reading in the last frame, and since when it has held. */
   let highest = 0;
   let heldFrom: number | null = null;
@@ -202,13 +202,13 @@ export function power(spec: PowerSpec = {}): PowerControl {
   }
 
   /** A short starts with the flare when there is a lit sign to blow out and motion is allowed. */
-  function shortOut(at: number, forMs: number | null, ctx: FrameCtx): void {
-    const blows = flare && Number.isFinite(ctx.dt) && (state === 'on' || state === 'warming');
+  function shortOut(at: number, forMs: number | null, setting: BlitsSetting): void {
+    const blows = flare && Number.isFinite(setting.dt) && (state === 'on' || state === 'warming');
     enter(blows ? 'flaring' : 'shorted', at, forMs);
   }
 
-  function advance(ctx: FrameCtx): void {
-    const now = ctx.now;
+  function advance(setting: BlitsSetting): void {
+    const now = hostOf(setting).now;
     if (frame === now) return;
     const previous = frame;
     frame = now;
@@ -218,14 +218,14 @@ export function power(spec: PowerSpec = {}): PowerControl {
       asked = null;
       if (request.state !== 'shorted') enter(request.state, now, request.for);
       else if (state === 'flaring') darkFor = request.for;
-      else shortOut(now, request.for, ctx);
+      else shortOut(now, request.for, setting);
     }
     since ??= now;
 
     if (trip && state === 'on' && previous !== null) {
       if (highest >= tripAt) {
         heldFrom ??= previous;
-        if (now - heldFrom >= holdMs) shortOut(now, outMs, ctx);
+        if (now - heldFrom >= holdMs) shortOut(now, outMs, setting);
       } else {
         heldFrom = null;
       }
@@ -234,14 +234,14 @@ export function power(spec: PowerSpec = {}): PowerControl {
 
     if (state === 'flaring' && flare) {
       const ends = since + flare.duration;
-      if (!Number.isFinite(ctx.dt) || now >= ends) {
-        enter('shorted', Number.isFinite(ctx.dt) ? ends : now, darkFor);
+      if (!Number.isFinite(setting.dt) || now >= ends) {
+        enter('shorted', Number.isFinite(setting.dt) ? ends : now, darkFor);
       }
     }
     if (state === 'shorted' && darkFor !== null && now - since >= darkFor) {
       enter('warming', since + darkFor, null);
     }
-    if (state === 'warming' && (!Number.isFinite(ctx.dt) || now - since >= warmup.duration)) {
+    if (state === 'warming' && (!Number.isFinite(setting.dt) || now - since >= warmup.duration)) {
       enter('on', now, null);
     }
 
@@ -251,23 +251,26 @@ export function power(spec: PowerSpec = {}): PowerControl {
   }
 
   return {
-    piece: {
-      duration: 0,
-      at(t, part, ctx) {
-        advance(ctx);
+    patch: {
+      period: 0,
+      at(_phase, part, setting) {
+        advance(setting);
         if (state === 'shorted') return DARK;
         if (state !== 'on') return lit;
         if (trip) {
-          const reading = trip.on(t, part, ctx);
+          const reading = trip.on(part, setting);
           if (reading > highest) highest = reading;
         }
         return NONE;
       },
     },
-    warm(_t, _part, ctx) {
-      advance(ctx);
-      return state === 'on' ? 1 : 0;
-    },
+    warm: Object.assign(
+      (_part: unknown, setting: BlitsSetting) => {
+        advance(setting);
+        return state === 'on' ? 1 : 0;
+      },
+      { input: true },
+    ),
     get state() {
       return asked?.state ?? state;
     },

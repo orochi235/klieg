@@ -15,7 +15,7 @@ in-process adapter: the flourish that plays over a page swap.
 
 - **Phase callback on `fire()`.** Cut the page swap at a chosen moment *inside* an effect, once the
   word has landed and is at full presence, so the swap happens behind an established flourish rather
-  than during its arrival. Shipped as `onPhase`.
+  than during its arrival. Shipped as `onPhase`, since renamed `onMark`.
 
 - **Per-fire cancellation.** Abort one running effect when the presenter skips ahead or seeks
   backward, without tearing down the instance and its GL context. Shipped as `signal`.

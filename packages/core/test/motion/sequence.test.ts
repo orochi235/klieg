@@ -5,7 +5,7 @@ import {
   type StagePlan,
   type StageTarget,
 } from '../../src/motion/sequence.js';
-import type { LetterInfo, MotionPiece } from '../../src/motion/types.js';
+import type { LetterInfo, MotionPatch } from '../../src/motion/types.js';
 import { NONE } from '../../src/motion/types.js';
 
 const letter: LetterInfo = { index: 0, count: 2, x: 0, y: 0 };
@@ -30,12 +30,12 @@ const TWO_OF_THREE: RegroupResult = {
   ],
 };
 
-const FLAG: MotionPiece = { duration: 200, offset: () => ({ position: [100, 0, 0] }) };
+const FLAG: MotionPatch = { duration: 200, at: () => ({ position: [100, 0, 0] }) };
 
 /** An exit that reads its own progress off the pose: opacity 0 means it has played out. */
-const fading = (duration: number): MotionPiece => ({
+const fading = (duration: number): MotionPatch => ({
   duration,
-  offset: (t) => ({ opacity: 1 - t }),
+  at: (t) => ({ opacity: 1 - t }),
 });
 
 const leaving: LetterInfo = { index: 1, count: 2, x: 0, y: 0, leaving: true };
@@ -69,7 +69,7 @@ describe('Sequence', () => {
   it('regroups when it enters a stage, and not before', () => {
     const t = target();
     const seq = new Sequence({
-      enter: { duration: 100, offset: () => ({}) },
+      enter: { duration: 100, at: () => ({}) },
       active: NONE,
       stages: [stage()],
       exit: NONE,
@@ -124,7 +124,7 @@ describe('Sequence', () => {
     const seq = new Sequence({
       enter: NONE,
       active: NONE,
-      stages: [stage({ exit: { duration: 800, offset: () => ({}) }, tween: { duration: 200 } })],
+      stages: [stage({ exit: { duration: 800, at: () => ({}) }, tween: { duration: 200 } })],
       exit: NONE,
       hold: 0,
       blendMs: 0,
@@ -192,7 +192,7 @@ describe('Sequence', () => {
     const seq = new Sequence({
       enter: NONE,
       active: NONE,
-      stages: [stage({ exit: { duration: 800, offset: () => ({}) }, tween: { duration: 0 } })],
+      stages: [stage({ exit: { duration: 800, at: () => ({}) }, tween: { duration: 0 } })],
       exit: NONE,
       hold: 0,
       blendMs: 0,
@@ -208,7 +208,7 @@ describe('Sequence', () => {
     const seq = new Sequence({
       enter: NONE,
       active: NONE,
-      stages: [stage({ exit: { duration: 800, offset: () => ({}) }, tween: { duration: 200 } })],
+      stages: [stage({ exit: { duration: 800, at: () => ({}) }, tween: { duration: 200 } })],
       exit: NONE,
       hold: 0,
       blendMs: 0,
@@ -230,7 +230,7 @@ describe('Sequence', () => {
       active: NONE,
       stages: [
         stage({
-          exit: { duration: 800, offset: () => ({}) },
+          exit: { duration: 800, at: () => ({}) },
           tween: { duration: 200, delayBy: { scale: 0.5 } },
         }),
       ],
@@ -254,7 +254,7 @@ describe('Sequence', () => {
       enter: NONE,
       active: NONE,
       stages: [stage()],
-      exit: { duration: 100, offset: () => ({}) },
+      exit: { duration: 100, at: () => ({}) },
       hold: 0,
       blendMs: 0,
       target: t,
@@ -321,7 +321,7 @@ describe('Sequence', () => {
   it('gives each stage its own clock, so a survivor travels rather than teleporting', () => {
     const t = target();
     const seq = new Sequence({
-      enter: { duration: 800, offset: () => ({}) },
+      enter: { duration: 800, at: () => ({}) },
       active: NONE,
       stages: [stage({ tween: { duration: 700 } })],
       exit: NONE,
@@ -347,8 +347,8 @@ describe('Sequence', () => {
       stages: [
         stage({
           exit: [
-            { duration: 200, offset: () => ({ position: [10, 0, 0], opacity: 0.5 }) },
-            { duration: 100, offset: () => ({ position: [0, 3, 0], opacity: 0.4 }) },
+            { duration: 200, at: () => ({ position: [10, 0, 0], opacity: 0.5 }) },
+            { duration: 100, at: () => ({ position: [0, 3, 0], opacity: 0.4 }) },
           ],
         }),
       ],
@@ -432,7 +432,7 @@ describe('Sequence', () => {
       enter: NONE,
       active: NONE,
       stages: [stage()],
-      exit: { duration: 100, offset: () => ({}) },
+      exit: { duration: 100, at: () => ({}) },
       hold: 0,
       blendMs: 0,
       target: t,
@@ -447,9 +447,9 @@ describe('Sequence', () => {
     // `float`'s own amplitude, and a hold that ends on the loop's crest — where a frame of the
     // loop moves nothing, so any step across the switch is the loop being discarded outright.
     const AMPLITUDE = 0.12;
-    const swing: MotionPiece = {
+    const swing: MotionPatch = {
       duration: 4000,
-      offset: (t) => ({ position: [0, AMPLITUDE * Math.sin(t * Math.PI * 2), 0] }),
+      at: (t) => ({ position: [0, AMPLITUDE * Math.sin(t * Math.PI * 2), 0] }),
     };
     // Zero deltas so the only thing that can move at the switch is the loop coming off.
     const t = target({

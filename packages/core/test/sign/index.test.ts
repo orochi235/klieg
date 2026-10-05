@@ -119,7 +119,7 @@ describe('sign', () => {
     sign(anchor, {
       font: '/f.ttf',
       lighting: 'sweep',
-      effects: [{ piece: 'flicker', target: { kind: 'body', by: 'index' } }],
+      effects: [{ patch: 'flicker', target: { kind: 'body', by: 'index' } }],
     });
 
     expect(fire).toHaveBeenCalledWith('A Name', expect.anything());
@@ -128,10 +128,10 @@ describe('sign', () => {
   });
 
   it('passes a composed lighting slot straight through', () => {
-    const piece = track({ pitchRange: 0.1 });
-    sign(anchor, { font: '/f.ttf', lighting: ['sweep', piece] });
+    const patch = track({ pitchRange: 0.1 });
+    sign(anchor, { font: '/f.ttf', lighting: ['sweep', patch] });
 
-    expect(fired().lighting).toEqual(['sweep', piece]);
+    expect(fired().lighting).toEqual(['sweep', patch]);
   });
 
   it('reports lit before the build blocks, and unlit when the fire settles', async () => {

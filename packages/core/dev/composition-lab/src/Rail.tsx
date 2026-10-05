@@ -5,7 +5,7 @@ import {
   type Composition,
   type EffectLayer,
   type IntermittentWrap,
-  layerPiece,
+  layerPatch,
   type PoolSource,
   type RovingWrap,
 } from './composition.js';
@@ -15,8 +15,8 @@ import {
   hasGradient,
   type LampSourceKind,
   PARAMS,
-  type PieceKind,
-} from './pieces.js';
+  type PatchKind,
+} from './patches.js';
 
 /** Whether the real pool the rail asked for is what the panels are actually drawing. */
 export type RealPoolStatus = 'ready' | 'loading' | 'failed';
@@ -28,17 +28,17 @@ export interface RailProps {
   realPoolStatus: RealPoolStatus;
 }
 
-const KINDS: PieceKind[] = ['flicker', 'hue', 'chase', 'lamp', 'draft'];
+const KINDS: PatchKind[] = ['flicker', 'hue', 'chase', 'lamp', 'draft'];
 
-/** What a new draft opens on: a piece that builds, so the pane starts from working code. */
+/** What a new draft opens on: a patch that builds, so the pane starts from working code. */
 const DRAFT_SOURCE = `return {
-  duration: 1400,
-  at: (t, part) => ({
-    gain: 0.35 + 0.65 * Math.abs(Math.sin(Math.PI * (t + part.at))),
+  period: 1400,
+  at: (phase, part) => ({
+    gain: 0.35 + 0.65 * Math.abs(Math.sin(Math.PI * (phase + part.at))),
   }),
 };`;
 
-const layerBuilds = (layer: EffectLayer): boolean => layerPiece(layer) !== null;
+const layerBuilds = (layer: EffectLayer): boolean => layerPatch(layer) !== null;
 
 export function Rail({ composition, onChange, counts, realPoolStatus }: RailProps) {
   const gradient = hasGradient(composition.look);
@@ -55,7 +55,7 @@ export function Rail({ composition, onChange, counts, realPoolStatus }: RailProp
   const setBouts = (layer: EffectLayer, patch: Partial<IntermittentWrap>) =>
     setLayer(layer.id, { intermittent: { ...(layer.intermittent as IntermittentWrap), ...patch } });
 
-  const add = (kind: PieceKind) =>
+  const add = (kind: PatchKind) =>
     onChange({
       ...composition,
       effects: [
@@ -202,7 +202,7 @@ export function Rail({ composition, onChange, counts, realPoolStatus }: RailProp
           {layer.kind === 'lamp' ? (
             <label
               className="cl-row"
-              title="fixed parks the lamp at x,y. orbit walks a circle of radius sweep around it, on the layer's own duration."
+              title="fixed parks the lamp at x,y. orbit walks a circle of radius sweep around it, on the layer's own period."
             >
               <span>source</span>
               <select
@@ -317,7 +317,7 @@ export function Rail({ composition, onChange, counts, realPoolStatus }: RailProp
             <>
               <label
                 className="cl-row"
-                title="Milliseconds of one bout. Shorter than one inner pass and the layer will not build at all — the piece throws rather than showing a sliver."
+                title="Milliseconds of one bout. Shorter than one inner pass and the layer will not build at all — the patch throws rather than showing a sliver."
               >
                 <span>bout spell</span>
                 <input

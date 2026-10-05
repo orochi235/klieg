@@ -2,6 +2,64 @@
 
 ## Unreleased
 
+### Breaking: klieg uses blits' words for what blits does
+
+Every name below changes with no alias left behind:
+
+| was | now |
+|---|---|
+| `EffectPiece`, `MotionPiece`, `EnvPiece` | `EffectPatch`, `MotionPatch`, `EnvPatch` |
+| `EffectPiece.duration`, `EnvPiece.duration`, and the `duration` option of `flicker`, `hue`, `chase` and `lamp` | `period`. A motion patch keeps `duration`: an enter or an exit plays once |
+| `MotionPiece.offset(t, letter)`, `EnvPiece.env(t, ctx)`, `EffectPiece.at(t, part, ctx)` | `at(phase, letter)`, `at(phase, setting)`, `at(phase, part, setting)` |
+| `PartOffset`, `PoseOffset`, `EnvOffset`, `LightOffset` | `PartDelta`, `PoseDelta`, `EnvDelta`, `LightDelta` |
+| `FrameCtx` | `Setting`: blits' setting, with `pointer`, `pointerInWord` and the instance clock `now` on `setting.host` (`Host`) |
+| `EffectSpec.piece`, `PowerControl.piece`, `TurnsSpec.pieces`, `ENV_PIECES` | `patch`, `patch`, `patches`, `ENV_PATCHES` |
+| `onPhase`, `PhaseEvent`, `PhaseListener`, `{ phase: 'active' }` | `onMark`, `MarkEvent`, `MarkListener`, `{ mark: 'active' }` |
+| `CycleSpec.phase` | `CycleSpec.shift`, in radians as before |
+
+`phase` now means only what it means in blits: how far through a pass, 0 to 1. Enter, active and
+exit are a timeline's segments.
+
+A slot that takes a name or a patch cannot type an inline patch's `at` by itself, since a string has
+an `at` of its own. `motion()`, `effect()` and `lighting()` hand back the patch they are given,
+typed: `enter: motion({ duration: 300, at: (phase, letter) => … })`.
+
+### Breaking: signals are blits signals
+
+A `Signal` is `(part, setting) => number`, blits' `Signal<PartInfo>`, where it was
+`(t, part, ctx)`. It no longer sees the hinging patch's phase, so `near` takes its own `period`
+(default 4000) for a source that follows the clock, as `lamp` does. `peak` is blits' own, and
+`slew`, `lag` and `gate` are re-exported beside it. A signal you write reads klieg's fields through
+`hostOf(setting)`.
+
+`dwell` is blits' `slew` over its input, and `kicks` a `slew` that drains each lift; both read the
+same as before. Their state now lives in the mix, per voice and part, rather than in a map per part,
+and `track` eases through blits' `lag` the same way, so one `track()` can serve several fires, each
+starting from rest. `power` keeps its own state machine.
+
+### Breaking: `hinge` weighs through the mix, and its stops crossfade
+
+`hinge(signal, patch)` is now the patch's voice weighted by the signal: the same numbers the `fade`
+blend gave, from the mix's own arithmetic. The `blend` option, `Blend`, `BlendSpec` and `fade` are
+gone. `hinge(signal, factory, { stops })` crossfades the two stops either side of the signal
+(blits' `mix.blend`) where it snapped to the nearest one, so a hinged flicker eases between levels
+instead of stepping. A hinged patch asked directly, as `roving` asks its inner, reproduces both.
+
+What one frame costs, before and after, from `packages/core/test/bench/frame-cost.bench.ts`: the
+mean of three runs on one machine (msb-uai), 60 parts.
+
+| one frame | before | after |
+|---|---:|---:|
+| 12 letters posed | 6.7 µs | 6.7 µs |
+| 3 effects | 74.5 µs | 71.9 µs |
+| `hinge(dwell(near))` | 29.9 µs | 24.6 µs |
+| `hinge(near)` over 8 stops | 37.0 µs | 92.4 µs |
+| `hinge(kicks)` | 31.2 µs | 30.2 µs |
+| `power` with a trip | 26.6 µs | 28.2 µs |
+
+A stops hinge now runs the two stops it crossfades where it ran one, and blits 0.4.0 reads its
+signal once per stop.
+
 ### A timeline's phases start, loop and hold through blits
 
 Each layer of `enter`, `active` and `exit` is a blits voice with its own `start`, `loop` and

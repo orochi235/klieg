@@ -1,4 +1,4 @@
-import type { EffectPiece, PartInfo, PartOffset } from './types.js';
+import type { EffectPatch, PartDelta, PartInfo } from './types.js';
 
 export interface IntermittentSpec {
   /**
@@ -13,10 +13,10 @@ export interface IntermittentSpec {
   bouts?: number;
 }
 
-const NONE: PartOffset = {};
+const NONE: PartDelta = {};
 
 /**
- * Runs an inner piece in bouts, swallowing its output between them. The inner is never reset — it
+ * Runs an inner patch in bouts, swallowing its output between them. The inner is never reset — it
  * keeps running against the wall clock and the gate only decides whether anything reaches the
  * part, so a bout opens wherever the inner happens to be.
  *
@@ -28,17 +28,17 @@ const NONE: PartOffset = {};
  * `spikes/intermittent-phase.mjs` reproduces both readings.
  *
  * `flicker`'s own `spell`/`calm` cover the same ground for flicker alone, deriving both scales from
- * one `t`; this is for the wrappers that cannot, `roving` and `hue` among them.
+ * one `phase`; this is for the wrappers that cannot, `roving` and `hue` among them.
  */
-export function intermittent(inner: EffectPiece, spec: IntermittentSpec = {}): EffectPiece {
-  const innerDuration = inner.duration > 0 ? inner.duration : 1000;
+export function intermittent(inner: EffectPatch, spec: IntermittentSpec = {}): EffectPatch {
+  const innerPeriod = inner.period > 0 ? inner.period : 1000;
   const calm = Math.max(0, spec.calm ?? 0);
   if (calm === 0) return inner;
 
-  const spell = Math.max(0, spec.spell ?? innerDuration * 3);
-  if (spell < innerDuration) {
+  const spell = Math.max(0, spec.spell ?? innerPeriod * 3);
+  if (spell < innerPeriod) {
     throw new Error(
-      `intermittent: spell ${spell}ms is under one inner pass (${innerDuration}ms), which shows a ` +
+      `intermittent: spell ${spell}ms is under one inner pass (${innerPeriod}ms), which shows a ` +
         'sliver of the inner rather than a bout',
     );
   }
@@ -48,18 +48,17 @@ export function intermittent(inner: EffectPiece, spec: IntermittentSpec = {}): E
   // A whole number of inner passes for the seam; then a whole number of bouts inside it, which
   // leaves the bout length off the inner's period and walks the opening phase. Do NOT round the
   // cycle itself onto the inner — see above.
-  const duration =
-    Math.max(1, Math.round((wantedBouts * wantedCycle) / innerDuration)) * innerDuration;
-  const bouts = Math.max(1, Math.round(duration / wantedCycle));
-  const cycle = duration / bouts;
+  const period = Math.max(1, Math.round((wantedBouts * wantedCycle) / innerPeriod)) * innerPeriod;
+  const bouts = Math.max(1, Math.round(period / wantedCycle));
+  const cycle = period / bouts;
   const lit = cycle * (spell / wantedCycle);
 
   return {
-    duration,
-    at(t: number, part: PartInfo, ctx) {
-      const ms = t * duration;
+    period,
+    at(phase: number, part: PartInfo, setting) {
+      const ms = phase * period;
       if (ms % cycle >= lit) return NONE;
-      return inner.at((ms % innerDuration) / innerDuration, part, ctx);
+      return inner.at((ms % innerPeriod) / innerPeriod, part, setting);
     },
   };
 }

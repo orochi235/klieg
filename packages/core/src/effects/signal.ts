@@ -1,18 +1,18 @@
+import { type Setting as BlitsSetting, type Signal as BlitsSignal, slew } from '@msb235/blits';
 import { clamp01 } from '../easing.js';
 import { falloff, fromPointer, inkCenter, type LightSource } from './source.js';
-import type { FrameCtx, PartInfo } from './types.js';
+import type { Signal } from './types.js';
 
-/**
- * A scalar a piece can hinge on: 0..1, resolved per part, per frame. `t` is the hinging piece's
- * own normalized pass, so a signal reading it follows that piece's clock rather than a private one.
- */
-export type Signal = (t: number, part: PartInfo, ctx: FrameCtx) => number;
+export type { Signal } from './types.js';
 
 export interface NearSpec {
   /** How far influence reaches, in em of layout space. Default 0.5, as `LampSpec.radius`. */
   radius?: number;
   /** Where the signal is measured from. Defaults to the cursor. */
   source?: LightSource;
+  /** Milliseconds for one pass of `source`, as `LampSpec.period`. Read only by the sources that
+   * follow the clock, `orbit` and `along`. Default 4000. */
+  period?: number;
 }
 
 /**
@@ -27,8 +27,9 @@ export interface NearSpec {
 export function near(spec: NearSpec = {}): Signal {
   const source = spec.source ?? fromPointer();
   const radius = spec.radius ?? 0.5;
-  return (t, part, ctx) => {
-    const pose = source(t, ctx);
+  const period = spec.period ?? 4000;
+  return (part, setting) => {
+    const pose = source(period > 0 ? (setting.elapsed % period) / period : 0, setting);
     if (!pose) return 0;
     const c = inkCenter(part.ink);
     return falloff(Math.hypot(c.x - pose.x, c.y - pose.y), radius);
@@ -48,22 +49,11 @@ export function level(initial = 0): Level {
   let value = clean(initial);
   const signal = (() => value) as unknown as Level;
   Object.defineProperties(signal, {
+    input: { value: true },
     set: { value: (v: number) => (value = clean(v)) },
     value: { get: () => value },
   });
   return signal;
-}
-
-/** The highest of several signals, per part — a hover's slow build with a spark's spike on top. */
-export function peak(...signals: Signal[]): Signal {
-  return (t, part, ctx) => {
-    let k = 0;
-    for (const signal of signals) {
-      const v = signal(t, part, ctx);
-      if (v > k) k = v;
-    }
-    return k;
-  };
 }
 
 export interface DwellSpec {
@@ -76,41 +66,33 @@ export interface DwellSpec {
 }
 
 /**
- * How long a part has been near something, rather than how near it is now: climbs toward its
- * input at `riseMs` per unit and drains at `fallMs`, so a cursor resting on a letter builds it up
- * and one passing over barely registers. It never climbs past the input, so a cursor at the edge
- * of `near`'s reach fills a part only as far as `near` reads there.
+ * How long a part has been near something, rather than how near it is now: blits' `slew` over
+ * `near()`, so a cursor resting on a letter builds it up and one passing over barely registers. It
+ * never climbs past the input, so a cursor at the edge of `near`'s reach fills a part only as far
+ * as `near` reads there.
  *
- * State is kept per part and advances once per `FrameCtx.now`: the first call in a frame reads the
- * input and steps, and every later one in that frame returns the same value, whatever its `t`. A
- * part it has not seen starts empty. Under reduced motion it snaps to its input instead of
- * climbing. One `dwell` is safe to share between words and fires, since no two draw the same part.
+ * A part it has not seen starts empty, where a bare `slew` starts at its input. The mix keeps its
+ * state per voice and part. Under reduced motion it snaps to its input instead of climbing.
  */
 export function dwell(spec: DwellSpec = {}): Signal {
   const of = spec.of ?? near();
-  const riseMs = spec.riseMs ?? 1500;
-  const fallMs = spec.fallMs ?? 600;
-  const held = new WeakMap<PartInfo, { now: number; k: number }>();
-  return (t, part, ctx) => {
-    const last = held.get(part);
-    if (last && last.now === ctx.now) return last.k;
-    const input = of(t, part, ctx);
-    const target = Number.isFinite(input) ? clamp01(input) : 0;
-    if (!last) {
-      const k = Number.isFinite(ctx.dt) ? 0 : target;
-      held.set(part, { now: ctx.now, k });
-      return k;
-    }
-    const ms = Math.max(0, ctx.now - last.now);
-    last.k = Number.isFinite(ctx.dt) ? toward(last.k, target, ms, riseMs, fallMs) : target;
-    last.now = ctx.now;
-    return last.k;
+  const clamped: Signal = (part, setting) => {
+    const input = of(part, setting);
+    return Number.isFinite(input) ? clamp01(input) : 0;
   };
+  const input = of.input ? Object.assign(clamped, { input: true }) : clamped;
+  return slew(startAt(0, input), { riseMs: spec.riseMs ?? 1500, fallMs: spec.fallMs ?? 600 });
 }
 
-function toward(k: number, target: number, ms: number, riseMs: number, fallMs: number): number {
-  const rising = target > k;
-  const per = rising ? riseMs : fallMs;
-  if (per <= 0) return target;
-  return rising ? Math.min(target, k + ms / per) : Math.max(target, k - ms / per);
+/**
+ * Reads `value` the first frame a subject is seen, and `of` after, unless motion is reduced. A
+ * `slew` or `lag` starts at its input on first sight; fed this, it starts at `value` and moves.
+ */
+export function startAt<I>(value: number, of: BlitsSignal<I>): BlitsSignal<I> {
+  const read = (subject: I, setting: BlitsSetting): number => {
+    const input = of(subject, setting);
+    const first = setting.keep(read, () => ({ at: setting.timestamp }));
+    return first.at === setting.timestamp && Number.isFinite(setting.dt) ? value : input;
+  };
+  return of.input ? Object.assign(read, { input: true }) : read;
 }

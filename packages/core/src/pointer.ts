@@ -22,7 +22,7 @@ export function pointerFrame(
 
   const nx = ((client.x - box.left) / box.width) * 2 - 1;
   const ny = ((client.y - box.top) / box.height) * 2 - 1;
-  // FrameCtx promises -1..1, and the listener is document-wide: a pointer beside a small
+  // `Host.pointer` promises -1..1, and the listener is document-wide: a pointer beside a small
   // anchored canvas would otherwise aim past every range that scales it.
   const pointer = { x: Math.max(-1, Math.min(1, nx)), y: Math.max(-1, Math.min(1, ny)) };
 

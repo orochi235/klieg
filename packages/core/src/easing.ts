@@ -27,7 +27,7 @@ export interface SpringParams {
 
 /**
  * The step response of a damped harmonic oscillator, in closed form. Closed form rather than an
- * integrator is what keeps it an `Easing`: the compositor samples pieces at arbitrary `t`, out of
+ * integrator is what keeps it an `Easing`: the compositor samples patches at arbitrary `t`, out of
  * order, several times a frame, which a stateful spring cannot answer.
  */
 export function spring({ stiffness = 170, damping = 22, mass = 1 }: SpringParams = {}): Easing {

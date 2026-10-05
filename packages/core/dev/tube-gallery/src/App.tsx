@@ -112,7 +112,7 @@ export function App() {
         const cell = cells.current.get(variant.id);
         const rect = rects.current.get(variant.id);
         if (!cell || !rect || rect.w < 2 || rect.h < 2) continue;
-        cell.advance(elapsed.current, dt);
+        cell.advance(elapsed.current);
         cell.fit(rect.w / rect.h);
         panels.push({ rect, scene: cell.scene, camera: cell.camera, bloom: live.current.bloom });
       }

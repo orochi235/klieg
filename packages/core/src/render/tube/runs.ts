@@ -117,7 +117,7 @@ export interface CutOptions {
   minRun: number;
   /**
    * What a contour too short to carry `runs` does. `fit` cuts it into as many runs as clear
-   * `minRun`, and is the default. `drop` spends the whole budget and drops every piece under the
+   * `minRun`, and is the default. `drop` spends the whole budget and drops every patch under the
    * floor, which leaves a contour shorter than `runs * minRun` empty — small detail falls out of
    * the sign rather than being drawn coarsely.
    */
@@ -1329,11 +1329,11 @@ function stitchPath(
 }
 
 /**
- * Cuts `span` into `pieces` runs by arc length. A span needs at least 2 vertices per piece, so
+ * Cuts `span` into `patches` runs by arc length. A span needs at least 2 vertices per patch, so
  * a request beyond `span.length - 1` is capped rather than honored.
  */
-function slice(span: THREE.Vector3[], pieces: number): THREE.Vector3[][] {
-  const n = Math.min(Math.max(1, pieces), Math.max(1, span.length - 1));
+function slice(span: THREE.Vector3[], patches: number): THREE.Vector3[][] {
+  const n = Math.min(Math.max(1, patches), Math.max(1, span.length - 1));
   if (n <= 1) return [span];
 
   const total = polyLength(span);
@@ -1345,7 +1345,7 @@ function slice(span: THREE.Vector3[], pieces: number): THREE.Vector3[][] {
     acc += (span[i] as THREE.Vector3).distanceTo(span[i - 1] as THREE.Vector3);
     cur.push(span[i] as THREE.Vector3);
     // Absolute target (next * total / n), not accumulate-and-reset: resetting acc to 0 after
-    // each cut discards the previous piece's overshoot, and that loss compounds over many pieces.
+    // each cut discards the previous patch's overshoot, and that loss compounds over many patches.
     if (next < n && i < span.length - 1 && acc >= (next * total) / n) {
       out.push(cur);
       cur = [span[i] as THREE.Vector3];
@@ -1506,9 +1506,9 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
   const lengths = spans.map((s) => polyLength(s.points));
   const total = lengths.reduce((a, b) => a + b, 0);
   const extra = Math.max(0, opts.runs - spans.length);
-  // A dark span is one piece of blockout, never several: slicing it would light its middle.
+  // A dark span is one patch of blockout, never several: slicing it would light its middle.
   const want = lengths.map((l, i) => (total > 0 && !spans[i]?.dark ? (extra * l) / total : 0));
-  // Extra cuts a span cannot afford: every piece has to clear `minRun` or it is dropped below,
+  // Extra cuts a span cannot afford: every patch has to clear `minRun` or it is dropped below,
   // and a span sliced past its own budget loses all of them rather than some.
   const fitting = (opts.shortRun ?? 'fit') === 'fit';
   const room = lengths.map((l, i) =>
@@ -1529,13 +1529,13 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
 
   const out: Run[] = [];
   spans.forEach((span, i) => {
-    for (const piece of slice(span.points, 1 + (base[i] as number))) {
-      const length = polyLength(piece);
+    for (const patch of slice(span.points, 1 + (base[i] as number))) {
+      const length = polyLength(patch);
       // A dark span is never dropped: dropping it would leave the gap the return exists to avoid.
       if (length < opts.minRun && !span.dark) continue;
       out.push({
-        points: piece,
-        from: piece.map((p) => origin.get(p) ?? null),
+        points: patch,
+        from: patch.map((p) => origin.get(p) ?? null),
         surface: span.surface,
         length,
         index: out.length,

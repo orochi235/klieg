@@ -1,5 +1,5 @@
 import { EffectFrame, planEffects } from '@core/effects/frame.js';
-import type { FrameCtx, PartInfo } from '@core/effects/types.js';
+import type { EffectPatch, Host, PartInfo } from '@core/effects/types.js';
 import { type Composition, finestPass, toFireOptions } from './composition.js';
 import { type PassSamples, passSamples, samplePass } from './sample.js';
 import { tenureAndJump } from './tenure.js';
@@ -131,7 +131,7 @@ export function flatMetrics(rows: readonly SweepRow[]): SweepMetric[] {
 /**
  * Resamples the whole pass once per value of one param. Every row rebuilds the `EffectFrame` from
  * `toFireOptions`, so a sweep measures the composition the preview would render rather than a
- * shortcut through the piece alone.
+ * shortcut through the patch alone.
  */
 export function runSweep(
   composition: Composition,
@@ -141,7 +141,7 @@ export function runSweep(
   max: number,
   steps: number,
   parts: readonly PartInfo[],
-  ctx: FrameCtx,
+  host: Host,
 ): SweepResult {
   const rows: SweepRow[] = [];
   // `toFireOptions` drops a disabled layer, so sweeping one measures a composition it never
@@ -162,12 +162,12 @@ export function runSweep(
       ),
     };
     const specs = toFireOptions(at).effects ?? [];
-    const pass = Math.max(1, ...specs.map((s) => (s.piece as { duration: number }).duration));
+    const pass = Math.max(1, ...specs.map((s) => (s.patch as EffectPatch).period));
     const frame = new EffectFrame(planEffects(specs, parts));
-    // Per row rather than once: a row that moves a piece's own `duration` moves what has to be
+    // Per row rather than once: a row that moves a patch's own `period` moves what has to be
     // resolved with it, and one rate for every row would under-sample the short end.
     const count = passSamples(pass, finestPass(at));
-    rows.push(aggregate(value, samplePass(frame, parts, pass, count, ctx), parts, pass));
+    rows.push(aggregate(value, samplePass(frame, parts, pass, count, host), parts, pass));
   }
 
   return { param, rows, flat: flatMetrics(rows) };

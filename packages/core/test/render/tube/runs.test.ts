@@ -112,7 +112,7 @@ describe('cutIntoRuns', () => {
     expect(runs).toHaveLength(5);
   });
 
-  it('hits the requested count exactly at high piece counts, not just low ones', () => {
+  it('hits the requested count exactly at high patch counts, not just low ones', () => {
     // A single-span cornerless loop with no floor: nothing but slice()'s own arithmetic can
     // cost a run here. Low counts (a handful of cuts) can't show compounding drift; these can.
     for (const requested of [13, 30, 60]) {
@@ -122,8 +122,8 @@ describe('cutIntoRuns', () => {
   });
 
   // `TubeSpec.runs` is documented as bounded above by `minRun`. It was not: the budget was
-  // allocated first and any piece under the floor dropped afterwards, so a contour too short to
-  // carry the requested count lost every piece and rendered nothing at all.
+  // allocated first and any patch under the floor dropped afterwards, so a contour too short to
+  // carry the requested count lost every patch and rendered nothing at all.
   it('cuts a short loop into as many runs as it can carry rather than none', () => {
     const perimeter = 2 * Math.PI * 0.153;
     const { runs } = cutIntoRuns([PATH(circleOf(0.153))], { runs: 7, minRun: 0.15 });
@@ -134,7 +134,7 @@ describe('cutIntoRuns', () => {
 
   // The old behaviour, kept deliberately: small detail falls out of a sign rather than being
   // drawn coarsely. It is opt-in because it renders nothing, which reads as a defect by default.
-  it('drops every piece of a short loop when asked to spend the budget anyway', () => {
+  it('drops every patch of a short loop when asked to spend the budget anyway', () => {
     const { runs } = cutIntoRuns([PATH(circleOf(0.153))], {
       runs: 7,
       minRun: 0.15,
@@ -177,7 +177,7 @@ describe('cutIntoRuns', () => {
 
   it('drops runs under the floor and keeps the rest', () => {
     // 18 requested over 4 equal-length sides splits unevenly by largest-remainder: two sides
-    // get 5 pieces (length 0.2), two get 4 (length 0.25). A 0.22 floor keeps only the latter.
+    // get 5 patches (length 0.2), two get 4 (length 0.25). A 0.22 floor keeps only the latter.
     const { runs: loose } = cutIntoRuns([PATH(squarePath())], { runs: 18, minRun: 0 });
     const { runs: floored } = cutIntoRuns([PATH(squarePath())], { runs: 18, minRun: 0.22 });
     // Some must survive: a floor that drops everything satisfies the per-run assertion vacuously.
@@ -216,7 +216,7 @@ describe('corner strategies', () => {
     expect(runs).toHaveLength(1);
   });
 
-  it('an all-connect distribution keeps an open path in one piece too', () => {
+  it('an all-connect distribution keeps an open path in one patch too', () => {
     const { runs } = cutIntoRuns([OPEN_PATH(openLPath())], {
       runs: 1,
       minRun: 0,

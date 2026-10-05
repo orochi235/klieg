@@ -1,7 +1,7 @@
-import type { PoseOffset } from '../pose.js';
+import type { PoseDelta } from '../pose.js';
 
 export interface LetterInfo {
-  /** The character this letter draws. Absent where a piece is sampled without a block behind it. */
+  /** The character this letter draws. Absent where a patch is sampled without a block behind it. */
   char?: string;
   /** 0-based position in the word, whitespace included. */
   index: number;
@@ -21,11 +21,27 @@ export interface LetterInfo {
   leaving?: boolean;
 }
 
-export interface MotionPiece {
-  /** Milliseconds for one pass. `active` pieces loop; `enter`/`exit` run once. */
+export interface MotionPatch {
+  /** Milliseconds for one pass. `active` patches loop; `enter`/`exit` run once. */
   duration: number;
-  /** `t` is normalized 0..1 within this pass. */
-  offset(t: number, letter: LetterInfo): PoseOffset;
+  /** `phase` is 0..1 within this pass. */
+  at(phase: number, letter: LetterInfo): PoseDelta;
+}
+
+/**
+ * Several patches layered in one slot. Without `at`: an array's own `at` would join a patch's in a
+ * slot's union and leave an inline patch's `at(phase)` untyped.
+ */
+export type Layered<T> = Omit<readonly T[], 'at'>;
+
+/** Every layer of a slot, which holds one or `Layered` several. */
+export function layersOf<T>(slot: T | Layered<T>): readonly T[] {
+  return Array.isArray(slot) ? (slot as readonly T[]) : [slot as T];
+}
+
+/** Hands back the patch it is given, typed, as `effect` does for an effect patch. */
+export function motion(patch: MotionPatch): MotionPatch {
+  return patch;
 }
 
 export type EnterName = 'slam' | 'spin' | 'flip' | 'assemble' | 'rise' | 'none';
@@ -109,18 +125,18 @@ export function orderKey(item: Ordered, spec: StaggerSpec = {}): number {
   }
 }
 
-/** Stagger helper: returns 0..1 for how far along member `index` should be at word-time `t`. */
-export function stagger(t: number, item: Ordered, spec: number | StaggerSpec = 0.5): number {
+/** Stagger helper: returns 0..1 for how far along member `index` should be at the word's `phase`. */
+export function stagger(phase: number, item: Ordered, spec: number | StaggerSpec = 0.5): number {
   const resolved: StaggerSpec = typeof spec === 'number' ? { spread: spec } : spec;
   const count = Math.max(1, item.count);
   const spread =
     resolved.each !== undefined ? Math.min(1, resolved.each * count) : (resolved.spread ?? 0.5);
 
   const start = orderKey(item, resolved) * spread;
-  // spread=1 would make span 0, and (t - start) is also 0 at t=start — 0/0 is NaN, which
+  // spread=1 would make span 0, and (phase - start) is also 0 at phase=start — 0/0 is NaN, which
   // clamps straight through into a transform and makes the letter vanish silently.
   const span = Math.max(1e-6, 1 - spread);
-  return Math.max(0, Math.min(1, (t - start) / span));
+  return Math.max(0, Math.min(1, (phase - start) / span));
 }
 
-export const NONE: MotionPiece = { duration: 0, offset: () => ({}) };
+export const NONE: MotionPatch = { duration: 0, at: () => ({}) };

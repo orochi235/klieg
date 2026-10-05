@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { ResolvedOffset } from '../../effects/types.js';
+import type { PartPose } from '../../effects/types.js';
 import { DEFAULT_GLYPH_OPTIONS, GlyphCache } from '../../text/glyphs.js';
 import type { SheetSpec } from '../decoration.js';
 import { DEFAULT_INFLATE } from '../inflate.js';
@@ -198,7 +198,7 @@ export class SheetBuilder implements DecorationBuilder {
 
   applyGradientBounds(): void {}
 
-  writePart(part: DecorationPart, out: ResolvedOffset): void {
+  writePart(part: DecorationPart, out: PartPose): void {
     const material = part.mesh.material as THREE.MeshPhysicalMaterial;
     const light = this.lights[part.slot];
     if (light) material.emissive.setHex(litEmissive(light.emissive, light.hue, out.light));

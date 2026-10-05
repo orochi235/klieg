@@ -1,5 +1,5 @@
 import { cycle } from './build.js';
-import type { ActiveName, MotionPiece } from './types.js';
+import type { ActiveName, MotionPatch } from './types.js';
 import { NONE } from './types.js';
 
 const TAU = Math.PI * 2;
@@ -15,10 +15,10 @@ const pulse = cycle(1600, { amplitude: { scale: 0.035 } });
 
 const shimmer = cycle(2600, {
   amplitude: { rotation: [0, 0.05, 0] },
-  phase: (letter) => (letter.index / Math.max(1, letter.count)) * TAU,
+  shift: (letter) => (letter.index / Math.max(1, letter.count)) * TAU,
 });
 
-export const ACTIVE: Record<ActiveName, MotionPiece> = {
+export const ACTIVE: Record<ActiveName, MotionPatch> = {
   float,
   pulse,
   shimmer,

@@ -1,6 +1,6 @@
 import { backOut, easeOutCubic } from '../easing.js';
 import { transition } from './build.js';
-import type { EnterName, MotionPiece } from './types.js';
+import type { EnterName, MotionPatch } from './types.js';
 import { NONE } from './types.js';
 
 const TAU = Math.PI * 2;
@@ -44,7 +44,7 @@ const rise = transition(900, {
   easeBy: { opacity: (s) => Math.min(1, s * 3) },
 });
 
-export const ENTER: Record<EnterName, MotionPiece> = {
+export const ENTER: Record<EnterName, MotionPatch> = {
   slam,
   spin,
   flip,

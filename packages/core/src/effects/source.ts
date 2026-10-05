@@ -1,5 +1,6 @@
+import type { Setting as BlitsSetting } from '@msb235/blits';
 import { clamp01 } from '../easing.js';
-import type { FrameCtx } from './types.js';
+import { hostOf } from './types.js';
 
 /** Where a lamp is, in the word's own layout space. */
 export interface LightPose {
@@ -8,7 +9,7 @@ export interface LightPose {
 }
 
 /** Null means the lamp has nowhere to be this frame and contributes nothing. */
-export type LightSource = (t: number, ctx: FrameCtx) => LightPose | null;
+export type LightSource = (phase: number, setting: BlitsSetting) => LightPose | null;
 
 const TAU = Math.PI * 2;
 
@@ -16,10 +17,10 @@ export function fixed(x: number, y: number): LightSource {
   return () => ({ x, y });
 }
 
-/** The cursor, exactly as `FrameCtx.pointerInWord` places it. */
+/** The cursor, exactly as `Host.pointerInWord` places it. */
 export function fromPointer(map?: (p: { x: number; y: number }) => LightPose): LightSource {
-  return (_t, ctx) => {
-    const p = ctx.pointerInWord;
+  return (_phase, setting) => {
+    const p = hostOf(setting).pointerInWord;
     if (!p) return null;
     return map ? map(p) : { x: p.x, y: p.y };
   };
@@ -39,7 +40,10 @@ export function orbit(spec: OrbitSpec = {}): LightSource {
   const radius = spec.radius ?? 0.3;
   const cx = spec.x ?? 0;
   const cy = spec.y ?? 0;
-  return (t) => ({ x: cx + Math.cos(t * TAU) * radius, y: cy + Math.sin(t * TAU) * radius });
+  return (phase) => ({
+    x: cx + Math.cos(phase * TAU) * radius,
+    y: cy + Math.sin(phase * TAU) * radius,
+  });
 }
 
 /** Walks a polyline once per pass, by segment count rather than by arc length: every segment
@@ -48,8 +52,8 @@ export function along(points: readonly { x: number; y: number }[]): LightSource 
   if (points.length < 2) throw new Error('klieg: along() needs at least two points');
   const pts = points.slice();
   const last = pts.length - 1;
-  return (t) => {
-    const u = clamp01(t) * last;
+  return (phase) => {
+    const u = clamp01(phase) * last;
     const i = Math.min(Math.floor(u), last - 1);
     const f = u - i;
     const a = pts[i] as { x: number; y: number };

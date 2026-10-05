@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 const DIR = join(import.meta.dirname, '..', 'dist', 'standalone');
 
 /** `import 'x'`, `import('x')` and `… from 'x'`, however the bundle is minified. */
-const SPECIFIER = /(?:\bfrom|\bimport\s*\(?)\s*(['"])([^'"]+)\1/g;
+const SPECIFIER = /(?:\bfrom|\bimport\s*\(?)\s*(['"])([^'"\s]+)\1/g;
 
 describe('the standalone bundle', () => {
   it('is the one file the subpath names', () => {

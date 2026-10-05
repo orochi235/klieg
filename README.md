@@ -441,7 +441,7 @@ hinge(peak(dwell(), sparks), (k) => EFFECTS.flicker({ unrest: k * 0.8, drop: 58 
 `peak`, `slew`, `lag` and `gate` are blits' own, re-exported: `dwell` is a `slew` over `near()` that
 starts empty, and `kicks` a `slew` that drains each lift. The mix keeps a stateful signal's state per
 effect and part, so one signal can drive several effects. A signal of your own reads the pointer
-through `hostOf(setting).pointerInWord`.
+at `setting.host.pointerInWord`.
 
 Effects layer. Brightness multiplies and color is replaced, so `flicker` and `hue` compose without
 either knowing about the other — but two patches both writing color fight, and the last one wins.

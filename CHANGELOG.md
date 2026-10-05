@@ -6,6 +6,19 @@ therefore never picks up a break. When 1.0 comes is chosen deliberately, not rea
 
 ## Unreleased
 
+### Breaking: `hostOf` is gone
+
+blits 0.5.0 types a mix's host, so `setting.host` is a `Host` wherever klieg hands over a setting:
+in an effect patch, a light source, an env patch and a `Signal`. Read `setting.host.pointer`
+where you called `hostOf(setting).pointer`. `Setting` is now blits' `Setting<void, Host>` and
+`Signal` blits' `Signal<PartInfo, Host>`, the same shapes as before.
+
+### Runs on @msb235/blits 0.5.0
+
+klieg pins `@msb235/blits` at exactly `0.5.0`. A hinged effect's `by` is read once per part per
+frame for the whole blend, where it was read once per stop: a signal counting its calls sees fewer.
+blits now skips a patch at zero weight itself, so a blend's idle stops cost nothing in klieg either.
+
 ## 0.15.0
 
 ### Breaking: klieg uses blits' words for what blits does

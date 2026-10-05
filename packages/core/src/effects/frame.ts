@@ -1,4 +1,4 @@
-import { type Signal as BlitsSignal, type Mix, mix, type Patch, patch } from '@msb235/blits';
+import { type Mix, mix, type Patch, patch } from '@msb235/blits';
 import type { StaggerSpec } from '../motion/types.js';
 import { stagger } from '../motion/types.js';
 import { selectIndices } from '../select.js';
@@ -11,7 +11,6 @@ import {
   type PartInfo,
   type PartPose,
   relay,
-  type Setting,
 } from './types.js';
 
 /** One spec resolved against a pool: the built patch, and which pool positions it drives. */
@@ -63,7 +62,7 @@ export class EffectFrame {
   /** Pool positions `drop` took out of play, kept so a re-cue against a new pool leaves them out. */
   private readonly dropped = new Set<number>();
   private readonly out = new Map<number, PartPose>();
-  private readonly mix: Mix<PartInfo, PartPose>;
+  private readonly mix: Mix<PartInfo, PartPose, Host>;
   /** The pool the voices were targeted against, so a caller passing a new one gets new voices. */
   private pool: readonly PartInfo[] | null = null;
   private frame: Host = NO_HOST;
@@ -78,7 +77,7 @@ export class EffectFrame {
         this.touched.push(index);
       }
     }
-    this.mix = mix<PartInfo, PartPose>(PART_KIT, {
+    this.mix = mix<PartInfo, PartPose, Host>(PART_KIT, {
       host: relay(() => this.frame),
       reduce: () => this.reduced,
       // `color` has no rest to scale toward, so a weighed voice passes it whole at any weight above
@@ -106,13 +105,13 @@ export class EffectFrame {
       if (hinged && 'stops' in hinged) {
         this.mix.blend(
           hinged.stops.map((stop) => voiceOf(stop, effect.stagger)),
-          hinged.by as BlitsSignal<PartInfo>,
+          hinged.by,
           { target },
         );
       } else if (hinged) {
         this.mix.cue({
           patch: voiceOf(hinged.patch, effect.stagger),
-          weight: hinged.by as BlitsSignal<PartInfo>,
+          weight: hinged.by,
           target,
         });
       } else {
@@ -162,8 +161,6 @@ export class EffectFrame {
   }
 }
 
-const NONE: Partial<PartPose> = {};
-
 /** Stands in until the first frame reports one. Nothing samples a patch before then. */
 const NO_HOST: Host = { pointer: null, pointerInWord: null, now: 0 };
 
@@ -174,16 +171,14 @@ const NO_HOST: Host = { pointer: null, pointerInWord: null, now: 0 };
 function voiceOf(
   effect: EffectPatch,
   spread: number | StaggerSpec | undefined,
-): Patch<PartInfo, PartPose> {
+): Patch<PartInfo, PartPose, void, Host> {
   const period = effect.period;
-  return patch<PartInfo, PartPose>(
+  return patch<PartInfo, PartPose, void, Host>(
     0,
     (_phase, part, setting) => {
-      // A blend's stops all run, and all but two sit at zero weight, where nothing they emit lands.
-      if (!(setting.weight > 0)) return NONE;
       const pass = period > 0 ? (setting.elapsed % period) / period : 0;
       const phase = spread === undefined ? pass : stagger(pass, part, spread);
-      return asDelta(effect.at(phase, part, setting as Setting));
+      return asDelta(effect.at(phase, part, setting));
     },
     { writes: PART_CHANNELS },
   );

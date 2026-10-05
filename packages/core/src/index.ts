@@ -130,7 +130,7 @@ export type {
   PartKind,
   Setting,
 } from './effects/types.js';
-export { effect, hostOf } from './effects/types.js';
+export { effect } from './effects/types.js';
 export {
   type CycleSpec,
   cycle,

@@ -1,6 +1,5 @@
-import type { Setting as BlitsSetting } from '@msb235/blits';
 import { clamp01 } from '../easing.js';
-import { hostOf } from './types.js';
+import type { Setting } from './types.js';
 
 /** Where a lamp is, in the word's own layout space. */
 export interface LightPose {
@@ -9,7 +8,7 @@ export interface LightPose {
 }
 
 /** Null means the lamp has nowhere to be this frame and contributes nothing. */
-export type LightSource = (phase: number, setting: BlitsSetting) => LightPose | null;
+export type LightSource = (phase: number, setting: Setting) => LightPose | null;
 
 const TAU = Math.PI * 2;
 
@@ -20,7 +19,7 @@ export function fixed(x: number, y: number): LightSource {
 /** The cursor, exactly as `Host.pointerInWord` places it. */
 export function fromPointer(map?: (p: { x: number; y: number }) => LightPose): LightSource {
   return (_phase, setting) => {
-    const p = hostOf(setting).pointerInWord;
+    const p = setting.host.pointerInWord;
     if (!p) return null;
     return map ? map(p) : { x: p.x, y: p.y };
   };

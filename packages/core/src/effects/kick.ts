@@ -1,7 +1,7 @@
-import { type Setting as BlitsSetting, slew } from '@msb235/blits';
+import { slew } from '@msb235/blits';
 import { clamp01 } from '../easing.js';
 import { falloff, inkCenter } from './source.js';
-import type { PartInfo, Signal } from './types.js';
+import type { PartInfo, Setting, Signal } from './types.js';
 
 export interface KicksSpec {
   /** How far a kick reaches, in em of layout space. Default 0.4. */
@@ -33,7 +33,7 @@ export function kicks(spec: KicksSpec = {}): Kicks {
   let latest = 0;
 
   /** The strongest kick to land on a part since it was last asked, and 0 between kicks. */
-  const lift = (part: PartInfo, setting: BlitsSetting): number => {
+  const lift = (part: PartInfo, setting: Setting): number => {
     const held = setting.keep(lift, () => ({ seq: latest, at: setting.timestamp, k: 0 }));
     if (held.at === setting.timestamp) return held.k;
     held.at = setting.timestamp;

@@ -104,15 +104,10 @@ export interface Host {
 }
 
 /**
- * What a patch or light source reads for one frame: blits' setting, with klieg's fields on `host`.
- * `dt` is `Infinity` under reduced motion. Valid only during the call it is handed to.
+ * What a patch, signal or light source reads for one frame: blits' setting, with klieg's fields on
+ * `host`. `dt` is `Infinity` under reduced motion. Valid only during the call it is handed to.
  */
-export type Setting = BlitsSetting & { readonly host: Host };
-
-/** klieg's fields on a setting a signal is handed, which blits types without them. */
-export function hostOf(setting: BlitsSetting): Host {
-  return setting.host as Host;
-}
+export type Setting = BlitsSetting<void, Host>;
 
 /**
  * A host whose fields read through to whichever frame `read` returns, so a mix holding it by
@@ -133,7 +128,7 @@ export function relay(read: () => Host): Host {
 }
 
 /** A scalar, usually 0..1, resolved per part per frame: blits' signal over parts. */
-export type Signal = BlitsSignal<PartInfo>;
+export type Signal = BlitsSignal<PartInfo, Host>;
 
 export interface EffectPatch {
   /** Milliseconds one pass lasts, and the patch loops. Zero does not hold a patch still — the pass

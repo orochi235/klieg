@@ -45,6 +45,21 @@ gone. `hinge(signal, factory, { stops })` crossfades the two stops either side o
 (blits' `mix.blend`) where it snapped to the nearest one, so a hinged flicker eases between levels
 instead of stepping. A hinged patch asked directly, as `roving` asks its inner, reproduces both.
 
+What one frame costs, before and after, from `packages/core/test/bench/frame-cost.bench.ts`: the
+mean of three runs on one machine (msb-uai), 60 parts.
+
+| one frame | before | after |
+|---|---:|---:|
+| 12 letters posed | 6.7 µs | 6.7 µs |
+| 3 effects | 74.5 µs | 71.9 µs |
+| `hinge(dwell(near))` | 29.9 µs | 24.6 µs |
+| `hinge(near)` over 8 stops | 37.0 µs | 92.4 µs |
+| `hinge(kicks)` | 31.2 µs | 30.2 µs |
+| `power` with a trip | 26.6 µs | 28.2 µs |
+
+A stops hinge now runs the two stops it crossfades where it ran one, and blits 0.4.0 reads its
+signal once per stop.
+
 ### A timeline's phases start, loop and hold through blits
 
 Each layer of `enter`, `active` and `exit` is a blits voice with its own `start`, `loop` and

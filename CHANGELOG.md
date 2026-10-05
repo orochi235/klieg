@@ -6,6 +6,8 @@ therefore never picks up a break. When 1.0 comes is chosen deliberately, not rea
 
 ## Unreleased
 
+## 0.16.0
+
 ### Breaking: `hostOf` is gone
 
 blits 0.5.0 types a mix's host, so `setting.host` is a `Host` wherever klieg hands over a setting:

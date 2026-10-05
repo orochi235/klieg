@@ -1,7 +1,6 @@
-import type { Setting as BlitsSetting } from '@msb235/blits';
 import { clamp01 } from '../easing.js';
 import { hash01 } from '../motion/types.js';
-import { type EffectPatch, hostOf, type PartDelta, type Signal } from './types.js';
+import type { EffectPatch, PartDelta, Setting, Signal } from './types.js';
 
 /** How a sign comes back on: gain against milliseconds since it began warming. */
 export interface Warmup {
@@ -202,13 +201,13 @@ export function power(spec: PowerSpec = {}): PowerControl {
   }
 
   /** A short starts with the flare when there is a lit sign to blow out and motion is allowed. */
-  function shortOut(at: number, forMs: number | null, setting: BlitsSetting): void {
+  function shortOut(at: number, forMs: number | null, setting: Setting): void {
     const blows = flare && Number.isFinite(setting.dt) && (state === 'on' || state === 'warming');
     enter(blows ? 'flaring' : 'shorted', at, forMs);
   }
 
-  function advance(setting: BlitsSetting): void {
-    const now = hostOf(setting).now;
+  function advance(setting: Setting): void {
+    const now = setting.host.now;
     if (frame === now) return;
     const previous = frame;
     frame = now;
@@ -265,7 +264,7 @@ export function power(spec: PowerSpec = {}): PowerControl {
       },
     },
     warm: Object.assign(
-      (_part: unknown, setting: BlitsSetting) => {
+      (_part: unknown, setting: Setting) => {
         advance(setting);
         return state === 'on' ? 1 : 0;
       },

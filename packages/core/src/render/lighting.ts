@@ -1,15 +1,6 @@
-import {
-  type Setting as BlitsSetting,
-  type Channel,
-  kit,
-  lag,
-  type Mix,
-  mix,
-  patch,
-  sum,
-} from '@msb235/blits';
+import { type Channel, kit, lag, type Mix, mix, patch, sum } from '@msb235/blits';
 import { startAt } from '../effects/signal.js';
-import { type Host, hostOf, relay, type Setting } from '../effects/types.js';
+import { type Host, relay, type Setting } from '../effects/types.js';
 import { type Layered, layersOf } from '../motion/types.js';
 
 export type LightingName = 'sweep' | 'static' | 'pointer';
@@ -78,20 +69,20 @@ const NO_HOST: Host = { pointer: null, pointerInWord: null, now: 0 };
  * rather than a shared one, and no subject dimension to speak of.
  */
 export class EnvFrame {
-  private readonly mix: Mix<object, EnvPose>;
+  private readonly mix: Mix<object, EnvPose, Host>;
   private frame: Host = NO_HOST;
   private reduced = false;
 
   constructor(patches: readonly EnvPatch[]) {
-    this.mix = mix<object, EnvPose>(ENV_KIT, {
+    this.mix = mix<object, EnvPose, Host>(ENV_KIT, {
       host: relay(() => this.frame),
       reduce: () => this.reduced,
     });
     for (const env of patches) {
       this.mix.cue({
-        patch: patch<object, EnvPose>(
+        patch: patch<object, EnvPose, void, Host>(
           env.period,
-          (phase, _sign, setting) => env.at(phase, setting as Setting),
+          (phase, _sign, setting) => env.at(phase, setting),
           { writes: ENV_CHANNELS },
         ),
       });
@@ -147,9 +138,9 @@ export function track(spec: TrackSpec = {}): EnvPatch {
   const followMs = spec.followMs ?? FOLLOW_MS;
   /** Where the pointer last aimed one axis, held while it is away. */
   const aim = (axis: 'x' | 'y', range: number) => {
-    const read = (_sign: object, setting: BlitsSetting): number => {
+    const read = (_sign: object, setting: Setting): number => {
       const held = setting.keep(read, () => ({ value: 0 }));
-      const pointer = hostOf(setting).pointer;
+      const pointer = setting.host.pointer;
       if (pointer) held.value = pointer[axis] * range;
       return held.value;
     };

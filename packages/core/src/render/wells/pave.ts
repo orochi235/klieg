@@ -74,8 +74,8 @@ const optionsOf = (spec: WellSpec): PaveOptions => ({
   edge: spec.edge ?? DEFAULT_PAVE.edge,
 });
 
-/** One connected patch the region left of a cell. A cell is one pocket, so only the biggest is set. */
-interface Patch {
+/** One connected piece the region left of a cell. A cell is one pocket, so only the biggest is set. */
+interface Piece {
   ring: Ring;
 }
 
@@ -183,17 +183,17 @@ function boundaryFor(region: Ring[][]): Boundary {
 }
 
 /**
- * Every patch of `cell` the region leaves.
+ * Every piece of `cell` the region leaves.
  *
  * Against the region as one multipolygon, never one polygon at a time: asking for the part of a
  * cell inside each polygon separately answers nothing at all for a letter whose bezel leaves two
- * patches, which is every `i` and every `j`.
+ * pieces, which is every `i` and every `j`.
  *
  * `standing` settles the cells that cross nothing before the clipper is asked. That is most of
  * them, and the clipper's cost is the letter's own vertex count rather than the cell's — so a cell
  * in the middle of a stroke was paying for the whole outline to answer "unchanged".
  */
-function clipTo(cell: Ring, region: Ring[][]): Patch[] {
+function clipTo(cell: Ring, region: Ring[][]): Piece[] {
   if (cell.length < 3) return [];
   switch (standing(boundaryFor(region), region, cell)) {
     case 'inside':
@@ -202,10 +202,10 @@ function clipTo(cell: Ring, region: Ring[][]): Patch[] {
       return [];
   }
   try {
-    const patches = polygonClipping.intersection([cell] as never, region as never) ?? [];
-    return patches
-      .filter((patch) => patch[0] && patch[0].length >= 4)
-      .map((patch) => ({ ring: (patch[0] as number[][]).slice(0, -1) as Ring }));
+    const pieces = polygonClipping.intersection([cell] as never, region as never) ?? [];
+    return pieces
+      .filter((piece) => piece[0] && piece[0].length >= 4)
+      .map((piece) => ({ ring: (piece[0] as number[][]).slice(0, -1) as Ring }));
   } catch {
     return [];
   }
@@ -373,9 +373,9 @@ export const pave: Cutter = (shapes, region, spec): Cut => {
   for (let pass = 0; pass < opts.relax; pass++) {
     const all = [...pinned, ...free];
     for (let i = 0; i < free.length; i++) {
-      const patches = clipTo(voronoiCell(pinned.length + i, all, opts.pitch), base);
-      if (patches.length === 0) continue;
-      const biggest = patches.reduce((a, b) => (area(a.ring) > area(b.ring) ? a : b)).ring;
+      const pieces = clipTo(voronoiCell(pinned.length + i, all, opts.pitch), base);
+      if (pieces.length === 0) continue;
+      const biggest = pieces.reduce((a, b) => (area(a.ring) > area(b.ring) ? a : b)).ring;
       if (area(biggest) < whole * TINY) continue;
       free[i] = centroid(biggest);
     }
@@ -414,9 +414,9 @@ export const pave: Cutter = (shapes, region, spec): Cut => {
     for (let i = 0; i < seeds.length; i++) {
       const cell = voronoiCell(i, seeds, opts.pitch);
       const perStep = growths.map((g, s) => {
-        const patches = clipTo(shrink(cell, opts.wall / 2 - g), regions[s] as Ring[][]);
-        if (patches.length === 0) return null;
-        return patches.reduce((a, b) => (area(a.ring) > area(b.ring) ? a : b));
+        const pieces = clipTo(shrink(cell, opts.wall / 2 - g), regions[s] as Ring[][]);
+        if (pieces.length === 0) return null;
+        return pieces.reduce((a, b) => (area(a.ring) > area(b.ring) ? a : b));
       });
       const first = perStep[0];
       if (perStep.some((p) => p === null) || !first || area(first.ring) < whole * opts.minArea) {
@@ -428,7 +428,7 @@ export const pave: Cutter = (shapes, region, spec): Cut => {
       // cells have a line to share.
       const nudge = 1 - (i + 1) * 4e-9;
       perStep.forEach((p, s) => {
-        const ring = (p as Patch).ring;
+        const ring = (p as Piece).ring;
         const c = centroid(ring);
         const shrunk = ring.map(
           ([x, y]): Point => [c[0] + (x - c[0]) * nudge, c[1] + (y - c[1]) * nudge],

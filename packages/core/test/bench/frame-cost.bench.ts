@@ -1,5 +1,10 @@
 import { bench, describe } from 'vitest';
 import { EffectFrame, planEffects } from '../../src/effects/frame.js';
+import { hinge } from '../../src/effects/hinge.js';
+import { kicks } from '../../src/effects/kick.js';
+import { flicker } from '../../src/effects/pieces.js';
+import { power } from '../../src/effects/power.js';
+import { dwell, near } from '../../src/effects/signal.js';
 import type { EffectPiece, PartInfo } from '../../src/effects/types.js';
 import { blankPose, Timeline } from '../../src/motion/compositor.js';
 import type { LetterInfo, MotionPiece } from '../../src/motion/types.js';
@@ -93,4 +98,36 @@ describe('one frame of the mix', () => {
     now += 16;
     frame.resolve(parts, now, { ...ctx, now });
   });
+});
+
+/**
+ * The signal-driven pieces, each as its own effect over the same parts, so a change to how a
+ * signal keeps state or how `hinge` weighs a piece shows as its own row.
+ */
+const near1 = near({ radius: 3 });
+const kicked = kicks({ radius: 3 });
+const mains = power({ trip: { on: near1, at: 2 } });
+const signalFrame = (piece: EffectPiece) =>
+  new EffectFrame(
+    planEffects(
+      [{ piece, target: { kind: 'run' as const, by: 'index' as const, amount: 1 }, stagger: 0.4 }],
+      parts,
+    ),
+  );
+const signalFrames = {
+  'hinge(dwell(near)) blend': signalFrame(hinge(dwell({ of: near1 }), flick)),
+  'hinge(near) stops': signalFrame(hinge(near1, (k) => flicker({ unrest: k }))),
+  'hinge(kicks) blend': signalFrame(hinge(kicked, flick)),
+  'power with a trip': signalFrame(mains.piece),
+};
+
+describe('one frame of a signal-driven effect', () => {
+  for (const [name, f] of Object.entries(signalFrames)) {
+    bench(`${PARTS} parts under ${name}`, () => {
+      now += 16;
+      if (now % 320 === 0) kicked.kick({ x: (now / 16) % PARTS, y: 0 }, 1);
+      const pointerInWord = { x: ((now / 16) % (PARTS * 10)) / 10, y: 0 };
+      f.resolve(parts, now, { pointer: { x: 0, y: 0 }, pointerInWord, dt: 16, now });
+    });
+  }
 });

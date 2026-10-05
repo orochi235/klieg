@@ -6,6 +6,14 @@ therefore never picks up a break. When 1.0 comes is chosen deliberately, not rea
 
 ## Unreleased
 
+### Added
+
+`startAt: { hold: k }` on `fire()` starts an effect already settled in one of its holds: hold 0 is
+the opening word's, and hold `k` is `stages[k - 1]`'s. The word arrives in that stage's layout with
+earlier boundaries already played, as if each hold had been released the moment it settled, and
+plays live from there. No mark it skipped is reported, `active` included. A hold the fire does not
+have throws at the call.
+
 ## 0.16.0
 
 ### Breaking: `hostOf` is gone

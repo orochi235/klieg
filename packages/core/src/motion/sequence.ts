@@ -60,6 +60,13 @@ export interface SequenceOptions {
 
 const DEFAULT_MOVE_MS = 700;
 
+/** Throws unless `hold` names one of the holds a fire with `stages` stages has: 0 through `stages`. */
+export function assertHold(hold: number, stages: number): void {
+  if (!Number.isInteger(hold) || hold < 0 || hold > stages) {
+    throw new RangeError(`klieg: startAt.hold must be an integer from 0 to ${stages}`);
+  }
+}
+
 /** A stage boundary still playing out: what the regroup moved, and the clock the sequence runs. */
 interface Boundary {
   result: RegroupResult;
@@ -83,6 +90,8 @@ interface Boundary {
  */
 export class Sequence {
   private readonly opts: SequenceOptions;
+  /** Set while `land` plays boundaries nobody watched, so none is reported. */
+  private quiet = false;
   private stage = -1;
   private stageStart = 0;
   private timeline: Timeline;
@@ -139,7 +148,7 @@ export class Sequence {
     // Last, so a listener cannot observe a half-landed boundary. `stage` is this stage's index at
     // both call sites: `tick` settles the current stage, and `enterNextStage` settles the outgoing
     // one before it increments.
-    this.opts.onStage?.(this.stage);
+    if (!this.quiet) this.opts.onStage?.(this.stage);
   }
 
   private retire(boundary: Boundary): void {
@@ -209,6 +218,24 @@ export class Sequence {
 
   release(elapsed: number): void {
     this.timeline.release(this.local(elapsed));
+  }
+
+  /**
+   * Plays every boundary before hold `hold` at once, releasing each hold as it settles, and returns
+   * the elapsed time at which that hold has settled. Hold 0 is the opening word's; hold `k` is
+   * `stages[k - 1]`'s. Nothing reports its stage on the way: those boundaries were never seen.
+   * Called once, before the first `tick`.
+   */
+  land(hold: number): number {
+    assertHold(hold, this.opts.stages.length);
+    this.quiet = true;
+    for (let k = 0; k < hold; k++) {
+      this.timeline.release(this.timeline.settledAt);
+      this.enterNextStage();
+    }
+    this.settle();
+    this.quiet = false;
+    return this.stageStart + this.timeline.settledAt;
   }
 
   isFinished(elapsed: number): boolean {

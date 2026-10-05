@@ -11,6 +11,7 @@ import {
   EXIT_NAMES,
   type FireOptions,
   type KliegOptions,
+  type LetterInfo,
   LIGHTING_NAMES,
   LOOK_NAMES,
   MAX_BACKDROP_ROWS,
@@ -1111,6 +1112,66 @@ describe('driving an effect from the host', () => {
       { mark: 'stage', index: 1 },
       { mark: 'stage', index: 2 },
     ]);
+  });
+
+  it('lands settled in a later hold, reporting nothing it skipped, then plays live', async () => {
+    const seen: MarkEvent[] = [];
+    const bk = create();
+    const click = (keep: (l: LetterInfo) => boolean) =>
+      ({ keep, exit: 'none', hold: 'click', tween: { duration: 50 } }) as const;
+    const done = bk.fire('ABCD', {
+      hold: 'click',
+      dismiss: 'host',
+      stages: [click((l) => l.index < 3), click((l) => l.index < 2), click((l) => l.index < 1)],
+      startAt: { hold: 2 },
+      onMark: (e) => seen.push(e),
+    });
+    await flush();
+
+    clock.advance(16);
+    clock.advance(60_000);
+    expect(seen).toEqual([]);
+
+    done.advance();
+    clock.advance(1000);
+    expect(seen).toEqual([{ mark: 'stage', index: 2 }]);
+
+    done.advance();
+    clock.advance(5000);
+    await done;
+    expect(seen).toEqual([{ mark: 'stage', index: 2 }, { mark: 'exit' }]);
+  });
+
+  it('lands a fire with no stages in its hold, past the enter and its active mark', async () => {
+    const seen: MarkEvent[] = [];
+    const bk = create();
+    const done = bk.fire('HI', {
+      enter: { duration: 400, at: () => ({}) },
+      exit: 'none',
+      hold: 1000,
+      startAt: { hold: 0 },
+      onMark: (e) => seen.push(e),
+    });
+    await flush();
+
+    clock.advance(16);
+    expect(seen).toEqual([]);
+    // The enter is skipped, so the hold's remainder is all that is left to play.
+    clock.advance(1000);
+    await done;
+    expect(seen).toEqual([{ mark: 'exit' }]);
+  });
+
+  it('refuses at the call a hold the fire does not have', () => {
+    const bk = create();
+    expect(() => bk.fire('HI', { startAt: { hold: 1 } })).toThrow(RangeError);
+    expect(() => bk.fire('HI', { stages: [{ hold: 0 }], startAt: { hold: 2 } })).toThrow(
+      RangeError,
+    );
+    const signal = AbortSignal.abort();
+    expect(() =>
+      bk.fire('HI', { stages: [{ hold: 0 }], startAt: { hold: 1 }, signal }),
+    ).not.toThrow();
   });
 
   it('reports both marks under reduced motion, which holds the pose without travelling', async () => {

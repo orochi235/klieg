@@ -183,6 +183,12 @@ export class Timeline {
     return elapsed >= this.duration;
   }
 
+  /** The first instant the word is in its hold at full weight: the enter's blend into it is over. */
+  get settledAt(): number {
+    if (this.enterEnd === 0) return 0;
+    return Math.min(this.enterEnd + this.blend / 2, this.activeEnd);
+  }
+
   /**
    * Writes the composed pose into `out` and returns it. An explicit out-parameter rather than a
    * quietly reused return value: this runs once per letter per frame, and an aliased return is a

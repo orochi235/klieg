@@ -14,7 +14,7 @@ import {
 import { ENTER } from './motion/enter.js';
 import { EXIT } from './motion/exit.js';
 import { isolate, type MarkEvent, MarkReporter } from './motion/marks.js';
-import { Sequence } from './motion/sequence.js';
+import { assertHold, Sequence } from './motion/sequence.js';
 import {
   type ActiveName,
   type EnterName,
@@ -401,6 +401,17 @@ export interface FireOptions {
    * a stage holds on `'click'`. Ignored under reduced motion, which never travels.
    */
   stages?: Stage[];
+  /**
+   * Starts the effect already settled in one of its holds, as if it had played there and every
+   * earlier hold had been released the moment it settled. Hold 0 is the opening word's; hold `k` is
+   * `stages[k - 1]`'s, so a fire has one more hold than it has stages. The enter and every boundary
+   * before that hold are skipped, and no mark is reported for them — `active` included — nor for
+   * the boundary that hold sits in. From there it plays live: a `'click'` hold waits for its press.
+   *
+   * Throws for a hold the fire does not have. Under reduced motion, which plays no stages, the word
+   * is the opening one whatever the hold.
+   */
+  startAt?: { hold: number };
   /**
    * Called as the effect crosses each mark. `active` is the instant the word has landed
    * and is at full presence — mid-blend, which is what a host swapping a page behind the flourish
@@ -930,7 +941,15 @@ export function createKlieg(options: KliegOptions): Klieg {
         })
       : null;
     const driver: Sequence | Timeline = sequence ?? timeline;
-    const startedAt = clock.now();
+    // Reduced motion times the hold off `since` itself, and has no enter to skip.
+    const landed =
+      opts.startAt && !still
+        ? sequence
+          ? sequence.land(opts.startAt.hold)
+          : timeline.settledAt
+        : 0;
+    if (opts.startAt) reporter?.passActive();
+    const startedAt = clock.now() - landed;
 
     holdPointer();
 
@@ -1167,6 +1186,7 @@ export function createKlieg(options: KliegOptions): Klieg {
       // swallowing it there would make the bug reproduce only on some laptops. The registry
       // raises it, so the message has one author.
       if (opts.font !== undefined) fonts.assertKnown(opts.font);
+      if (opts.startAt) assertHold(opts.startAt.hold, opts.stages?.length ?? 0);
       if (!supported || destroyed) return handle(Promise.resolve());
       return handle(
         queue.push(

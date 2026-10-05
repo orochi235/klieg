@@ -41,6 +41,11 @@ export class MarkReporter {
     }
   }
 
+  /** Counts `active` as already crossed, for an effect that starts past it. */
+  passActive(): void {
+    this.sentActive = true;
+  }
+
   stage(index: number): void {
     this.emit({ mark: 'stage', index });
   }

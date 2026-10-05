@@ -1812,9 +1812,6 @@ describe('the lighting slot', () => {
     await flush();
     stubCanvas({ left: 0, top: 0, width: 100, height: 100 });
     dispatch('pointermove', { clientX: 75, clientY: 50 });
-    // `track` starts every run from rest, so its first frame reads 0 however fast it follows.
-    clock.advance(16);
-    expect(envY()).toBe(0);
     clock.advance(16);
 
     expect(envY()).toBeCloseTo(0.5, 6);

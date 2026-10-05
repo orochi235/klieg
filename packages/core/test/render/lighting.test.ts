@@ -100,10 +100,18 @@ describe('track', () => {
   });
 
   it('starts from rest on its first frame, wherever the pointer is', () => {
-    const patch = track({ yawRange: 1, pitchRange: 0.5, followMs: 0 });
+    const patch = track({ yawRange: 1, pitchRange: 0.5, followMs: 90 });
     expect(patch.at(0, voice()({ pointer: { x: 1, y: -1 }, now: 0 }))).toEqual({
       yaw: 0,
       pitch: 0,
+    });
+  });
+
+  it('snaps on its first frame when it follows at once', () => {
+    const patch = track({ yawRange: 1, pitchRange: 0.5, followMs: 0 });
+    expect(patch.at(0, voice()({ pointer: { x: 1, y: -1 }, now: 0 }))).toEqual({
+      yaw: 1,
+      pitch: -0.5,
     });
   });
 

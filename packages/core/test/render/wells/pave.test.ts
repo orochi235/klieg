@@ -28,7 +28,7 @@ function box(x: number, w: number, top: number, bottom: number): PathCommand[] {
   ];
 }
 
-/** `A` is one 0.5 em box; `i` is two, a stem and a dot, which is the two-patch region. */
+/** `A` is one 0.5 em box; `i` is two, a stem and a dot, which is the two-piece region. */
 function stubFont(): LoadedFont {
   const font = {
     charToGlyph: (char: string) => ({
@@ -102,12 +102,12 @@ describe('the pave cutter', () => {
   });
 
   // Asking for the part of a cell inside each polygon separately answers nothing at all for a
-  // letter whose bezel leaves two patches, and every `i` and `j` is one.
-  it('paves a letter the bezel leaves in two patches', () => {
+  // letter whose bezel leaves two pieces, and every `i` and `j` is one.
+  it('paves a letter the bezel leaves in two pieces', () => {
     const { cut } = cutOf('i');
     expect(cut.wells.length).toBeGreaterThan(2);
     const ys = cut.seats.map((s) => s.y);
-    // Cells in the dot as well as the stem, not just the taller patch.
+    // Cells in the dot as well as the stem, not just the taller piece.
     expect(Math.max(...ys)).toBeGreaterThan(0.55);
     expect(Math.min(...ys)).toBeLessThan(0.3);
   });

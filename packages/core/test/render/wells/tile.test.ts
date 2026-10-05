@@ -140,8 +140,8 @@ describe('the tile field', () => {
   });
 
   // A neck narrower than two bezels is gone at the pocket's level and back at the rim's, so the
-  // two patches either side of it share one rim, which no stitch can close.
-  it('keeps one of two patches the widest bead would join', () => {
+  // two pieces either side of it share one rim, which no stitch can close.
+  it('keeps one of two pieces the widest bead would join', () => {
     const dumbbell: Ring = [
       [-0.055, -0.03],
       [-0.005, -0.03],
@@ -156,11 +156,11 @@ describe('the tile field', () => {
       [-0.005, 0.03],
       [-0.055, 0.03],
     ];
-    // Every patch counts here, however small: the rule is about which patches meet.
+    // Every piece counts here, however small: the rule is about which pieces meet.
     const centered = (rings: Ring[]) =>
       tiled(rings, { minArea: 0 }).pockets.filter((p) => Math.hypot(p.cx, p.cy) < 1e-9);
     expect(centered([dumbbell])).toHaveLength(1);
-    // Cut the neck and the patches never meet, so both stay.
+    // Cut the neck and the pieces never meet, so both stay.
     const apart = [box(-0.055, -0.03, -0.005, 0.03), box(0.005, -0.03, 0.055, 0.03)];
     expect(centered(apart)).toHaveLength(2);
   });

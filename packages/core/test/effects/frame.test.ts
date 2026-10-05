@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EffectFrame, planEffects } from '../../src/effects/frame.js';
+import { hinge } from '../../src/effects/hinge.js';
 import type { EffectPatch, EffectSpec, Host, PartInfo } from '../../src/effects/types.js';
 
 const HOST: Host = { pointer: null, pointerInWord: null, now: 0 };
@@ -156,5 +157,22 @@ describe('EffectFrame', () => {
     ];
     const out = new EffectFrame(planEffects(specs, parts)).resolve(parts, 9999, HOST);
     expect(out.get(0)?.scale).toBe(1);
+  });
+
+  it("asks only the two stops a hinge's signal sits between", () => {
+    const parts = pool(4, 0);
+    let asked = 0;
+    const stop = (k: number): EffectPatch => ({
+      period: 1000,
+      at: () => {
+        asked++;
+        return { gain: k };
+      },
+    });
+    const specs: EffectSpec[] = [
+      { patch: hinge(() => 0.3, stop), target: { kind: 'run', by: 'index', amount: 1 } },
+    ];
+    new EffectFrame(planEffects(specs, parts)).resolve(parts, 100, HOST);
+    expect(asked).toBe(parts.length * 2);
   });
 });

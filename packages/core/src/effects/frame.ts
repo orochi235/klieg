@@ -162,6 +162,8 @@ export class EffectFrame {
   }
 }
 
+const NONE: Partial<PartPose> = {};
+
 /** Stands in until the first frame reports one. Nothing samples a patch before then. */
 const NO_HOST: Host = { pointer: null, pointerInWord: null, now: 0 };
 
@@ -177,6 +179,8 @@ function voiceOf(
   return patch<PartInfo, PartPose>(
     0,
     (_phase, part, setting) => {
+      // A blend's stops all run, and all but two sit at zero weight, where nothing they emit lands.
+      if (!(setting.weight > 0)) return NONE;
       const pass = period > 0 ? (setting.elapsed % period) / period : 0;
       const phase = spread === undefined ? pass : stagger(pass, part, spread);
       return asDelta(effect.at(phase, part, setting as Setting));

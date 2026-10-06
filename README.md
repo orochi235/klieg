@@ -585,8 +585,22 @@ The per-letter form of [`tint`](#tint) is how the survivors get their own color.
 fraction of the move or this stage's exit, whichever is longer, so it can wait out an exit that
 outlasts the move. `delayBy: { scale: 0.45 }` lands the word before it grows to fill the screen.
 
+A fire with stages has one more hold than it has stages: hold 0 is the opening word's, and hold
+`k` is `stages[k - 1]`'s. `startAt: { hold: k }` starts the fire already settled in hold `k`, as if
+it had played there and each earlier hold had been released the moment it settled. It is how a
+presentation lands on a slide it is stepping back to, without replaying the entrance:
+
+```ts
+const slide = bk.fire(poem, { hold: 'click', dismiss: 'host', stages, startAt: { hold: 2 } });
+// The next press plays on from there:
+slide.advance();
+```
+
+Nothing it skips is reported to `onMark`: not `active`, and not the stage that hold sits in. A hold
+the fire does not have throws at the call.
+
 Under `prefers-reduced-motion: reduce` the stages do not play — that path holds a pose and never
-travels, so there is nothing to regroup.
+travels, so there is nothing to regroup, and `startAt` only keeps the skipped marks quiet.
 
 ### acronym
 
@@ -732,6 +746,7 @@ you called it, as `fire()` does.
 | `tint` | none | recolors the look, as `0xff2d6f`, or a rule consulted per letter |
 | `hold` | `1200` | milliseconds in the active segment, `'click'` to hold until dismissed, or `'forever'` to hold until `destroy()`; under an element `placement`, `'click'` needs either `clickAnywhere` on the placement or `dismiss: 'host'`, and `'forever'` is refused alongside `stages`, which it would never advance past |
 | `stages` | none | stages played after the enter, each regrouping what survives it |
+| `startAt` | none | `{ hold: k }` starts the effect settled in its `k`th hold, skipping the enter and every stage before it, and reports no mark it skipped — [stages](#stages) |
 | `blendMs` | `120` | crossfade window straddling each segment boundary |
 | `bloom` | look's choice | adds a glow pass, at the cost of three render targets while the effect runs |
 | `wrap` | `false` | break long text into the arrangement that renders largest |

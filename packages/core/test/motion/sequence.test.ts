@@ -527,3 +527,75 @@ describe('Sequence', () => {
     expect(seq.exitAt).toBe(600);
   });
 });
+
+describe('Sequence.land', () => {
+  const MOVE: MotionPatch = { duration: 300, at: (t) => ({ position: [10 * (1 - t), 0, 0] }) };
+  const SWAY: MotionPatch = { duration: 500, at: (t) => ({ position: [0, Math.sin(t * 6), 0] }) };
+  const build = (t: Spy, onStage?: (index: number) => void) =>
+    new Sequence({
+      enter: MOVE,
+      active: SWAY,
+      stages: [
+        stage({ hold: 'click', active: SWAY, exit: fading(250) }),
+        stage({ hold: 'click', active: FLAG, exit: fading(150) }),
+      ],
+      exit: fading(200),
+      hold: 'click',
+      blendMs: 40,
+      target: t,
+      onStage,
+    });
+
+  it('lands each hold as a play-through pressed the moment each hold settles would', () => {
+    const settled = [0, 1, 2].map((k) => build(target()).land(k));
+    for (const k of [0, 1, 2]) {
+      const played = target();
+      const seq = build(played);
+      const at = settled[k] as number;
+      let pressed = 0;
+      for (let t = 0; t <= at; t++) {
+        seq.tick(t);
+        if (pressed < k && t >= (settled[pressed] as number)) {
+          seq.release(t);
+          pressed++;
+        }
+      }
+      const landed = target();
+      const jumped = build(landed);
+      expect(jumped.land(k)).toBe(at);
+      jumped.tick(at);
+      expect(jumped.poseAt(at, letter)).toEqual(seq.poseAt(at, letter));
+      expect(landed.regroups).toBe(played.regroups);
+      expect(landed.retired).toEqual(played.retired);
+      expect(landed.fit.at(-1)).toBe(played.fit.at(-1));
+    }
+  });
+
+  it('reports no stage it lands past, and carries on reporting live from there', () => {
+    const seen: number[] = [];
+    const seq = build(target(), (index) => seen.push(index));
+    const at = seq.land(1);
+    expect(seen).toEqual([]);
+    seq.tick(at);
+    seq.release(at + 10);
+    seq.tick(at + 5000);
+    expect(seen).toEqual([1]);
+  });
+
+  it('waits in the landed hold until it is released', () => {
+    const t = target();
+    const seq = build(t);
+    const at = seq.land(1);
+    seq.tick(at + 60_000);
+    expect(t.regroups).toBe(1);
+    seq.release(at + 60_000);
+    seq.tick(at + 70_000);
+    expect(t.regroups).toBe(2);
+  });
+
+  it('refuses a hold the fire does not have', () => {
+    expect(() => build(target()).land(3)).toThrow(RangeError);
+    expect(() => build(target()).land(-1)).toThrow(RangeError);
+    expect(() => build(target()).land(0.5)).toThrow(RangeError);
+  });
+});

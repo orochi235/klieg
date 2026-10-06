@@ -1,4 +1,4 @@
-enlist: 2
+enlist: 3
 # How `onto test` runs this repository's suite on another node.
 plugin: node
 run: npm test

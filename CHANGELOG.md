@@ -6,6 +6,8 @@ therefore never picks up a break. When 1.0 comes is chosen deliberately, not rea
 
 ## Unreleased
 
+## 0.16.2
+
 ### Runs on @msb235/blits 0.6.0
 
 klieg pins `@msb235/blits` at exactly `0.6.0`. Nothing klieg exports changes. `dwell` and `track`

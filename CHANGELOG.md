@@ -6,6 +6,11 @@ therefore never picks up a break. When 1.0 comes is chosen deliberately, not rea
 
 ## Unreleased
 
+### Runs on @msb235/blits 0.6.0
+
+klieg pins `@msb235/blits` at exactly `0.6.0`. Nothing klieg exports changes. `dwell` and `track`
+start from rest through blits' own `from`, which 0.6.0 skips under reduced motion as klieg did.
+
 ## 0.16.1
 
 ### Added

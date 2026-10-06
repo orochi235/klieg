@@ -1,5 +1,4 @@
 import { type Channel, kit, lag, type Mix, mix, patch, sum } from '@msb235/blits';
-import { startAt } from '../effects/signal.js';
 import { type Host, relay, type Setting } from '../effects/types.js';
 import { type Layered, layersOf } from '../motion/types.js';
 
@@ -145,10 +144,11 @@ export function track(spec: TrackSpec = {}): EnvPatch {
       return held.value;
     };
     const aimed = Object.assign(read, { input: true });
-    return lag(followMs > 0 ? startAt(0, aimed) : aimed, {
+    return lag(aimed, {
       riseMs: followMs,
       fallMs: followMs,
       floor: 0,
+      from: followMs > 0 ? 0 : undefined,
     });
   };
   const yaw = aim('x', yawRange);

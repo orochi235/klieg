@@ -131,7 +131,7 @@ export class Timeline {
           }),
           start: seg.start,
           loop: seg.loop && seg.period > 0 ? true : 1,
-          hold: 'both',
+          freeze: 'both',
           weight: () => this.weightAt(seg, this.at),
         });
       }

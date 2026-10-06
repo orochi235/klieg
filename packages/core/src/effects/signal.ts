@@ -1,4 +1,4 @@
-import { type Signal as BlitsSignal, slew } from '@msb235/blits';
+import { slew } from '@msb235/blits';
 import { clamp01 } from '../easing.js';
 import { falloff, fromPointer, inkCenter, type LightSource } from './source.js';
 import type { Signal } from './types.js';
@@ -81,18 +81,5 @@ export function dwell(spec: DwellSpec = {}): Signal {
     return Number.isFinite(input) ? clamp01(input) : 0;
   };
   const input = of.input ? Object.assign(clamped, { input: true }) : clamped;
-  return slew(startAt(0, input), { riseMs: spec.riseMs ?? 1500, fallMs: spec.fallMs ?? 600 });
-}
-
-/**
- * Reads `value` the first frame a subject is seen, and `of` after, unless motion is reduced. A
- * `slew` or `lag` starts at its input on first sight; fed this, it starts at `value` and moves.
- */
-export function startAt<I, H>(value: number, of: BlitsSignal<I, H>): BlitsSignal<I, H> {
-  const read: BlitsSignal<I, H> = (subject, setting) => {
-    const input = of(subject, setting);
-    const first = setting.keep(read, () => ({ at: setting.timestamp }));
-    return first.at === setting.timestamp && Number.isFinite(setting.dt) ? value : input;
-  };
-  return of.input ? Object.assign(read, { input: true }) : read;
+  return slew(input, { riseMs: spec.riseMs ?? 1500, fallMs: spec.fallMs ?? 600, from: 0 });
 }

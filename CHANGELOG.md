@@ -6,6 +6,8 @@ therefore never picks up a break. When 1.0 comes is chosen deliberately, not rea
 
 ## Unreleased
 
+## 0.16.1
+
 ### Added
 
 `startAt: { hold: k }` on `fire()` starts an effect already settled in one of its holds: hold 0 is

@@ -83,8 +83,7 @@ Each of these needs someone looking at renders or choosing; none is safe to sett
 - **Unmeasured costs**: a lamp on `by: 'all'` may re-upload every run's vertex buffer each frame,
   and `tile`'s remaining cost is mostly the shell's own distance field of the letter's skin.
 - **The dev labs carry a second `@msb235/blits`** (0.4.0, pinned by `@weasel-js/core`) beside klieg's
-  0.6.0, until weasel moves. Branch `blits-0.6.0` in weasel (worktree `.worktrees/blits-0.6.0`)
-  makes that move and is waiting to merge; once a weasel release carries it, bump klieg's
-  `@weasel-js` packages again.
+  0.6.0, until weasel moves. weasel's `main` makes that move in `0b8d6f836`, unreleased; once a
+  weasel release carries it, bump klieg's `@weasel-js` packages again.
 - **No visual baseline covers** `power`, `kicks`, a lamp, or a multi-line block's horizontal
   placement.

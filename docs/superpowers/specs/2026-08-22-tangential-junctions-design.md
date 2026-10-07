@@ -3,6 +3,8 @@
 **For:** whoever changes the corner stage next. **Answers:** why the last bend-minimum failure is not
 a tuning problem, and what replaces the fit that causes it.
 
+**Status, 2026-10-07: unbuilt, and a decision rather than a task.** `junctionRadius` and `biarcBlend` exist in `bend.ts` (the latter used only by the hairpin); neither fix is wired, and `piping`'s `B` still fails.
+
 A *junction* is where a corner's built arc splices back into the extracted path. A *fillet* is the
 fixed-radius arc the corner stage builds there today.
 

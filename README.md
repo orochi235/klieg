@@ -978,10 +978,15 @@ Under `prefers-reduced-motion: reduce` the word holds the pose its enter settles
 - `npm run dev -w @klieg/lab` — the lab page: every motion, look and policy behind
   pickers, plus canned sequences.
 - `npm run dev:tube-lab -w klieg` — the tube lab: several letters at several angles at once
-  with the tube pipeline's own numbers beside the render. Dev-only tooling, never published.
+  with the tube pipeline's own numbers beside the render. `dev:kliegsminister`,
+  `dev:composition-lab` and `dev:tube-gallery` are the other labs, described in
+  [the lab notes](docs/notes/labs.md). Dev-only tooling, never published.
 - `npm run check` — biome, tsc and the unit suite.
 - `npm run test:visual` — Playwright specs asserting the overlay composites over a live page
   without tinting or blocking it.
 - `npm run build:pages -w @klieg/lab && npm run preview:pages -w @klieg/lab` — the
   lab exactly as GitHub Pages serves it, under the `/klieg/` subpath the workflow builds
   for. Plain `npm run build` produces a root-served build instead.
+
+How the internals behave, and what was measured getting them there, is in
+[`docs/notes/`](docs/notes/README.md).

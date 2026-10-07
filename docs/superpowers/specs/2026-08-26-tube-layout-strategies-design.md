@@ -5,6 +5,8 @@ pipeline exists and sweeps a tube along a path; assumes nothing about its intern
 **Answers:** how a filled shape should decide where its tubes go, when outline-tracing is the wrong
 answer, and what has to change to offer anything else.
 
+**Status, 2026-10-07: only `TubeSpec.shortRun` is built.** None of the `concentric`, `spine` or `single-stroke` strategies exist, nor the option forcing a cut on a corner-free loop.
+
 ## The problem
 
 klieg has exactly one way to turn a shape into tubes: trace its outline. That is right for

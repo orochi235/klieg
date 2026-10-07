@@ -4,6 +4,8 @@
 `packages/core/src/render/tube/` and the vocabulary of
 [the tube geometry design](2026-08-19-tube-geometry-design.md).
 
+**Status, 2026-10-07: shipped as the default, two goals unmet.** `refineExact` is still in `field.ts` for the `'exact'` source, and "0 runs under ρmin" is not met: `piping`'s `B` fails ([tangential junctions](2026-08-22-tangential-junctions-design.md)).
+
 **Answers:** where a tube's path should come from, and what has to be fixed before it can change.
 
 ## The decision

@@ -4,6 +4,8 @@
 **For:** whoever implements this in `@klieg/core`.
 **Answers:** what a regroup is, how a caller drives one, and how a letter gets its colour.
 
+**Status, 2026-10-07: built except run spans.** Regroup, stages and the tint cascade shipped, and `TextRun` arrived with the run model. `LetterInfo.span` was never added, so `keep` and `tint` cannot ask which run a letter came from.
+
 ## The target
 
 An acrostic. Each line of a poem has its first letter in its own colour. The viewer clicks;

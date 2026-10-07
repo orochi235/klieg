@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   effectsFor,
   lookFor,
-  sweepIsVisible,
   VARIANTS,
   type Variant,
 } from '../../dev/tube-gallery/src/variants.js';

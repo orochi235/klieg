@@ -42,8 +42,8 @@ type IdleHost = { requestIdleCallback?: (cb: () => void) => unknown };
  * links on the first draw — so this draws, to a one-pixel target rather than the canvas the mount
  * just appended, which would otherwise flash a stray glyph seconds before anything was fired.
  *
- * The returned function ends the warm and frees what it is holding. Call it when the first fire
- * starts, and on destroy.
+ * The returned `Warmer` frees what it is holding: `release` when the first fire starts, `cancel`
+ * on destroy.
  */
 export function scheduleWarm(deps: WarmDeps): Warmer {
   let cancelled = false;

@@ -195,8 +195,8 @@ class Skin {
   }
 
   /**
-   * A quad strip between two rings that need not correspond. Both are walked by their own arc
-   * length and whichever is behind advances, so the strip closes whatever the point counts are.
+   * A quad strip between two rings that need not correspond. Each vertex of `lower` is matched to
+   * its nearest point on `upper`, so the strip closes whatever the point counts are.
    *
    * That is what lets every ring come off the field. A miter keeps the point count and so cannot
    * survive being asked for more than a corner's own radius — past that the offset has to invert.
@@ -206,16 +206,6 @@ class Skin {
     const na = lower.length;
     const nb = upper.length;
     if (na < 3 || nb < 3) return;
-    const arc = (ring: Ring): number[] => {
-      const t = [0];
-      for (let i = 1; i <= ring.length; i++) {
-        const p = ring[i - 1] as Point;
-        const q = ring[i % ring.length] as Point;
-        t.push((t[i - 1] as number) + Math.hypot(q[0] - p[0], q[1] - p[1]));
-      }
-      const total = (t[t.length - 1] as number) || 1;
-      return t.map((v) => v / total);
-    };
     // Two iso levels start wherever marching squares happened to start them; without this the
     // strip is built with a twist in it and every quad crosses the letter.
     let off = 0;

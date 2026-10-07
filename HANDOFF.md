@@ -6,10 +6,11 @@ open. Everything learned along the way is in [`docs/notes/`](docs/notes/README.m
 
 ## State
 
-- **npm has 0.16.2**; `main` is at 0.16.5, untagged and unpushed. 0.16.3 and 0.16.4 move to
-  `@weasel-js` 1.8.0 and 1.8.1; 0.16.5 stops the stage unmounting under a running effect. Releasing
-  is a tag push — see [releasing](docs/notes/README.md#releasing).
-- On 0.16.5, biome and `tsc -b` are clean and the full unit suite is green on the fleet (`onto test`).
+- **npm has 0.16.6**, tagged `v0.16.6`, on `@weasel-js` 1.9.0 with every dependency current.
+  Releasing is a tag push — see [releasing](docs/notes/README.md#releasing).
+- On 0.16.6, biome and `tsc -b` are clean, the full unit suite is green on the fleet (`onto test`)
+  and the dist test passes. The Playwright visual suite has not run since `@playwright/test` moved
+  from 1.62 to 1.64; a new Chromium can move baselines.
 
 ## Open, and waiting on a decision
 

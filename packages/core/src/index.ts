@@ -642,6 +642,7 @@ export function createKlieg(options: KliegOptions): Klieg {
         caches,
         stale: () => destroyed || fired,
         gone: () => destroyed,
+        busy: () => liveFires > 0 || layersLive(),
       })
     : null;
 
@@ -972,8 +973,8 @@ export function createKlieg(options: KliegOptions): Klieg {
         word.dispose();
         backdrop?.dispose();
         bloom?.dispose();
-        // A live layer holds the stage; the layer loop arms this once it goes quiet.
-        if (!layersLive()) stage.scheduleIdleTeardown();
+        // Another fire or a live layer holds the stage, and arms this itself once it lets go.
+        if (liveFires === 0 && !layersLive()) stage.scheduleIdleTeardown();
         done();
       };
       const finish = () => settle(resolve);

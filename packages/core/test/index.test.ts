@@ -419,6 +419,21 @@ describe('createKlieg', () => {
     expect(renders).toBe(1);
   });
 
+  it('arms no teardown while a concurrent effect is still running', async () => {
+    const bk = create({ policy: 'concurrent' });
+    const short = bk.fire('A', INSTANT);
+    const long = bk.fire('B', LIT);
+    await flush();
+    clock.advance(16);
+    await short;
+
+    expect(calls).not.toContain('idle');
+
+    clock.advance(5000);
+    await long;
+    expect(calls.at(-1)).toBe('idle');
+  });
+
   it('runs queued effects one at a time', async () => {
     const bk = create();
     const a = bk.fire('A', { ...INSTANT, hold: 32 });
@@ -2477,6 +2492,20 @@ describe('the warm', () => {
     await bk.warm('gold');
 
     expect(renders).toBe(before + 1);
+  });
+
+  it('arms no teardown when the host warms during a fire', async () => {
+    const bk = create();
+    const done = bk.fire('HI', LIT);
+    await flush();
+    clock.advance(16);
+    await bk.warm('gold');
+
+    expect(calls).not.toContain('idle');
+
+    clock.advance(5000);
+    await done;
+    expect(calls.at(-1)).toBe('idle');
   });
 
   it('warms the configured look when the host names none', async () => {

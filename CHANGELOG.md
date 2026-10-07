@@ -6,6 +6,14 @@ therefore never picks up a break. When 1.0 comes is chosen deliberately, not rea
 
 ## Unreleased
 
+## 0.16.5
+
+### Fixed
+
+The stage no longer unmounts under an effect that is still running. Under `policy: 'concurrent'`,
+one effect settling started the idle teardown while another was still on screen, and so did a
+`warm()` called during a fire; an effect that ran past `idleTimeoutMs` after either lost its canvas.
+
 ## 0.16.4
 
 ### Runs on @weasel-js 1.8.1

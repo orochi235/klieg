@@ -76,7 +76,6 @@ export interface WordOptions {
   tracking?: number;
 }
 
-/** One group per letter — per-letter motion (spin, flip, shatter) needs independent transforms. */
 /** The ink bounding box of a word's part pool, in its own layout space. */
 export interface WordExtent {
   minX: number;
@@ -85,6 +84,7 @@ export interface WordExtent {
   maxY: number;
 }
 
+/** One group per letter — per-letter motion (spin, flip, shatter) needs independent transforms. */
 export class Word {
   readonly group = new THREE.Group();
   /** Sits between `group` (the viewport fit) and the letters — see the `transform` accessor. */
@@ -448,12 +448,12 @@ export class Word {
     return this.caches.shapes(this.font, char);
   }
 
-  /** A glyph draws ink when its geometry has vertices — the same test the cell build uses. */
   /** Line ranging stays klieg's, in `placeBlock`, so weasel is asked only to place. */
   private layoutOpts() {
     return { maxWidth: UNBOUNDED, lineHeight: LINE_HEIGHT_EM, align: 'left' as const };
   }
 
+  /** A glyph draws ink when its geometry has vertices — the same test the cell build uses. */
   private drawsInk(char: string): boolean {
     return !!this.glyph(char, DEFAULT_GLYPH_OPTIONS.depth).attributes.position?.count;
   }

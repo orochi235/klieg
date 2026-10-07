@@ -26,8 +26,9 @@ export interface PartInfo {
   count: number;
   /** The letter this part belongs to, so a patch can order by letter as well as by part. */
   letter: LetterInfo;
-  /** Layout position in em, relative to the block centre. This is the letter's origin, which on
-   * a single line is the shared baseline -- `ink` is where the part is actually drawn. */
+  /** The letter's origin in em -- `ink` is where the part is actually drawn. `x` is relative to
+   * the block centre; `y` is not: it is the baseline, 0 on the first line and `-1.1` per line
+   * after, where `LetterInfo.y` is block-centred. */
   x: number;
   y: number;
   /**

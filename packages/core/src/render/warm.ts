@@ -20,6 +20,8 @@ export interface WarmDeps {
   stale(): boolean;
   /** True once the instance is destroyed. Nothing may touch the stage after that. */
   gone(): boolean;
+  /** True while a fire or a live layer holds the stage, and arms its own teardown once it lets go. */
+  busy(): boolean;
   /** Whether `look` draws through the bloom path, whose quads link programs of their own. */
   blooms: boolean;
 }
@@ -40,8 +42,8 @@ type IdleHost = { requestIdleCallback?: (cb: () => void) => unknown };
  * links on the first draw — so this draws, to a one-pixel target rather than the canvas the mount
  * just appended, which would otherwise flash a stray glyph seconds before anything was fired.
  *
- * The returned function ends the warm and frees what it is holding. Call it when the first fire
- * starts, and on destroy.
+ * The returned `Warmer` frees what it is holding: `release` when the first fire starts, `cancel`
+ * on destroy.
  */
 export function scheduleWarm(deps: WarmDeps): Warmer {
   let cancelled = false;
@@ -126,8 +128,8 @@ async function warm(
     // by keeping a reference until that fire arrives.
     if (word) held.push(word);
     if (bloom) held.push(bloom);
-    // A fire that started while this ran arms its own teardown when it settles; arming here too
-    // would set an 8s timer against an effect that has not finished.
-    if (!skip()) deps.stage.scheduleIdleTeardown();
+    // A fire's frames draw on the renderer it took at the start and never cancel the timer, so
+    // one armed here would unmount the stage under it.
+    if (!skip() && !deps.busy()) deps.stage.scheduleIdleTeardown();
   }
 }

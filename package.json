@@ -16,11 +16,11 @@
     "check": "npm run lint && npm run typecheck && npm run test"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.8",
-    "@playwright/test": "^1.62.1",
-    "@types/node": "^26.2.0",
-    "jsdom": "^28.1.0",
+    "@biomejs/biome": "^2.5.15",
+    "@playwright/test": "^1.64.0",
+    "@types/node": "^26.6.4",
+    "jsdom": "^30.1.2",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.3"
   }
 }

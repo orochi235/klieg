@@ -6,6 +6,14 @@ therefore never picks up a break. When 1.0 comes is chosen deliberately, not rea
 
 ## Unreleased
 
+## 0.16.6
+
+### Runs on @weasel-js 1.9.0
+
+klieg pins `@weasel-js/text` and `@weasel-js/font` at exactly `1.9.0`, and its dev labs build on
+the matching `core`, `ui` and `labkit`, which now share klieg's `@msb235/blits` 0.6.0 rather than
+carrying a second copy. Nothing klieg exports changes.
+
 ## 0.16.5
 
 ### Fixed

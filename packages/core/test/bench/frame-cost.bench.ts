@@ -1,4 +1,4 @@
-import { bench, describe } from 'vitest';
+import { test } from 'vitest';
 import { EffectFrame, planEffects } from '../../src/effects/frame.js';
 import { hinge } from '../../src/effects/hinge.js';
 import { kicks } from '../../src/effects/kick.js';
@@ -85,18 +85,19 @@ const frame = new EffectFrame(
 
 let now = 0;
 
-describe('one frame of the mix', () => {
-  bench(`${LETTERS} letters posed`, () => {
-    now += 16;
-    for (let i = 0; i < LETTERS; i++) {
-      timeline.poseAt(now % 2400, letters[i] as LetterInfo, scratch[i]);
-    }
-  });
-
-  bench(`${PARTS} parts resolved under ${EFFECTS} effects`, () => {
-    now += 16;
-    frame.resolve(parts, now, { pointer: null, pointerInWord: null, now });
-  });
+test('one frame of the mix', async ({ bench }) => {
+  await bench.compare(
+    bench(`${LETTERS} letters posed`, () => {
+      now += 16;
+      for (let i = 0; i < LETTERS; i++) {
+        timeline.poseAt(now % 2400, letters[i] as LetterInfo, scratch[i]);
+      }
+    }),
+    bench(`${PARTS} parts resolved under ${EFFECTS} effects`, () => {
+      now += 16;
+      frame.resolve(parts, now, { pointer: null, pointerInWord: null, now });
+    }),
+  );
 });
 
 /**
@@ -120,14 +121,16 @@ const signalFrames = {
   'power with a trip': signalFrame(mains.patch),
 };
 
-describe('one frame of a signal-driven effect', () => {
-  for (const [name, f] of Object.entries(signalFrames)) {
-    bench(`${PARTS} parts under ${name}`, () => {
-      now += 16;
-      if (now % 320 === 0) kicked.kick({ x: (now / 16) % PARTS, y: 0 }, 1);
-      const pointerInWord = { x: ((now / 16) % (PARTS * 10)) / 10, y: 0 };
-      const host = { pointer: { x: 0, y: 0 }, pointerInWord, now };
-      f.resolve(parts, now, host);
-    });
-  }
+test('one frame of a signal-driven effect', async ({ bench }) => {
+  await bench.compare(
+    ...Object.entries(signalFrames).map(([name, f]) =>
+      bench(`${PARTS} parts under ${name}`, () => {
+        now += 16;
+        if (now % 320 === 0) kicked.kick({ x: (now / 16) % PARTS, y: 0 }, 1);
+        const pointerInWord = { x: ((now / 16) % (PARTS * 10)) / 10, y: 0 };
+        const host = { pointer: { x: 0, y: 0 }, pointerInWord, now };
+        f.resolve(parts, now, host);
+      }),
+    ),
+  );
 });

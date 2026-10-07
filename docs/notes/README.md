@@ -108,8 +108,8 @@ The rest of this page is about working in the repo.
   version's internal packages (`kernel3d`, `loupe`, `svg`), the install fails even with every
   declared version moved; delete the `node_modules/@weasel-js/*` entries from `package-lock.json`
   and reinstall.
-- **`@weasel-js/core` pins its own `@msb235/blits`**, so the dev labs can carry a second copy beside
-  klieg's.
+- **`@weasel-js/core` pins its own `@msb235/blits`**, so the dev labs carry a second copy beside
+  klieg's whenever the two pins differ. `npm ls @msb235/blits` should show one version.
 - **`@types/three` is an optional peer**, and anything a consumer's type checker re-evaluates must
   not depend on it. `LookKey` ships as a literal union; the `Extract<keyof
   THREE.MeshPhysicalMaterial, …>` it was once emitted as collapsed `LookParams` to `{}` for any

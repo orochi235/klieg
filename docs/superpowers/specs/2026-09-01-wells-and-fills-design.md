@@ -3,6 +3,8 @@
 **For:** whoever builds klieg's next major version. **Answers:** what replaces the single
 `decoration` slot, and why the replacement is subtractive.
 
+**Status, 2026-10-07: partly built.** The cutters (`lattice`, `pave`, `tile`), the `stone` fill, proportional insets, `inflate` and `{ fill }` targeting are on `main`. The `tube`, `scatter` and `flat` fills are not, and `tubing`, `piping` and `sequin` have not moved onto fills — the last slice, which moves baselines.
+
 A letter is a solid volume. This pipeline **carves wells into it and fills them**. A well is a
 recess; a fill is what sits in the recess; the metal left standing between the wells is the frame.
 Nothing here adds a decoration to a surface.

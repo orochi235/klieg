@@ -3,6 +3,8 @@
 **What this is:** a design for a draggable, corner-snapping color key over the corner lab's canvas,
 and the three packages it lands across.
 
+**Status, 2026-10-07: half built.** kliegsminister has a static key (`LegendPanel.tsx`) built on labkit's `LegendEntry`. The floating, draggable, corner-snapping legend is not built, though labkit now exports `FloatingPanel`.
+
 **Who it's for:** whoever implements it. The work spans klieg, `@weasel-js/labkit` and `windease`,
 and cannot land as one commit.
 

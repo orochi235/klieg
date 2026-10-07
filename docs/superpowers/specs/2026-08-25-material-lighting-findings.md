@@ -7,7 +7,7 @@ Everything here was found while designing
 [composable lighting](2026-08-25-composable-lighting-design.md) and is verified by rendering, not by
 reading. Each item names the spike that proves it.
 
-**Items 1 and 5 shipped in `deebe56`, after this file was written.** A struck heading means the
+**Status, 2026-10-07: items 1, 5 and 7 are fixed and 9 is fixed in part; 10 and 11 are open.** Items 1 and 5 shipped in `deebe56`. A regrouped sign's lamp still lights the old layout (10), and a `replace` gradient still never reads `vRunColor` (11). A struck heading means the
 finding is fixed and the item is kept only for the mechanism under it. Re-read the code before
 acting on any item here: the file is dated, the tree is not.
 

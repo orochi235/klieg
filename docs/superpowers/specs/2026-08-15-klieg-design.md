@@ -5,6 +5,8 @@ app, for game-show celebration moments.
 **For:** developers of any web app; `wod` (spinning name wheel) is the first consumer.
 **Answers:** what klieg's public surface is, how it renders, and what it deliberately won't do.
 
+**Status, 2026-10-07: core built; two parts never were.** No `klieg-react` package exists, and in-engine particles were replaced by `attach(SceneLayer)`, which lets a host draw its own. The `{ kind: 'anchor' }` placement shipped as `'element'`.
+
 Two words. A *blit* is a bit-block transfer, the copy-a-rectangle-of-pixels operation the
 composite step performs. A *klieg light* is the carbon-arc lamp that lit early film studios,
 and the synthetic one this library builds is where all the shine comes from.

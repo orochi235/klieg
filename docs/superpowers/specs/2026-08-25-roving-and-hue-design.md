@@ -144,7 +144,7 @@ should modulate the swept hue or lose to it.
 
 ## Decided, on implementation
 
-Both pieces ship. [The plan](../plans/2026-08-25-roving-and-hue.md) has the tasks.
+Both pieces ship.
 
 - **`roving` is factory-only and `hue` is a name.** `EffectName` is `'flicker' | 'hue'`. `EffectSpec`
   did not gain a per-piece parameter field: a wrapper takes another piece, which no name can express,

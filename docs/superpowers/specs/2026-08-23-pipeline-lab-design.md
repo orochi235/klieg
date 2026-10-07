@@ -159,7 +159,7 @@ geometry byte-identical with all repairs on; only the *off* states may move.
 - **The break-side `stretch` has no gate and no report.** `dropHead` and `dropTail` call
   `trimStretch` directly, which makes `SPAN_REPAIRS`' `stretch (break)` entry enumerable and inert.
 
-**Left exposed, not fixed.** Switching `setback` off under `rejoin: 'bridge'` cascades — 1505 points
+**Left exposed, not fixed.** Switching `setback` off under `rejoin: 'bridge'` cascades — 2769 points
 against 241 on the test square — because the leg-room math assumes the trim happened. The lab can
 reach that combination and flags it as a bad measure; the geometry is a separate chase.
 

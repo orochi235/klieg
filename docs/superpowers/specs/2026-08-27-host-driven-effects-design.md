@@ -4,6 +4,8 @@ For whoever implements this in klieg. It answers: what does klieg expose so a ho
 cut a page swap partway through an effect, cancel one effect without destroying the instance, and
 advance a `'click'` hold from its own input handler?
 
+**Status, 2026-10-07: built, with renames.** `onPhase` and `PhaseEvent` are now `onMark` and its event, `FireHandle` extends `Promise` rather than `PromiseLike`, and `ShowClock` is `RafClock`. [Effects notes](../../notes/effects.md#the-fire-handle) has the departures.
+
 The asks are recorded in `FEATURE-REQUESTS.md`, all three from sherpa — a presentation runtime that
 plays a flow of pages and uses klieg as the flourish over a page swap. They are designed together
 because only one of them changes what `fire()` returns, and that decision is the awkward one to

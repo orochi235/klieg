@@ -15,6 +15,13 @@ open. Everything learned along the way is in [`docs/notes/`](docs/notes/README.m
 
 Each of these needs someone looking at renders or choosing; none is safe to settle unattended.
 
+- **Two visual baselines moved with the counters change and await a look before re-blessing.**
+  Off-axis `tubing` differs by 1899 pixels and `hue` on a `tubing` sign by 335, all of it on
+  `JACKPOT!`'s `A`, where the tube now goes around the counter. Expected when counters merged
+  (`caee62c`), which re-took no baselines. The run on 2026-10-07 was at a load average near 190:
+  nine more tests failed without reaching a comparison, `look-tubing` among them, so re-run the
+  suite on a quiet machine before re-blessing. Never re-bless unseen.
+
 - **Re-express `tubing`, `piping` and `sequin` as fills.** The last slice of
   [wells and fills](docs/superpowers/specs/2026-09-01-wells-and-fills-design.md); it moves visual
   baselines and is judged on its renders.

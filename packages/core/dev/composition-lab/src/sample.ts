@@ -1,5 +1,6 @@
 import type { EffectFrame } from '@core/effects/frame.js';
 import type { Host, PartInfo, PartPose } from '@core/effects/types.js';
+import { toHex } from '@msb235/blits';
 
 /**
  * Samples one pass of the finest patch has to get. Below about 20 a `flicker` drop falls between
@@ -95,7 +96,7 @@ export function samplePass(
       (out.dark[index] as number[])[s] = o.dark;
       (out.crawl[index] as number[])[s] = o.crawl;
       (out.light[index] as number[])[s] = Math.hypot(o.light[0], o.light[1], o.light[2]);
-      (out.color[index] as number[])[s] = o.color ?? -1;
+      (out.color[index] as number[])[s] = o.color ? toHex(o.color) : -1;
     }
   }
   return out;

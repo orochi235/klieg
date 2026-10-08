@@ -1,4 +1,4 @@
-import type { Channel } from '@msb235/blits';
+import { type Channel, oklab, toHex } from '@msb235/blits';
 import { PART_KIT } from './rig.js';
 import type { EffectPatch, PartDelta, PartInfo, Setting, Signal } from './types.js';
 
@@ -65,6 +65,8 @@ function between(a: PartDelta, b: PartDelta, u: number): PartDelta {
       continue;
     }
     if (key === 'light') out.light = mixLight(x as Light, y as Light, u);
+    else if (key === 'color')
+      out.color = toHex(PART_KIT.color.lerp(oklab(x as number), oklab(y as number), u));
     else out[key] = (PART_KIT[key] as Channel<unknown>).lerp(x, y, u);
   }
   return out as PartDelta;

@@ -6,6 +6,13 @@ therefore never picks up a break. When 1.0 comes is chosen deliberately, not rea
 
 ## Unreleased
 
+### Runs on @msb235/blits 0.7.0 and @weasel-js 1.9.1
+
+klieg pins `@msb235/blits` at exactly `0.7.0` and `@weasel-js/text` and `@weasel-js/font` at
+exactly `1.9.1`, and its dev labs build on the matching `core`, `ui` and `labkit`, which share
+klieg's blits. Nothing klieg exports changes. An effect's `color` is still authored as `0xrrggbb`;
+the mix now holds it as OKLab through blits' `color()` channel in place of the deprecated `hex()`.
+
 ## 0.16.6
 
 ### Runs on @weasel-js 1.9.0

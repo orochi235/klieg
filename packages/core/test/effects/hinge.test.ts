@@ -1,4 +1,4 @@
-import type { Channel } from '@msb235/blits';
+import { oklab, toHex } from '@msb235/blits';
 import { describe, expect, it, vi } from 'vitest';
 import { isRest, mergeDeltas } from '../../src/effects/compositor.js';
 import { EffectFrame, planEffects } from '../../src/effects/frame.js';
@@ -105,7 +105,7 @@ describe('hinge, stops mode', () => {
     expect(out.position?.[1]).toBeCloseTo(0);
     expect(out.position?.[2]).toBeCloseTo(-1.5);
     expect(out.color).toBe(
-      (PART_KIT.color as Channel<number>).lerp(lo.color as number, hi.color as number, 0.5),
+      toHex(PART_KIT.color.lerp(oklab(lo.color as number), oklab(hi.color as number), 0.5)),
     );
     expect(out.light?.color).toBe(0x00ff00);
     expect(out.light?.amount).toBeCloseTo(lerp(1, 2, 0.5));
@@ -245,7 +245,7 @@ describe('hinge through EffectFrame', () => {
     expect(a.dark).toBeCloseTo(expected.dark, 6);
     expect(a.scale).toBeCloseTo(expected.scale, 6);
     expect(a.crawl).toBeCloseTo(expected.crawl, 6);
-    expect(a.color).toBe(expected.color);
+    expect(a.color && toHex(a.color)).toBe(expected.color && toHex(expected.color));
     for (let i = 0; i < 3; i++) {
       expect(a.position[i]).toBeCloseTo(expected.position[i] as number, 6);
       expect(a.rotation[i]).toBeCloseTo(expected.rotation[i] as number, 6);

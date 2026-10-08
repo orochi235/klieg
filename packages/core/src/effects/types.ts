@@ -75,7 +75,8 @@ export interface LightDelta {
 /** Everything a merge resolved. Multiplicative channels rest at 1, additive at 0. */
 export interface PartPose {
   gain: number;
-  color?: number;
+  /** OKLab `[L, a, b, coverage]`, as blits' `color` channel holds it; `toHex` writes it back. */
+  color?: number[];
   dark: number;
   position: Vec3;
   rotation: Vec3;

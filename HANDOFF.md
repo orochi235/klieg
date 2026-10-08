@@ -2,15 +2,17 @@
 
 **For:** the next session in this repo. **Answers:** what state `main` is in and what is still
 open. Everything learned along the way is in [`docs/notes/`](docs/notes/README.md); designs are in
-[`docs/superpowers/specs/`](docs/superpowers/specs/). Checked against the code on 2026-10-07.
+[`docs/superpowers/specs/`](docs/superpowers/specs/). Checked against the code on 2026-10-08.
 
 ## State
 
-- **npm has 0.16.6**, tagged `v0.16.6`, on `@weasel-js` 1.9.0 with every dependency current.
+- **npm has 0.16.7**, tagged `v0.16.7`, on `@msb235/blits` 0.7.0 and `@weasel-js` 1.9.1, which
+  share one blits.
   Releasing is a tag push — see [releasing](docs/notes/README.md#releasing).
-- On 0.16.6, biome and `tsc -b` are clean, the full unit suite is green on the fleet (`onto test`)
-  and the dist test passes. The Playwright visual suite has not run since `@playwright/test` moved
-  from 1.62 to 1.64; a new Chromium can move baselines.
+- On 0.16.7, biome and `tsc -b` are clean, the full unit suite is green on the fleet (`onto test`)
+  and the dist test passes. The Playwright visual suite fails 12 specs on 0.16.6 and 0.16.7 alike,
+  with byte-identical screenshots on both, at a load average of 16 to 24 on 2026-10-08; see the
+  baselines item below before re-blessing any.
 
 ## Open, and waiting on a decision
 

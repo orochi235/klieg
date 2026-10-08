@@ -1,3 +1,4 @@
+import { oklab } from '@msb235/blits';
 import { describe, expect, it } from 'vitest';
 import { isRest, mergeDeltas, PART_REST } from '../../src/effects/compositor.js';
 import type { Vec3 } from '../../src/pose.js';
@@ -33,7 +34,7 @@ describe('mergeDeltas', () => {
   });
 
   it('lets the last writer win the colour', () => {
-    expect(mergeDeltas([{ color: 0xff0000 }, { color: 0x00ff00 }]).color).toBe(0x00ff00);
+    expect(mergeDeltas([{ color: 0xff0000 }, { color: 0x00ff00 }]).color).toEqual(oklab(0x00ff00));
   });
 
   it('leaves colour unset when nobody writes one, so the part keeps its own', () => {

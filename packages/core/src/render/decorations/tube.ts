@@ -1,3 +1,4 @@
+import { toHex } from '@msb235/blits';
 import * as THREE from 'three';
 import type { PartPose } from '../../effects/types.js';
 import { DEFAULT_GLYPH_OPTIONS, EM, glyphToShapes } from '../../text/glyphs.js';
@@ -277,7 +278,7 @@ export class TubeBuilder implements DecorationBuilder {
     if (!attribute) return;
     // Hue and emissive are the same colour here: a lamp on a run tints by what the run is showing,
     // so a `hue` patch sweeping the base takes the lit pool with it.
-    const shown = out.color ?? run.color;
+    const shown = out.color ? toHex(out.color, run.color) : run.color;
     const color = this.partColor
       .setHex(litEmissive(shown, shown, out.light))
       .multiplyScalar(out.gain);

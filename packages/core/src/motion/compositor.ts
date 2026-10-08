@@ -195,6 +195,9 @@ export class Timeline {
    * trap for the next caller who retains what they were handed.
    */
   poseAt(elapsed: number, letter: LetterInfo, out: Pose = blankPose()): Pose {
+    // A blits mix only syncs forward, and every voice here is stateless, so a fresh one reads
+    // an earlier time exactly.
+    if (elapsed < this.at) this.mix = this.cue();
     this.at = elapsed;
     this.mix.sync(elapsed);
     return this.mix.probe(letter, out);

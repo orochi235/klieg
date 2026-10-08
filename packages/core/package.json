@@ -63,7 +63,7 @@
     "dev:tube-gallery": "vite dev/tube-gallery"
   },
   "dependencies": {
-    "@msb235/blits": "0.6.0",
+    "@msb235/blits": "0.7.0",
     "@weasel-js/font": "1.9.0",
     "@weasel-js/text": "1.9.0",
     "opentype.js": "^2.0.0",

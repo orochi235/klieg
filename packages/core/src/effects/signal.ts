@@ -1,7 +1,7 @@
-import { slew } from '@msb235/blits';
+import { input, slew } from '@msb235/blits';
 import { clamp01 } from '../easing.js';
 import { falloff, fromPointer, inkCenter, type LightSource } from './source.js';
-import type { Signal } from './types.js';
+import type { Host, PartInfo, Signal } from './types.js';
 
 export type { Signal } from './types.js';
 
@@ -47,13 +47,19 @@ export interface Level extends Signal {
 export function level(initial = 0): Level {
   const clean = (v: number) => (Number.isFinite(v) ? clamp01(v) : 0);
   let value = clean(initial);
-  const signal = (() => value) as unknown as Level;
+  const signal = input<PartInfo, Host>(() => value);
   Object.defineProperties(signal, {
-    input: { value: true },
-    set: { value: (v: number) => (value = clean(v)) },
+    set: {
+      value: (v: number) => {
+        const next = clean(v);
+        if (next === value) return;
+        value = next;
+        signal.touch();
+      },
+    },
     value: { get: () => value },
   });
-  return signal;
+  return signal as unknown as Level;
 }
 
 export interface DwellSpec {
@@ -77,9 +83,12 @@ export interface DwellSpec {
 export function dwell(spec: DwellSpec = {}): Signal {
   const of = spec.of ?? near();
   const clamped: Signal = (part, setting) => {
-    const input = of(part, setting);
-    return Number.isFinite(input) ? clamp01(input) : 0;
+    const raw = of(part, setting);
+    return Number.isFinite(raw) ? clamp01(raw) : 0;
   };
-  const input = of.input ? Object.assign(clamped, { input: true }) : clamped;
-  return slew(input, { riseMs: spec.riseMs ?? 1500, fallMs: spec.fallMs ?? 600, from: 0 });
+  return slew(input(clamped, [of]), {
+    riseMs: spec.riseMs ?? 1500,
+    fallMs: spec.fallMs ?? 600,
+    from: 0,
+  });
 }

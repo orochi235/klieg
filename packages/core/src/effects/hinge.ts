@@ -1,4 +1,4 @@
-import { type Channel, oklab, toHex } from '@msb235/blits';
+import { type Channel, input, oklab, toHex } from '@msb235/blits';
 import { PART_KIT } from './rig.js';
 import type { EffectPatch, PartDelta, PartInfo, Setting, Signal } from './types.js';
 
@@ -16,7 +16,7 @@ export function weightOf(by: Signal): Signal {
     const k = by(part, setting);
     return Number.isFinite(k) ? k : 0;
   };
-  return by.input ? Object.assign(read, { input: true }) : read;
+  return input(read, [by]);
 }
 
 /** A signal's reading as a place among stops, held to 0..1. */
@@ -25,7 +25,7 @@ export function placeOf(by: Signal): Signal {
     const k = by(part, setting);
     return Number.isFinite(k) ? Math.min(1, Math.max(0, k)) : 0;
   };
-  return by.input ? Object.assign(read, { input: true }) : read;
+  return input(read, [by]);
 }
 
 /**

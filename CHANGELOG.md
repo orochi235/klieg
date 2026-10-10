@@ -40,6 +40,9 @@ that stop's share of the crossfade. It held the channel whole until the signal r
 that leaves it out, where it snapped to rest: stops that write `dark: 0.8` at 1 and nothing at 0
 read 0.4 halfway, where they read 0.8. This is what blits' `mix.blend` does from 0.8.0.
 
+`level` is built on blits' `input`, and its `set` reports each change to the mix. `dwell` and a
+`hinge`'s signal are inputs where the signal under them is.
+
 ## 0.16.7
 
 ### Runs on @msb235/blits 0.7.0 and @weasel-js 1.9.1

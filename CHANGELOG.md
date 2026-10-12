@@ -13,6 +13,13 @@ exactly `1.9.4`, and its dev labs build on the matching `core`, `ui` and `labkit
 pins blits 0.8.1, so the labs carry a second copy of blits until weasel moves to 0.10.0; the
 published package carries one.
 
+### Fixed
+
+A lamp, `near`, `dwell` and `kicks` follow a sign's letters through a `stages` regroup. A part
+kept the position its letter was built at, so once the survivors re-laid, a lamp lit where they
+used to stand and the cursor missed the letter under it. `PartInfo.x`, `y` and `ink` now move with
+a surviving letter, at the regroup, ahead of the letter's own travel.
+
 ### Changed
 
 A `hinge` over a factory fades a channel that only one of the two neighboring stops writes, by

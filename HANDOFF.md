@@ -82,8 +82,6 @@ Each of these needs someone looking at renders or choosing; none is safe to sett
 
 - **Long curves facet**: the rendered extrusion samples at a fixed `curveSegments` of 10 — a crease
   across great-vibes' capital `M` at masthead size. See [text](docs/notes/text.md#glyphs).
-- **A regrouped sign's lamp lights where the letters used to be**; the part pool is frozen at
-  construction.
 - **Unmeasured costs**: a lamp on `by: 'all'` may re-upload every run's vertex buffer each frame,
   and `tile`'s remaining cost is mostly the shell's own distance field of the letter's skin.
 - **No visual baseline covers** `power`, `kicks`, a lamp, or a multi-line block's horizontal

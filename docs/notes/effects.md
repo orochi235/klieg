@@ -73,8 +73,8 @@ was measured about it. The public surface is in the README's `effects` and `ligh
 - **The light leads the cursor at one end of the sign and lags at the other**, because the
   pointer's whole travel is compressed onto the ink. The README describes that shape rather than
   promising a match.
-- **A regrouped sign's lamp lights where the letters used to be.** The part pool is frozen at
-  construction.
+- **A regroup moves a surviving letter's parts in the pool at once**, while the letter itself
+  travels there over the stage's move, so a lamp leads the letters until they land.
 - **Layered env pieces add per axis.** Two `sweep`s both write `yaw` and `mergeEnv` sums them into
   one uniform turn; two layers you can tell apart need different axes.
 - **"The lamp landed" cannot tell one light base from another.** A chunk part reading the body's

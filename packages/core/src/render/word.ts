@@ -249,10 +249,10 @@ export class Word {
    * The word-wide pool of addressable parts, built once every letter exists. Word-wide rather than
    * per letter: `{ count: 1 }` picks one bad tube in the sign, not one in every letter.
    *
-   * A construction-time snapshot. `regroup` re-lays the letters and leaves the pool alone, so a
-   * part keeps the index its effect resolved against and the layout it was built with — a letter
-   * a regroup drops takes its parts out of play rather than renumbering the pool under an effect
-   * already running against it.
+   * Numbered once, at construction. `regroup` moves a surviving letter's parts with it and leaves
+   * the rest of the pool alone, so a part keeps the index and the order its effect resolved
+   * against — a letter a regroup drops takes its parts out of play rather than renumbering the
+   * pool under an effect already running against it.
    */
   private buildParts(): void {
     const bodies: number[] = [];
@@ -354,7 +354,7 @@ export class Word {
 
   /**
    * The ink bounding box of the part pool in layout space, or null before any part exists.
-   * Describes the pool as built: `regroup` re-lays the letters and leaves the pool alone.
+   * A letter a `regroup` dropped still counts, where it stood.
    *
    * Each glyph's own bounds are folded in the way `fitOf` does. A box of origins alone would have
    * zero height on a single-line sign, since every letter on a line shares its baseline.
@@ -702,6 +702,18 @@ export class Word {
       this.columnOf[i] = placed.column[n] as number;
       this.idxOf[i] = n;
       delta[i] = [oldX - (this.baseX[i] as number), oldY - (this.baseY[i] as number)];
+    }
+    // In place: an effect's state is keyed on the part object.
+    for (let p = 0; p < this.parts.length; p++) {
+      const [dx, dy] = delta[this.partSlot[p] as number] as [number, number];
+      if (dx === 0 && dy === 0) continue;
+      const part = this.parts[p] as PartInfo;
+      part.x -= dx;
+      part.y -= dy;
+      part.ink.minX -= dx;
+      part.ink.maxX -= dx;
+      part.ink.minY -= dy;
+      part.ink.maxY -= dy;
     }
 
     this.fitFrom = this.fit;

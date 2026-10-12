@@ -353,10 +353,9 @@ polyline at constant time per segment rather than constant speed.
 to `fixed` or `fromPointer`, which ignore it. A pointer source stays dark until the pointer has
 been inside the canvas, so an untouched page gets no lamp rather than one parked at the origin.
 
-**A lamp does not follow a `stages` regroup.** It lights by position, and the part pool is fixed at
-construction, so after the letters re-lay the light still lands where they used to be — on a centered
-sign that has dropped letters, a cursor over the type can light nothing at all. Combine the two and
-the lamp is a silent no-op, not a smaller effect.
+**A lamp follows a `stages` regroup, a move ahead of the letters.** It lights by position, and a
+surviving letter's parts take their new position when the stage begins, so the light lands where
+the letters are going while they travel there.
 
 **`hinge(signal, make, { stops })`** and **`hinge(signal, patch)`** — make a patch a
 function of a signal as well as of time. `near({ radius, source })` is the first signal: how close a
@@ -382,8 +381,7 @@ goes with it.
 **Stops that disagree on period are refused at construction.** A pass is read once per effect
 rather than once per part, so the levels cannot each run on their own clock under one published
 pass — vary a knob that leaves the pass alone, `unrest` or `depth` rather than `spell` or `calm`.
-`near` also inherits a lamp's blind spot: it measures against the layout the word was built with, so
-it does not follow a `stages` regroup either.
+`near` measures to the same positions a lamp lights, so it follows a `stages` regroup the same way.
 
 **`dwell({ of, riseMs, fallMs })`** — how long a part has stayed near the cursor, rather than how
 near it is now. It climbs toward its input over `riseMs`, 1500 by default, and drains over `fallMs`,

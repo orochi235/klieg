@@ -1128,6 +1128,29 @@ describe('regroup', () => {
     expect(after[1]?.x).toBeCloseTo(before[1]?.x as number);
   });
 
+  it("moves a survivor's parts with it, and leaves the pool's numbering alone", () => {
+    const word = new Word('NA\nEB\nOC', stubFont(), 'gold', ROOMY);
+    const pool = word.partsOf('body');
+    const numbered = pool.map((part) => part.index);
+    word.regroup(firstOfLine, 'line');
+
+    const survivors = word.partsOf('body').filter((_, i) => i % 2 === 0);
+    const direct = new Word('NEO', stubFont(), 'gold', ROOMY).partsOf('body');
+    survivors.forEach((part, n) => {
+      const want = direct[n] as PartInfo;
+      expect(part.x).toBeCloseTo(want.x);
+      expect(part.y).toBeCloseTo(want.y);
+      for (const edge of ['minX', 'maxX', 'minY', 'maxY'] as const) {
+        expect(part.ink[edge]).toBeCloseTo(want.ink[edge]);
+      }
+    });
+    // The same objects under the same indices: an effect's state is keyed on them.
+    word.partsOf('body').forEach((part, i) => {
+      expect(part).toBe(pool[i]);
+      expect(part.index).toBe(numbered[i]);
+    });
+  });
+
   it('matches laying the survivors out directly', () => {
     const word = new Word('NA\nEB\nOC', stubFont(), 'gold', ROOMY);
     word.regroup(firstOfLine, 'line');
@@ -1799,18 +1822,20 @@ describe('part pool', () => {
     expect(parts[longest]?.span).toBeGreaterThan((parts[shortest]?.span as number) * 1.5);
   });
 
-  it('is a construction-time snapshot a regroup re-lays the letters around', () => {
+  it('keeps the numbering it was built with through a regroup that moves its parts', () => {
     const word = new Word('ABCD', stubFont(), 'gold', ROOMY);
-    const before = word
-      .partsOf('body')
-      .map((p) => [p.index, p.count, p.letter.count, p.x] as const);
+    const numbering = () =>
+      word.partsOf('body').map((p) => [p.index, p.count, p.letter.count] as const);
+    const before = numbering();
+    const was = word.partsOf('body').map((p) => p.x);
     const { delta } = word.regroup((l) => l.index < 2, 'line');
 
-    // The survivors really did move, so the pool holding still is the snapshot and not a no-op.
     expect(delta[0]?.[0]).not.toBe(0);
-    expect(
-      word.partsOf('body').map((p) => [p.index, p.count, p.letter.count, p.x] as const),
-    ).toEqual(before);
+    expect(numbering()).toEqual(before);
+    // A survivor's part goes where its letter went; a dropped letter's stays where it stood.
+    const now = word.partsOf('body').map((p) => p.x);
+    expect(now[0]).toBeCloseTo((was[0] as number) - (delta[0]?.[0] as number));
+    expect(now.slice(2)).toEqual(was.slice(2));
   });
 
   it('carries its letter grid position, so a radial stagger has something to read', () => {

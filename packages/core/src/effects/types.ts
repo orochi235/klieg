@@ -94,8 +94,8 @@ export interface Host {
   /** The same pointer in the word's layout space — the em, block-relative space `PartInfo.x/y`
    * uses, +y up — projected through the camera onto the letters' front face, so on a front-on
    * sign it sits under the cursor. It ignores the word's `transform`, its pose and a moved `eye`,
-   * and addresses the layout the word was built with, so after a `stages` regroup it points at
-   * where the letters used to be. Null whenever `pointer` is, and before the word has a fit. */
+   * so while a `stages` regroup's letters travel it points at where they are going. Null whenever
+   * `pointer` is, and before the word has a fit. */
   pointerInWord: { x: number; y: number } | null;
   /**
    * Milliseconds on the instance's clock when this frame was drawn. `setting.timestamp` is the

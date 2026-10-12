@@ -64,8 +64,8 @@
   },
   "dependencies": {
     "@msb235/blits": "0.10.0",
-    "@weasel-js/font": "1.9.1",
-    "@weasel-js/text": "1.9.1",
+    "@weasel-js/font": "1.9.4",
+    "@weasel-js/text": "1.9.4",
     "opentype.js": "^2.0.0",
     "polygon-clipping": "^0.15.7"
   },
@@ -82,14 +82,14 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/three": "^0.186.0",
-    "@weasel-js/core": "1.9.1",
-    "@weasel-js/labkit": "1.9.1",
-    "@weasel-js/ui": "1.9.1",
+    "@weasel-js/core": "1.9.4",
+    "@weasel-js/labkit": "1.9.4",
+    "@weasel-js/ui": "1.9.4",
     "codemirror": "^6.0.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "three": "^0.186.1",
-    "vite": "^8.3.3"
+    "vite": "^8.3.4"
   },
   "peerDependenciesMeta": {
     "@types/three": {

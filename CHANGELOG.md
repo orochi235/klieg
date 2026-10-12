@@ -6,6 +6,20 @@ therefore never picks up a break. When 1.0 comes is chosen deliberately, not rea
 
 ## Unreleased
 
+### Runs on @msb235/blits 0.10.0 and @weasel-js 1.9.4
+
+klieg pins `@msb235/blits` at exactly `0.10.0` and `@weasel-js/text` and `@weasel-js/font` at
+exactly `1.9.4`, and its dev labs build on the matching `core`, `ui` and `labkit`. `core` 1.9.4
+pins blits 0.8.1, so the labs carry a second copy of blits until weasel moves to 0.10.0; the
+published package carries one.
+
+### Changed
+
+A `hinge` over a factory fades a channel that only one of the two neighboring stops writes, by
+that stop's share of the crossfade. It held the channel whole until the signal reached the stop
+that leaves it out, where it snapped to rest: stops that write `dark: 0.8` at 1 and nothing at 0
+read 0.4 halfway, where they read 0.8. This is what blits' `mix.blend` does from 0.8.0.
+
 ## 0.16.7
 
 ### Runs on @msb235/blits 0.7.0 and @weasel-js 1.9.1

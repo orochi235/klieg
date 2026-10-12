@@ -117,13 +117,13 @@ describe('hinge, stops mode', () => {
     expect(patch.at(0, partAt(0), NO_CTX).crawl).toBeCloseTo(lerp(5, 10, 0.2));
   });
 
-  it('passes a channel only one of the two stops writes whole', () => {
+  it('fades a channel only one of the two stops writes with that stop', () => {
     const patch = hinge(reads(0.5), (k) => emits(k === 1 ? { gain: 0, dark: 0.8 } : { gain: 1 }), {
       stops: 2,
     });
     const out = patch.at(0, partAt(0), NO_CTX);
     expect(out.gain).toBeCloseTo(0.5);
-    expect(out.dark).toBeCloseTo(0.8);
+    expect(out.dark).toBeCloseTo(0.4);
   });
 
   it('clamps the signal to 0..1 and reads a non-finite one as 0', () => {

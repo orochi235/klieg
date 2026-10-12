@@ -18,7 +18,7 @@ const partAt = (x: number): PartInfo => ({
 /** One voice's frames for `part`: the mix keeps a stateful signal per voice and subject. */
 function frames() {
   const v = voice();
-  return (part: PartInfo, now: number, dt = 16) => v({ now, dt }, part);
+  return (part: PartInfo, now: number, dt?: number) => v({ now, dt }, part);
 }
 
 describe('kicks', () => {

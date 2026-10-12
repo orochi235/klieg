@@ -52,8 +52,9 @@ export function weigh(o: PartDelta, k: number): PartDelta {
 
 /**
  * Crossfades two neighboring stops by their shares, as `mix.blend`'s locus does: each channel is
- * lerped among the stops that write it, by its share of their weight. Two lamps of different
- * colors fold as premultiplied light, which comes back as the nearest color and amount.
+ * lerped among the stops that write it, by its share of their weight, and one only a single stop
+ * writes fades with that stop. Two lamps of different colors fold as premultiplied light, which
+ * comes back as the nearest color and amount.
  */
 function between(a: PartDelta, b: PartDelta, u: number): PartDelta {
   const out: Record<string, unknown> = {};
@@ -61,7 +62,7 @@ function between(a: PartDelta, b: PartDelta, u: number): PartDelta {
     const x = a[key];
     const y = b[key];
     if (x === undefined || y === undefined) {
-      out[key] = x ?? y;
+      Object.assign(out, weigh({ [key]: x ?? y }, x === undefined ? u : 1 - u));
       continue;
     }
     if (key === 'light') out.light = mixLight(x as Light, y as Light, u);

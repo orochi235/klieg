@@ -5,7 +5,8 @@ export interface Frame {
   pointer?: Host['pointer'];
   pointerInWord?: Host['pointerInWord'];
   now?: number;
-  /** Milliseconds since the subject last advanced; `Infinity` under reduced motion. Default 16. */
+  /** Milliseconds since the subject last advanced; `Infinity` under reduced motion. Defaults to
+   * the gap since the voice's last frame for the subject, and 16 on its first. */
   dt?: number;
   /** The voice's own clock. Defaults to `now`. */
   elapsed?: number;
@@ -17,14 +18,18 @@ export interface Frame {
  */
 export function voice(): (frame?: Frame, subject?: object) => Setting {
   const kept = new Map<object, Map<object, unknown>>();
+  const seen = new Map<object, { now: number; dt: number }>();
   const SOLE = {};
   return (frame = {}, subject = SOLE) => {
     const store = kept.get(subject) ?? new Map<object, unknown>();
     kept.set(subject, store);
     const now = frame.now ?? 0;
+    const last = seen.get(subject);
+    const gap = last === undefined ? 16 : now === last.now ? last.dt : now - last.now;
+    seen.set(subject, { now, dt: gap });
     return {
       timestamp: now,
-      dt: frame.dt ?? 16,
+      dt: frame.dt ?? gap,
       elapsed: frame.elapsed ?? now,
       pass: 0,
       weight: 1,

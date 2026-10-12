@@ -6,8 +6,9 @@ open. Everything learned along the way is in [`docs/notes/`](docs/notes/README.m
 
 ## State
 
-- **npm has 0.16.7**, tagged `v0.16.7`, on `@msb235/blits` 0.7.0 and `@weasel-js` 1.9.1, which
-  share one blits.
+- **npm has 0.16.7**, tagged `v0.16.7`, on `@msb235/blits` 0.7.0 and `@weasel-js` 1.9.1.
+  **`main` is on blits 0.10.0, unreleased.** `@weasel-js/core` 1.9.1 pins blits 0.7.0 and 1.9.4
+  pins 0.8.1, so the dev labs carry a second blits until weasel releases on 0.10.0.
   Releasing is a tag push — see [releasing](docs/notes/README.md#releasing).
 - On 0.16.7, biome and `tsc -b` are clean, the full unit suite is green on the fleet (`onto test`)
   and the dist test passes. The Playwright visual suite fails 12 specs on 0.16.6 and 0.16.7 alike,

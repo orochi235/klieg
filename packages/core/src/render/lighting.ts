@@ -84,6 +84,7 @@ export class EnvFrame {
           (phase, _sign, setting) => env.at(phase, setting),
           { writes: ENV_CHANNELS },
         ),
+        loop: true,
       });
     }
   }

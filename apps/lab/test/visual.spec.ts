@@ -1,65 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
-
-/** Alpha census of one frame of the overlay's drawing buffer. */
-interface Frame {
-  lit: number;
-  clear: number;
-  total: number;
-}
-
-interface Reading {
-  frames: number;
-  drawn: number;
-  best: Frame;
-}
+import { CANVAS_TIMEOUT_MS, drawn, type Reading, readOverlay } from './overlay.js';
 
 const SAMPLE_FRAMES = 24;
-
-/**
- * Reports the busiest of `frames` consecutive frames of the overlay's own drawing buffer.
- *
- * `readPixels` after the effect settles returns zeros — the buffer is not `preserveDrawingBuffer`,
- * so it is cleared once the page composites. Reading from `requestAnimationFrame`, which runs
- * after the library's own rAF-driven draw, is the only way to see what the overlay put on screen.
- */
-function readOverlay(page: Page, frames: number): Promise<Reading> {
-  return page.evaluate(
-    (count) =>
-      new Promise<Reading>((resolve, reject) => {
-        const canvas = document.querySelector('canvas');
-        if (!canvas) return reject(new Error('the overlay never created a canvas'));
-        const gl = canvas.getContext('webgl2');
-        if (!gl) return reject(new Error('the overlay canvas has no webgl2 context'));
-
-        const { width, height } = canvas;
-        const px = new Uint8Array(width * height * 4);
-        const total = width * height;
-        let sampled = 0;
-        let drawn = 0;
-        let best: Frame = { lit: 0, clear: total, total };
-
-        const step = () => {
-          gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, px);
-          let lit = 0;
-          for (let i = 3; i < px.length; i += 4) if (px[i] !== 0) lit++;
-
-          sampled++;
-          if (lit > 0) drawn++;
-          if (lit > best.lit) best = { lit, clear: total - lit, total };
-
-          if (sampled < count) requestAnimationFrame(step);
-          else resolve({ frames: sampled, drawn, best });
-        };
-        requestAnimationFrame(step);
-      }),
-    frames,
-  );
-}
-
-// The first fire in a fresh page pays vite's cold transform, the font fetch and parse, and the
-// first shader compile before a canvas exists: measured 2.5-5.8s here, against the 5s an expect
-// gets by default. Every canvas wait below carries this, so a busy machine decides nothing.
-const CANVAS_TIMEOUT_MS = 15000;
 
 /**
  * The hold every spec below fires with, and it has to dwarf `CANVAS_TIMEOUT_MS` rather than merely
@@ -161,8 +103,7 @@ async function fireStill(page: Page, text: string, wrap = false): Promise<number
   await page.locator('#text').fill(text);
   const firedAt = Date.now();
   await page.getByRole('button', { name: 'FIRE', exact: true }).click();
-  await expect(page.locator('canvas')).toBeAttached({ timeout: CANVAS_TIMEOUT_MS });
-  await page.waitForTimeout(200);
+  await drawn(page);
   return firedAt;
 }
 
@@ -202,8 +143,7 @@ test('the dismissing click still reaches the page when the hold is not modal', a
   await page.goto('/');
   await page.locator('#holdClick').check();
   await page.getByRole('button', { name: 'FIRE', exact: true }).click();
-  await expect(page.locator('canvas')).toBeAttached({ timeout: CANVAS_TIMEOUT_MS });
-  await page.waitForTimeout(500);
+  await drawn(page);
 
   // One click on FIRE: it dismisses the held effect and presses the button underneath.
   await page.getByRole('button', { name: 'FIRE', exact: true }).click({ timeout: 5000 });
@@ -288,19 +228,6 @@ async function settledLayer(page: Page): Promise<Box[]> {
   return layerBoxes(page);
 }
 
-/**
- * Waits until the overlay has drawn a lit frame. An absence check that skips this proves nothing:
- * the DOM is empty before the first fire reaches the screen whatever the mode was.
- */
-async function waitForDraw(page: Page): Promise<void> {
-  await expect
-    .poll(async () => (await readOverlay(page, 2)).drawn, {
-      message: 'the overlay never drew a lit frame',
-      timeout: LAYER_TIMEOUT_MS,
-    })
-    .toBeGreaterThan(0);
-}
-
 /** Bounding box of every non-transparent pixel the overlay drew, in the canvas's CSS coordinates. */
 function inkBox(page: Page): Promise<Box | null> {
   return page.evaluate(
@@ -381,7 +308,7 @@ function hitAt(page: Page, x: number, y: number): Promise<{ tag: string; text: s
 
 test('the hidden node puts the word in the DOM without a layer', async ({ page }) => {
   await fireSelectable(page, 'hidden');
-  await waitForDraw(page);
+  await drawn(page);
   // `rendered` is the difference between find-in-page reaching the word and not: a node clipped
   // to nothing still carries its text, one taken out of the layout with `display:none` does not.
   expect(await hiddenNode(page)).toEqual({ text: 'BIG', rendered: 'BIG' });
@@ -390,7 +317,7 @@ test('the hidden node puts the word in the DOM without a layer', async ({ page }
 
 test('none puts no klieg text in the page at all', async ({ page }) => {
   await fireSelectable(page, 'none');
-  await waitForDraw(page);
+  await drawn(page);
   // Not `document.body.innerText`: the lab's own #log echoes every fired string, so it holds
   // 'BIG' whatever the mode did, and a body-wide check would pass with the feature ripped out.
   expect(await hiddenNode(page)).toBeNull();

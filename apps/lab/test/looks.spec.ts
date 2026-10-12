@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { drawn } from './overlay.js';
 
 /**
  * Appearance is the one thing the unit suite cannot reach: vitest has no GL context, so the
@@ -58,8 +59,7 @@ const EFFECT_RATIO = 0.0002;
 
 async function shoot(page: Page, name: string, ratio = LOOK_RATIO): Promise<void> {
   await page.click('#fire');
-  // The first frame draws on the next rAF after the font resolves; a beat covers both.
-  await page.waitForTimeout(600);
+  await drawn(page);
   await hideChrome(page);
   await expect(page).toHaveScreenshot(`${name}.png`, {
     // Bloom is a wide, low-amplitude halo: at Playwright's default threshold of 0.2 not one pixel
@@ -117,7 +117,7 @@ test.describe('lighting', () => {
       await page.selectOption('#look', 'chrome');
       await page.selectOption('#lighting', name);
       await page.click('#fire');
-      await page.waitForTimeout(600);
+      await drawn(page);
       await hideChrome(page);
       return (await page.screenshot()).toString('base64');
     };

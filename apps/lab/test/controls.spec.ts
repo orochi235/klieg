@@ -33,7 +33,7 @@ test('every shipped look fits the controls that show it', async ({ page }) => {
   for (const look of LOOKS) {
     await page.selectOption('#look', look);
     // The sliders are seeded on the change; a frame is enough for the handler to have run.
-    await page.waitForTimeout(50);
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
   }
 
   expect(clamped).toEqual([]);

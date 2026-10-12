@@ -12,7 +12,10 @@ open. Everything learned along the way is in [`docs/notes/`](docs/notes/README.m
   Releasing is a tag push — see [releasing](docs/notes/README.md#releasing).
 - On 0.16.7, biome and `tsc -b` are clean, the full unit suite is green on the fleet (`onto test`)
   and the dist test passes. The Playwright visual suite fails 12 specs on 0.16.6 and 0.16.7 alike,
-  with byte-identical screenshots on both, at a load average of 16 to 24 on 2026-10-08; see the
+  with byte-identical screenshots on both, at a load average of 16 to 24 on 2026-10-08. The same
+  12 fail on blits 0.10.0 at a load average of 8 on 2026-10-11, by the same pixel counts in two
+  runs, so they are moved baselines and not load: `looks.spec.ts`'s chrome, oil, flake, glitter,
+  tubing, ice, off-axis tubing, static lighting, flake seeding, flicker, hue and roving. See the
   baselines item below before re-blessing any.
 
 ## Open, and waiting on a decision
@@ -81,9 +84,6 @@ Each of these needs someone looking at renders or choosing; none is safe to sett
   across great-vibes' capital `M` at masthead size. See [text](docs/notes/text.md#glyphs).
 - **A regrouped sign's lamp lights where the letters used to be**; the part pool is frozen at
   construction.
-- **Fixed sleeps remain in the Playwright specs** (`waitForTimeout` in `visual.spec.ts`,
-  `looks.spec.ts` and `controls.spec.ts`), standing in for conditions; under load they are what
-  flakes.
 - **Unmeasured costs**: a lamp on `by: 'all'` may re-upload every run's vertex buffer each frame,
   and `tile`'s remaining cost is mostly the shell's own distance field of the letter's skin.
 - **No visual baseline covers** `power`, `kicks`, a lamp, or a multi-line block's horizontal

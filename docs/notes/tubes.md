@@ -40,7 +40,7 @@ whose `## Acceptance, as measured` section has the numbers.
   0.13 em footprint but eats up to `6 ρmin` of each leg. `spikes/hairpin-view.mjs`.
 - **The last bend-minimum failure is a junction defect**, open — see
   [tangential junctions](../superpowers/specs/2026-08-22-tangential-junctions-design.md).
-  Only `piping`/`direct` `B` fails in a shipped configuration; `tubing`'s `R` at 1.996r is wander
+  Only `piping`/`direct` `B` and `G` fail in a shipped configuration; `tubing`'s `R` at 1.996r is wander
   and vanishes at `amplitude: 0`. `junctionRadius` and `biarcBlend` are built and tested in
   `bend.ts` and deliberately not wired.
 

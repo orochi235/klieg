@@ -27,11 +27,3 @@ that turns a fired word about its ink's face, with translation measured there, d
 image match on panels too small to trust it; a zoom reads `LOST`. Give the lab a `pointOn`-style
 readout before deciding how much of that is real.
 
-## The corner stage measures a junction two ways
-
-`bendThrough` in `render/tube/legs.ts` takes the circumradius through three points, which
-`resumeAt` and `relaxOnto` use; `junctionRadius` in `render/tube/bend.ts`, which `hairpin.ts` uses,
-takes the shorter step instead. Its own doc says why: circumradius is set by the longer side, so a
-leg stepped back from a fillet reads straighter the further it retreats — and `resumeAt` is exactly
-such a walk. Unmeasured whether switching `bendThrough` to `junctionRadius` moves the alphabet; it
-would move visual baselines if it does.

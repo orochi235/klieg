@@ -3,16 +3,24 @@
 **For:** whoever changes the corner stage next. **Answers:** why the last bend-minimum failure is not
 a tuning problem, and what replaces the fit that causes it.
 
-**Status, 2026-10-07: unbuilt, and a decision rather than a task.** `junctionRadius` and `biarcBlend` exist in `bend.ts` (the latter used only by the hairpin); neither fix is wired, and `piping`'s `B` still fails.
+**Status, 2026-10-07: unbuilt, and a decision rather than a task.** `junctionRadius` and `biarcBlend` exist in `bend.ts` (the latter used only by the hairpin); neither fix is wired, and `piping`'s `B` and `G` still fail (re-measured 2026-10-12).
 
 A *junction* is where a corner's built arc splices back into the extracted path. A *fillet* is the
 fixed-radius arc the corner stage builds there today.
 
 ## The defect
 
-`piping` traces `B` with one run bending at 1.70r against a 2.00r floor. It is the only failure in a
-shipped configuration; the two others the census reports are `piping` under `exact` and `field`,
-which are lab-only path sources, and `tubing`'s `R` at 1.996r is wander, not geometry.
+`piping` traces `B` with one run bending at 1.70r against a 2.00r floor, and `G` with one at 1.536r.
+They are the only failures in a shipped configuration; the others the census reports are `piping`
+under `exact` and `field`, which are lab-only path sources, and `tubing`'s `R` at 1.996r is wander,
+not geometry.
+
+`G` has failed since `52f3b9d` (2026-09-01), which breaks a corner whose fillet would cost a whole
+leg. On `G` that breaks the 59° corner up front. Before, its fillet survived long enough for the
+pass that settles leg room to break the 41° corner beside it, and then broke itself a pass later;
+the settle pass never restores a corner it broke. Now the 41° corner keeps its fillet, with a
+setback of 0.134 em against about 0.066 for its neighbors, and its junction is the 1.536r run. The
+defect is the same one; that commit only stopped hiding it.
 
 The path arrives at the arc **49 degrees off tangent**. Nothing measures that. `resumeAt` accepts a
 junction on the circumradius of the triple spanning it, and circumradius through a long chord is
@@ -69,7 +77,8 @@ and any fix narrow enough to leave the other corners alone is patching a symptom
 
 ## What was tried, and what each cost
 
-Measured against `spikes/junction-split.mjs`, which reports 7 genuine failures today:
+Measured against `spikes/junction-split.mjs`, which reported 7 genuine failures then (9 since
+`G` joined them):
 
 | change | failures | cost |
 | --- | --- | --- |

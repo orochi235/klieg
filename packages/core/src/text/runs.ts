@@ -60,6 +60,17 @@ export function tintOf(text: string | TextRun[]): (slot: number) => number | und
   return (slot) => tints[slot];
 }
 
+/** A run's own tint wins for the slots it covers; the fire's tint paints the rest. */
+export function tintFor<L extends { index: number }>(
+  text: string | TextRun[],
+  fireTint: number | ((letter: L) => number | undefined) | undefined,
+): number | ((letter: L) => number | undefined) | undefined {
+  if (typeof text === 'string') return fireTint;
+  const perRun = tintOf(text);
+  return (letter) =>
+    perRun(letter.index) ?? (typeof fireTint === 'function' ? fireTint(letter) : fireTint);
+}
+
 /** Per-run size, for the scale node inside each letter cell. */
 export function sizeOf(text: string | TextRun[]): ((slot: number) => number) | undefined {
   if (typeof text === 'string') return undefined;

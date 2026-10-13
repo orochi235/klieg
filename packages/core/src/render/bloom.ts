@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { type Look, specOf } from './looks.js';
 
 const QUAD_VS = `
   varying vec2 vUv;
@@ -232,4 +233,9 @@ export class BloomPath {
     this.blurMat.dispose();
     this.compositeMat.dispose();
   }
+}
+
+/** An explicit `bloom` always wins; a look may only ask when the caller said nothing. */
+export function wantsBloom(explicit: boolean | undefined, look: Look): boolean {
+  return explicit ?? specOf(look).bloom ?? false;
 }

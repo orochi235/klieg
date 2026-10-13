@@ -121,6 +121,22 @@ export interface Fillet {
   corner: THREE.Vector3;
 }
 
+/** A fillet's tangent points, and the arc points one sample inside each. */
+export function endsOf(fillet: Fillet): {
+  entry: THREE.Vector3;
+  second: THREE.Vector3;
+  penult: THREE.Vector3;
+  exit: THREE.Vector3;
+} {
+  const n = fillet.points.length;
+  return {
+    entry: fillet.points[0] as THREE.Vector3,
+    second: fillet.points[1] as THREE.Vector3,
+    penult: fillet.points[n - 2] as THREE.Vector3,
+    exit: fillet.points[n - 1] as THREE.Vector3,
+  };
+}
+
 /**
  * A circular arc of radius `rhoMin` tangent to both legs at `index`, resampled at `spacing`.
  * Returns null when either leg is shorter than the setback — the caller falls back to a break.

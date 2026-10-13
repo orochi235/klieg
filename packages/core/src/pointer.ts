@@ -31,3 +31,26 @@ export function pointerFrame(
 
   return { pointer, pointerInWord: layoutFromNdc(pointer.x, pointer.y, placed) };
 }
+
+/** The last pointer position seen, in client pixels, once something has asked for it. */
+export class PointerWatch {
+  client: { x: number; y: number } | null = null;
+  private attached = false;
+  private readonly onMove = (event: PointerEvent) => {
+    this.client = { x: event.clientX, y: event.clientY };
+  };
+
+  /** Once attached it stays for the instance's life. The cursor goes on moving between effects,
+   * so a listener that came and went would open the next one aimed where the pointer used to be. */
+  hold(): void {
+    if (this.attached) return;
+    this.attached = true;
+    globalThis.addEventListener('pointermove', this.onMove, { passive: true });
+  }
+
+  release(): void {
+    if (!this.attached) return;
+    this.attached = false;
+    globalThis.removeEventListener('pointermove', this.onMove);
+  }
+}

@@ -65,7 +65,7 @@ was measured about it. The public surface is in the README's `effects` and `ligh
   `PartInfo.ink` carries the drawn bounds; `pointerFrame` maps through `layoutFromNdc`, the inverse
   of `projectLetters`, sharing its `faceHeight` so the two cannot drift. `spikes/lamp-registration.mjs
   [word] [look]` prints the vertical registration.
-- **The guard is `a cursor lands on the letter it is over`** in `test/render/word.test.ts`, which
+- **The guard is `a cursor lands on the letter it is over`** in `test/render/word/layout.test.ts`, which
   drives the whole chain: the unit tests either side of the mapping both pass while the pair
   disagrees. Dropping `aspect` from the inverse is caught only there.
 - **A run part carries its own ink**, from its tube mesh rather than its glyph box, so `tubing` on

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { biarcBlend, type Corner } from './bend.js';
+import { biarcBlend, type Corner, junctionRadius } from './bend.js';
 
 /**
  * How a hairpin turns the tube around outside an apex a fillet would cut off.
@@ -79,16 +79,6 @@ function bisectorHairpin(
   return { points, reach: -setback, proud: proudOf(points, apex) };
 }
 
-/** The bend a path takes at `mid`, in em, as `runs.ts` measures a junction. */
-function bendThrough(a: THREE.Vector3, mid: THREE.Vector3, b: THREE.Vector3): number {
-  const into = mid.clone().sub(a);
-  const outOf = b.clone().sub(mid);
-  if (into.lengthSq() < 1e-18 || outOf.lengthSq() < 1e-18) return Number.POSITIVE_INFINITY;
-  const turn = into.clone().normalize().angleTo(outOf.clone().normalize());
-  if (turn < 1e-9) return Number.POSITIVE_INFINITY;
-  return Math.min(into.length(), outOf.length()) / (2 * Math.sin(turn / 2));
-}
-
 /** The leg vertex nearest `reach` of arc length from the apex, walking outward from it. */
 function vertexAt(leg: THREE.Vector3[], step: 1 | -1, reach: number): number {
   const from = step === 1 ? 0 : leg.length - 1;
@@ -144,9 +134,9 @@ function uturnHairpin(
     // The vertices the blend hands back to are not part of it, so their junctions are unchecked.
     const before1 = before[iFrom - 1] as THREE.Vector3 | undefined;
     const after1 = after[iTo + 1] as THREE.Vector3 | undefined;
-    if (before1 && bendThrough(before1, from, into[1] as THREE.Vector3) < rhoMin) continue;
+    if (before1 && junctionRadius(before1, from, into[1] as THREE.Vector3) < rhoMin) continue;
     const last = outOf[outOf.length - 2] as THREE.Vector3;
-    if (after1 && bendThrough(last, to, after1) < rhoMin) continue;
+    if (after1 && junctionRadius(last, to, after1) < rhoMin) continue;
     // The blends already start and end on the path's own vectors; keep those, not the copies.
     into[0] = from;
     outOf[outOf.length - 1] = to;

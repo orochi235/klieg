@@ -1,61 +1,27 @@
 import * as THREE from 'three';
+import type { FireHandle, Klieg, KliegOptions } from './api.js';
 import { type Clock, RafClock } from './clock.js';
-import type { Easing } from './easing.js';
 import { EFFECTS } from './effects/patches.js';
-import type { EffectName, EffectSpec, Host } from './effects/types.js';
+import type { EffectName } from './effects/types.js';
+import { type FireControl, type Instance, runFire } from './fire.js';
+import { SceneLayers } from './layers.js';
 import { ACTIVE } from './motion/active.js';
-import {
-  PLACED,
-  type Slot,
-  slotDuration,
-  slotMovesLetters,
-  Timeline,
-} from './motion/compositor.js';
 import { ENTER } from './motion/enter.js';
 import { EXIT } from './motion/exit.js';
-import { isolate, type MarkEvent, MarkReporter } from './motion/marks.js';
-import { assertHold, Sequence } from './motion/sequence.js';
-import {
-  type ActiveName,
-  type EnterName,
-  type ExitName,
-  type Layered,
-  type LetterInfo,
-  layersOf,
-  type MotionPatch,
-} from './motion/types.js';
-import { type PointerFrame, pointerFrame } from './pointer.js';
+import { assertHold } from './motion/sequence.js';
+import type { ActiveName, EnterName, ExitName } from './motion/types.js';
+import { PointerWatch } from './pointer.js';
 import { EffectQueue, type QueuePolicy } from './queue.js';
-import { BloomPath } from './render/bloom.js';
+import { wantsBloom } from './render/bloom.js';
 import { WordCaches } from './render/caches.js';
-import {
-  ENV_PATCHES,
-  EnvFrame,
-  type LightingName,
-  type LightingSlot,
-  resolveLighting,
-} from './render/lighting.js';
-import { LOOKS, type Look, type LookName, type LookSpec, specOf } from './render/looks.js';
-import {
-  type CameraSpec,
-  type Framing,
-  type Placement,
-  prefersReducedMotion,
-  Stage as SceneStage,
-  webglSupported,
-} from './render/stage.js';
+import { ENV_PATCHES, type LightingName } from './render/lighting.js';
+import { LOOKS, type Look, type LookName, type LookSpec } from './render/looks.js';
+import { Stage as SceneStage, webglSupported } from './render/stage.js';
 import { scheduleWarm } from './render/warm.js';
-import { Word } from './render/word.js';
-import { type SelectableMode, TextLayer } from './text/dom-layer.js';
-import type { LoadedFont } from './text/font.js';
-import { measureBaselineRatio, registerFace } from './text/font-face.js';
-import { FontRegistry, type FontSpec } from './text/font-registry.js';
-import { DEFAULT_GLYPH_OPTIONS } from './text/glyphs.js';
-import type { Align, Budget } from './text/layout.js';
-import type { Arrangement } from './text/placement.js';
-import { projectLetters } from './text/projection.js';
-import { plainTextOf, sizeOf, type TextRun, tintOf } from './text/runs.js';
-import { isIdentity, type Transform } from './transform.js';
+import type { Word } from './render/word.js';
+import { DEFAULT_LOOK } from './resolve.js';
+import { registryFor } from './text/font-registry.js';
+import type { Transform } from './transform.js';
 
 /** blits' own signal combinators, which klieg's signals are built from and compose with. */
 export { gate, lag, peak, slew } from '@msb235/blits';
@@ -65,6 +31,27 @@ export {
   isCapital,
   type LetterStyle,
 } from './acronym.js';
+export type {
+  ActiveSlot,
+  Align,
+  BackdropSpec,
+  CameraSpec,
+  EnterSlot,
+  ExitSlot,
+  FireHandle,
+  FireOptions,
+  Framing,
+  Klieg,
+  KliegOptions,
+  LightingSlot,
+  Placement,
+  SceneLayer,
+  Stage,
+  TextRun,
+  TweenSpec,
+  TypePoint,
+} from './api.js';
+export { MAX_BACKDROP_ROWS } from './backdrop.js';
 export { ManualClock } from './clock.js';
 export {
   backOut,
@@ -143,6 +130,7 @@ export type { Layered, LetterInfo, MotionPatch, StaggerFrom, StaggerSpec } from 
 export { motion, stagger } from './motion/types.js';
 export type { Pose, PoseDelta, Vec3 } from './pose.js';
 export { POLICY_NAMES } from './queue.js';
+export { wantsBloom } from './render/bloom.js';
 export type { DecorationSpec, MaterialSpec } from './render/decoration.js';
 export type { FlakeSpec } from './render/flake.js';
 export {
@@ -200,421 +188,6 @@ export const LOOK_NAMES: readonly LookName[] = Object.keys(LOOKS) as LookName[];
 export const LIGHTING_NAMES: readonly LightingName[] = Object.keys(ENV_PATCHES) as LightingName[];
 export const EFFECT_NAMES: readonly EffectName[] = Object.keys(EFFECTS) as EffectName[];
 
-/** An explicit `bloom` always wins; a look may only ask when the caller said nothing. */
-export function wantsBloom(explicit: boolean | undefined, look: Look): boolean {
-  return explicit ?? specOf(look).bloom ?? false;
-}
-
-/**
- * Names index the built-in record; anything else is already a patch the caller supplied. Names
- * inside a layered slot are resolved too — leaving a bare string in the array puts it where a
- * patch is expected, and reading `.duration` off it yields NaN rather than throwing.
- */
-function resolveSlot<N extends string>(
-  slot: N | MotionPatch | Layered<N | MotionPatch>,
-  builtin: Record<N, MotionPatch>,
-): Slot {
-  if (typeof slot === 'string') return builtin[slot];
-  if (!Array.isArray(slot)) return slot as MotionPatch;
-  return layersOf<N | MotionPatch>(slot).map((s) => (typeof s === 'string' ? builtin[s] : s));
-}
-
-/**
- * The most rows a backdrop lays out. A guard on the allocation, not a frame budget: what a frame
- * costs is the size of the part pool, and the look decides that far more than the row count does.
- * Measured with `spikes/backdrop-frame-cost.mjs` on a 15-letter sign — `gold` runs 16 rows in
- * 0.4ms a frame, where `tubing` costs about 2.2ms a row and passes 16.7ms at 7 of them. Past this
- * a caller is asking for wallpaper, and should say so with `text` rather than with `rows`.
- */
-export const MAX_BACKDROP_ROWS = 12;
-
-/** The sign on `rows` lines. A run list repeats as a list, so each run's styling repeats with it. */
-function onRows(text: string | TextRun[], rows: number): string | TextRun[] {
-  const asked = Math.max(1, Math.floor(rows));
-  const n = Math.min(asked, MAX_BACKDROP_ROWS);
-  if (n !== asked) {
-    console.warn(
-      `klieg: a backdrop lays out at most ${MAX_BACKDROP_ROWS} rows — asked for ${asked}`,
-    );
-  }
-  if (n === 1) return text;
-  if (typeof text === 'string') return Array.from({ length: n }, () => text).join('\n');
-  return Array.from({ length: n }, (_, i) => (i === 0 ? text : [{ text: '\n' }, ...text])).flat();
-}
-
-/** Names a slot for a diagnostic; a caller's own patch has no name to give. */
-function describeSlot(slot: EnterSlot | ActiveSlot | ExitSlot): string {
-  if (typeof slot === 'string') return slot;
-  if (Array.isArray(slot)) return layersOf(slot).map(describeSlot).join(' + ');
-  return 'a custom patch';
-}
-
-export interface KliegOptions {
-  target?: HTMLElement;
-  /**
-   * Fullscreen overlay, or the type anchored inside one element of the page. Fixed for the
-   * instance's lifetime; a page wanting both needs two instances, and two WebGL contexts.
-   * An element placement is its own parent, so it cannot be combined with `target`.
-   */
-  placement?: Placement;
-  /**
-   * The fonts this instance can set type in, addressed by name from `fire()`. A value may name a
-   * face within a `.ttc` collection, which is how the fonts macOS ships — Helvetica, Times,
-   * Courier, Menlo — are loadable at all.
-   *
-   * The first entry is the default; `defaultFont` overrides it. Key order is what JS fixes for
-   * string keys, so reordering the literal is what changes which font a bare `fire()` uses.
-   */
-  fonts?: Record<string, FontSpec>;
-  /** Which entry a `fire()` with no `font` uses. Defaults to the first. */
-  defaultFont?: string;
-  /** @deprecated Pass `fonts` instead: `fonts: { display: url }`. */
-  fontUrl?: string;
-  clock?: Clock;
-  /**
-   * `concurrent` is unsound for `sweep`: every live effect writes the shared environment
-   * rotation from its own elapsed time, so the highlight sawtooths between their phases.
-   */
-  policy?: QueuePolicy;
-  idleTimeoutMs?: number;
-  /**
-   * The look whose shader programs the warm links, on an idle callback after `createKlieg`. The
-   * link is the driver's and lands per look, so warming `gold` buys a page that only fires `neon`
-   * nothing. Defaults to `'gold'`.
-   */
-  warmLook?: Look;
-  /** How much of the viewport the type may fill. The default leaves room for the page underneath. */
-  framing?: Framing;
-  /**
-   * The lens: `{ projection: 'ortho' }` for parallel projection, or a `fov` in degrees for how
-   * much perspective a word shows. Neither changes how large the type is drawn.
-   */
-  camera?: CameraSpec;
-  /**
-   * How far the canvas reaches past its anchor, as a share of the tallest the type may be — room
-   * for a glow, a bevel highlight or a bloom halo to fall off in. Without it the canvas is the
-   * anchor exactly, and everything a look paints outside the type's own box is cut at the edge the
-   * type is aligned against, which on `align: 'start'` is the leading letter's own stem.
-   *
-   * The bleed never moves the type: the framing fractions and the aligned edge go on measuring the
-   * anchor. Sized against the type rather than the box, and never below the blur's own reach, so a
-   * small word in a large anchor does not pay for one. `0` pins the canvas back to the anchor.
-   *
-   * It costs a wider canvas: the extra reaches over whatever the anchor sits beside, and a page
-   * that scrolls to its own right edge can gain a few pixels of overflow. An anchor under an
-   * `overflow: hidden` ancestor clips it away, and wants the room as padding instead.
-   */
-  bleed?: number;
-}
-
-export type { CameraSpec, Framing, Placement } from './render/stage.js';
-export type { Align } from './text/layout.js';
-export type { TextRun } from './text/runs.js';
-
-/** A built-in name, your own patch, or several layered together — names and patches may mix. */
-export type EnterSlot = EnterName | MotionPatch | Layered<EnterName | MotionPatch>;
-export type ActiveSlot = ActiveName | MotionPatch | Layered<ActiveName | MotionPatch>;
-export type ExitSlot = ExitName | MotionPatch | Layered<ExitName | MotionPatch>;
-export type { LightingSlot };
-
-export interface FireOptions {
-  enter?: EnterSlot;
-  active?: ActiveSlot;
-  exit?: ExitSlot;
-  /** A built-in name, or a material of your own as plain numbers. */
-  look?: Look;
-  /**
-   * Appearance driven over time, below the level of a letter. Replaces the look's own list rather
-   * than adding to it — spread `specOf(look).effects` to keep them.
-   */
-  effects?: EffectSpec[];
-  /** How the environment lights the type. `sweep` rakes the highlight, `static` holds it still.
-   * Layers compose: `['sweep', track({ pitchRange: 0.1 })]`, each on its own period.
-   *
-   * A patch you construct carries its own state, so give each fire its own `track()` rather than
-   * sharing one; the name `'pointer'` builds a fresh patch per run and is safe to reuse. */
-  lighting?: LightingSlot;
-  /**
-   * Recolors the look, as `0xff2d6f`. A function is consulted per letter and may return
-   * `undefined` for "not mine", leaving that letter the look's own colour.
-   *
-   * Routed to whichever property carries that look's hue — `gem` is clear stone whose red comes
-   * from what light picks up passing through it, so tinting its base color would do nothing.
-   */
-  tint?: number | ((letter: LetterInfo) => number | undefined);
-  /**
-   * Turns the whole word as one rigid object — never the camera, which would drift
-   * `viewportBudget`'s fit and shrink the word along with its angle. It turns and scales about the
-   * middle of the ink's face, where the letters' poses hold it that frame, and moves in world units,
-   * in which the frame is about 7.6 tall at that face.
-   * Build one with `fromEuler`, `fromAxisAngle` or `compose` rather than writing the sixteen
-   * numbers by hand.
-   */
-  transform?: Transform;
-  /**
-   * Milliseconds in the active segment, `'click'` to hold until the viewer dismisses it, or
-   * `'forever'` to stay until `destroy()`. A held effect blocks the queue under the default
-   * `queue` policy, and its promise stays pending until it leaves the screen.
-   *
-   * `'click'` has no meaning for an element placement and is refused there; `'forever'` is legal
-   * everywhere.
-   */
-  hold?: number | 'click' | 'forever';
-  bloom?: boolean;
-  blendMs?: number;
-  /** @deprecated Unread. Placement is fixed per instance — pass it to `createKlieg` instead. */
-  placement?: Placement;
-  /**
-   * How the lines of a multi-line block range against each other, in reading order. Defaults to
-   * `'start'`, which is what an acrostic wants: centred lines scatter its initials across as many
-   * x positions as there are lines. Distinct from `framing.align`, which places the whole block
-   * in the frame. A single-line word places identically either way.
-   */
-  lineAlign?: Align;
-  /** A name from the instance's `fonts`. Defaults to `defaultFont`, else the first entry. */
-  font?: string;
-  /**
-   * Extra advance after each glyph, in em. Negative tightens. A face with advances too tight for
-   * display sizes — a pixel face especially — wants a little here.
-   */
-  tracking?: number;
-  /** Break long lines to whatever arrangement renders largest. Explicit newlines always break. */
-  wrap?: boolean;
-  /** Let the overlay swallow the dismissing click instead of passing it through to the page. */
-  modal?: boolean;
-  /**
-   * Who dismisses a `'click'` hold. `'host'` attaches no window listeners at all — neither
-   * `pointerdown` nor `Escape` — so one press does one thing, and `advance()` on the handle is the
-   * only way out. Per effect rather than per instance, so window-dismissed flourishes and
-   * host-driven held slides can share one `Klieg`.
-   */
-  dismiss?: 'window' | 'host';
-  /**
-   * How the word appears in the DOM, so it can be copied, found and read aloud. `'hidden'` is one
-   * visually-hidden node; `'layer'` adds a transparent per-letter layer a drag can select, and
-   * takes a click on a letter instead of passing it through; `'none'` adds nothing, for a page
-   * whose own markup already carries this text.
-   *
-   * `'layer'` needs the word still — it falls back to `'hidden'` under a `transform` or a motion
-   * patch that moves the letters. Defaults to `'hidden'`.
-   */
-  selectable?: SelectableMode;
-  /**
-   * Stages played after the enter, each regrouping what survives it. Advanced by the viewer when
-   * a stage holds on `'click'`. Ignored under reduced motion, which never travels.
-   */
-  stages?: Stage[];
-  /**
-   * Starts the effect already settled in one of its holds, as if it had played there and every
-   * earlier hold had been released the moment it settled. Hold 0 is the opening word's; hold `k` is
-   * `stages[k - 1]`'s, so a fire has one more hold than it has stages. The enter and every boundary
-   * before that hold are skipped, and no mark is reported for them — `active` included — nor for
-   * the boundary that hold sits in. From there it plays live: a `'click'` hold waits for its press.
-   *
-   * Throws for a hold the fire does not have. Under reduced motion, which plays no stages, the word
-   * is the opening one whatever the hold.
-   */
-  startAt?: { hold: number };
-  /**
-   * Called as the effect crosses each mark. `active` is the instant the word has landed
-   * and is at full presence — mid-blend, which is what a host swapping a page behind the flourish
-   * wants. A listener that throws does not stop the render loop.
-   */
-  onMark?: (event: MarkEvent) => void;
-  /**
-   * The sign repeated in rows behind this one, tilted and dimmed and running effects of its own.
-   * It shares this instance's caches, and adds nothing to the DOM — the hero already carries the
-   * text a reader copies or hears.
-   */
-  backdrop?: BackdropSpec;
-  /**
-   * Aborts this one effect without touching the instance. Composed with the queue's own signal
-   * rather than replacing it: an abort plays no exit, and the promise resolves rather than
-   * rejecting, which is what it already promises for an effect the queue drops.
-   */
-  signal?: AbortSignal;
-}
-
-/**
- * The sign repeated in rows behind the fired word. Not tied to a look: any look and any effect can
- * be used this way, and `stagger: { from: 'line' }` is what makes an effect crawl across the rows.
- *
- * It never takes the motion slots. No enter, no active, no exit — it is placed once and runs only
- * its effects, so it is already at full presence when the hero arrives over it.
- */
-export interface BackdropSpec {
-  /** How many lines the sign is repeated on. Defaults to 1, which is an ordinary second sign. */
-  rows?: number;
-  /** What is repeated, in place of the hero's own text. */
-  text?: string | TextRun[];
-  /** Defaults to the hero's look — it is the same sign, standing further back. */
-  look?: Look;
-  /** Replaces the backdrop look's own effects, as `FireOptions.effects` does for the hero. */
-  effects?: EffectSpec[];
-  /** Turns the rows as one rigid object, so a tilt can run them off the corners of the frame. */
-  transform?: Transform;
-  /**
-   * Multiple of the hero's fitted letter size. Above 1 the rows overfill the frame, which is what
-   * keeps a tilt from exposing a corner. Defaults to 1.
-   */
-  scale?: number;
-  /**
-   * Scales the backdrop's frame-owned base — its opacity and its emissive — so the rows sit under
-   * the hero. Not the effect layer: an effect still modulates from the dimmed base, so a chase
-   * reads at full contrast against a dimmed row. Defaults to 1.
-   */
-  dim?: number;
-}
-
-/** Timing for the move into a new layout. `scale` addresses the viewport fit, not letter size. */
-export interface TweenSpec {
-  /** Milliseconds for the move. Defaults to 700. */
-  duration?: number;
-  /** Defaults to `easeOutCubic`. */
-  ease?: Easing;
-  /**
-   * Fraction of a span a channel waits before starting. `position` is a fraction of the move;
-   * `scale` is a fraction of the move or this stage's exit, whichever is longer, so the fit can
-   * wait for an exit that outlasts the move.
-   */
-  delayBy?: { position?: number; scale?: number };
-}
-
-/** One regroup: some letters leave, the rest re-lay out and the effect carries on. */
-export interface Stage {
-  /** Letters that continue. The rest exit. Omitted keeps all of them. */
-  keep?: (letter: LetterInfo) => boolean;
-  /** How the letters that do not continue leave. */
-  exit?: ExitSlot;
-  /** Arrangement for the survivors' new layout. One line by default. */
-  as?: Arrangement;
-  active?: ActiveSlot;
-  hold?: number | 'click';
-  tween?: TweenSpec;
-}
-
-/**
- * What `fire()` hands back: the promise it has always been, plus control over this one effect.
- * A `Promise` rather than a bare thenable — callers already use `.catch()` on a fire.
- */
-export interface FireHandle extends Promise<void> {
-  /**
-   * Treats this as the dismissing press. A no-op unless a hold is waiting for one; called before
-   * the effect starts, it releases the first hold that effect reaches rather than being lost.
-   */
-  advance(): void;
-  /**
-   * Replaces the fire's `transform` while it runs — a lab's orbit, a slider, a drag. Called before
-   * the effect starts, it is the transform the effect opens with. It shows on the next frame the
-   * clock draws, so under a paused `ManualClock` the caller follows it with `advance(0)`. A turn
-   * away from identity drops `selectable: 'layer'` to `'hidden'`, as a `transform` does at fire
-   * time; the backdrop keeps its own.
-   */
-  turn(transform: Transform): void;
-}
-
-/**
- * Something drawn in klieg's own scene beside the type — sparks, smoke, anything a three.js object
- * can carry. Structural, so klieg depends on nothing that builds one.
- */
-export interface SceneLayer {
-  /** Joins the scene on `attach`, before the first `update`. */
-  readonly object: THREE.Object3D;
-  /** Advances the layer by `dt` seconds. Called once a frame for as long as it is attached. */
-  update(dt: number): void;
-  /** Whether it has anything left on screen. While any attached layer is live, frames keep coming. */
-  readonly live: boolean;
-}
-
-/** A point on the drawn type in world units, and how large a CSS pixel is at its depth. */
-export interface TypePoint {
-  x: number;
-  y: number;
-  z: number;
-  /** World units one CSS pixel spans at `z`, for sizing in pixels whatever is placed there. */
-  unitsPerPx: number;
-  /** The same point in the word's layout space, where effects measure distance — a `kick` lands
-   * here. The fit and `transform` are undone; a letter's own motion is not. */
-  inWord: { x: number; y: number };
-}
-
-export interface Klieg {
-  readonly supported: boolean;
-  /** Resolves when the effect leaves the screen, whether it played out or was cancelled. */
-  fire(text: string | TextRun[], options?: FireOptions): FireHandle;
-  /**
-   * Links a look's shader programs now instead of waiting for the idle callback after
-   * construction. For a host that already knows what it is about to fire — a page swap that has
-   * decided — so the link is paid before the swap rather than inside it. Defaults to `warmLook`.
-   *
-   * Resolves once the linking draw has been issued, and never rejects: a warm that cannot run
-   * leaves the fire paying exactly what it would have paid anyway.
-   */
-  warm(look?: Look): Promise<void>;
-  /**
-   * Fetches, parses and extrudes a face's glyphs for every distinct character of `chars`, so the
-   * first fire that draws them pays for none of it. For a host that knows its corpus — a roster of
-   * names is a couple of dozen characters, however many words it fires.
-   *
-   * Letters only. A tube look's blueprint keys on a per-letter seed as well as the character, so
-   * there is nothing a corpus alone can warm; `warm()` covers the shader link beside it.
-   *
-   * Throws synchronously on a font name the instance does not hold, as `fire()` does — that is a
-   * typo in the host's own code. Rejects if the face cannot be fetched or parsed, which is the
-   * same failure the next fire would hit.
-   */
-  preheat(chars: string, font?: string): Promise<void>;
-  /**
-   * Adds a layer's object to the scene the type is drawn in, so it shares the type's camera, depth
-   * buffer and, during a fire that asks for it, bloom. Returns a function that takes it out again;
-   * disposing the layer stays the caller's job.
-   *
-   * While the layer is `live`, frames keep coming — between fires, and after the fire that set it
-   * off has ended — and the WebGL context is held. Once it goes quiet with no fire running, one
-   * frame clears it and the stage idles as usual. Between fires the scene is drawn without bloom,
-   * which belongs to a fire. `update` runs every frame while attached, live or not, so a layer that
-   * starts something on its own is drawn from the next frame; that costs a frame callback for as
-   * long as it stays attached. A no-op where WebGL is unsupported and after `destroy()`.
-   */
-  attach(layer: SceneLayer): () => void;
-  /**
-   * The point on the fired word drawn under a client position, or null where there is none — off
-   * the letters, outside the canvas, or with nothing on screen. Hit against the geometry as drawn,
-   * so it follows a `transform`, the letters' pose and a moved `eye`. A backdrop is never answered.
-   */
-  pointOn(clientX: number, clientY: number): TypePoint | null;
-  /** Cancels everything in flight; the stage comes down once the running effect has settled. */
-  destroy(): void;
-}
-
-/** The live link between a `FireHandle` and its effect, which may not have started yet. */
-interface FireControl {
-  /** Set while the effect is waiting on a dismissal; null before it starts and after it settles. */
-  dismiss: (() => void) | null;
-  /** An `advance()` that arrived before the effect did, to spend on its first hold. */
-  latched: boolean;
-  /** The last `turn()`, which a fire that has not built its word yet opens with. */
-  transform: Transform | null;
-  /** Set while the word is on screen; null before it is built and after it settles. */
-  turn: ((transform: Transform) => void) | null;
-}
-
-/**
- * One registry from either surface, so nothing downstream knows which the host used. The
- * deprecation warns once per instance rather than once per process: a host that constructs klieg
- * per fire should hear it every time, and a per-process latch would make the warning depend on
- * which instance happened to be built first.
- */
-function registryFor(options: KliegOptions): FontRegistry {
-  if (options.fonts && options.fontUrl !== undefined) {
-    throw new Error('klieg: pass fonts or fontUrl, not both');
-  }
-  if (options.fonts) return new FontRegistry(options.fonts, options.defaultFont);
-  if (options.fontUrl === undefined) throw new Error('klieg: fonts is required');
-  console.warn('klieg: fontUrl is deprecated — pass fonts: { display: url } instead');
-  return new FontRegistry({ default: options.fontUrl });
-}
-
 /** Whether a mesh is on screen: every ancestor visible and some opacity left. A letter mid-exit
  * keeps its geometry at zero opacity. */
 function drawn(object: THREE.Object3D): boolean {
@@ -645,541 +218,42 @@ export function createKlieg(options: KliegOptions): Klieg {
   });
 
   const caches = new WordCaches();
-  const cameraZOf = (): number | null => {
-    const lens = stage.lens();
-    return lens.orthoHeight === undefined ? lens.cameraZ : null;
-  };
   const fonts = registryFor(options);
   let destroyed = false;
   let fired = false;
+  const pointer = new PointerWatch();
+  const inst: Instance = {
+    stage,
+    clock,
+    caches,
+    framing: options.framing,
+    heroes: new Set<Word>(),
+    liveFires: 0,
+    font: (name) => fonts.load(name),
+    pointer,
+    layers: new SceneLayers(
+      stage,
+      clock,
+      () => inst.liveFires === 0,
+      () => destroyed,
+    ),
+  };
+  const { heroes, layers } = inst;
+  const warmLook = options.warmLook ?? DEFAULT_LOOK;
   const warmer = supported
     ? scheduleWarm({
         stage,
-        font: () => font(),
-        look: options.warmLook ?? 'gold',
-        blooms: wantsBloom(undefined, options.warmLook ?? 'gold'),
+        font: () => inst.font(),
+        look: warmLook,
+        blooms: wantsBloom(undefined, warmLook),
         caches,
         stale: () => destroyed || fired,
         gone: () => destroyed,
-        busy: () => liveFires > 0 || layersLive(),
+        busy: () => inst.liveFires > 0 || layers.live(),
       })
     : null;
-
-  let pointerClient: { x: number; y: number } | null = null;
-  let pointerAttached = false;
-  const onMove = (event: PointerEvent) => {
-    pointerClient = { x: event.clientX, y: event.clientY };
-  };
-
-  /** Once attached it stays for the instance's life. The cursor goes on moving between effects,
-   * so a listener that came and went would open the next one aimed where the pointer used to be. */
-  function holdPointer(): void {
-    if (pointerAttached) return;
-    pointerAttached = true;
-    globalThis.addEventListener('pointermove', onMove, { passive: true });
-  }
-
-  function releasePointer(): void {
-    if (!pointerAttached) return;
-    pointerAttached = false;
-    globalThis.removeEventListener('pointermove', onMove);
-  }
-
-  const layers = new Set<SceneLayer>();
-  let stopLayers: (() => void) | null = null;
-  let steppedAt: number | null = null;
-  let layersWereLive = false;
-  /** Fires with a frame subscription, and the words they put on screen for `pointOn`. */
-  let liveFires = 0;
-  const heroes = new Set<Word>();
-  let drawnAt: number | null = null;
   const raycaster = new THREE.Raycaster();
   const aim = new THREE.Vector2();
-
-  function layersLive(): boolean {
-    for (const layer of layers) if (layer.live) return true;
-    return false;
-  }
-
-  /** Once a frame, from whichever of the layer loop and a fire's tick reaches it first, and always
-   * before that frame is drawn. */
-  function stepLayers(now: number): void {
-    if (layers.size === 0 || steppedAt === now) return;
-    const dt = steppedAt === null ? 0 : Math.max(0, now - steppedAt) / 1000;
-    steppedAt = now;
-    for (const layer of [...layers]) {
-      try {
-        layer.update(dt);
-      } catch (err) {
-        detachLayer(layer);
-        queueMicrotask(() => {
-          throw err;
-        });
-      }
-    }
-  }
-
-  function drawLayers(now: number): void {
-    const renderer = stage.mount();
-    renderer.setRenderTarget(null);
-    renderer.clear();
-    renderer.render(stage.scene, stage.camera);
-    drawnAt = now;
-  }
-
-  /** A running fire draws the layers with everything else; between fires this is all that does. */
-  function layerTick(now: number): void {
-    stepLayers(now);
-    const live = layersLive();
-    if ((live || layersWereLive) && liveFires === 0) {
-      if (drawnAt !== now) drawLayers(now);
-      if (!live) stage.scheduleIdleTeardown();
-    }
-    layersWereLive = live;
-  }
-
-  function detachLayer(layer: SceneLayer): void {
-    if (!layers.delete(layer)) return;
-    stage.scene.remove(layer.object);
-    if (layers.size === 0) {
-      stopLayers?.();
-      stopLayers = null;
-      layersWereLive = false;
-    }
-    // Whatever it drew last stays on the canvas until something draws over it.
-    if (!destroyed && liveFires === 0 && stage.renderer) {
-      drawLayers(clock.now());
-      if (!layersLive()) stage.scheduleIdleTeardown();
-    }
-  }
-
-  function font(name?: string): Promise<LoadedFont> {
-    return fonts.load(name);
-  }
-
-  /** A run's own tint wins for the slots it covers; the fire's tint paints the rest. */
-  function tintFor(
-    text: string | TextRun[],
-    fireTint: number | ((letter: LetterInfo) => number | undefined) | undefined,
-  ): number | ((letter: LetterInfo) => number | undefined) | undefined {
-    if (typeof text === 'string') return fireTint;
-    const perRun = tintOf(text);
-    return (letter) =>
-      perRun(letter.index) ?? (typeof fireTint === 'function' ? fireTint(letter) : fireTint);
-  }
-
-  /**
-   * The second word, built against the hero's own fit. Its scale is a multiple of the hero's rather
-   * than of its own budget fit, or seven rows would shrink to fit the frame instead of overfilling
-   * it; `behind` is its own extrusion plus a hero's thickness of clearance, which the depth buffer
-   * then resolves.
-   */
-  function rowsBehind(
-    spec: BackdropSpec,
-    rowText: string | TextRun[],
-    hero: Word,
-    loaded: LoadedFont,
-    budget: Budget,
-    heroLook: Look,
-  ): Word {
-    const text = onRows(rowText, spec.rows ?? 1);
-    const chosen = spec.look ?? heroLook;
-    const look = spec.effects ? { ...specOf(chosen), effects: spec.effects } : chosen;
-    const depth = DEFAULT_GLYPH_OPTIONS.depth;
-    const heroScale = hero.placement.scale;
-    const scale = heroScale * (spec.scale ?? 1);
-    const word = new Word(
-      text,
-      loaded,
-      look,
-      budget,
-      false,
-      undefined,
-      undefined,
-      stage.environment?.texture ?? null,
-      caches,
-      sizeOf(text),
-      undefined,
-      {
-        fitScale: scale,
-        dim: spec.dim ?? 1,
-        behind: depth * scale + depth * heroScale,
-        cameraZ: cameraZOf,
-      },
-    );
-    if (spec.transform) word.transform = spec.transform;
-    return word;
-  }
-
-  async function run(
-    text: string | TextRun[],
-    opts: FireOptions,
-    signal: AbortSignal,
-    control: FireControl,
-  ): Promise<void> {
-    const loaded = await font(opts.font);
-    if (signal.aborted) return;
-
-    // A run names a klieg font; layout resolves a registered family. Every distinct name a run
-    // mentions is loaded (and so registered) before anything is laid out. The backdrop's own text
-    // is in here too, so a run naming a font reads the same behind the sign as in front of it.
-    const rowText = opts.backdrop ? (opts.backdrop.text ?? text) : null;
-    const namesIn = (t: string | TextRun[]) =>
-      typeof t === 'string' ? [] : t.flatMap((r) => r.font ?? []);
-    const named = [...new Set([...namesIn(text), ...(rowText ? namesIn(rowText) : [])])];
-    const families = new Map<string, string>();
-    for (const name of named) families.set(name, (await font(name)).family);
-    if (signal.aborted) return;
-
-    const resolve = (t: string | TextRun[]): string | TextRun[] =>
-      typeof t === 'string'
-        ? t
-        : t.map((r) => (r.font ? { ...r, font: families.get(r.font) as string } : r));
-    const runs = resolve(text);
-
-    const renderer = stage.mount();
-    const chosen = opts.look ?? 'gold';
-    const bloom = wantsBloom(opts.bloom, chosen) ? new BloomPath(renderer) : null;
-    // A caller's list replaces the look's own rather than adding to it.
-    const look = opts.effects ? { ...specOf(chosen), effects: opts.effects } : chosen;
-    const budget = stage.viewportBudget(
-      options.framing?.width,
-      options.framing?.height,
-      options.framing?.align,
-      opts.lineAlign,
-    );
-    let word: Word;
-    try {
-      word = new Word(
-        runs,
-        loaded,
-        look,
-        budget,
-        opts.wrap,
-        tintFor(text, opts.tint),
-        undefined,
-        stage.environment?.texture ?? null,
-        caches,
-        sizeOf(text),
-        undefined,
-        { tracking: opts.tracking, cameraZ: cameraZOf },
-      );
-    } catch (err) {
-      // This rejects before the settle() that would otherwise free the bloom's render targets.
-      bloom?.dispose();
-      throw err;
-    }
-    const transform = control.transform ?? opts.transform;
-    if (transform) word.transform = transform;
-    stage.scene.add(word.group);
-
-    let backdrop: Word | null = null;
-    try {
-      backdrop =
-        opts.backdrop && rowText
-          ? rowsBehind(opts.backdrop, resolve(rowText), word, loaded, budget, chosen)
-          : null;
-    } catch (err) {
-      stage.scene.remove(word.group);
-      word.dispose();
-      bloom?.dispose();
-      throw err;
-    }
-    if (backdrop) stage.scene.add(backdrop.group);
-
-    const enter = resolveSlot(opts.enter ?? 'slam', ENTER);
-    const active = resolveSlot(opts.active ?? 'none', ACTIVE);
-    const asked = opts.selectable ?? 'hidden';
-    // Whether it *moves* the word, not whether it was passed: a caller wiring rotation sliders
-    // sends an identity transform at 0°, and refusing that costs the layer for nothing.
-    const blocker =
-      transform && !isIdentity(transform)
-        ? 'a transform'
-        : slotMovesLetters(active)
-          ? `the active motion (${describeSlot(opts.active ?? 'none')})`
-          : null;
-    if (asked === 'layer' && blocker) {
-      console.warn(
-        `klieg: selectable 'layer' needs the word still, and ${blocker} moves it — falling back to 'hidden'`,
-      );
-    }
-    let mode: SelectableMode = asked === 'layer' && blocker ? 'hidden' : asked;
-
-    // Its own node inside the shared container: under `policy: 'concurrent'` two live effects
-    // would otherwise clear each other's text, and the first to settle would wipe the survivor's.
-    const host = stage.textLayer?.appendChild(document.createElement('div')) ?? null;
-    const layer = host ? new TextLayer(host) : null;
-    let family: string | null = null;
-    let baselineRatio = 0;
-    let built = false;
-    // Up first even for 'layer', so the word is never absent from the DOM while the face loads —
-    // and a browser with no `FontFace` keeps it rather than getting nothing at all.
-    if (layer && mode !== 'none') layer.setHidden(plainTextOf(text));
-    if (layer && mode === 'layer') {
-      void registerFace(loaded.key, loaded.bytes).then((f) => {
-        if (!f) return;
-        baselineRatio = measureBaselineRatio(f);
-        family = f;
-      });
-    }
-
-    const envFrame = new EnvFrame(resolveLighting(opts.lighting ?? 'sweep'));
-    const hold = opts.hold ?? 1200;
-    const untilClick = hold === 'click';
-    const exit = resolveSlot(opts.exit ?? 'fade', EXIT);
-    const enterEnd = slotDuration(enter);
-    const blendMs = opts.blendMs ?? 120;
-    const timeline = new Timeline({
-      enter,
-      active,
-      exit,
-      hold: typeof hold === 'number' ? hold : 'until-release',
-      blendMs,
-    });
-
-    // Reduced motion: hold the pose the enter settles into for `hold`, then leave. No travel.
-    const still = prefersReducedMotion();
-
-    // Reduced motion never travels, so a regroup has nothing to play — and a stage held on
-    // 'click' would never advance from a clock this path pins to the settled pose.
-    const stages = still ? [] : (opts.stages ?? []);
-    // A stage that holds on 'click' waits for the same press the top-level hold does, and gets no
-    // listener of its own — so the whole effect stalls unless this covers both.
-    const awaitsClick = untilClick || stages.some((s) => s.hold === 'click');
-    const reporter = opts.onMark ? new MarkReporter(isolate(opts.onMark)) : null;
-    const sequence = stages.length
-      ? new Sequence({
-          enter,
-          active,
-          stages: stages.map((s) => ({
-            keep: s.keep,
-            exit: resolveSlot(s.exit ?? 'fade', EXIT),
-            as: s.as,
-            active: resolveSlot(s.active ?? 'none', ACTIVE),
-            hold: s.hold ?? 1200,
-            tween: s.tween ?? {},
-          })),
-          exit,
-          hold: typeof hold === 'number' ? hold : 'click',
-          blendMs,
-          target: word,
-          onStage: reporter ? (index) => reporter.stage(index) : undefined,
-        })
-      : null;
-    const driver: Sequence | Timeline = sequence ?? timeline;
-    // Reduced motion times the hold off `since` itself, and has no enter to skip.
-    const landed =
-      opts.startAt && !still
-        ? sequence
-          ? sequence.land(opts.startAt.hold)
-          : timeline.settledAt
-        : 0;
-    if (opts.startAt) reporter?.passActive();
-    const startedAt = clock.now() - landed;
-
-    holdPointer();
-
-    await new Promise<void>((resolve, reject) => {
-      let settled = false;
-      let released = false;
-      let detachDismiss = () => {};
-
-      const settle = (done: () => void) => {
-        if (settled) return;
-        settled = true;
-        control.dismiss = null;
-        control.turn = null;
-        off();
-        liveFires--;
-        heroes.delete(word);
-        detachDismiss();
-        stage.scene.remove(word.group);
-        if (backdrop) stage.scene.remove(backdrop.group);
-        host?.remove();
-        word.dispose();
-        backdrop?.dispose();
-        bloom?.dispose();
-        // Another fire or a live layer holds the stage, and arms this itself once it lets go.
-        if (liveFires === 0 && !layersLive()) stage.scheduleIdleTeardown();
-        done();
-      };
-      const finish = () => settle(resolve);
-
-      if (awaitsClick) {
-        // Not one-shot with stages: each dismissal advances one stage, and only the last ends it.
-        const dismiss = () => {
-          if (released) return;
-          const since = clock.now() - startedAt;
-          driver.release(since);
-          if (!sequence || sequence.isFinished(since)) {
-            released = true;
-            detachDismiss();
-          }
-        };
-        // A modal hold is a keyboard trap without Escape: it swallows input and never times out.
-        // Under host dismissal that trade is the host's to make, since it holds the input.
-        if (opts.modal) stage.setInteractive(true);
-
-        if (opts.dismiss === 'host') {
-          detachDismiss = () => {
-            stage.setInteractive(false);
-            detachDismiss = () => {};
-          };
-        } else {
-          // Capture on window catches the press in both modes; `modal` only decides whether the
-          // canvas absorbs it on the way down or the page underneath sees it too.
-          const onPointer = () => dismiss();
-          const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') dismiss();
-          };
-          globalThis.addEventListener('pointerdown', onPointer, { capture: true, passive: true });
-          globalThis.addEventListener('keydown', onKey);
-
-          detachDismiss = () => {
-            globalThis.removeEventListener('pointerdown', onPointer, { capture: true });
-            globalThis.removeEventListener('keydown', onKey);
-            stage.setInteractive(false);
-            detachDismiss = () => {};
-          };
-        }
-
-        control.dismiss = dismiss;
-        if (control.latched) {
-          control.latched = false;
-          dismiss();
-        }
-      }
-
-      control.turn = (next) => {
-        word.transform = next;
-        if (mode !== 'layer' || isIdentity(next)) return;
-        console.warn(
-          "klieg: selectable 'layer' needs the word still, and a turn moves it — falling back to 'hidden'",
-        );
-        mode = 'hidden';
-        layer?.setHidden(plainTextOf(text));
-      };
-      liveFires++;
-      heroes.add(word);
-      const off = clock.subscribe((now) => {
-        if (signal.aborted) return finish();
-
-        try {
-          // rAF reports the frame's start time, which can precede a now() sampled moments earlier.
-          const since = now - startedAt;
-          const raw = Math.max(still ? enterEnd : since, 0);
-          const elapsed = sequence ? raw : Math.min(raw, timeline.duration);
-          // Ahead of the pose, or the fit and the stage advance both lag it by a frame.
-          sequence?.tick(elapsed);
-
-          // Detected against this frame rather than scheduled at fire time: `release()` moves
-          // `activeEnd`, so a click hold has no exit instant until the press lands. Reduced motion
-          // pins `elapsed` to the settled pose, so it reads both boundaries off `since` instead.
-          if (reporter) {
-            if (still) {
-              const over = untilClick
-                ? released
-                  ? 0
-                  : Number.POSITIVE_INFINITY
-                : (hold as number);
-              reporter.observe(since, 0, over);
-            } else {
-              reporter.observe(elapsed, enterEnd, sequence ? sequence.exitAt : timeline.activeEnd);
-            }
-          }
-
-          // Resolved on demand, once per frame: placing the cursor reads the canvas' box, which
-          // flushes layout, and most signs run no patch that asks for it.
-          let placed: PointerFrame | null = null;
-          const place = (): PointerFrame =>
-            (placed ??= pointerFrame(
-              pointerClient ? stage.canvas?.getBoundingClientRect() : null,
-              pointerClient,
-              {
-                fit: word.placement,
-                ...stage.lens(),
-                depth: DEFAULT_GLYPH_OPTIONS.depth,
-                bevel: DEFAULT_GLYPH_OPTIONS.bevelThickness,
-              },
-            ));
-          const host: Host = {
-            get pointer() {
-              return place().pointer;
-            },
-            get pointerInWord() {
-              return place().pointerInWord;
-            },
-            now,
-          };
-          word.apply(driver, elapsed, host, still);
-          // Never the driver: the backdrop takes no motion slot, so it is at full presence from
-          // its first frame. Its own effects still run, off the same clock the hero reads.
-          backdrop?.apply(PLACED, elapsed, host, still);
-
-          if (layer && mode === 'layer' && family) {
-            if (word.atRest()) {
-              const canvas = stage.canvas;
-              const readout = word.readout();
-              const key = {
-                version: word.layoutVersion,
-                width: canvas?.clientWidth ?? 0,
-                height: canvas?.clientHeight ?? 0,
-                scale: readout.fit.scale,
-                midY: readout.fit.midY,
-              };
-              if (layer.isStale(key)) {
-                const projected = projectLetters({
-                  ...readout,
-                  ...stage.lens(),
-                  depth: DEFAULT_GLYPH_OPTIONS.depth,
-                  bevel: DEFAULT_GLYPH_OPTIONS.bevelThickness,
-                  width: key.width,
-                  height: key.height,
-                  baselineRatio,
-                });
-                layer.setLayer(projected.boxes, projected.fontSize, family, key, projected.scaleX);
-              } else {
-                layer.setVisible(true);
-              }
-              built = true;
-            } else if (built) {
-              layer.setVisible(false);
-            }
-          }
-
-          const env = envFrame.at(elapsed, host, still);
-          stage.scene.environmentRotation.x = env.pitch;
-          stage.scene.environmentRotation.y = env.yaw;
-          // The scene write above reaches only a material with no `envMap` of its own; every
-          // material the word draws with carries one.
-          word.setEnvRotation(env.pitch, env.yaw);
-          backdrop?.setEnvRotation(env.pitch, env.yaw);
-
-          stepLayers(now);
-          if (bloom) {
-            bloom.render(stage.scene, stage.camera);
-          } else {
-            renderer.setRenderTarget(null);
-            renderer.clear();
-            renderer.render(stage.scene, stage.camera);
-          }
-          drawnAt = now;
-
-          const stillDone = typeof hold === 'number' ? since >= hold : released;
-          if (still ? stillDone : driver.isFinished(since)) finish();
-        } catch (err) {
-          // RafClock keeps a throwing subscriber subscribed, so a lost context would otherwise
-          // throw every frame forever with the word still on a stage destroy() can never settle.
-          settle(() => reject(err));
-        }
-      });
-
-      // Teardown must not wait for a tick: rAF stops in a hidden tab, and destroy() holds a
-      // scarce GL context until this effect settles.
-      signal.addEventListener('abort', finish);
-      if (signal.aborted) finish();
-    });
-  }
 
   let counter = 0;
 
@@ -1231,14 +305,14 @@ export function createKlieg(options: KliegOptions): Klieg {
       return handle(
         queue.push(
           `${counter++}:${text}`,
-          (signal) => run(text, opts, signal, control),
+          (signal) => runFire(inst, text, opts, signal, control),
           opts.signal,
         ),
       );
     },
     warm(look) {
       if (!supported || destroyed || !warmer) return Promise.resolve();
-      const chosen = look ?? options.warmLook ?? 'gold';
+      const chosen = look ?? warmLook;
       return warmer.run(chosen, wantsBloom(undefined, chosen));
     },
     preheat(chars, name) {
@@ -1253,16 +327,7 @@ export function createKlieg(options: KliegOptions): Klieg {
     },
     attach(layer) {
       if (!supported || destroyed) return () => {};
-      if (!layers.has(layer)) {
-        // First: three.quarks disposes a particle system that has no Scene above it when it updates.
-        stage.scene.add(layer.object);
-        layers.add(layer);
-        if (!stopLayers) {
-          steppedAt = null;
-          stopLayers = clock.subscribe(layerTick);
-        }
-      }
-      return () => detachLayer(layer);
+      return layers.attach(layer);
     },
     pointOn(clientX, clientY) {
       const canvas = stage.canvas;
@@ -1297,8 +362,8 @@ export function createKlieg(options: KliegOptions): Klieg {
     destroy() {
       destroyed = true;
       warmer?.cancel();
-      releasePointer();
-      for (const layer of [...layers]) detachLayer(layer);
+      pointer.release();
+      layers.detachAll();
       // A running effect only notices the abort on its next tick, and tearing down first would
       // leave it re-arming idle teardown against a stage that is already gone.
       void queue.cancelAll().then(() => {

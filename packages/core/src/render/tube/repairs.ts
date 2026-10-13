@@ -50,6 +50,9 @@ export interface RepairSite {
   side?: RepairSide;
 }
 
+/** Hears every cut repair considered, whether or not it ran. @internal */
+export type RepairReport = (id: CutRepairId, site: RepairSite | null, ran: boolean) => void;
+
 /**
  * Identity, label, order, and where the repair hangs in the pipeline — no `apply`. Each id fires
  * with a body no one signature spans (`setback` trims a span entering and yields an index leaving),

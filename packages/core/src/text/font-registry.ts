@@ -1,3 +1,4 @@
+import type { KliegOptions } from '../api.js';
 import { type LoadedFont, loadFont } from './font.js';
 
 /** A url, or a url and which face of a collection it should take. */
@@ -83,4 +84,22 @@ export class FontRegistry {
     this.loads.set(request, load);
     return load;
   }
+}
+
+/**
+ * One registry from either surface, so nothing downstream knows which the host used. The
+ * deprecation warns once per instance rather than once per process: a host that constructs klieg
+ * per fire should hear it every time, and a per-process latch would make the warning depend on
+ * which instance happened to be built first.
+ */
+export function registryFor(
+  options: Pick<KliegOptions, 'fonts' | 'fontUrl' | 'defaultFont'>,
+): FontRegistry {
+  if (options.fonts && options.fontUrl !== undefined) {
+    throw new Error('klieg: pass fonts or fontUrl, not both');
+  }
+  if (options.fonts) return new FontRegistry(options.fonts, options.defaultFont);
+  if (options.fontUrl === undefined) throw new Error('klieg: fonts is required');
+  console.warn('klieg: fontUrl is deprecated — pass fonts: { display: url } instead');
+  return new FontRegistry({ default: options.fontUrl });
 }

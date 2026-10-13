@@ -141,6 +141,14 @@ function pixelRatio(): number {
   return Math.min(globalThis.devicePixelRatio ?? 1, 2);
 }
 
+/** The camera's distance from the type for a perspective lens, or null for an orthographic one. */
+export function cameraZOf(stage: Stage): () => number | null {
+  return () => {
+    const lens = stage.lens();
+    return lens.orthoHeight === undefined ? lens.cameraZ : null;
+  };
+}
+
 export function prefersReducedMotion(): boolean {
   return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 }
@@ -269,6 +277,14 @@ export class Stage {
     }
     const distance = this.camera.position.z - z;
     return (2 * Math.tan((this.camera.fov * Math.PI) / 360) * distance) / cssHeight;
+  }
+
+  /** Draws the scene straight to the canvas. A caller already holding the renderer skips the mount,
+   * which would cancel a pending idle teardown. */
+  draw(renderer: THREE.WebGLRenderer = this.mount()): void {
+    renderer.setRenderTarget(null);
+    renderer.clear();
+    renderer.render(this.scene, this.camera);
   }
 
   /** Idempotent: repeated fires reuse one context rather than allocating a new one. */

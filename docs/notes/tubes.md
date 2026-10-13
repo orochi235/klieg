@@ -61,7 +61,7 @@ whose `## Acceptance, as measured` section has the numbers.
 - **A fixture's sampling spacing is load-bearing.** A 90° turn at 0.1 spacing is a 0.071 em bend
   — wider than a 0.03 tube needs — so no corner is found at all. Sample at the pipeline's 0.02.
   Two named fixtures: a square never hairpins (use `sharpV` in `repairs.test.ts`), and
-  `openLPath`'s 0.1 sampling registers no corner (use `fineOpenL` in `runs.test.ts`).
+  `openLPath`'s 0.1 sampling registers no corner (use `fineOpenL` in `runs/stage.test.ts`).
 - **`wanderPaths` seeds its rng from the path's array index**, so the order paths are concatenated
   in — contours, then connectors — keeps every wandered look byte-identical. Reordering re-renders
   them all and throws nothing.
@@ -88,7 +88,7 @@ and `fillet` and `hairpin` are gated where the decision is made. Two things shap
 reads:
 
 - **`resume`'s `ran: false` lies under `bridge`/`relax`.** The blend applies regardless; the toggle
-  gates only the walk's trim (comment on `ranResume` in `runs.ts`), so the repair layer hides a
+  gates only the walk's trim (comment on `ranResume` in `rejoin.ts`), so the repair layer hides a
   site that partly ran.
 - **Some toggles are geometry-invisible on typical paths.** `setback` and the corner-side `stretch`
   are subsumed by later walks under most rejoins — `relax` makes exit-setback bite, triple-off

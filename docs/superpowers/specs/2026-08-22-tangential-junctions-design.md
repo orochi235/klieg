@@ -3,15 +3,15 @@
 **For:** whoever changes the corner stage next. **Answers:** why the last bend-minimum failure is not
 a tuning problem, and what replaces the fit that causes it.
 
-**Status, 2026-10-07: unbuilt, and a decision rather than a task.** `junctionRadius` and `biarcBlend` exist in `bend.ts` (the latter used only by the hairpin); neither fix is wired, and `piping`'s `B` and `G` still fail (re-measured 2026-10-12).
+**Status, 2026-10-12: unbuilt, and a decision rather than a task.** `junctionRadius` and `biarcBlend` exist in `bend.ts` (the latter used only by the hairpin); neither fix is wired. Easing shallow corners in place (`ease.ts`) fixed `piping`'s `B`; `G` still fails.
 
 A *junction* is where a corner's built arc splices back into the extracted path. A *fillet* is the
 fixed-radius arc the corner stage builds there today.
 
 ## The defect
 
-`piping` traces `B` with one run bending at 1.70r against a 2.00r floor, and `G` with one at 1.536r.
-They are the only failures in a shipped configuration; the others the census reports are `piping`
+`piping` traces `G` with one run bending at 1.536r against a 2.00r floor. It is the only failure in a
+shipped configuration; the others the census reports are `piping`
 under `exact` and `field`, which are lab-only path sources, and `tubing`'s `R` at 1.996r is wander,
 not geometry.
 
@@ -22,7 +22,7 @@ the settle pass never restores a corner it broke. Now the 41° corner keeps its 
 setback of 0.134 em against about 0.066 for its neighbors, and its junction is the 1.536r run. The
 defect is the same one; that commit only stopped hiding it.
 
-The path arrives at the arc **49 degrees off tangent**. Nothing measures that. `resumeAt` accepts a
+On `B`, before it was eased, the path arrived at the arc **49 degrees off tangent**. Nothing measures that. `resumeAt` accepts a
 junction on the circumradius of the triple spanning it, and circumradius through a long chord is
 `chord / (2 sin turn)` — so stepping the leg back lengthens the chord and raises the number while
 leaving the mismatch exactly where it was. The function's own docstring states this as its strategy.
@@ -50,7 +50,7 @@ straight. Both local repairs fail, and a reader who proposes either should see t
 Each fixes one corner and breaks another, which is the signature of a wrong model rather than a bad
 parameter.
 
-## Two populations, one treatment
+## Two populations, two treatments
 
 Detection has no notion of margin: a vertex is hard when its radius is below the floor, whether by
 3% or by 74%. On `B` those are different worlds. Seven of its eight hard corners sit **53 to 74
@@ -59,10 +59,13 @@ no choice but to leave the letterform. The eighth, on the right of the lower cou
 **1.94r, a 3.2% margin**, inside a stretch curving at 2.2r to 2.9r.
 
 That last one has no straight legs to be tangent to, and fitting an arc to two straight leg lines
-there is what produces the 53 degree kink. It does not need replacing. Nudging its few vertices
-outward by three percent would clear the floor and keep the path. Sorting corners by how far under
-they are, and relaxing the shallow ones in place rather than replacing them, is the treatment the
-measurements point at — and it is untried.
+there is what produces the 53 degree kink. `easeShallowCorners` in `ease.ts` now smooths any hard
+corner within 10% of the floor in place, moving no point more than half a tube radius, so it is no
+longer a corner. That took `B` from 1.70r to clear and changed no shipped corner but that one.
+Wider margins of 20% and 35% fix nothing more and start changing `tubing`'s strategy mix.
+
+`G` is in the other population. Its failing junction belongs to its 41 degree corner, which sits
+at **0.44 of the floor**, so easing cannot reach it; it needs the tangential fix below.
 
 ## The long chord is the design, not an accident
 
@@ -77,8 +80,8 @@ and any fix narrow enough to leave the other corners alone is patching a symptom
 
 ## What was tried, and what each cost
 
-Measured against `spikes/junction-split.mjs`, which reported 7 genuine failures then (9 since
-`G` joined them):
+Measured against `spikes/junction-split.mjs`, which reported 7 genuine failures then (7 again now,
+with `G` in and `B` eased out):
 
 | change | failures | cost |
 | --- | --- | --- |
@@ -119,8 +122,10 @@ around at all.
   `tubing`'s `R` at 1.996r is wander, not geometry — it vanishes at `amplitude: 0`.
 - `spikes/junction-chord.mjs` shows no run whose chord-filled radius falls below its built one by
   more than float noise, which is the metric and the geometry agreeing.
-- The corner strategy mix stays within a few percent of 177/30 on `piping` and 111/47/47 on
-  `tubing`, or the change is a redraw and every baseline is re-judged rather than updated.
+- The corner strategy mix stays within a few percent of what the cut stage records over A–Z at
+  `direct`: 177 connect and 29 break on `piping`, 90 return, 47 connect and 68 break on `tubing`
+  (2026-10-12). Otherwise the change is a redraw and every baseline is re-judged rather than
+  updated.
 
 ## Traps
 

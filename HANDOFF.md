@@ -38,7 +38,7 @@ Each of these needs someone looking at renders or choosing; none is safe to sett
   Stones the seam cuts show dark specks where the cut face sees into the hollow letter; dropping
   those stones is the likely fix. Individual stones as effect parts are not designed. Every letter
   draws the whole sheet twice and the mask discards most of it, at an unmeasured cost.
-- **`piping`'s `B` and `G` still bend tighter than their minimum.** The fixes tried each redraw the alphabet
+- **`piping`'s `G` still bends tighter than its minimum.** The fixes tried each redraw the alphabet
   or move the fault to another corner; [tangential
   junctions](docs/superpowers/specs/2026-08-22-tangential-junctions-design.md) lays out the choice.
 - **Archivo Black's `K` and `k` show a tapering bevel highlight**, from arm sides 1–2.5° off

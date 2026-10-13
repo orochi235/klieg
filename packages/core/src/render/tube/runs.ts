@@ -3,6 +3,7 @@ import { rng } from '../../rng.js';
 import { BEND_FLOOR, DEFAULT_BEND, minBendRadius, STYLE_FACTOR, vertexBends } from './bend.js';
 import { type ContourPolicies, type ContourRole, DEFAULT_FLOOR } from './contours.js';
 import { cornerSeed, type Draw } from './decide.js';
+import { easeShallowCorners } from './ease.js';
 import type { GeneratedPath } from './generators.js';
 import { DEFAULT_HAIRPIN, type HairpinShape } from './hairpin.js';
 import { polyLength } from './legs.js';
@@ -284,6 +285,7 @@ export function cutIntoRuns(paths: GeneratedPath[], opts: CutOptions): CutResult
   }[] = [];
   const blockout = opts.blockout ?? DEFAULT_BLOCKOUT;
   for (const [p, path] of paths.entries()) {
+    easeShallowCorners(path.points, path.closed, rhoMin, radius / 2);
     const stitchAt = (r: number, b: number, heard: RepairReport): Stitched => {
       const min = r === radius ? rhoMin : minBendRadius(r, opts.bend);
       const style = r === radius ? rhoStyle : r * STYLE_FACTOR;

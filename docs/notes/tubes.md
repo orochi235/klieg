@@ -40,9 +40,12 @@ whose `## Acceptance, as measured` section has the numbers.
   0.13 em footprint but eats up to `6 ρmin` of each leg. `spikes/hairpin-view.mjs`.
 - **The last bend-minimum failure is a junction defect**, open — see
   [tangential junctions](../superpowers/specs/2026-08-22-tangential-junctions-design.md).
-  Only `piping`/`direct` `B` and `G` fail in a shipped configuration; `tubing`'s `R` at 1.996r is wander
+  Only `piping`/`direct` `G` fails in a shipped configuration; `tubing`'s `R` at 1.996r is wander
   and vanishes at `amplitude: 0`. `junctionRadius` and `biarcBlend` are built and tested in
   `bend.ts` and deliberately not wired.
+- **A hard corner within 10% of the floor is eased, not cut.** `easeShallowCorners` (`ease.ts`)
+  smooths it in place before detection, which is what fixed `piping`'s `B`. Corners are bimodal:
+  across A–Z most sit at 0.15 to 0.45 of the floor and a handful at 0.95 to 1.0.
 
 ## Traps in building runs
 

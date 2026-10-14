@@ -4,7 +4,13 @@ import type { LoadedFont } from '@core/text/font.js';
 import { DEFAULT_GLYPH_OPTIONS, glyphToShapes } from '@core/text/glyphs.js';
 import { LabBar } from '@shared/LabBar.js';
 import { LabRenderer, type PanelDraw } from '@shared/lab-renderer.js';
-import { SurfaceContext, useSurfaceTile, useTiledSurface, Workspace } from '@weasel-js/labkit';
+import {
+  SurfaceContext,
+  TileGrip,
+  useSurfaceTile,
+  useTiledSurface,
+  Workspace,
+} from '@weasel-js/labkit';
 import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
@@ -85,7 +91,7 @@ function PanelTile({ record, summary, onSource, viewProps, onReset }: PanelTileP
   const tile = useSurfaceTile(id);
   return (
     <div className="panel" ref={tile}>
-      <div className="panel__bar">
+      <TileGrip className="panel__bar">
         <span className="panel__letter">{letter}</span>
         <span className="panel__mode">{mode}</span>
         {mode === 'ramp' ? (
@@ -97,7 +103,7 @@ function PanelTile({ record, summary, onSource, viewProps, onReset }: PanelTileP
             ))}
           </select>
         ) : null}
-      </div>
+      </TileGrip>
       <div className="panel__body" {...viewProps(id, pose)}>
         <button
           type="button"

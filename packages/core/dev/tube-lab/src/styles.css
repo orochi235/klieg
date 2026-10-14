@@ -37,26 +37,6 @@ body {
   inset: 0;
 }
 
-/* labkit gives the drag grip a strip of its own above the tile. The panel already has a bar, so
-   the grip rides the middle of it — narrow enough to leave the ramp select clickable. */
-.stage .lk-trial-tile {
-  position: relative;
-}
-.stage .lk-trial-tile__grip {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  z-index: 1;
-  width: 72px;
-  height: var(--panel-bar);
-  transform: translateX(-50%);
-  background: transparent;
-  border-radius: 0;
-}
-.stage .lk-trial-tile__body {
-  height: 100%;
-}
-
 .panel {
   display: grid;
   grid-template-rows: auto 1fr;

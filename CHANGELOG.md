@@ -6,12 +6,11 @@ therefore never picks up a break. When 1.0 comes is chosen deliberately, not rea
 
 ## Unreleased
 
-### Runs on @msb235/blits 0.10.0 and @weasel-js 1.9.4
+### Runs on @msb235/blits 0.10.0 and @weasel-js 1.10.0
 
 klieg pins `@msb235/blits` at exactly `0.10.0` and `@weasel-js/text` and `@weasel-js/font` at
-exactly `1.9.4`, and its dev labs build on the matching `core`, `ui` and `labkit`. `core` 1.9.4
-pins blits 0.8.1, so the labs carry a second copy of blits until weasel moves to 0.10.0; the
-published package carries one.
+exactly `1.10.0`, and its dev labs build on the matching `core`, `ui` and `labkit`. `core` 1.10.0
+pins blits 0.10.0 too, so the labs no longer carry a second copy of blits.
 
 ### Fixed
 

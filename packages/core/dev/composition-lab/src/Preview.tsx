@@ -18,19 +18,34 @@ export interface PreviewProps {
  */
 export function Preview({ composition, elapsed }: PreviewProps) {
   const host = useRef<HTMLDivElement>(null);
-  const rig = useRef<{ clock: ManualClock; at: number } | null>(null);
+  const rig = useRef<{ clock: ManualClock; at: number; live: boolean } | null>(null);
+  const latest = useRef(elapsed);
+  latest.current = elapsed;
 
   useEffect(() => {
     const target = host.current;
     if (!target) return;
 
-    const clock = new ManualClock();
+    const mine = { clock: new ManualClock(), at: 0, live: false };
+    const subscribe = mine.clock.subscribe.bind(mine.clock);
+    // A fire draws only on a tick and takes its start time when it subscribes, which is after its
+    // font loads. The clock holds at 0 until then, so a paused transport still gets its frame.
+    mine.clock.subscribe = (fn) => {
+      const off = subscribe(fn);
+      queueMicrotask(() => {
+        if (rig.current !== mine || mine.live) return;
+        mine.live = true;
+        mine.clock.advance(latest.current);
+        mine.at = latest.current;
+      });
+      return off;
+    };
     const instance = createKlieg({
-      clock,
+      clock: mine.clock,
       fonts: { display: fontUrl },
       placement: { kind: 'element', el: target },
     });
-    rig.current = { clock, at: 0 };
+    rig.current = mine;
     void instance.fire(composition.text, toFireOptions(composition)).catch(() => {});
 
     return () => {
@@ -41,7 +56,7 @@ export function Preview({ composition, elapsed }: PreviewProps) {
 
   useEffect(() => {
     const r = rig.current;
-    if (!r || elapsed < r.at) return;
+    if (!r?.live || elapsed < r.at) return;
     r.clock.advance(elapsed - r.at);
     r.at = elapsed;
   }, [elapsed]);

@@ -1,24 +1,23 @@
-:root {
-  --cl-bg: #0e1013;
-  --cl-panel: #171a1f;
-  --cl-edge: #262b33;
-  --cl-ink: #d7dce4;
-  --cl-dim: #7e8896;
-  --cl-hot: #ffb347;
-  --cl-cool: #5aa9e6;
+/* Resolved where they are used, under the lab's theme: on :root they would read the page's tokens. */
+.cl-body,
+.cl-section,
+.cl-layers {
+  --cl-bg: var(--wzl-surface-sunken);
+  --cl-edge: var(--wzl-border);
+  --cl-ink: var(--wzl-fg);
+  --cl-dim: var(--wzl-fg-muted);
+  --cl-hot: var(--wzl-danger);
 }
 
-body {
-  margin: 0;
-  background: var(--cl-bg);
+.cl-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+  padding: 12px;
   color: var(--cl-ink);
-}
-
-.cl-shell {
-  display: grid;
-  grid-template-columns: 300px 1fr;
-  grid-template-rows: auto minmax(0, 1fr);
-  height: 100vh;
   font:
     12px / 1.5 ui-monospace,
     SFMono-Regular,
@@ -26,56 +25,13 @@ body {
     monospace;
 }
 
-.cl-shell > .lab-bar {
-  grid-column: 1 / -1;
-}
-
-.cl-rail {
-  overflow-y: auto;
-  padding: 12px;
-  background: var(--cl-panel);
-  border-right: 1px solid var(--cl-edge);
-}
-
-.cl-rail h2 {
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--cl-dim);
-  margin: 14px 0 6px;
-}
-
-.cl-main {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow-y: auto;
-  padding: 12px;
-}
-
 .cl-preview-host {
   position: relative;
+  flex: 1 0 240px;
   width: 100%;
-  height: 240px;
   border: 1px solid var(--cl-edge);
   border-radius: 5px;
   overflow: hidden;
-}
-
-.cl-transport {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.cl-transport input[type="range"] {
-  flex: 1;
-  accent-color: var(--cl-cool);
-}
-
-.cl-tag {
-  color: var(--cl-hot);
 }
 
 .cl-panel {
@@ -93,7 +49,8 @@ body {
   margin: 0 0 6px;
 }
 
-.cl-panel canvas {
+.cl-panel canvas,
+.cl-section canvas {
   display: block;
   width: 100%;
 }
@@ -151,10 +108,50 @@ body {
   cursor: pointer;
 }
 
+.cl-section {
+  font:
+    12px / 1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+.cl-section h3 {
+  font-size: 11px;
+  font-weight: 500;
+  margin: 8px 0 4px;
+}
+
 .cl-layer {
   border-top: 1px solid var(--cl-edge);
-  padding-top: 8px;
-  margin-bottom: 10px;
+  padding: 6px 0;
+}
+
+.cl-layer__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cl-layer__grip {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: grab;
+  touch-action: none;
+}
+
+.cl-layer__kind {
+  flex: 1;
+}
+
+.cl-layers__add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-top: 6px;
 }
 
 .cl-note {
@@ -170,27 +167,8 @@ body {
   margin-top: 8px;
 }
 
-.cl-deck {
-  display: grid;
-  /* minmax(0, …) rather than 1fr: a bare 1fr floors at its content's min-width, and the sweep
-     table's is wider than half the deck. */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-}
-
-@media (max-width: 1000px) {
-  .cl-deck {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 .cl-scroll {
   overflow-x: auto;
-}
-
-.cl-span2 {
-  grid-column: 1 / -1;
 }
 
 .cl-table {

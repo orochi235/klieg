@@ -1,16 +1,16 @@
 import { createKlieg, ManualClock } from '@core/index.js';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { type Composition, toFireOptions } from './composition.js';
 import { fontUrl } from './font.js';
 
 export interface PreviewProps {
   composition: Composition;
-  /** Milliseconds into the fire. Never decreases within one mount; a backward seek remounts. */
+  /** Milliseconds into the fire. A move back rebuilds the fire and jumps to it. */
   elapsed: number;
 }
 
 /**
- * A real fire on a clock the lab owns. Seeking backward remounts and jumps straight to the target
+ * A real fire on a clock the lab owns. Seeking backward rebuilds and jumps straight to the target
  * in one advance, which `spikes/seek-rebuild/` measures as byte-identical to playing there at
  * 60fps. Seeking forward just advances, because the rebuild is the expensive half.
  *
@@ -21,7 +21,10 @@ export function Preview({ composition, elapsed }: PreviewProps) {
   const rig = useRef<{ clock: ManualClock; at: number; live: boolean } | null>(null);
   const latest = useRef(elapsed);
   latest.current = elapsed;
+  // A fire only runs forward, so a move back (a scrub, or a loop starting over) rebuilds it.
+  const [epoch, setEpoch] = useState(0);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `epoch` only asks for the rebuild
   useEffect(() => {
     const target = host.current;
     if (!target) return;
@@ -48,15 +51,33 @@ export function Preview({ composition, elapsed }: PreviewProps) {
     rig.current = mine;
     void instance.fire(composition.text, toFireOptions(composition)).catch(() => {});
 
+    // A fire fits the word to its box once, when it starts, so a box that changes size (a second
+    // trial narrowing this one) gets a new fire rather than a word that overflows or shrinks.
+    const fitted = { width: target.clientWidth, height: target.clientHeight };
+    let wait = 0;
+    const observer = new ResizeObserver(() => {
+      if (target.clientWidth === fitted.width && target.clientHeight === fitted.height) return;
+      clearTimeout(wait);
+      wait = window.setTimeout(() => setEpoch((n) => n + 1), 150);
+    });
+    observer.observe(target);
+
     return () => {
+      clearTimeout(wait);
+      observer.disconnect();
       rig.current = null;
       instance.destroy();
     };
-  }, [composition]);
+  }, [composition, epoch]);
 
   useEffect(() => {
     const r = rig.current;
-    if (!r?.live || elapsed < r.at) return;
+    if (!r?.live) return;
+    if (elapsed < r.at) {
+      r.live = false;
+      setEpoch((n) => n + 1);
+      return;
+    }
     r.clock.advance(elapsed - r.at);
     r.at = elapsed;
   }, [elapsed]);

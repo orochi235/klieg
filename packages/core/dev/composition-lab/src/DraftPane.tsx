@@ -109,11 +109,11 @@ export function DraftPane({ layer, onSource, faults }: DraftPaneProps) {
   }, [layer.id]);
 
   return (
-    <div className="cl-panel cl-draft">
-      <h2>
+    <div className="cl-section cl-draft">
+      <h3>
         draft · {layer.id}
         {compiled && !error ? <span className="cl-ok"> compiled</span> : null}
-      </h2>
+      </h3>
       <div ref={host} className="cl-editor" />
       <div className="cl-row">
         <button type="button" onClick={() => commit.current()}>

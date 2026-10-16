@@ -14,6 +14,21 @@ is `packages/core/dev/shared/pages.ts`; `apps/lab` serves on 5180.
 
 ## Composition lab
 
+A labkit `<Lab>` with one instrument (`src/instrument.tsx`): each trial is one composition, and
+**Clone trial** copies it to compare looks side by side. The settings are the schema in
+`src/config.ts`, where every hint lives; the analysis panels are sidebar sections that read their
+own trial through `useTrialState`, so a torn-out one still follows it.
+
+- **`PrefControl` draws every field of an object it is given, `.hidden()` or not.** The layer
+  editor (`src/LayersControl.tsx`) draws each layer with it, so a layer's `id`, `enabled` and a
+  draft's `source` are kept beside the schema rather than in it.
+- **A fire sizes its word once, when it starts.** The preview fires again when its box resizes, or
+  a second trial halving the first leaves the word overflowing it. Filed in `TODO.md`.
+- **A draft builds only once its source has compiled**, which is async. Reading a composition
+  compiles any stored draft nothing has compiled yet, so a reloaded lab's drafts play with their
+  pane folded.
+- **Theme the lab's own CSS under the lab, not on `:root`.** labkit applies its tokens on the lab's
+  element, so an alias defined on `:root` captures the page's colors instead.
 - **Honest about time, dishonest about intensity.** No bloom threshold reaches the plots, so a
   `gain` of 0.65 plots as 0.65 whether or not it reads as a dropout. Judge timing off the raster
   and the plot, and depth off the render.

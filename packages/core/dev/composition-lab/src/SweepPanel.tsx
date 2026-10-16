@@ -40,8 +40,7 @@ export function Sweep({ composition, parts, host }: SweepPanelProps) {
   const rows = result?.rows.map((row, i) => ({ key: `${i}:${row.value}`, row })) ?? [];
 
   return (
-    <div className="cl-panel">
-      <h2>param sweep</h2>
+    <div className="cl-section">
       <div className="cl-row">
         <select value={layer?.id ?? ''} onChange={(e) => setLayerId(e.target.value)}>
           {layers.map((l) => (

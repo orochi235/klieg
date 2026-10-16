@@ -32,8 +32,8 @@ export function Plot({ samples, channel, part, label, at }: PlotProps) {
     g.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     g.clearRect(0, 0, w, h);
 
-    // A packed colour has no vertical position to plot. -1 is "no layer wrote one", drawn as a gap
-    // rather than as black, which is a colour a layer can genuinely write.
+    // A packed color has no vertical position to plot. -1 is "no layer wrote one", drawn as a gap
+    // rather than as black, which is a color a layer can genuinely write.
     if (channel === 'color') {
       const cw = Math.max(1, w / row.length);
       for (let s = 0; s < row.length; s++) {
@@ -77,10 +77,10 @@ export function Plot({ samples, channel, part, label, at }: PlotProps) {
 
   const range = row ? `${Math.min(...row).toFixed(3)} … ${Math.max(...row).toFixed(3)}` : 'no data';
   return (
-    <div className="cl-panel">
-      <h2>
-        {channel} — {label} <span className="cl-note">{range}</span>
-      </h2>
+    <div className="cl-section">
+      <p className="cl-note">
+        {channel}, {label}: {range}
+      </p>
       <canvas ref={ref} />
     </div>
   );

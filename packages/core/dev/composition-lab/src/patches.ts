@@ -147,7 +147,7 @@ export const PARAMS: Record<Exclude<PatchKind, 'draft'>, ParamSpec[]> = {
       max: 2,
       step: 0.05,
       value: 0.5,
-      hint: "How far the light reaches, in em of layout space. Measured to a part's ink centre.",
+      hint: "How far the light reaches, in em of layout space. Measured to a part's ink center.",
     },
     {
       key: 'strength',
@@ -155,7 +155,7 @@ export const PARAMS: Record<Exclude<PatchKind, 'draft'>, ParamSpec[]> = {
       max: 8,
       step: 0.1,
       value: 2,
-      hint: 'Light at the centre, falling to zero at the radius.',
+      hint: 'Light at the center, falling to zero at the radius.',
     },
     {
       key: 'x',
@@ -163,7 +163,7 @@ export const PARAMS: Record<Exclude<PatchKind, 'draft'>, ParamSpec[]> = {
       max: 3,
       step: 0.05,
       value: 0,
-      hint: 'Lamp position under a fixed source, and the orbit centre under an orbit.',
+      hint: 'Lamp position under a fixed source, and the orbit center under an orbit.',
     },
     {
       key: 'y',
@@ -184,7 +184,7 @@ export const PARAMS: Record<Exclude<PatchKind, 'draft'>, ParamSpec[]> = {
   ],
 };
 
-/** Whether the look declares the colour ramp `chase` shifts; without one every chase layer is inert. */
+/** Whether the look declares the color ramp `chase` shifts; without one every chase layer is inert. */
 export function hasGradient(look: Look): boolean {
   const decoration = specOf(look).decoration;
   return decoration?.kind === 'tube' && decoration.gradient !== undefined;

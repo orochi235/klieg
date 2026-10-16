@@ -25,8 +25,7 @@ export function Tenure({ samples, parts, pass, epochMs, perPatchPass }: TenurePr
   const coarse = perPatchPass < PER_PATCH_PASS;
 
   return (
-    <div className="cl-panel">
-      <h2>tenure &amp; jump</h2>
+    <div className="cl-section">
       <div className="cl-row">
         <span>tenure</span>
         <output>{(r.meanTenureMs / 1000).toFixed(2)}s</output>

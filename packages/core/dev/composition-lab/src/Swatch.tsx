@@ -15,8 +15,8 @@ export interface SwatchProps {
 const RESTS_AT_ONE = new Set<Channel>(['gain', 'scale']);
 
 /**
- * One cell per part at its ink centre in em space, tinted by the channel at the playhead. Some
- * pools give multiple parts the same ink centre; where cells coincide, plain source-over means
+ * One cell per part at its ink center in em space, tinted by the channel at the playhead. Some
+ * pools give multiple parts the same ink center; where cells coincide, plain source-over means
  * the last part drawn wins, not the brightest.
  */
 export function Swatch({ samples, parts, channel, at }: SwatchProps) {
@@ -91,13 +91,10 @@ export function Swatch({ samples, parts, channel, at }: SwatchProps) {
   }, [samples, parts, source, rest, peak, at]);
 
   return (
-    <div className="cl-panel">
-      <h2>
-        swatch{' '}
-        <span className="cl-note">
-          {channel === 'color' ? 'color (via gain)' : channel} at the playhead, in em
-        </span>
-      </h2>
+    <div className="cl-section">
+      <p className="cl-note">
+        {channel === 'color' ? 'color (via gain)' : channel} at the playhead, in em
+      </p>
       <canvas ref={ref} />
     </div>
   );

@@ -39,7 +39,7 @@ export interface PassSamples {
   /** Length of the merged lamp vector. A lamp writes nothing else, so without this a lamp layer
    * reads on every other channel exactly as a patch that does nothing does. */
   light: number[][];
-  /** Packed 0xRRGGBB, or -1 where no layer wrote a colour. */
+  /** Packed 0xRRGGBB, or -1 where no layer wrote a color. */
   color: number[][];
   /** Whether any layer ever MOVED this part across the whole pass. Being targeted is not enough:
    * a patch like `roving` addresses the whole pool and afflicts one part of it, and counting the

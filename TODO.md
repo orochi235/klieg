@@ -1,3 +1,10 @@
 # TODO
 
 Work klieg owes that has no other home yet.
+
+## A placed word does not refit when its element resizes
+
+A fire sizes the word once, from `stage.viewportBudget` when it starts. After that, the stage's
+`ResizeObserver` only resizes the canvas and its lens, so a word in an element that narrows mid-fire
+overflows it, and one in an element that grows stays small. Seen in the composition lab when a
+second trial halves the first one's width; the lab works around it by firing again on resize.

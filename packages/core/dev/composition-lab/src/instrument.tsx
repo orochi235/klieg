@@ -2,6 +2,7 @@ import { defineInstrument } from '@weasel-js/labkit';
 import { Body } from './Body.js';
 import { DEFAULT_COMPOSITION } from './composition.js';
 import { type LabConfig, schema, TAIL_MS } from './config.js';
+import { HOME } from './orbit.js';
 import { SECTIONS } from './sections.js';
 
 /** One composition per trial. Nothing lives in state: every panel derives from the config and
@@ -13,6 +14,10 @@ export const composer = defineInstrument<Record<string, never>, LabConfig>({
   initialState: () => ({}),
   // The run's length follows `hold`; `Body` rewrites it when hold changes.
   clock: { duration: DEFAULT_COMPOSITION.hold + TAIL_MS, loop: true },
+  orbit: {
+    initialView: HOME,
+    limits: { minDistance: HOME.distance / 4, maxDistance: HOME.distance * 4 },
+  },
   chrome: SECTIONS,
   render: () => <Body />,
 });

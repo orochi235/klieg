@@ -18,7 +18,8 @@ export function Body() {
   const sampled = useSampled();
   const focus = useFocus();
   const span = composition.hold + TAIL_MS;
-  const camera = useTrialOrbit()?.camera;
+  const orbit = useTrialOrbit();
+  const camera = orbit?.camera;
   const transform = useMemo(() => (camera ? orbitTransform(camera) : undefined), [camera]);
 
   useEffect(() => {
@@ -36,7 +37,12 @@ export function Body() {
 
   return (
     <div className="cl-body">
-      <Preview composition={composition} elapsed={t} transform={transform} />
+      <Preview
+        composition={composition}
+        elapsed={t}
+        transform={transform}
+        viewportRef={orbit?.viewportRef}
+      />
       <TrialTransport />
       <Timeline composition={composition} tailMs={TAIL_MS} elapsed={t} onSeek={seek} />
       <div className="cl-panel">

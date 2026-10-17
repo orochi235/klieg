@@ -1,5 +1,5 @@
 import { createKlieg, type FireHandle, ManualClock, type Transform } from '@core/index.js';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { type Composition, toFireOptions } from './composition.js';
 import { fontUrl } from './font.js';
 
@@ -9,6 +9,8 @@ export interface PreviewProps {
   elapsed: number;
   /** The trial's orbit as the word's turn; omitted, the word faces the viewer. */
   transform?: Transform;
+  /** Handed the box the word draws in, so the trial's camera gestures land there alone. */
+  viewportRef?: (el: HTMLElement | null) => void;
 }
 
 /**
@@ -18,7 +20,7 @@ export interface PreviewProps {
  *
  * An element placement is its own parent, so it takes `el` and refuses `target`.
  */
-export function Preview({ composition, elapsed, transform }: PreviewProps) {
+export function Preview({ composition, elapsed, transform, viewportRef }: PreviewProps) {
   const host = useRef<HTMLDivElement>(null);
   const rig = useRef<{
     clock: ManualClock;
@@ -103,5 +105,13 @@ export function Preview({ composition, elapsed, transform }: PreviewProps) {
     r.at = elapsed;
   }, [elapsed]);
 
-  return <div className="cl-preview-host" ref={host} />;
+  const attach = useCallback(
+    (el: HTMLDivElement | null) => {
+      host.current = el;
+      viewportRef?.(el);
+    },
+    [viewportRef],
+  );
+
+  return <div className="cl-preview-host" ref={attach} />;
 }

@@ -11,8 +11,8 @@ second trial halves the first one's width; the lab works around it by firing aga
 
 ## The composition lab cannot turn its sign yet
 
-Waiting on labkit's orbit camera, which weasel is adding as an instrument capability. Once it is
-released, the lab declares it, maps the camera onto `FireHandle.turn` (yaw and pitch to a rotation,
-distance to a uniform scale, target to a translation), and calls `advance(0)` after a turn while
-the transport is paused. The tube lab's hand-rolled drag (`dev/tube-lab/src/App.tsx`) moves onto
-the same capability.
+Built on branch `composition-orbit`, waiting on a weasel release with labkit's orbit capability and
+its icon registry; the branch typechecks only once klieg pins that weasel. It maps the trial's
+camera onto `FireHandle.turn`: yaw and pitch to a rotation, distance to a uniform scale, target to
+a translation. Until the release, run it with `WEASEL=<checkout>`. The tube lab's hand-rolled drag
+(`dev/tube-lab/src/App.tsx`) moves onto the same capability after that.

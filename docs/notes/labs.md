@@ -85,3 +85,6 @@ own trial through `useTrialState`, so a torn-out one still follows it.
 - **Plain `chromium.launch()` gets `chrome-headless-shell`, which rasterizes WebGL in software** and
   gets transmission wrong. The render spikes pass `channel: 'chromium'` and `--use-angle=metal`.
 - **A push to `main` touching `apps/lab/**` deploys the lab** through `pages.yml`.
+- **`WEASEL=<checkout>` serves every `@weasel-js` import from a weasel checkout's built
+  packages** (`dev/shared/weasel.ts`), for trying an unreleased labkit. It takes all of them at
+  once, because a labkit is built against its own core, and keeps klieg's React and three.

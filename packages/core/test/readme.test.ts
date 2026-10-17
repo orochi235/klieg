@@ -47,7 +47,10 @@ describe('documented surface', () => {
   it('hands back a handle that is still the promise callers already use', async () => {
     // Keeps `FireHandle` from being narrowed back to a bare thenable, which would break the
     // composition lab's `.catch()` on a fire.
-    const handle: bk.FireHandle = Object.assign(Promise.resolve(), { advance: () => {} });
+    const handle: bk.FireHandle = Object.assign(Promise.resolve(), {
+      advance: () => {},
+      turn: () => {},
+    });
 
     expect(typeof handle.then).toBe('function');
     expect(typeof handle.catch).toBe('function');

@@ -1625,6 +1625,42 @@ describe('caller-supplied transform', () => {
     await done;
   });
 
+  it('turns a running word to whatever turn() hands it', async () => {
+    const bk = create();
+    const done = bk.fire('HI', { ...INSTANT, hold: 5000, transform: fromEuler(0, 0.2, 0) });
+    await flush();
+    clock.advance(16);
+
+    done.turn(fromEuler(0.1, 0.5, 0));
+    const inner = (words()[0] as THREE.Group).children[0] as THREE.Group;
+    expect(inner.rotation.x).toBeCloseTo(0.1, 6);
+    expect(inner.rotation.y).toBeCloseTo(0.5, 6);
+    expect(stage().camera.rotation.y).toBe(0);
+    bk.destroy();
+  });
+
+  it('opens on a turn that arrived before the word was built', async () => {
+    const bk = create();
+    const done = bk.fire('HI', { ...INSTANT, hold: 5000, transform: fromEuler(0, 0.2, 0) });
+    done.turn(fromEuler(0, 0.7, 0));
+    await flush();
+
+    const inner = (words()[0] as THREE.Group).children[0] as THREE.Group;
+    expect(inner.rotation.y).toBeCloseTo(0.7, 6);
+    bk.destroy();
+  });
+
+  it('takes a turn after the fire has settled without complaint', async () => {
+    const bk = create();
+    const done = bk.fire('HI', INSTANT);
+    await flush();
+    clock.advance(16);
+    await done;
+
+    expect(() => done.turn(fromEuler(0, 1, 0))).not.toThrow();
+    bk.destroy();
+  });
+
   it('defaults to no turn when transform is not given', async () => {
     const bk = create();
     const done = bk.fire('HI', INSTANT);
@@ -2353,6 +2389,19 @@ describe('selectable', () => {
     await flush();
 
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('a transform'));
+    bk.destroy();
+  });
+
+  it('falls back to hidden when a running word is turned', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const bk = create();
+    const done = bk.fire('AB', { selectable: 'layer', enter: 'none', active: 'none', hold: 5000 });
+    await flush();
+    done.turn(fromEuler(0, 0, 0));
+    expect(warn).not.toHaveBeenCalled();
+
+    done.turn(fromEuler(0, 0.3, 0));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('a turn'));
     bk.destroy();
   });
 

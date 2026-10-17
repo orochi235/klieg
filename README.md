@@ -930,6 +930,19 @@ An `advance()` that arrives before the effect starts is not lost: it releases th
 effect reaches. Because `clickAnywhere` exists to gate a window listener, `dismiss: 'host'` does not
 need it — an anchored placement may hold on a click without the opt-in.
 
+The handle also takes `turn(transform)`, which replaces the fire's `transform` while it runs — for a
+drag, a slider or a lab's orbit. It turns the word, never the camera, so the fit holds:
+
+```ts
+const held = bk.fire('OPEN', { hold: 'forever' });
+held.turn(fromEuler(0.2, 0.6, 0));
+```
+
+A turn shows on the next frame the clock draws; under a paused `ManualClock`, follow it with
+`advance(0)`. One that arrives before the effect starts is what it opens with. Turning away from
+identity drops `selectable: 'layer'` to `'hidden'`, as a `transform` does at fire time, and a
+backdrop keeps its own `transform`.
+
 ## Queue policies
 
 - `queue` — effects play one at a time, in the order fired.

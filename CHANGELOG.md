@@ -12,6 +12,13 @@ klieg pins `@msb235/blits` at exactly `0.10.0` and `@weasel-js/text` and `@wease
 exactly `1.10.0`, and its dev labs build on the matching `core`, `ui` and `labkit`. `core` 1.10.0
 pins blits 0.10.0 too, so the labs no longer carry a second copy of blits.
 
+### Added
+
+`FireHandle.turn(transform)` replaces a fire's `transform` while it runs, so a drag, a slider or a
+lab's orbit can turn a word that is already on screen. A turn that arrives before the effect starts
+is what it opens with. Turning away from identity drops `selectable: 'layer'` to `'hidden'`, as a
+`transform` does at fire time.
+
 ### Fixed
 
 A lamp, `near`, `dwell` and `kicks` follow a sign's letters through a `stages` regroup. A part

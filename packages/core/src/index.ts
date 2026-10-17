@@ -500,6 +500,14 @@ export interface FireHandle extends Promise<void> {
    * the effect starts, it releases the first hold that effect reaches rather than being lost.
    */
   advance(): void;
+  /**
+   * Replaces the fire's `transform` while it runs — a lab's orbit, a slider, a drag. Called before
+   * the effect starts, it is the transform the effect opens with. It shows on the next frame the
+   * clock draws, so under a paused `ManualClock` the caller follows it with `advance(0)`. A turn
+   * away from identity drops `selectable: 'layer'` to `'hidden'`, as a `transform` does at fire
+   * time; the backdrop keeps its own.
+   */
+  turn(transform: Transform): void;
 }
 
 /**
@@ -582,6 +590,10 @@ interface FireControl {
   dismiss: (() => void) | null;
   /** An `advance()` that arrived before the effect did, to spend on its first hold. */
   latched: boolean;
+  /** The last `turn()`, which a fire that has not built its word yet opens with. */
+  transform: Transform | null;
+  /** Set while the word is on screen; null before it is built and after it settles. */
+  turn: ((transform: Transform) => void) | null;
 }
 
 /**
@@ -845,7 +857,8 @@ export function createKlieg(options: KliegOptions): Klieg {
       bloom?.dispose();
       throw err;
     }
-    if (opts.transform) word.transform = opts.transform;
+    const transform = control.transform ?? opts.transform;
+    if (transform) word.transform = transform;
     stage.scene.add(word.group);
 
     let backdrop: Word | null = null;
@@ -868,7 +881,7 @@ export function createKlieg(options: KliegOptions): Klieg {
     // Whether it *moves* the word, not whether it was passed: a caller wiring rotation sliders
     // sends an identity transform at 0°, and refusing that costs the layer for nothing.
     const blocker =
-      opts.transform && !isIdentity(opts.transform)
+      transform && !isIdentity(transform)
         ? 'a transform'
         : slotMovesLetters(active)
           ? `the active motion (${describeSlot(opts.active ?? 'none')})`
@@ -878,7 +891,7 @@ export function createKlieg(options: KliegOptions): Klieg {
         `klieg: selectable 'layer' needs the word still, and ${blocker} moves it — falling back to 'hidden'`,
       );
     }
-    const mode: SelectableMode = asked === 'layer' && blocker ? 'hidden' : asked;
+    let mode: SelectableMode = asked === 'layer' && blocker ? 'hidden' : asked;
 
     // Its own node inside the shared container: under `policy: 'concurrent'` two live effects
     // would otherwise clear each other's text, and the first to settle would wipe the survivor's.
@@ -963,6 +976,7 @@ export function createKlieg(options: KliegOptions): Klieg {
         if (settled) return;
         settled = true;
         control.dismiss = null;
+        control.turn = null;
         off();
         liveFires--;
         heroes.delete(word);
@@ -1024,6 +1038,15 @@ export function createKlieg(options: KliegOptions): Klieg {
         }
       }
 
+      control.turn = (next) => {
+        word.transform = next;
+        if (mode !== 'layer' || isIdentity(next)) return;
+        console.warn(
+          "klieg: selectable 'layer' needs the word still, and a turn moves it — falling back to 'hidden'",
+        );
+        mode = 'hidden';
+        layer?.setHidden(plainTextOf(text));
+      };
       liveFires++;
       heroes.add(word);
       const off = clock.subscribe((now) => {
@@ -1155,12 +1178,16 @@ export function createKlieg(options: KliegOptions): Klieg {
       // Frees the warm's held throwaway: its programs have done their job the moment a real word
       // is about to be built, and its blueprint lease would otherwise make this fire take a copy.
       warmer?.release();
-      const control: FireControl = { dismiss: null, latched: false };
+      const control: FireControl = { dismiss: null, latched: false, transform: null, turn: null };
       const handle = (promise: Promise<void>): FireHandle =>
         Object.assign(promise, {
           advance(): void {
             if (control.dismiss) control.dismiss();
             else control.latched = true;
+          },
+          turn(transform: Transform): void {
+            control.transform = transform;
+            control.turn?.(transform);
           },
         });
 

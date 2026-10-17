@@ -27,7 +27,7 @@
 
 .cl-preview-host {
   position: relative;
-  flex: 1 0 240px;
+  flex: 1 0 55%;
   width: 100%;
   border: 1px solid var(--cl-edge);
   border-radius: 5px;

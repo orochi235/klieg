@@ -47,6 +47,8 @@ export function Preview({ composition, elapsed }: PreviewProps) {
       clock: mine.clock,
       fonts: { display: fontUrl },
       placement: { kind: 'element', el: target },
+      // The box is the whole picture here, not a column in a page with a text edge to meet.
+      framing: { width: 0.9, height: 0.7, align: 'center' },
     });
     rig.current = mine;
     void instance.fire(composition.text, toFireOptions(composition)).catch(() => {});

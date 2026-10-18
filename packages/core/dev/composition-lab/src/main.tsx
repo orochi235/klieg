@@ -1,5 +1,6 @@
 import '@weasel-js/labkit/styles.css';
 import { loadFont } from '@core/text/font.js';
+import { KitIcons } from '@shared/KitIcons.js';
 import { labHref, labPages } from '@shared/pages.js';
 import { Lab } from '@weasel-js/labkit';
 import { createRoot } from 'react-dom/client';
@@ -18,13 +19,15 @@ provideFont(await loadFont(fontUrl).catch(() => null));
 const controls = { effects: LayersControl };
 
 createRoot(host).render(
-  <Lab
-    instruments={[composer]}
-    defaultInstrument="composer"
-    title="composition lab"
-    pages={labPages()}
-    path={labHref('composition-lab')}
-    storageKey="klieg:composition-lab"
-    controls={controls}
-  />,
+  <KitIcons>
+    <Lab
+      instruments={[composer]}
+      defaultInstrument="composer"
+      title="composition lab"
+      pages={labPages()}
+      path={labHref('composition-lab')}
+      storageKey="klieg:composition-lab"
+      controls={controls}
+    />
+  </KitIcons>,
 );

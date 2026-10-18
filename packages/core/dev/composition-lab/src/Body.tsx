@@ -1,6 +1,7 @@
-import { TrialTransport, useTrialClock } from '@weasel-js/labkit';
+import { orbitTransform } from '@shared/orbit.js';
+import { TrialTransport, useTrialClock, useTrialOrbit } from '@weasel-js/labkit';
 import { Select } from '@weasel-js/ui';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { TAIL_MS } from './config.js';
 import { useFocus, useLab, useRunTime, useSampled } from './hooks.js';
 import { CHANNELS, type Channel } from './Plot.js';
@@ -17,6 +18,9 @@ export function Body() {
   const sampled = useSampled();
   const focus = useFocus();
   const span = composition.hold + TAIL_MS;
+  const orbit = useTrialOrbit();
+  const camera = orbit?.camera;
+  const transform = useMemo(() => (camera ? orbitTransform(camera) : undefined), [camera]);
 
   useEffect(() => {
     if (clock && clock.duration !== span) clock.duration = span;
@@ -33,7 +37,12 @@ export function Body() {
 
   return (
     <div className="cl-body">
-      <Preview composition={composition} elapsed={t} />
+      <Preview
+        composition={composition}
+        elapsed={t}
+        transform={transform}
+        viewportRef={orbit?.viewportRef}
+      />
       <TrialTransport />
       <Timeline composition={composition} tailMs={TAIL_MS} elapsed={t} onSeek={seek} />
       <div className="cl-panel">

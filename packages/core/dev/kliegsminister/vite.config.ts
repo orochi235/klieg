@@ -14,6 +14,9 @@ export default defineConfig({
   server: { host: '::', port: LABS.kliegsminister.port, strictPort: true, ...weasel.server },
   resolve: {
     ...weasel.resolve,
-    alias: { '@core': fileURLToPath(new URL('../../src', import.meta.url)) },
+    alias: {
+      '@core': fileURLToPath(new URL('../../src', import.meta.url)),
+      '@shared': fileURLToPath(new URL('../shared', import.meta.url)),
+    },
   },
 });

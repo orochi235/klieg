@@ -4,21 +4,17 @@ import type { LoadedFont } from '@core/text/font.js';
 import { DEFAULT_GLYPH_OPTIONS, glyphToShapes } from '@core/text/glyphs.js';
 import { LabBar } from '@shared/LabBar.js';
 import { LabRenderer, type PanelDraw } from '@shared/lab-renderer.js';
+import { HOME, orbitPose } from '@shared/orbit.js';
 import {
+  Orbit,
+  type OrbitProps,
   SurfaceContext,
   TileGrip,
   useSurfaceTile,
   useTiledSurface,
   Workspace,
 } from '@weasel-js/labkit';
-import {
-  type PointerEvent as ReactPointerEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { labFont } from './font.js';
 import {
   type PanelMode,
@@ -48,47 +44,35 @@ export function mintPanelId(taken: Iterable<string>): string {
   return id;
 }
 
-/** How a panel is being looked at. In memory only, unlike the layout. */
-interface View {
-  yaw: number;
-  pitch: number;
-  zoom: number;
-}
+/** How a panel is being looked at: labkit's orbit camera. In memory only, unlike the layout. */
+type View = OrbitProps['view'];
 
-const HEAD_ON: View = { yaw: 0, pitch: 0, zoom: 1 };
+const HEAD_ON: View = { ...HOME, near: 0.1, far: 100 };
 
 /** The turned pose's yaw, with enough pitch to show a planar loop ring as an ellipse. */
-const TURNED: View = { yaw: (30 * Math.PI) / 180, pitch: (13 * Math.PI) / 180, zoom: 1 };
+const TURNED: View = { ...HEAD_ON, yaw: (-30 * Math.PI) / 180, pitch: (13 * Math.PI) / 180 };
 
 function initialView(pose: Pose): View {
   return pose === 'turned' ? TURNED : HEAD_ON;
 }
 
-const ZOOM_MIN = 0.5;
-const ZOOM_MAX = 4;
-
-/** Measured in Chrome: a mouse notch is a `deltaY` of ~100; a pinch streams a few per event. */
-const WHEEL_STEP = 500;
-const PINCH_STEP = 100;
-
-interface ViewProps {
-  'data-view': string;
-  onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
-  onDoubleClick: () => void;
-}
+/** A zoom from half size to four times, as a dolly. */
+const LIMITS = { minDistance: HOME.distance / 4, maxDistance: HOME.distance * 2 };
 
 interface PanelTileProps {
   record: PanelRecord;
   summary: string | undefined;
   onSource: (id: string, source: RampSource) => void;
-  viewProps: (id: string, pose: Pose) => ViewProps;
-  onReset: (id: string, pose: Pose) => void;
+  onView: (id: string, view: View) => void;
 }
 
-function PanelTile({ record, summary, onSource, viewProps, onReset }: PanelTileProps) {
+function PanelTile({ record, summary, onSource, onView }: PanelTileProps) {
   const { id, letter, mode, pose, source } = record;
   // The panel's own element, so the lab can scissor the canvas to where it sits.
   const tile = useSurfaceTile(id);
+  const [view, setView] = useState(() => initialView(pose));
+  useEffect(() => onView(id, view), [onView, id, view]);
+  const home = useCallback(() => initialView(pose), [pose]);
   return (
     <div className="panel" ref={tile}>
       <TileGrip className="panel__bar">
@@ -104,31 +88,31 @@ function PanelTile({ record, summary, onSource, viewProps, onReset }: PanelTileP
           </select>
         ) : null}
       </TileGrip>
-      <div className="panel__body" {...viewProps(id, pose)}>
-        <button
-          type="button"
-          className="panel__reset"
-          aria-label={`reset the ${letter} ${pose} ${mode} view`}
-          // The button sits on the drag surface: without this a click starts a turn instead.
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => onReset(id, pose)}
-        >
-          <svg
-            viewBox="0 0 16 16"
-            width="12"
-            height="12"
-            aria-hidden="true"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+      <div className="panel__body">
+        <Orbit view={view} onViewChange={setView} home={home} limits={LIMITS}>
+          <button
+            type="button"
+            className="panel__reset"
+            aria-label={`reset the ${letter} ${pose} ${mode} view`}
+            onClick={() => setView(home())}
           >
-            <path d="M14 8a6 6 0 1 1-1.8-4.3" />
-            <path d="M12.2 3.7 8.9 3.1M12.2 3.7 11.5 6.6" />
-          </svg>
-        </button>
-        {summary ? <p className="panel__readout">{summary}</p> : null}
+            <svg
+              viewBox="0 0 16 16"
+              width="12"
+              height="12"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M14 8a6 6 0 1 1-1.8-4.3" />
+              <path d="M12.2 3.7 8.9 3.1M12.2 3.7 11.5 6.6" />
+            </svg>
+          </button>
+          {summary ? <p className="panel__readout">{summary}</p> : null}
+        </Orbit>
       </div>
     </div>
   );
@@ -262,9 +246,10 @@ export function App({
 
   // `fit` is absolute, so the view can be re-applied any number of times without compounding.
   const pose = useCallback((cell: Cell, id: string, aspect: number) => {
-    const view = views.current.get(id) ?? HEAD_ON;
-    cell.pivot.rotation.set(view.pitch, view.yaw, 0);
-    cell.fit(aspect, view.zoom);
+    const { rotation, zoom, position } = orbitPose(views.current.get(id) ?? HEAD_ON);
+    cell.pivot.rotation.copy(rotation);
+    cell.fit(aspect, zoom);
+    cell.pivot.position.copy(position);
   }, []);
 
   // Tiles are positioned by the grid, so the surface reads their rects from the DOM and keeps
@@ -370,75 +355,13 @@ export function App({
     invalidateAll();
   }, [invalidateAll, font, panels, specKey, bloom]);
 
-  const resetView = useCallback(
-    (id: string, pose: Pose) => {
-      views.current.set(id, initialView(pose));
+  const setView = useCallback(
+    (id: string, view: View) => {
+      views.current.set(id, view);
       invalidate(id);
     },
     [invalidate],
   );
-
-  const viewProps = useCallback(
-    (id: string, pose: Pose): ViewProps => ({
-      'data-view': id,
-      onPointerDown: (event) => {
-        event.stopPropagation();
-        const target = event.currentTarget;
-        target.setPointerCapture(event.pointerId);
-        let last = { x: event.clientX, y: event.clientY };
-        const move = (e: PointerEvent) => {
-          const view = views.current.get(id) ?? HEAD_ON;
-          // A half turn across the panel's own width, so the gesture scales with the panel.
-          const span = Math.max(1, target.clientWidth);
-          views.current.set(id, {
-            ...view,
-            yaw: view.yaw + ((e.clientX - last.x) / span) * Math.PI,
-            pitch: view.pitch + ((e.clientY - last.y) / span) * Math.PI,
-          });
-          last = { x: e.clientX, y: e.clientY };
-          invalidate(id);
-        };
-        const up = () => {
-          if (target.hasPointerCapture(event.pointerId))
-            target.releasePointerCapture(event.pointerId);
-          target.removeEventListener('pointermove', move);
-          target.removeEventListener('pointerup', up);
-          target.removeEventListener('pointercancel', up);
-          target.removeEventListener('lostpointercapture', up);
-        };
-        target.addEventListener('pointermove', move);
-        target.addEventListener('pointerup', up);
-        target.addEventListener('pointercancel', up);
-        // Capture can go without a pointerup — a re-render that replaces the panel is enough — and
-        // after that neither move nor up fires here, so a buttonless hover keeps turning the letter.
-        target.addEventListener('lostpointercapture', up);
-      },
-      onDoubleClick: () => resetView(id, pose),
-    }),
-    [invalidate, resetView],
-  );
-
-  // React attaches wheel passively at its root, where preventDefault does nothing and a trackpad
-  // pinch zooms the whole page instead of the letter. Hence a listener of our own on the stage.
-  useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) return;
-    const onWheel = (event: WheelEvent) => {
-      const id = (event.target as Element | null)
-        ?.closest('[data-view]')
-        ?.getAttribute('data-view');
-      if (!id) return;
-      event.preventDefault();
-      const view = views.current.get(id) ?? HEAD_ON;
-      // ctrlKey is how a macOS trackpad pinch reaches the page.
-      const step = event.ctrlKey ? PINCH_STEP : WHEEL_STEP;
-      const zoom = view.zoom * Math.exp(-event.deltaY / step);
-      views.current.set(id, { ...view, zoom: Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom)) });
-      invalidate(id);
-    };
-    stage.addEventListener('wheel', onWheel, { passive: false });
-    return () => stage.removeEventListener('wheel', onWheel);
-  }, [invalidate]);
 
   return (
     <div className="lab">
@@ -461,8 +384,7 @@ export function App({
                 record={record}
                 summary={reports[record.id]}
                 onSource={setSource}
-                viewProps={viewProps}
-                onReset={resetView}
+                onView={setView}
               />
             ))}
           </Workspace>

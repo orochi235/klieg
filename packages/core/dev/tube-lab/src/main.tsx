@@ -1,4 +1,5 @@
 import '@weasel-js/labkit/styles.css';
+import { KitIcons } from '@shared/KitIcons.js';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 import { DEFAULT_LETTERS, type PanelRecord, seedPanels } from './panels.js';
@@ -17,11 +18,13 @@ const host = document.getElementById('root');
 if (!host) throw new Error('tube lab: the page has no #root');
 
 createRoot(host).render(
-  <App
-    panels={saved?.panels ?? seed(letters)}
-    layout={saved?.layout ?? {}}
-    letters={letters}
-    spec={saved?.spec ?? tubeSpecOf('tubing')}
-    look={saved?.look ?? 'tubing'}
-  />,
+  <KitIcons>
+    <App
+      panels={saved?.panels ?? seed(letters)}
+      layout={saved?.layout ?? {}}
+      letters={letters}
+      spec={saved?.spec ?? tubeSpecOf('tubing')}
+      look={saved?.look ?? 'tubing'}
+    />
+  </KitIcons>,
 );

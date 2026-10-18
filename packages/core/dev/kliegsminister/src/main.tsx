@@ -1,4 +1,5 @@
 import '@weasel-js/labkit/styles.css';
+import { KitIcons } from '@shared/KitIcons.js';
 import { Lab } from '@weasel-js/labkit';
 import { createRoot } from 'react-dom/client';
 import { labFont } from './font.js';
@@ -12,5 +13,7 @@ if (!host) throw new Error('kliegsminister: the page has no #root');
 provideFont(await labFont());
 
 createRoot(host).render(
-  <Lab instruments={[junction]} defaultInstrument="junction" title="kliegsminister" />,
+  <KitIcons>
+    <Lab instruments={[junction]} defaultInstrument="junction" title="kliegsminister" />
+  </KitIcons>,
 );

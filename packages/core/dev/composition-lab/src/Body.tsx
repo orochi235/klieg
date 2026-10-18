@@ -1,9 +1,9 @@
+import { orbitTransform } from '@shared/orbit.js';
 import { TrialTransport, useTrialClock, useTrialOrbit } from '@weasel-js/labkit';
 import { Select } from '@weasel-js/ui';
 import { useEffect, useMemo } from 'react';
 import { TAIL_MS } from './config.js';
 import { useFocus, useLab, useRunTime, useSampled } from './hooks.js';
-import { orbitTransform } from './orbit.js';
 import { CHANNELS, type Channel } from './Plot.js';
 import { Preview } from './Preview.js';
 import { poolCounts } from './pool.js';

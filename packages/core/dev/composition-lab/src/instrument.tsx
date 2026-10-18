@@ -1,8 +1,8 @@
+import { HOME } from '@shared/orbit.js';
 import { defineInstrument } from '@weasel-js/labkit';
 import { Body } from './Body.js';
 import { DEFAULT_COMPOSITION } from './composition.js';
 import { type LabConfig, schema, TAIL_MS } from './config.js';
-import { HOME } from './orbit.js';
 import { SECTIONS } from './sections.js';
 
 /** One composition per trial. Nothing lives in state: every panel derives from the config and

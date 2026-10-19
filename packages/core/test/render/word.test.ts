@@ -27,7 +27,7 @@ import type { Budget } from '../../src/text/layout.js';
 import { LINE_HEIGHT_EM } from '../../src/text/layout.js';
 import { registerFace } from '../../src/text/outline-face.js';
 import { projectLetters } from '../../src/text/projection.js';
-import { fromEuler } from '../../src/transform.js';
+import { compose, fromEuler } from '../../src/transform.js';
 
 const UPEM = 1000;
 const ADVANCE = 600;
@@ -439,6 +439,36 @@ describe('Word', () => {
     expect(word.group.scale.x).toBeCloseTo(fitScale, 10);
     expect(word.group.position.x).toBeCloseTo(fitPosition.x, 10);
     expect(word.group.position.y).toBeCloseTo(fitPosition.y, 10);
+  });
+
+  it('turns about the middle of the ink, so a half roll leaves it where it stood', () => {
+    // The descender drops the ink's middle below the baseline, which a turn about the origin misses.
+    const word = new Word('Ag', stubFont(), 'gold', ROOMY);
+    const middle = () => {
+      word.group.updateMatrixWorld(true);
+      return new THREE.Box3().setFromObject(word.group).getCenter(new THREE.Vector3());
+    };
+    const before = middle();
+
+    word.transform = fromEuler(0, 0, Math.PI);
+
+    const after = middle();
+    expect(after.x).toBeCloseTo(before.x, 6);
+    expect(after.y).toBeCloseTo(before.y, 6);
+  });
+
+  it('moves the word by its translation in world units, whatever the fit', () => {
+    const word = new Word('A', stubFont(), 'gold', ROOMY);
+    expect(word.group.scale.x).not.toBeCloseTo(1, 2);
+    const x = () => {
+      word.group.updateMatrixWorld(true);
+      return new THREE.Box3().setFromObject(word.group).getCenter(new THREE.Vector3()).x;
+    };
+    const before = x();
+
+    word.transform = compose([1, 0, 0], [0, 0, 0, 1], [1, 1, 1]);
+
+    expect(x() - before).toBeCloseTo(1, 6);
   });
 
   it('applies transform to the word as one rigid object, not per letter', () => {

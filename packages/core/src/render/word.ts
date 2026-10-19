@@ -89,6 +89,7 @@ export class Word {
   readonly group = new THREE.Group();
   /** Sits between `group` (the viewport fit) and the letters — see the `transform` accessor. */
   private readonly inner = new THREE.Group();
+  private readonly turn = new THREE.Matrix4();
   private readonly sizeOf: ((slot: number) => number) | undefined;
   private readonly family: string;
   /** null where the glyph drew no outline (space, U+00A0, ZWJ); the slot still holds its index. */
@@ -473,6 +474,24 @@ export class Word {
   private applyFit(fit: Fit): void {
     this.group.scale.setScalar(fit.scale);
     this.group.position.set(fit.offsetX, -fit.midY * fit.scale, -this.behind);
+    this.applyTurn(fit);
+  }
+
+  /**
+   * `transform` is in world units about the middle of the ink, but sits inside the fit, so it is
+   * carried into layout space, where the ink's middle is (midX, midY) and a world length is
+   * `scale` em.
+   */
+  private applyTurn(fit: Fit): void {
+    const pos = new THREE.Vector3();
+    const quat = new THREE.Quaternion();
+    const size = new THREE.Vector3();
+    this.turn.decompose(pos, quat, size);
+    new THREE.Matrix4()
+      .makeTranslation(fit.midX, fit.midY, 0)
+      .multiply(new THREE.Matrix4().compose(pos.divideScalar(fit.scale), quat, size))
+      .multiply(new THREE.Matrix4().makeTranslation(-fit.midX, -fit.midY, 0))
+      .decompose(this.inner.position, this.inner.quaternion, this.inner.scale);
   }
 
   /**
@@ -562,19 +581,17 @@ export class Word {
 
   /**
    * Turns the whole word as one rigid object — never per letter, and never the camera, so the
-   * viewport fit stays put. Applied on a group between the fit and the letters, so it composes
-   * with the fit instead of overwriting it.
+   * viewport fit stays put. It turns about the middle of the ink and moves in world units, and
+   * is applied between the fit and the letters, so it composes with the fit instead of
+   * overwriting it.
    */
   get transform(): Transform {
-    return new THREE.Matrix4()
-      .compose(this.inner.position, this.inner.quaternion, this.inner.scale)
-      .toArray();
+    return this.turn.toArray();
   }
 
   set transform(matrix: Transform) {
-    new THREE.Matrix4()
-      .fromArray(matrix as number[])
-      .decompose(this.inner.position, this.inner.quaternion, this.inner.scale);
+    this.turn.fromArray(matrix as number[]);
+    this.applyTurn(this.fit);
   }
 
   /** A world point in the layout space parts are measured in, with the fit and `transform` undone.
@@ -754,6 +771,7 @@ export class Word {
         : {
             scale: this.fitFrom.scale + (this.fitTo.scale - this.fitFrom.scale) * w,
             midY: this.fitFrom.midY + (this.fitTo.midY - this.fitFrom.midY) * w,
+            midX: this.fitFrom.midX + (this.fitTo.midX - this.fitFrom.midX) * w,
             offsetX: this.fitFrom.offsetX + (this.fitTo.offsetX - this.fitFrom.offsetX) * w,
           };
     this.applyFit(this.fit);

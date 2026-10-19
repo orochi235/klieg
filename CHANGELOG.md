@@ -28,6 +28,11 @@ a surviving letter, at the regroup, ahead of the letter's own travel.
 
 ### Changed
 
+A `transform` turns and scales the word about the middle of its ink, and its translation is in world
+units. It turned about the word's origin on the baseline and moved in em, so a tilt swung a centred
+word off centre and a translation's reach depended on how large the word was fitted. A
+`fromEuler(0, 0, -12 * DEG)` backdrop now tilts in place.
+
 A `hinge` over a factory fades a channel that only one of the two neighboring stops writes, by
 that stop's share of the crossfade. It held the channel whole until the signal reached the stop
 that leaves it out, where it snapped to rest: stops that write `dark: 0.8` at 1 and nothing at 0

@@ -931,7 +931,9 @@ effect reaches. Because `clickAnywhere` exists to gate a window listener, `dismi
 need it — an anchored placement may hold on a click without the opt-in.
 
 The handle also takes `turn(transform)`, which replaces the fire's `transform` while it runs — for a
-drag, a slider or a lab's orbit. It turns the word, never the camera, so the fit holds:
+drag, a slider or a lab's orbit. It turns the word, never the camera, so the fit holds. Any
+`transform` turns and scales the word about the middle of its ink, and moves it in world units, in
+which the frame is about 7.6 tall at the word's depth:
 
 ```ts
 const held = bk.fire('OPEN', { hold: 'forever' });

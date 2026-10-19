@@ -68,13 +68,13 @@ interface PanelTileProps {
 
 function PanelTile({ record, summary, onSource, onView }: PanelTileProps) {
   const { id, letter, mode, pose, source } = record;
-  // The panel's own element, so the lab can scissor the canvas to where it sits.
+  // The body under the bar, so the canvas is scissored to the box the orbit measures its gestures on.
   const tile = useSurfaceTile(id);
   const [view, setView] = useState(() => initialView(pose));
   useEffect(() => onView(id, view), [onView, id, view]);
   const home = useCallback(() => initialView(pose), [pose]);
   return (
-    <div className="panel" ref={tile}>
+    <div className="panel">
       <TileGrip className="panel__bar">
         <span className="panel__letter">{letter}</span>
         <span className="panel__mode">{mode}</span>
@@ -88,7 +88,7 @@ function PanelTile({ record, summary, onSource, onView }: PanelTileProps) {
           </select>
         ) : null}
       </TileGrip>
-      <div className="panel__body">
+      <div className="panel__body" ref={tile}>
         <Orbit view={view} onViewChange={setView} home={home} limits={LIMITS}>
           <button
             type="button"

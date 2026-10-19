@@ -60,6 +60,8 @@ export function Preview({ composition, elapsed, transform, viewportRef }: Previe
       placement: { kind: 'element', el: target },
       // The box is the whole picture here, not a column in a page with a text edge to meet.
       framing: { width: 0.9, height: 0.7, align: 'center' },
+      // A canvas wider than the box would put the orbit's pointer maths, measured on the box, off.
+      bleed: 0,
     });
     rig.current = mine;
     mine.fire = instance.fire(composition.text, toFireOptions(composition));

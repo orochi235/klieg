@@ -1463,7 +1463,7 @@ describe('backdrop', () => {
     await flush();
 
     expect((backdrop().children[0] as THREE.Group).rotation.z).toBeCloseTo(-0.2, 10);
-    expect(((words()[0] as THREE.Group).children[0] as THREE.Group).rotation.z).toBe(0);
+    expect(((words()[0] as THREE.Group).children[0] as THREE.Group).rotation.z).toBeCloseTo(0, 10);
 
     clock.advance(16);
     await done;

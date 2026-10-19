@@ -110,6 +110,9 @@ export interface Fit {
   scale: number;
   /** Vertical centre of the drawn ink, in em. The group shifts by `-midY * scale`. */
   midY: number;
+  /** Horizontal centre of the drawn ink, in em: where a `transform` turns about. A centred line
+   * is centred on its advances, so side bearings leave this off 0. */
+  midX: number;
   /** World-space x for the group, placing the painted edge on the box's. 0 when centred. */
   offsetX: number;
 }
@@ -162,6 +165,7 @@ export function fitOf(placed: Placement, geo: GlyphBounds, budget: Budget, force
   return {
     scale,
     midY: drawn ? (minY + maxY) / 2 : 0,
+    midX: Number.isFinite(minX) ? (minX + maxX) / 2 : 0,
     offsetX: alignOffset(scale, minX, maxX, geo.depth ?? 0, budget),
   };
 }

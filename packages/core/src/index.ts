@@ -344,8 +344,10 @@ export interface FireOptions {
   tint?: number | ((letter: LetterInfo) => number | undefined);
   /**
    * Turns the whole word as one rigid object — never the camera, which would drift
-   * `viewportBudget`'s fit and shrink the word along with its angle. Build one with `fromEuler`,
-   * `fromAxisAngle` or `compose` rather than writing the sixteen numbers by hand.
+   * `viewportBudget`'s fit and shrink the word along with its angle. It turns and scales about the
+   * middle of the ink and moves in world units, in which the frame is about 7.6 tall at the word.
+   * Build one with `fromEuler`, `fromAxisAngle` or `compose` rather than writing the sixteen
+   * numbers by hand.
    */
   transform?: Transform;
   /**

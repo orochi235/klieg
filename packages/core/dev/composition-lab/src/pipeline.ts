@@ -17,7 +17,9 @@ export type Part =
 export const WRAPPERS: readonly Wrapper[] = ['roving', 'intermittent'];
 export const STAGES: readonly Stage[] = ['enter', 'active', 'exit'];
 
-const GROUP = 'layer:';
+/** The prefix of a layer row's group id. */
+export const GROUP_OF_LAYER = 'layer:';
+const GROUP = GROUP_OF_LAYER;
 
 export function idOf(part: Part): string {
   switch (part.kind) {

@@ -19,9 +19,15 @@ A labkit `<Lab>` with one instrument (`src/instrument.tsx`): each trial is one c
 `src/config.ts`, where every hint lives; the analysis panels are sidebar sections that read their
 own trial through `useTrialState`, so a torn-out one still follows it.
 
-- **`PrefControl` draws every field of an object it is given, `.hidden()` or not.** The layer
-  editor (`src/LayersControl.tsx`) draws each layer with it, so a layer's `id`, `enabled` and a
-  draft's `source` are kept beside the schema rather than in it.
+- **Layers and motions are edited on the diagram in the right column** (`src/Diagram.tsx`), not
+  in Settings, where `effects`, `enter`, `active` and `exit` are `.hidden()`. Each layer is a row,
+  patch → wrappers → pool, into the word; `src/pipeline.ts` turns the config into the diagram and
+  maps a node id back to what it stands for, and `src/edits.ts` holds every edit. A node's card is
+  labkit's `ControlPanel` over that node's slice of the schema, placed with `DiagramView`'s
+  overlays. A layer's `id`, `enabled` and a draft's `source` stay outside the schema, since nested
+  `.hidden()` fields are still drawn.
+- **Headless driving clicks diagram nodes by id** through `globalThis.kliegDiagram` (`view.rectOf`
+  and the node `ids`), as the probe reads ink through `kliegLab`.
 - **A fire sizes its word once, when it starts.** The preview fires again when its box resizes, or
   a second trial halving the first leaves the word overflowing it. Filed in `TODO.md`.
 - **A draft builds only once its source has compiled**, which is async. Reading a composition
@@ -106,3 +112,8 @@ lab itself; unit tests of the transform have passed while the lab visibly drifte
 - **`WEASEL=<checkout>` serves every `@weasel-js` import from a weasel checkout's built
   packages** (`dev/shared/weasel.ts`), for trying an unreleased labkit. It takes all of them at
   once, because a labkit is built against its own core, and keeps klieg's React and three.
+- **The composition lab always runs against `~/src/weasel`** (its `dev:composition-lab` script
+  defaults `WEASEL` to the sibling checkout, and its tsconfig maps `@weasel-js/*` to that
+  checkout's `dist`), because its effects diagram uses `@weasel-js/diagram` APIs weasel has not
+  released. Build the checkout before serving; until a weasel release carries those APIs, the
+  repo's `typecheck` needs the checkout beside it.

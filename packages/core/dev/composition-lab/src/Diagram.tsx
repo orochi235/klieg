@@ -2,10 +2,10 @@ import { DiagramView, type DiagramViewApi, diagramScene } from '@weasel-js/diagr
 import { registerCanvasFont } from '@weasel-js/font';
 import { Button } from '@weasel-js/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { asEffects, entriesOf, KINDS, type LayerEntry } from './config.js';
+import { layerPatch } from './composition.js';
+import { asEffects, entriesOf, KINDS, type LayerEntry, toLayer } from './config.js';
 import { addLayer, insertable, insertWrapper, reorder } from './edits.js';
 import { useLab, useSampled } from './hooks.js';
-import { warningsOf } from './LayersControl.js';
 import { NodeCard } from './NodeCard.js';
 import { hasGradient } from './patches.js';
 import { diagramOf, GROUP_OF_LAYER, layerOfGroup, type Part, partOf } from './pipeline.js';
@@ -129,7 +129,7 @@ export function Diagram() {
             ),
           );
         }}
-        overlays={[...card, ...plus, ...add]}
+        overlays={[...plus, ...add, ...card]}
         anchor="start"
       />
     </div>
@@ -144,4 +144,24 @@ function endsOf(edgeId: string): { layer: string; from: Part; to: Part } | null 
   if (!from || !to || !('layer' in from) || !('layer' in to) || from.layer !== to.layer)
     return null;
   return { layer: from.layer, from, to };
+}
+
+/** Why a layer will do nothing, which the patch itself never says. */
+function warningsOf(
+  entry: LayerEntry,
+  counts: Record<string, number>,
+  look: string,
+  gradient: boolean,
+) {
+  const out: string[] = [];
+  const target = entry.target as string;
+  if (counts[target] === 0) out.push(`this pool has no ${target} parts, so the layer does nothing`);
+  if (entry.kind === 'chase' && !gradient) {
+    out.push(`the ${look} look declares no gradient, so the layer does nothing`);
+  }
+  const bouts = entry.intermittent as { on?: boolean } | undefined;
+  if (bouts?.on && entry.kind !== 'draft' && layerPatch(toLayer(entry)) === null) {
+    out.push(`bout spell is shorter than one pass of ${entry.kind}, so the layer does not build`);
+  }
+  return out;
 }

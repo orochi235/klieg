@@ -23,6 +23,14 @@ describe('the lab config', () => {
     expect(layer.intermittent).toBeUndefined();
   });
 
+  it('hides the layers and motions from Settings, which the diagram edits', () => {
+    const nodes = schema.nodes as Record<string, { annotations: { hidden?: boolean } }>;
+    for (const key of ['effects', 'enter', 'active', 'exit']) {
+      expect(nodes[key]?.annotations.hidden).toBe(true);
+    }
+    expect(toComposition(schema.defaults())).toEqual(DEFAULT_COMPOSITION);
+  });
+
   it('gives each new layer an id of its own', () => {
     expect(newEntry('flicker').id).not.toBe(newEntry('flicker').id);
   });

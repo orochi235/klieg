@@ -175,19 +175,17 @@ const shape = {
       `How long the word stays up. The transport runs ${TAIL_MS} ms past it, so an exit shows.`,
     )
     .section('word'),
-  enter: f.enum(d.enter, ENTER_NAMES).describe('How the word arrives.').section('word'),
-  active: f
-    .enum(d.active, ACTIVE_NAMES)
-    .describe('What the word does while it holds.')
-    .section('word'),
-  exit: f.enum(d.exit, EXIT_NAMES).describe('How the word leaves.').section('word'),
+  enter: f.enum(d.enter, ENTER_NAMES).describe('How the word arrives.').hidden(),
+  active: f.enum(d.active, ACTIVE_NAMES).describe('What the word does while it holds.').hidden(),
+  exit: f.enum(d.exit, EXIT_NAMES).describe('How the word leaves.').hidden(),
   pool: f
     .enum(d.pool, ['real', 'synthetic'])
     .describe(
       'Which pool the panels describe. Real follows the text and look above; synthetic is a fixed 24-run, 7-letter stand-in for exercising a kind this look does not build.',
     )
     .section('word'),
-  effects: f.list([], layer).label('').section('layers'),
+  /** Drawn and edited on the diagram, as are the three motions above. */
+  effects: f.list([], layer).hidden(),
   /** Which channel and part the plot and part × time show; drawn beside the raster, not here. */
   channel: f.enum('gain', CHANNELS).hidden(),
   part: f.number(0).hidden(),

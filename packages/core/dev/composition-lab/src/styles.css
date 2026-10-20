@@ -1,7 +1,7 @@
 /* Resolved where they are used, under the lab's theme: on :root they would read the page's tokens. */
 .cl-body,
 .cl-section,
-.cl-layers {
+.cl-diagram {
   --cl-bg: var(--wzl-surface-sunken);
   --cl-edge: var(--wzl-border);
   --cl-ink: var(--wzl-fg);
@@ -165,38 +165,6 @@
   font-size: 11px;
   font-weight: 500;
   margin: 8px 0 4px;
-}
-
-.cl-layer {
-  border-top: 1px solid var(--cl-edge);
-  padding: 6px 0;
-}
-
-.cl-layer__head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.cl-layer__grip {
-  display: inline-flex;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  cursor: grab;
-  touch-action: none;
-}
-
-.cl-layer__kind {
-  flex: 1;
-}
-
-.cl-layers__add {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding-top: 6px;
 }
 
 .cl-note {

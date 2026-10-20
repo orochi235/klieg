@@ -10,7 +10,7 @@ export function addLayer(entries: LayerEntry[], kind: PatchKind): LayerEntry[] {
 }
 
 export function removeLayer(entries: LayerEntry[], id: string): LayerEntry[] {
-  return entries.filter((e) => e.id !== id);
+  return entries.some((e) => e.id === id) ? entries.filter((e) => e.id !== id) : entries;
 }
 
 function edit(
@@ -54,7 +54,8 @@ export function removeWrapper(entries: LayerEntry[], id: string, wrapper: Wrappe
 /** The layers in `ids`' order, then any `ids` leaves out, in the order they had. */
 export function reorder(entries: LayerEntry[], ids: readonly string[]): LayerEntry[] {
   const named = ids.flatMap((id) => entries.filter((e) => e.id === id));
-  return [...named, ...entries.filter((e) => !ids.includes(e.id))];
+  const next = [...named, ...entries.filter((e) => !ids.includes(e.id))];
+  return next.every((e, i) => e === entries[i]) ? entries : next;
 }
 
 const SLOT: Record<string, number> = { patch: 0, roving: 1, intermittent: 2, pool: 3 };

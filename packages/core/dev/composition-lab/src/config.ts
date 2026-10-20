@@ -27,8 +27,8 @@ const ROVING = { dwell: 3200, seed: 0, epochs: 96 };
 const INTERMITTENT = { spell: 4200, calm: 2000, bouts: 3 };
 
 /** `id`, `enabled` and a draft's `source` are not in the schema: `PrefControl` draws every field of
- * an object it is given, hidden or not. The layer list carries them beside the schema's fields;
- * `enabled` is its header switch and `source` is edited in the Drafts section. */
+ * an object it is given, hidden or not. They ride beside the schema's fields in each entry; the
+ * diagram's patch card holds `enabled`, and `source` is edited in the Drafts section. */
 /** A layer's pool: what it drives, and how much of it. */
 export const sharedFields = () => ({
   target: f
@@ -110,6 +110,25 @@ const roving = () =>
       "Moves this layer's affliction from part to part. Its pass is many inner passes long, so a short hold may never reach a second handover.",
     );
 
+/** Which way a lamp walks. */
+export const lampSourceField = () =>
+  f
+    .enum('fixed', ['fixed', 'orbit'])
+    .label('source')
+    .describe(
+      "fixed parks the lamp at x,y. orbit walks a circle of radius sweep around it, on the layer's own period.",
+    );
+
+/** The word's three motions, each defaulting to the lab's own composition's. */
+export const MOTION_FIELDS = {
+  enter: () => f.enum(DEFAULT_COMPOSITION.enter, ENTER_NAMES).describe('How the word arrives.'),
+  active: () =>
+    f.enum(DEFAULT_COMPOSITION.active, ACTIVE_NAMES).describe('What the word does while it holds.'),
+  exit: () => f.enum(DEFAULT_COMPOSITION.exit, EXIT_NAMES).describe('How the word leaves.'),
+};
+
+export const motionField = (stage: keyof typeof MOTION_FIELDS) => MOTION_FIELDS[stage]();
+
 /** A patch kind's own params. */
 export const paramFields = (kind: Exclude<PatchKind, 'draft'>) =>
   Object.fromEntries(
@@ -142,12 +161,7 @@ const VARIANTS = {
   }),
   lamp: f.object({
     ...sharedFields(),
-    lampSource: f
-      .enum('fixed', ['fixed', 'orbit'])
-      .label('source')
-      .describe(
-        "fixed parks the lamp at x,y. orbit walks a circle of radius sweep around it, on the layer's own period.",
-      ),
+    lampSource: lampSourceField(),
     ...paramFields('lamp'),
     intermittent: intermittent(),
   }),
@@ -175,9 +189,9 @@ const shape = {
       `How long the word stays up. The transport runs ${TAIL_MS} ms past it, so an exit shows.`,
     )
     .section('word'),
-  enter: f.enum(d.enter, ENTER_NAMES).describe('How the word arrives.').hidden(),
-  active: f.enum(d.active, ACTIVE_NAMES).describe('What the word does while it holds.').hidden(),
-  exit: f.enum(d.exit, EXIT_NAMES).describe('How the word leaves.').hidden(),
+  enter: MOTION_FIELDS.enter().hidden(),
+  active: MOTION_FIELDS.active().hidden(),
+  exit: MOTION_FIELDS.exit().hidden(),
   pool: f
     .enum(d.pool, ['real', 'synthetic'])
     .describe(

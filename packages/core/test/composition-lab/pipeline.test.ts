@@ -14,9 +14,12 @@ import {
   layerOfGroup,
   offIds,
   partOf,
+  type Warning,
+  warnedIds,
+  warningsOf,
 } from '../../dev/composition-lab/src/pipeline.js';
 
-const none = (): string[] => [];
+const none = (): Warning[] => [];
 
 /** What `emit` wrote for the saved trial below on main before the diagram. */
 const SAVED_EMIT = `import { EFFECTS, intermittent, roving } from 'klieg';
@@ -60,8 +63,14 @@ function flicker(over: Partial<LayerEntry> = {}): LayerEntry {
 const pairs = (config: LabConfig, warnings = none) =>
   diagramOf(config, warnings).edges.map((e) => `${e.from}→${e.to}`);
 
-const rowsOf = (config: LabConfig, id: string, warnings = none) =>
-  diagramOf(config, warnings).nodes.find((n) => n.id === id)?.lines ?? [];
+const nodeOf = (config: LabConfig, id: string, warnings = none) =>
+  diagramOf(config, warnings).nodes.find((n) => n.id === id);
+
+/** A node's text, whether it was given as lines or as rows. */
+const rowsOf = (config: LabConfig, id: string, warnings = none) => {
+  const node = nodeOf(config, id, warnings);
+  return node?.lines ?? node?.rows?.map((r) => ('text' in r ? r.text : '')) ?? [];
+};
 
 describe('the pipeline diagram', () => {
   it('draws a layer as patch, its wrappers in order, then its pool, into the word', () => {
@@ -107,9 +116,49 @@ describe('the pipeline diagram', () => {
     expect(rowsOf(withLayers(flicker()), `patch:${flicker().id}`)).not.toContain('off');
   });
 
-  it("puts a layer's warnings on its pool node", () => {
+  it('puts each warning on the node it is about, in bold, and outlines that node', () => {
     const e = flicker();
-    expect(rowsOf(withLayers(e), `pool:${e.id}`, () => ['no runs'])).toContain('no runs');
+    const said = (): Warning[] => [
+      { at: 'patch', text: 'on the patch' },
+      { at: 'intermittent', text: 'on the bouts' },
+      { at: 'pool', text: 'on the pool' },
+    ];
+    const config = withLayers(e);
+    for (const [id, text] of [
+      [`patch:${e.id}`, 'on the patch'],
+      [`intermittent:${e.id}`, 'on the bouts'],
+      [`pool:${e.id}`, 'on the pool'],
+    ]) {
+      expect(nodeOf(config, id as string, said)?.rows).toContainEqual({
+        kind: 'label',
+        text,
+        style: { bold: true },
+      });
+    }
+    expect([...warnedIds(config, said)].sort()).toEqual(
+      [`intermittent:${e.id}`, `patch:${e.id}`, `pool:${e.id}`].sort(),
+    );
+    expect(warnedIds(config, none).size).toBe(0);
+  });
+
+  it('names what will silence a layer, on the node that causes it', () => {
+    const chase = newEntry('chase');
+    expect(warningsOf(chase, { run: 4 }, 'gold', false)).toEqual([
+      { at: 'patch', text: 'gold has no gradient' },
+    ]);
+    expect(warningsOf(newEntry('hue'), { run: 0 }, 'tubing', true)).toEqual([
+      { at: 'pool', text: 'no run parts' },
+    ]);
+    const f = newEntry('flicker');
+    const short = { ...f, intermittent: { on: true, spell: 200, calm: 2000, bouts: 3 } };
+    expect(warningsOf(short, { run: 4 }, 'tubing', true)).toEqual([
+      { at: 'intermittent', text: 'spell under one pass' },
+    ]);
+  });
+
+  it("shows a lamp's source on its patch node", () => {
+    const lamp = newEntry('lamp');
+    expect(rowsOf(withLayers(lamp), `patch:${lamp.id}`)).toContain('source fixed');
   });
 
   it('round-trips every id through partOf', () => {

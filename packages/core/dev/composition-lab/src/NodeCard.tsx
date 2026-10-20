@@ -1,25 +1,26 @@
-import { ACTIVE_NAMES, ENTER_NAMES, EXIT_NAMES } from '@core/index.js';
-import { ControlPanel, f, resolveConfigSchema } from '@weasel-js/labkit';
+import {
+  ControlPanel,
+  f,
+  LabStoreContext,
+  resolveConfigSchema,
+  useTrialId,
+} from '@weasel-js/labkit';
 import { Button, Switch } from '@weasel-js/ui';
-import { useMemo } from 'react';
+import { useContext, useMemo } from 'react';
 import {
   asEffects,
   entriesOf,
   intermittentFields,
   type LayerEntry,
+  lampSourceField,
+  motionField,
   paramFields,
   rovingFields,
   sharedFields,
 } from './config.js';
 import { removeLayer, removeWrapper, setEnabled, updateEntry } from './edits.js';
 import { useLab } from './hooks.js';
-import type { Part, Stage } from './pipeline.js';
-
-const NAMES: Record<Stage, readonly string[]> = {
-  enter: ENTER_NAMES,
-  active: ACTIVE_NAMES,
-  exit: EXIT_NAMES,
-};
+import type { Part } from './pipeline.js';
 
 // biome-ignore lint/suspicious/noExplicitAny: the shapes are the schema builder's own, per part.
 type Shape = Record<string, any>;
@@ -34,10 +35,7 @@ function shapeOf(part: Part, entry: LayerEntry | undefined): { shape: Shape; at:
   }
   if (part.kind === 'pool') return { shape: sharedFields(), at: null };
   if (part.kind === 'patch' && entry && entry.kind !== 'draft') {
-    const lamp =
-      entry.kind === 'lamp'
-        ? { lampSource: f.enum('fixed', ['fixed', 'orbit']).label('source') }
-        : {};
+    const lamp = entry.kind === 'lamp' ? { lampSource: lampSourceField() } : {};
     return { shape: { ...lamp, ...paramFields(entry.kind) }, at: null };
   }
   return { shape: {}, at: null };
@@ -47,6 +45,10 @@ function shapeOf(part: Part, entry: LayerEntry | undefined): { shape: Shape; at:
  * the lab schema. */
 export function NodeCard({ part }: { part: Part }) {
   const { config, setConfig } = useLab();
+  const store = useContext(LabStoreContext);
+  const trial = useTrialId();
+  // The section's own fold, kept with the trial; read once on click rather than subscribed to.
+  const openDrafts = () => store?.store.getState().setTrialSectionCollapsed(trial, 'drafts', false);
   const entries = entriesOf(config);
   const layer = 'layer' in part ? part.layer : null;
   const entry = entries.find((e) => e.id === layer);
@@ -57,7 +59,7 @@ export function NodeCard({ part }: { part: Part }) {
 
   if (part.kind === 'motion') {
     const stage = part.stage;
-    const motion = resolveConfigSchema(f.schema({ [stage]: f.enum(config[stage], NAMES[stage]) }));
+    const motion = resolveConfigSchema(f.schema({ [stage]: motionField(stage) }));
     return (
       <div className="cl-card">
         <ControlPanel
@@ -109,7 +111,13 @@ export function NodeCard({ part }: { part: Part }) {
         ) : null}
       </div>
       {part.kind === 'patch' && entry.kind === 'draft' ? (
-        <p className="cl-note">Its source is edited in the Drafts section.</p>
+        <p className="cl-note">
+          Its source is edited in the{' '}
+          <button type="button" className="cl-link" onClick={openDrafts}>
+            Drafts section
+          </button>
+          .
+        </p>
       ) : (
         <ControlPanel
           schema={schema}

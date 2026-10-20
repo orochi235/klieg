@@ -27,6 +27,17 @@ describe('edits to the layer list', () => {
     expect(next[1]?.enabled).toBe(true);
   });
 
+  it('leaves the list alone removing a layer it lacks, or reordering to the order it has', () => {
+    const list = [newEntry('hue'), newEntry('chase')];
+    expect(removeLayer(list, 'missing')).toBe(list);
+    expect(
+      reorder(
+        list,
+        list.map((e) => e.id),
+      ),
+    ).toBe(list);
+  });
+
   it('removes a layer by id', () => {
     const a = newEntry('hue');
     const b = newEntry('chase');

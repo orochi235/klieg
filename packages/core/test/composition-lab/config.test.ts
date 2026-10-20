@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_COMPOSITION } from '../../dev/composition-lab/src/composition.js';
 import {
   KINDS,
+  lampSourceField,
+  motionField,
   newEntry,
   schema,
   toComposition,
@@ -29,6 +31,15 @@ describe('the lab config', () => {
       expect(nodes[key]?.annotations.hidden).toBe(true);
     }
     expect(toComposition(schema.defaults())).toEqual(DEFAULT_COMPOSITION);
+  });
+
+  it('describes the fields a diagram card reuses', () => {
+    const described = (node: { annotations: { description?: string } }) =>
+      node.annotations.description;
+    expect(described(lampSourceField())).toMatch(/orbit/);
+    for (const stage of ['enter', 'active', 'exit'] as const) {
+      expect(described(motionField(stage))).toBeTruthy();
+    }
   });
 
   it('gives each new layer an id of its own', () => {

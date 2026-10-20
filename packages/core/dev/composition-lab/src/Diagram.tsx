@@ -1,14 +1,28 @@
-import { DiagramView, type DiagramViewApi, diagramScene, type NodeStyle } from '@weasel-js/diagram';
+import {
+  DEFAULT_NODE_STYLE,
+  DiagramView,
+  type DiagramViewApi,
+  diagramScene,
+  type NodeStyle,
+} from '@weasel-js/diagram';
 import { registerCanvasFont } from '@weasel-js/font';
 import { Button } from '@weasel-js/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { layerPatch } from './composition.js';
-import { asEffects, entriesOf, KINDS, type LayerEntry, toLayer } from './config.js';
+import { asEffects, entriesOf, KINDS, type LayerEntry } from './config.js';
 import { addLayer, insertable, insertWrapper, reorder } from './edits.js';
 import { useLab, useSampled } from './hooks.js';
 import { NodeCard } from './NodeCard.js';
 import { hasGradient } from './patches.js';
-import { addAnchor, diagramOf, layerOfGroup, offIds, type Part, partOf } from './pipeline.js';
+import {
+  addAnchor,
+  diagramOf,
+  layerOfGroup,
+  offIds,
+  type Part,
+  partOf,
+  warnedIds,
+  warningsOf,
+} from './pipeline.js';
 import { poolCounts } from './pool.js';
 
 registerCanvasFont('sans-serif');
@@ -17,6 +31,9 @@ const FONT = { fontFamily: 'sans-serif', fontSize: 12 } as const;
 
 /** A layer that is switched off: still drawn, dimmed and dashed. */
 const OFF: NodeStyle = { fill: '#232a31', stroke: '#56606a', text: '#87939e', dash: [4, 3] };
+
+/** A node a warning is pinned to: the reason the layer does nothing. */
+const WARNED: NodeStyle = { ...DEFAULT_NODE_STYLE, stroke: '#e5484d', strokeWidth: 2 };
 
 /** The composition as a wiring diagram, and where its layers and motions are edited. */
 export function Diagram() {
@@ -28,7 +45,8 @@ export function Diagram() {
   const [hovered, setHovered] = useState<string | null>(null);
   const view = useRef<DiagramViewApi | null>(null);
 
-  const data = diagramOf(config, (entry) => warningsOf(entry, counts, composition.look, gradient));
+  const warnings = (entry: LayerEntry) => warningsOf(entry, counts, composition.look, gradient);
+  const data = diagramOf(config, warnings);
   const ids = data.nodes.map((n) => n.id);
   // For headless driving, which clicks a node by its id through `rectOf`.
   useEffect(() => {
@@ -40,14 +58,15 @@ export function Diagram() {
     };
   });
   const off = offIds(config);
-  const key = JSON.stringify([data, [...off]]);
+  const warned = warnedIds(config, warnings);
+  const key = JSON.stringify([data, [...off], [...warned]]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: `key` is the data's content.
   const specs = useMemo(
     () =>
       diagramScene(data, {
         font: FONT,
         layoutOptions: { direction: 'right' },
-        nodeStyle: (n) => (off.has(n.id) ? OFF : undefined),
+        nodeStyle: (n) => (off.has(n.id) ? OFF : warned.has(n.id) ? WARNED : undefined),
       }),
     [key],
   );
@@ -119,7 +138,7 @@ export function Diagram() {
   ];
 
   return (
-    <div className="cl-diagram">
+    <div className="cl-diagram" onPointerLeave={() => setHovered(null)}>
       <DiagramView
         ref={view}
         specs={specs}
@@ -153,24 +172,4 @@ function endsOf(edgeId: string): { layer: string; from: Part; to: Part } | null 
   if (!from || !to || !('layer' in from) || !('layer' in to) || from.layer !== to.layer)
     return null;
   return { layer: from.layer, from, to };
-}
-
-/** Why a layer will do nothing, which the patch itself never says. */
-function warningsOf(
-  entry: LayerEntry,
-  counts: Record<string, number>,
-  look: string,
-  gradient: boolean,
-) {
-  const out: string[] = [];
-  const target = entry.target as string;
-  if (counts[target] === 0) out.push(`this pool has no ${target} parts, so the layer does nothing`);
-  if (entry.kind === 'chase' && !gradient) {
-    out.push(`the ${look} look declares no gradient, so the layer does nothing`);
-  }
-  const bouts = entry.intermittent as { on?: boolean } | undefined;
-  if (bouts?.on && entry.kind !== 'draft' && layerPatch(toLayer(entry)) === null) {
-    out.push(`bout spell is shorter than one pass of ${entry.kind}, so the layer does not build`);
-  }
-  return out;
 }

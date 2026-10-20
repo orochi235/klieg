@@ -1,5 +1,6 @@
-import type { DataEdge, DataGroup, DataNode, DiagramData } from '@weasel-js/diagram';
-import { entriesOf, type LabConfig, type LayerEntry } from './config.js';
+import type { DataEdge, DataGroup, DataNode, DiagramData, Row } from '@weasel-js/diagram';
+import { layerPatch } from './composition.js';
+import { entriesOf, type LabConfig, type LayerEntry, toLayer } from './config.js';
 import { PARAMS } from './patches.js';
 
 export type Wrapper = 'roving' | 'intermittent';
@@ -69,6 +70,7 @@ const POOLS: Record<string, string> = { run: 'runs', body: 'bodies', chunk: 'chu
 function patchLines(entry: LayerEntry): string[] {
   const lines: string[] = [entry.kind];
   if (entry.kind !== 'draft') {
+    if (entry.kind === 'lamp') lines.push(`source ${entry.lampSource}`);
     lines.push(...PARAMS[entry.kind].map((p) => `${p.key} ${entry[p.key]}`));
   }
   if (!entry.enabled) lines.push('off');
@@ -81,16 +83,76 @@ function wrapperLines(entry: LayerEntry, wrapper: Wrapper): string[] {
   return [wrapper, `${w.spell / 1000}s on · ${w.calm / 1000}s calm · ${w.bouts} bouts`];
 }
 
-function poolLines(entry: LayerEntry, warnings: string[]): string[] {
+function poolLines(entry: LayerEntry): string[] {
   const amount = entry.amount as number;
   const share = amount >= 1 ? 'all' : `${Math.round(amount * 100)}%`;
-  return [`${POOLS[entry.target as string] ?? entry.target} · ${share}`, ...warnings];
+  return [`${POOLS[entry.target as string] ?? entry.target} · ${share}`];
+}
+
+/** Why a layer will do nothing, which the patch itself never says, pinned to the node at fault. */
+export interface Warning {
+  at: 'patch' | 'pool' | Wrapper;
+  text: string;
+}
+
+export function warningsOf(
+  entry: LayerEntry,
+  counts: Record<string, number>,
+  look: string,
+  gradient: boolean,
+): Warning[] {
+  const out: Warning[] = [];
+  const target = entry.target as string;
+  if (counts[target] === 0) out.push({ at: 'pool', text: `no ${target} parts` });
+  if (entry.kind === 'chase' && !gradient) {
+    out.push({ at: 'patch', text: `${look} has no gradient` });
+  }
+  const bouts = entry.intermittent as { on?: boolean } | undefined;
+  if (bouts?.on && entry.kind !== 'draft' && layerPatch(toLayer(entry)) === null) {
+    out.push({ at: 'intermittent', text: 'spell under one pass' });
+  }
+  return out;
+}
+
+const atOf = (id: string): Warning['at'] | null => {
+  const part = partOf(id);
+  if (part?.kind === 'patch' || part?.kind === 'pool') return part.kind;
+  return part?.kind === 'wrapper' ? part.wrapper : null;
+};
+
+/** A node's readout, with the warnings about it after, in bold. */
+function withWarnings(id: string, lines: string[], warnings: Warning[]): DataNode {
+  const mine = warnings.filter((w) => w.at === atOf(id));
+  if (mine.length === 0) return { id, lines };
+  const rows: Row[] = [
+    ...lines.map((text): Row => ({ kind: 'label', text })),
+    ...mine.map((w): Row => ({ kind: 'label', text: w.text, style: { bold: true } })),
+  ];
+  return { id, rows };
+}
+
+/** Every node a warning is pinned to, to outline. */
+export function warnedIds(
+  config: LabConfig,
+  warnings: (entry: LayerEntry) => Warning[],
+): Set<string> {
+  const ids = new Set<string>();
+  for (const entry of entriesOf(config)) {
+    for (const w of warnings(entry)) {
+      const part: Part =
+        w.at === 'patch' || w.at === 'pool'
+          ? { kind: w.at, layer: entry.id }
+          : { kind: 'wrapper', layer: entry.id, wrapper: w.at };
+      ids.add(idOf(part));
+    }
+  }
+  return ids;
 }
 
 /** The composition as a left-to-right wiring diagram: a row per layer into the word, and the word's motions. */
 export function diagramOf(
   config: LabConfig,
-  warnings: (entry: LayerEntry) => string[],
+  warnings: (entry: LayerEntry) => Warning[],
 ): DiagramData {
   const nodes: DataNode[] = [{ id: 'word', lines: [config.text, config.look] }];
   const edges: DataEdge[] = [];
@@ -99,13 +161,13 @@ export function diagramOf(
 
   for (const entry of entriesOf(config)) {
     const layer = entry.id;
+    const said = warnings(entry);
     const row = [
-      { id: idOf({ kind: 'patch', layer }), lines: patchLines(entry) },
-      ...wrappersOf(entry).map((wrapper) => ({
-        id: idOf({ kind: 'wrapper', layer, wrapper }),
-        lines: wrapperLines(entry, wrapper),
-      })),
-      { id: idOf({ kind: 'pool', layer }), lines: poolLines(entry, warnings(entry)) },
+      withWarnings(idOf({ kind: 'patch', layer }), patchLines(entry), said),
+      ...wrappersOf(entry).map((wrapper) =>
+        withWarnings(idOf({ kind: 'wrapper', layer, wrapper }), wrapperLines(entry, wrapper), said),
+      ),
+      withWarnings(idOf({ kind: 'pool', layer }), poolLines(entry), said),
     ];
     nodes.push(...row);
     const ids = row.map((n) => n.id);

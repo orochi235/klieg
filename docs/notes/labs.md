@@ -74,6 +74,24 @@ own trial through `useTrialState`, so a torn-out one still follows it.
 **Two ways a cell silently stops cycling, both refused in code**: a `tubeMaterial` override, and a
 `mode: 'replace'` gradient (`lookFor` throws). See [tubes](tubes.md#color).
 
+## Checking an orbit fix
+
+`npm run probe:lab -- composition-lab` (or `tube-lab`) drives the running lab headless — a turn at
+the pose the lab opens on, then, settled into the hold, a pan, a turn, a zoom at the pointer and a
+turn after it — and prints how far, in pixels, the ink under each
+gesture's fixed point slid. A change to how a lab orbits is not done until this passes against the
+lab itself; unit tests of the transform have passed while the lab visibly drifted. Frames land in
+`test-results/lab-probe/<lab>/`, emptied each run, and go to the wall unless `--no-post`.
+
+- **The composition lab is measured exactly**, through `pointOn` on the instance it leaves at
+  `globalThis.kliegLab`. Other labs fall back to matching images, which bloom defeats under a zoom
+  (its glow is drawn in screen pixels and does not grow), so a `LOST` there is the matcher, not the lab.
+- **Check the pose the user sees, not only the rest pose.** The composition lab opens mid-entrance
+  with the letters 26 em behind where they rest; a pivot that held at rest threw them out of frame
+  there while every settled check passed. The opening check measures the ink's on-screen middle.
+- **A turn moves whatever is off the pivot plane.** The pivot is the ink's face; a tube stands one
+  radius in front of it, so its surface legitimately shifts a few pixels under a turn.
+
 ## Running them
 
 - **Identify a dev server by its process cwd, never by its port.** `lsof -p <pid> -a -d cwd`. Other

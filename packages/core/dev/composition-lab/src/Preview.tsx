@@ -64,6 +64,8 @@ export function Preview({ composition, elapsed, transform, viewportRef }: Previe
       bleed: 0,
     });
     rig.current = mine;
+    // For scripts/lab-probe.mjs, which asks what ink sits under a point before and after a gesture.
+    (globalThis as { kliegLab?: typeof instance }).kliegLab = instance;
     mine.fire = instance.fire(composition.text, toFireOptions(composition));
     if (turn.current) mine.fire.turn(turn.current);
     mine.fire.catch(() => {});
@@ -83,6 +85,8 @@ export function Preview({ composition, elapsed, transform, viewportRef }: Previe
       clearTimeout(wait);
       observer.disconnect();
       rig.current = null;
+      const probe = globalThis as { kliegLab?: typeof instance };
+      if (probe.kliegLab === instance) delete probe.kliegLab;
       instance.destroy();
     };
   }, [composition, epoch]);

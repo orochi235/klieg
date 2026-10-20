@@ -13,7 +13,8 @@
     "test:visual": "playwright test",
     "typecheck": "tsc -b",
     "lint": "biome check .",
-    "check": "npm run lint && npm run typecheck && npm run test"
+    "check": "npm run lint && npm run typecheck && npm run test",
+    "probe:lab": "node scripts/lab-probe.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

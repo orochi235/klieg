@@ -345,7 +345,8 @@ export interface FireOptions {
   /**
    * Turns the whole word as one rigid object — never the camera, which would drift
    * `viewportBudget`'s fit and shrink the word along with its angle. It turns and scales about the
-   * middle of the ink and moves in world units, in which the frame is about 7.6 tall at the word.
+   * middle of the ink's face, where the letters' poses hold it that frame, and moves in world units,
+   * in which the frame is about 7.6 tall at that face.
    * Build one with `fromEuler`, `fromAxisAngle` or `compose` rather than writing the sixteen
    * numbers by hand.
    */
@@ -644,6 +645,10 @@ export function createKlieg(options: KliegOptions): Klieg {
   });
 
   const caches = new WordCaches();
+  const cameraZOf = (): number | null => {
+    const lens = stage.lens();
+    return lens.orthoHeight === undefined ? lens.cameraZ : null;
+  };
   const fonts = registryFor(options);
   let destroyed = false;
   let fired = false;
@@ -795,7 +800,12 @@ export function createKlieg(options: KliegOptions): Klieg {
       caches,
       sizeOf(text),
       undefined,
-      { fitScale: scale, dim: spec.dim ?? 1, behind: depth * scale + depth * heroScale },
+      {
+        fitScale: scale,
+        dim: spec.dim ?? 1,
+        behind: depth * scale + depth * heroScale,
+        cameraZ: cameraZOf,
+      },
     );
     if (spec.transform) word.transform = spec.transform;
     return word;
@@ -852,7 +862,7 @@ export function createKlieg(options: KliegOptions): Klieg {
         caches,
         sizeOf(text),
         undefined,
-        { tracking: opts.tracking },
+        { tracking: opts.tracking, cameraZ: cameraZOf },
       );
     } catch (err) {
       // This rejects before the settle() that would otherwise free the bloom's render targets.

@@ -74,6 +74,12 @@ export interface WordOptions {
   behind?: number;
   /** Extra advance after each glyph, in em. Negative tightens. */
   tracking?: number;
+  /**
+   * How far the camera stands from z = 0, read whenever a turn is applied; null for a parallel
+   * lens. The frame is a fixed height at z = 0, so a turn's translation is shrunk by the face's
+   * nearness to stay in units of the frame at the face. Omitted, translation is left as given.
+   */
+  cameraZ?: () => number | null;
 }
 
 /** The ink bounding box of a word's part pool, in its own layout space. */
@@ -90,6 +96,9 @@ export class Word {
   /** Sits between `group` (the viewport fit) and the letters — see the `transform` accessor. */
   private readonly inner = new THREE.Group();
   private readonly turn = new THREE.Matrix4();
+  /** Where the letters' poses have carried the middle of the ink's face, in em off its rest. */
+  private readonly drift = new THREE.Vector3();
+  private readonly cameraZ: (() => number | null) | undefined;
   private readonly sizeOf: ((slot: number) => number) | undefined;
   private readonly family: string;
   /** null where the glyph drew no outline (space, U+00A0, ZWJ); the slot still holds its index. */
@@ -185,6 +194,7 @@ export class Word {
     this.dim = opts.dim ?? 1;
     this.forcedScale = opts.fitScale;
     this.behind = opts.behind ?? 0;
+    this.cameraZ = opts.cameraZ;
     this.tracking = opts.tracking ?? 0;
     this.sizeOf = sizeOf;
     this.family = family ?? font.family;
@@ -477,20 +487,55 @@ export class Word {
     this.applyTurn(fit);
   }
 
+  /** Moves the turn's pivot with the letters, so a turn held through a motion pivots on the ink. */
+  private follow(): void {
+    const face = DEFAULT_GLYPH_OPTIONS.depth;
+    let x = 0;
+    let y = 0;
+    let z = 0;
+    let n = 0;
+    for (let i = 0; i < this.letters.length; i++) {
+      const cell = this.letters[i];
+      if (!cell) continue;
+      const s = cell.scale.x - 1;
+      const midX = ((this.geoMinX[i] ?? 0) + (this.geoMaxX[i] ?? 0)) / 2;
+      const midY = ((this.geoMinY[i] ?? 0) + (this.geoMaxY[i] ?? 0)) / 2;
+      x += cell.position.x - (this.baseX[i] as number) + midX * s;
+      y += cell.position.y - (this.baseY[i] as number) + midY * s;
+      z += cell.position.z + face * s;
+      n++;
+    }
+    if (n) {
+      x /= n;
+      y /= n;
+      z /= n;
+    }
+    if (this.drift.x === x && this.drift.y === y && this.drift.z === z) return;
+    this.drift.set(x, y, z);
+    this.applyTurn(this.fit);
+  }
+
   /**
-   * `transform` is in world units about the middle of the ink, but sits inside the fit, so it is
-   * carried into layout space, where the ink's middle is (midX, midY) and a world length is
-   * `scale` em.
+   * `transform` is in world units about the middle of the ink's face as the letters stand now, but
+   * sits inside the fit, so it is carried into layout space, where that point is (midX, midY,
+   * depth) plus `drift` and a world length is `scale` em. A pivot anywhere else swings the ink: a
+   * turn about the extrusion's back moves the face sideways, and one about the rest plane throws a
+   * word whose entrance holds it deep behind that plane clean out of frame.
    */
   private applyTurn(fit: Fit): void {
     const pos = new THREE.Vector3();
     const quat = new THREE.Quaternion();
     const size = new THREE.Vector3();
     this.turn.decompose(pos, quat, size);
+    const x = fit.midX + this.drift.x;
+    const y = fit.midY + this.drift.y;
+    const face = DEFAULT_GLYPH_OPTIONS.depth + this.drift.z;
+    const z = this.cameraZ?.() ?? null;
+    const atFace = z ? (z - (face * fit.scale - this.behind)) / z : 1;
     new THREE.Matrix4()
-      .makeTranslation(fit.midX, fit.midY, 0)
-      .multiply(new THREE.Matrix4().compose(pos.divideScalar(fit.scale), quat, size))
-      .multiply(new THREE.Matrix4().makeTranslation(-fit.midX, -fit.midY, 0))
+      .makeTranslation(x, y, face)
+      .multiply(new THREE.Matrix4().compose(pos.multiplyScalar(atFace / fit.scale), quat, size))
+      .multiply(new THREE.Matrix4().makeTranslation(-x, -y, -face))
       .decompose(this.inner.position, this.inner.quaternion, this.inner.scale);
   }
 
@@ -581,7 +626,8 @@ export class Word {
 
   /**
    * Turns the whole word as one rigid object — never per letter, and never the camera, so the
-   * viewport fit stays put. It turns about the middle of the ink and moves in world units, and
+   * viewport fit stays put. It turns about the middle of the ink's face where the letters stand now
+   * and moves in world units, and
    * is applied between the fit and the letters, so it composes with the fit instead of
    * overwriting it.
    */
@@ -805,6 +851,7 @@ export class Word {
       }
       this.builder?.frame(i, pose.opacity);
     }
+    this.follow();
 
     if (this.effectFrame) this.applyEffects(elapsed, host, reduced);
   }

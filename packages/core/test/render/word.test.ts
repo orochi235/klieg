@@ -457,6 +457,87 @@ describe('Word', () => {
     expect(after.y).toBeCloseTo(before.y, 6);
   });
 
+  it('yaws and pitches about the face, so the ink there stays where it stood', () => {
+    // A roll cannot see depth; a yaw about the extrusion's back plane swings the face sideways.
+    const word = new Word('AAAA', stubFont(), 'gold', ROOMY);
+    const { fit } = word.readout();
+    const face = new THREE.Vector3(fit.midX, fit.midY, DEFAULT_GLYPH_OPTIONS.depth);
+    const world = () => {
+      word.group.updateMatrixWorld(true);
+      return (word.group.children[0] as THREE.Object3D).localToWorld(face.clone());
+    };
+    const before = world();
+
+    word.transform = fromEuler(0.4, 0.6, 0);
+
+    const after = world();
+    expect(after.x).toBeCloseTo(before.x, 6);
+    expect(after.y).toBeCloseTo(before.y, 6);
+    expect(after.z).toBeCloseTo(before.z, 6);
+  });
+
+  it('turns about the ink where its pose holds it, not where it rests', () => {
+    // An entrance holding the letters deep behind the rest plane flew out of frame on a yaw.
+    const word = new Word('AAAA', stubFont(), 'gold', ROOMY);
+    word.apply(
+      timelineOf(() => ({ position: [0.5, 0.2, -26], scale: 0.55 })),
+      50,
+      HOST,
+    );
+    word.group.updateMatrixWorld(true);
+    // The middle of each letter's face, held in the letter's own space so it rides the turn.
+    const faces = groups(word).map((cell) => {
+      const box = new THREE.Box3().setFromObject(cell);
+      const local = cell.worldToLocal(box.getCenter(new THREE.Vector3()));
+      return { cell, local: local.setZ(DEFAULT_GLYPH_OPTIONS.depth) };
+    });
+    const middle = () => {
+      word.group.updateMatrixWorld(true);
+      const sum = new THREE.Vector3();
+      for (const { cell, local } of faces) sum.add(cell.localToWorld(local.clone()));
+      return sum.divideScalar(faces.length);
+    };
+    const before = middle();
+
+    word.transform = fromEuler(0.4, 0.6, 0);
+
+    const after = middle();
+    expect(after.x).toBeCloseTo(before.x, 2);
+    expect(after.y).toBeCloseTo(before.y, 2);
+    expect(after.z).toBeCloseTo(before.z, 2);
+  });
+
+  it('moves the face by as much of the frame as a move at z = 0 would cover', () => {
+    const word = new Word(
+      'A',
+      stubFont(),
+      'gold',
+      ROOMY,
+      false,
+      undefined,
+      undefined,
+      null,
+      undefined,
+      undefined,
+      undefined,
+      {
+        cameraZ: () => 11,
+      },
+    );
+    const { fit } = word.readout();
+    const face = new THREE.Vector3(fit.midX, fit.midY, DEFAULT_GLYPH_OPTIONS.depth);
+    const seen = () => {
+      word.group.updateMatrixWorld(true);
+      const p = (word.group.children[0] as THREE.Object3D).localToWorld(face.clone());
+      return p.x / (11 - p.z);
+    };
+    const before = seen();
+
+    word.transform = compose([1, 0, 0], [0, 0, 0, 1], [1, 1, 1]);
+
+    expect(seen() - before).toBeCloseTo(1 / 11, 6);
+  });
+
   it('moves the word by its translation in world units, whatever the fit', () => {
     const word = new Word('A', stubFont(), 'gold', ROOMY);
     expect(word.group.scale.x).not.toBeCloseTo(1, 2);

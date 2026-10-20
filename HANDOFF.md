@@ -27,7 +27,7 @@ Each of these needs someone looking at renders or choosing; none is safe to sett
   (`caee62c`), which re-took no baselines. The run on 2026-10-07 was at a load average near 190:
   nine more tests failed without reaching a comparison, `look-tubing` among them, so re-run the
   suite on a quiet machine before re-blessing. Never re-bless unseen. Off-axis specs move again
-  with `transform` turning about the middle of the ink rather than the baseline origin; the visual
+  with `transform` turning about the middle of the ink's face rather than the baseline origin; the visual
   suite has not been run since.
 
 - **Re-express `tubing`, `piping` and `sequin` as fills.** The last slice of

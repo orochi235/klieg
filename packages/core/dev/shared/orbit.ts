@@ -19,6 +19,12 @@ export const HOME = {
   target: { x: 0, y: 0, z: 0 },
 };
 
+/**
+ * How far a lab's orbit may zoom: a quarter size out to 64 times in. The zoom scales the word rather
+ * than moving the camera, so nothing near the lens bounds it; 4x was too little to read a tube.
+ */
+export const LIMITS = { minDistance: HOME.distance / 64, maxDistance: HOME.distance * 4 };
+
 /** The word's turn for an orbit, in parts, for a lab that poses a three.js group itself. */
 export interface OrbitPose {
   rotation: THREE.Euler;

@@ -1,4 +1,4 @@
-import { HOME } from '@shared/orbit.js';
+import { HOME, LIMITS } from '@shared/orbit.js';
 import { defineInstrument } from '@weasel-js/labkit';
 import { Body } from './Body.js';
 import { DEFAULT_COMPOSITION } from './composition.js';
@@ -16,7 +16,7 @@ export const composer = defineInstrument<Record<string, never>, LabConfig>({
   clock: { duration: DEFAULT_COMPOSITION.hold + TAIL_MS, loop: true },
   orbit: {
     initialView: HOME,
-    limits: { minDistance: HOME.distance / 4, maxDistance: HOME.distance * 4 },
+    limits: LIMITS,
   },
   chrome: SECTIONS,
   render: () => <Body />,

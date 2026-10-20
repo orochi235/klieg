@@ -4,7 +4,7 @@ import type { LoadedFont } from '@core/text/font.js';
 import { DEFAULT_GLYPH_OPTIONS, glyphToShapes } from '@core/text/glyphs.js';
 import { LabBar } from '@shared/LabBar.js';
 import { LabRenderer, type PanelDraw } from '@shared/lab-renderer.js';
-import { HOME, orbitPose } from '@shared/orbit.js';
+import { HOME, LIMITS, orbitPose } from '@shared/orbit.js';
 import {
   Orbit,
   type OrbitProps,
@@ -55,9 +55,6 @@ const TURNED: View = { ...HEAD_ON, yaw: (-30 * Math.PI) / 180, pitch: (13 * Math
 function initialView(pose: Pose): View {
   return pose === 'turned' ? TURNED : HEAD_ON;
 }
-
-/** A zoom from half size to four times, as a dolly. */
-const LIMITS = { minDistance: HOME.distance / 4, maxDistance: HOME.distance * 2 };
 
 interface PanelTileProps {
   record: PanelRecord;

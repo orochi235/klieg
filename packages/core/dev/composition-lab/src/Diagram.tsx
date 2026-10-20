@@ -1,4 +1,4 @@
-import { DiagramView, type DiagramViewApi, diagramScene } from '@weasel-js/diagram';
+import { DiagramView, type DiagramViewApi, diagramScene, type NodeStyle } from '@weasel-js/diagram';
 import { registerCanvasFont } from '@weasel-js/font';
 import { Button } from '@weasel-js/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -8,12 +8,15 @@ import { addLayer, insertable, insertWrapper, reorder } from './edits.js';
 import { useLab, useSampled } from './hooks.js';
 import { NodeCard } from './NodeCard.js';
 import { hasGradient } from './patches.js';
-import { diagramOf, GROUP_OF_LAYER, layerOfGroup, type Part, partOf } from './pipeline.js';
+import { addAnchor, diagramOf, layerOfGroup, offIds, type Part, partOf } from './pipeline.js';
 import { poolCounts } from './pool.js';
 
 registerCanvasFont('sans-serif');
 
 const FONT = { fontFamily: 'sans-serif', fontSize: 12 } as const;
+
+/** A layer that is switched off: still drawn, dimmed and dashed. */
+const OFF: NodeStyle = { fill: '#232a31', stroke: '#56606a', text: '#87939e', dash: [4, 3] };
 
 /** The composition as a wiring diagram, and where its layers and motions are edited. */
 export function Diagram() {
@@ -36,10 +39,16 @@ export function Diagram() {
       if (probe.kliegDiagram === mine) delete probe.kliegDiagram;
     };
   });
-  const key = JSON.stringify(data);
+  const off = offIds(config);
+  const key = JSON.stringify([data, [...off]]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: `key` is the data's content.
   const specs = useMemo(
-    () => diagramScene(data, { font: FONT, layoutOptions: { direction: 'right' } }),
+    () =>
+      diagramScene(data, {
+        font: FONT,
+        layoutOptions: { direction: 'right' },
+        nodeStyle: (n) => (off.has(n.id) ? OFF : undefined),
+      }),
     [key],
   );
 
@@ -90,12 +99,12 @@ export function Diagram() {
         ]
       : [];
 
-  const last = entries.at(-1);
+  const anchor = addAnchor(config);
   const add = [
     {
-      target: last ? `${GROUP_OF_LAYER}${last.id}` : 'motion:enter',
+      target: anchor.target,
       key: 'add',
-      placement: { side: last ? ('bottom' as const) : ('top' as const), align: 'start' as const },
+      placement: { side: anchor.side, align: 'start' as const },
       offset: 8,
       content: (
         <div className="cl-plus">

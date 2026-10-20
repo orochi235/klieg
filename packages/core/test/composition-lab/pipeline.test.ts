@@ -7,9 +7,41 @@ import {
   toComposition,
 } from '../../dev/composition-lab/src/config.js';
 import { emit } from '../../dev/composition-lab/src/emit.js';
-import { diagramOf, idOf, layerOfGroup, partOf } from '../../dev/composition-lab/src/pipeline.js';
+import {
+  addAnchor,
+  diagramOf,
+  idOf,
+  layerOfGroup,
+  offIds,
+  partOf,
+} from '../../dev/composition-lab/src/pipeline.js';
 
 const none = (): string[] => [];
+
+/** What `emit` wrote for the saved trial below on main before the diagram. */
+const SAVED_EMIT = `import { EFFECTS, intermittent, roving } from 'klieg';
+
+klieg.fire("ACRONYM", {
+  look: 'tubing',
+  enter: 'slam',
+  active: 'none',
+  exit: 'none',
+  hold: 6000,
+  effects: [
+    {
+      patch: (() => {
+return { period: 1000, at: () => ({}) };
+})(),
+      target: { kind: 'run', by: 'index', amount: 1 },
+      seed: 0,
+    },
+    {
+      patch: intermittent(roving(EFFECTS.flicker({ period: 1400, depth: 0, unrest: 0.18, spell: 0, calm: 0 }), { dwell: 3200, seed: 0, epochs: 96 }), { spell: 4200, calm: 2000, bouts: 3 }),
+      target: { kind: 'run', by: 'index', amount: 1 },
+      seed: 0,
+    },
+  ],
+});`;
 
 function withLayers(...entries: LayerEntry[]): LabConfig {
   return { ...schema.defaults(), effects: entries as unknown as LabConfig['effects'] };
@@ -94,14 +126,61 @@ describe('the pipeline diagram', () => {
     expect(layers?.members.map(layerOfGroup)).toEqual([a.id, b.id]);
   });
 
-  it('draws a trial saved before the diagram', () => {
-    const draft = { ...newEntry('draft'), source: 'return { period: 1000, at: () => ({}) };' };
-    const both = flicker();
-    const config = withLayers(draft, both);
-    const before = emit(toComposition(config));
+  it('draws a trial saved before the diagram, and emits the call it always did', () => {
+    // Entries as a trial stored them before the diagram existed.
+    const saved = [
+      {
+        kind: 'draft',
+        id: 'draft-old-1',
+        enabled: true,
+        target: 'run',
+        amount: 1,
+        roving: { on: false, dwell: 3200, epochs: 96 },
+        intermittent: { on: false, spell: 4200, calm: 2000, bouts: 3 },
+        source: 'return { period: 1000, at: () => ({}) };',
+      },
+      {
+        kind: 'flicker',
+        id: 'flicker-old-2',
+        enabled: true,
+        target: 'run',
+        amount: 1,
+        period: 1400,
+        depth: 0,
+        unrest: 0.18,
+        spell: 0,
+        calm: 0,
+        roving: { on: true, dwell: 3200, epochs: 96 },
+        intermittent: { on: true, spell: 4200, calm: 2000, bouts: 3 },
+      },
+    ];
+    const config = withLayers(...(saved as unknown as LayerEntry[]));
     const ids = diagramOf(config, none).nodes.map((n) => n.id);
-    expect(ids).toEqual(expect.arrayContaining([`patch:${draft.id}`, `pool:${draft.id}`]));
-    expect(ids.filter((id) => id.endsWith(`:${both.id}`))).toHaveLength(4);
-    expect(emit(toComposition(config))).toBe(before);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'patch:draft-old-1',
+        'pool:draft-old-1',
+        'patch:flicker-old-2',
+        'roving:flicker-old-2',
+        'intermittent:flicker-old-2',
+        'pool:flicker-old-2',
+      ]),
+    );
+    expect(emit(toComposition(config))).toBe(SAVED_EMIT);
+  });
+
+  it('lists every node of a disabled layer as off, and nothing else', () => {
+    const off = flicker({ enabled: false });
+    const live = newEntry('hue');
+    expect([...offIds(withLayers(off, live))].sort()).toEqual(
+      [`intermittent:${off.id}`, `patch:${off.id}`, `pool:${off.id}`, `roving:${off.id}`].sort(),
+    );
+  });
+
+  it('puts the add-layer + under the last layer, or above the motions when there is none', () => {
+    const a = flicker();
+    const b = newEntry('hue');
+    expect(addAnchor(withLayers(a, b))).toEqual({ target: `layer:${b.id}`, side: 'bottom' });
+    expect(addAnchor(schema.defaults())).toEqual({ target: 'motion:enter', side: 'top' });
   });
 });

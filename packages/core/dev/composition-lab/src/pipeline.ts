@@ -126,3 +126,24 @@ export function diagramOf(
 
   return { nodes, edges, groups };
 }
+
+/** Every node of a layer that is switched off, to draw dimmed. */
+export function offIds(config: LabConfig): Set<string> {
+  const ids = new Set<string>();
+  for (const entry of entriesOf(config)) {
+    if (entry.enabled) continue;
+    const layer = entry.id;
+    ids.add(idOf({ kind: 'patch', layer }));
+    for (const wrapper of wrappersOf(entry)) ids.add(idOf({ kind: 'wrapper', layer, wrapper }));
+    ids.add(idOf({ kind: 'pool', layer }));
+  }
+  return ids;
+}
+
+/** Where the + that adds a layer stands: under the last layer's row, or above the motions. */
+export function addAnchor(config: LabConfig): { target: string; side: 'bottom' | 'top' } {
+  const last = entriesOf(config).at(-1);
+  return last
+    ? { target: `${GROUP_OF_LAYER}${last.id}`, side: 'bottom' }
+    : { target: idOf({ kind: 'motion', stage: 'enter' }), side: 'top' };
+}

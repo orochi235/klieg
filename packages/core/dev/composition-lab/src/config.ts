@@ -29,7 +29,8 @@ const INTERMITTENT = { spell: 4200, calm: 2000, bouts: 3 };
 /** `id`, `enabled` and a draft's `source` are not in the schema: `PrefControl` draws every field of
  * an object it is given, hidden or not. The layer list carries them beside the schema's fields;
  * `enabled` is its header switch and `source` is edited in the Drafts section. */
-const shared = () => ({
+/** A layer's pool: what it drives, and how much of it. */
+export const sharedFields = () => ({
   target: f
     .enum<PartKind>('run', ['run', 'body', 'chunk'])
     .describe(
@@ -45,67 +46,72 @@ const shared = () => ({
     ),
 });
 
+/** The bout wrapper's own settings, without its switch. */
+export const intermittentFields = () => ({
+  spell: f
+    .number(INTERMITTENT.spell)
+    .range(200, 20000)
+    .step(100)
+    .slider()
+    .label('bout spell')
+    .describe(
+      'Milliseconds of one bout. Shorter than one inner pass and the layer will not build at all: the patch throws rather than showing a sliver.',
+    ),
+  calm: f
+    .number(INTERMITTENT.calm)
+    .range(0, 30000)
+    .step(100)
+    .slider()
+    .label('bout calm')
+    .describe(
+      'Milliseconds held quiet between bouts. At 0 the wrapper is a pass-through, so the layer runs continuously until this is above zero.',
+    ),
+  bouts: f
+    .number(INTERMITTENT.bouts)
+    .range(1, 12)
+    .step(1)
+    .slider()
+    .describe(
+      'Bouts to a pass, and so how long the loop runs before it repeats. The pass rounds to a whole number of inner passes, so the count it produces can drift from this value.',
+    ),
+});
+
 const intermittent = () =>
   f
-    .object({
-      on: f.boolean(false),
-      spell: f
-        .number(INTERMITTENT.spell)
-        .range(200, 20000)
-        .step(100)
-        .slider()
-        .label('bout spell')
-        .describe(
-          'Milliseconds of one bout. Shorter than one inner pass and the layer will not build at all: the patch throws rather than showing a sliver.',
-        ),
-      calm: f
-        .number(INTERMITTENT.calm)
-        .range(0, 30000)
-        .step(100)
-        .slider()
-        .label('bout calm')
-        .describe(
-          'Milliseconds held quiet between bouts. At 0 the wrapper is a pass-through, so the layer runs continuously until this is above zero.',
-        ),
-      bouts: f
-        .number(INTERMITTENT.bouts)
-        .range(1, 12)
-        .step(1)
-        .slider()
-        .describe(
-          'Bouts to a pass, and so how long the loop runs before it repeats. The pass rounds to a whole number of inner passes, so the count it produces can drift from this value.',
-        ),
-    })
+    .object({ on: f.boolean(false), ...intermittentFields() })
     .describe(
       'Runs the layer in bouts and swallows it between them. The inner keeps running against the clock, so a bout opens wherever it happens to be.',
     );
 
+/** The roving wrapper's own settings, without its switch. */
+export const rovingFields = () => ({
+  dwell: f
+    .number(ROVING.dwell)
+    .range(400, 9000)
+    .step(100)
+    .slider()
+    .describe(
+      'Roughly how long one part keeps the fault. This picks WHO flickers, never how much: that is unrest.',
+    ),
+  epochs: f
+    .number(ROVING.epochs)
+    .range(4, 192)
+    .step(4)
+    .slider()
+    .describe(
+      'Handovers to a pass, and so the ceiling on how many parts a pass can reach before it loops. Below the pool size, some parts never take the fault at all.',
+    ),
+});
+
 const roving = () =>
   f
-    .object({
-      on: f.boolean(false),
-      dwell: f
-        .number(ROVING.dwell)
-        .range(400, 9000)
-        .step(100)
-        .slider()
-        .describe(
-          'Roughly how long one part keeps the fault. This picks WHO flickers, never how much: that is unrest.',
-        ),
-      epochs: f
-        .number(ROVING.epochs)
-        .range(4, 192)
-        .step(4)
-        .slider()
-        .describe(
-          'Handovers to a pass, and so the ceiling on how many parts a pass can reach before it loops. Below the pool size, some parts never take the fault at all.',
-        ),
-    })
+    .object({ on: f.boolean(false), ...rovingFields() })
     .describe(
       "Moves this layer's affliction from part to part. Its pass is many inner passes long, so a short hold may never reach a second handover.",
     );
 
-const params = (kind: Exclude<PatchKind, 'draft'>) =>
+/** A patch kind's own params. */
+export const paramFields = (kind: Exclude<PatchKind, 'draft'>) =>
   Object.fromEntries(
     PARAMS[kind].map((p) => [
       p.key,
@@ -117,31 +123,36 @@ const params = (kind: Exclude<PatchKind, 'draft'>) =>
  * leaves x/y alone, so a lamp would light the part it is standing on. */
 const VARIANTS = {
   flicker: f.object({
-    ...shared(),
-    ...params('flicker'),
+    ...sharedFields(),
+    ...paramFields('flicker'),
     roving: roving(),
     intermittent: intermittent(),
   }),
-  hue: f.object({ ...shared(), ...params('hue'), roving: roving(), intermittent: intermittent() }),
+  hue: f.object({
+    ...sharedFields(),
+    ...paramFields('hue'),
+    roving: roving(),
+    intermittent: intermittent(),
+  }),
   chase: f.object({
-    ...shared(),
-    ...params('chase'),
+    ...sharedFields(),
+    ...paramFields('chase'),
     roving: roving(),
     intermittent: intermittent(),
   }),
   lamp: f.object({
-    ...shared(),
+    ...sharedFields(),
     lampSource: f
       .enum('fixed', ['fixed', 'orbit'])
       .label('source')
       .describe(
         "fixed parks the lamp at x,y. orbit walks a circle of radius sweep around it, on the layer's own period.",
       ),
-    ...params('lamp'),
+    ...paramFields('lamp'),
     intermittent: intermittent(),
   }),
   draft: f.object({
-    ...shared(),
+    ...sharedFields(),
     roving: roving(),
     intermittent: intermittent(),
   }),

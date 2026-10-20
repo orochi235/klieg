@@ -18,7 +18,7 @@ type Leaf = Parameters<typeof PrefControl>[0]['pref'];
 type Context = Parameters<ControlRenderer>[0];
 
 /** Why a layer will do nothing, which the patch itself never says. */
-function warningsOf(
+export function warningsOf(
   entry: LayerEntry,
   counts: Record<string, number>,
   look: string,

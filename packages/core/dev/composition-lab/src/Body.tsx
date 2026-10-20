@@ -3,6 +3,7 @@ import { TrialTransport, useTrialClock, useTrialOrbit } from '@weasel-js/labkit'
 import { Select } from '@weasel-js/ui';
 import { useEffect, useMemo } from 'react';
 import { TAIL_MS } from './config.js';
+import { Diagram } from './Diagram.js';
 import { useFocus, useLab, useRunTime, useSampled } from './hooks.js';
 import { CHANNELS, type Channel } from './Plot.js';
 import { Preview } from './Preview.js';
@@ -36,43 +37,46 @@ export function Body() {
   const at = (t % sampled.pass) / sampled.pass;
 
   return (
-    <div className="cl-body">
-      <Preview
-        composition={composition}
-        elapsed={t}
-        transform={transform}
-        viewportRef={orbit?.viewportRef}
-      />
-      <TrialTransport />
-      <Timeline composition={composition} tailMs={TAIL_MS} elapsed={t} onSeek={seek} />
-      <div className="cl-panel">
-        <p className="cl-note">
-          {composition.pool} pool: run {counts.run}, body {counts.body}, chunk {counts.chunk}
-          {focus.fallback ? ' (the font failed to load, so this is the synthetic pool)' : ''}
-        </p>
-        <Raster samples={sampled.data} rows={focus.rows} at={at} kinds={focus.kinds} />
-        <div className="cl-row">
-          <Select<Channel>
-            label="channel"
-            orientation="row"
-            width="fit"
-            selectedKey={config.channel}
-            onSelectionChange={(c) => setConfig('channel', c)}
-            options={CHANNELS.map((c) => ({ value: c, label: c }))}
-          />
-          <Select
-            label="part"
-            orientation="row"
-            width="fit"
-            selectedKey={String(focus.row)}
-            onSelectionChange={(r) => setConfig('part', Number(r))}
-            options={focus.rows.map((index, r) => ({
-              value: String(r),
-              label: labelOf(sampled.parts[index]),
-            }))}
-          />
+    <div className="cl-trial">
+      <div className="cl-body">
+        <Preview
+          composition={composition}
+          elapsed={t}
+          transform={transform}
+          viewportRef={orbit?.viewportRef}
+        />
+        <TrialTransport />
+        <Timeline composition={composition} tailMs={TAIL_MS} elapsed={t} onSeek={seek} />
+        <div className="cl-panel">
+          <p className="cl-note">
+            {composition.pool} pool: run {counts.run}, body {counts.body}, chunk {counts.chunk}
+            {focus.fallback ? ' (the font failed to load, so this is the synthetic pool)' : ''}
+          </p>
+          <Raster samples={sampled.data} rows={focus.rows} at={at} kinds={focus.kinds} />
+          <div className="cl-row">
+            <Select<Channel>
+              label="channel"
+              orientation="row"
+              width="fit"
+              selectedKey={config.channel}
+              onSelectionChange={(c) => setConfig('channel', c)}
+              options={CHANNELS.map((c) => ({ value: c, label: c }))}
+            />
+            <Select
+              label="part"
+              orientation="row"
+              width="fit"
+              selectedKey={String(focus.row)}
+              onSelectionChange={(r) => setConfig('part', Number(r))}
+              options={focus.rows.map((index, r) => ({
+                value: String(r),
+                label: labelOf(sampled.parts[index]),
+              }))}
+            />
+          </div>
         </div>
       </div>
+      <Diagram />
     </div>
   );
 }

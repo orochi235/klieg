@@ -67,7 +67,7 @@ const POOLS: Record<string, string> = { run: 'runs', body: 'bodies', chunk: 'chu
 function patchLines(entry: LayerEntry): string[] {
   const lines: string[] = [entry.kind];
   if (entry.kind !== 'draft') {
-    lines.push(PARAMS[entry.kind].map((p) => `${p.key} ${entry[p.key]}`).join(' · '));
+    lines.push(...PARAMS[entry.kind].map((p) => `${p.key} ${entry[p.key]}`));
   }
   if (!entry.enabled) lines.push('off');
   return lines;

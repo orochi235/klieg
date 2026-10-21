@@ -191,7 +191,7 @@ describe('a cursor lands on the letter it is over', () => {
 
 describe("a run's size", () => {
   /** Halves the second letter, the way a `size: 0.5` run does. */
-  const HALF = (slot: number) => (slot === 1 ? 0.5 : 1);
+  const half = (slot: number) => (slot === 1 ? 0.5 : 1);
 
   function sizedWord(): Word {
     return new Word(
@@ -204,7 +204,7 @@ describe("a run's size", () => {
       undefined,
       null,
       undefined,
-      HALF,
+      half,
     );
   }
 

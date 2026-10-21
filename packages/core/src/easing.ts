@@ -17,6 +17,7 @@ export const backOut: Easing = (t) => {
   return 1 + c3 * p ** 3 + c1 * p ** 2;
 };
 
+// biome-ignore lint/complexity/useMathMinMax: NaN must clamp to 0, which Math.min/max would pass through
 export const clamp01 = (t: number): number => (t >= 0 ? (t > 1 ? 1 : t) : 0);
 
 export interface SpringParams {

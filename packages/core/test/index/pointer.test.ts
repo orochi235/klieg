@@ -57,7 +57,7 @@ describe('the pointer in the setting', () => {
   }
 
   const last = <T>(xs: T[]): T => xs[xs.length - 1] as T;
-  const LOOKING = (spec: EffectSpec): FireOptions => ({
+  const looking = (spec: EffectSpec): FireOptions => ({
     enter: 'none',
     active: 'none',
     exit: 'none',
@@ -68,7 +68,7 @@ describe('the pointer in the setting', () => {
   it('stamps every frame with the clock time it was drawn at', async () => {
     const seen = capture();
     const bk = create();
-    void bk.fire('HI', LOOKING(seen.spec));
+    void bk.fire('HI', looking(seen.spec));
     await flush();
     clock.advance(16);
     const first = last(seen.frames).now;
@@ -82,7 +82,7 @@ describe('the pointer in the setting', () => {
   it('leaves both pointers null until one has moved', async () => {
     const seen = capture();
     const bk = create();
-    void bk.fire('HI', LOOKING(seen.spec));
+    void bk.fire('HI', looking(seen.spec));
     await flush();
     stubCanvas(BOX);
     clock.advance(16);
@@ -98,7 +98,7 @@ describe('the pointer in the setting', () => {
     const bk = create();
     // Two lines, and wide enough that the word's extent reaches past the -1..1 the box is in:
     // a single line has no vertical extent to speak of and cannot tell the y axes apart.
-    void bk.fire('HELLO\nTHERE', LOOKING(seen.spec));
+    void bk.fire('HELLO\nTHERE', looking(seen.spec));
     await flush();
     stubCanvas(BOX);
 
@@ -134,7 +134,7 @@ describe('the pointer in the setting', () => {
 
     // The cursor never moves again: a hover- or click-triggered sign opens under a still pointer.
     const seen = capture();
-    void bk.fire('HI', LOOKING(seen.spec));
+    void bk.fire('HI', looking(seen.spec));
     await flush();
     clock.advance(16);
 
@@ -157,7 +157,7 @@ describe('the pointer in the setting', () => {
     dispatch('pointermove', { clientX: 100, clientY: 50 });
 
     const seen = capture();
-    void bk.fire('HI', LOOKING(seen.spec));
+    void bk.fire('HI', looking(seen.spec));
     await flush();
     clock.advance(16);
 
@@ -231,7 +231,7 @@ describe('the pointer in the setting', () => {
   it('reports the frame delta the clock advanced by', async () => {
     const seen = capture();
     const bk = create();
-    void bk.fire('HI', LOOKING(seen.spec));
+    void bk.fire('HI', looking(seen.spec));
     await flush();
     clock.advance(16);
     clock.advance(32);
@@ -244,7 +244,7 @@ describe('the pointer in the setting', () => {
     vi.stubGlobal('matchMedia', () => ({ matches: true }));
     const seen = capture();
     const bk = create();
-    void bk.fire('HI', LOOKING(seen.spec));
+    void bk.fire('HI', looking(seen.spec));
     await flush();
     clock.advance(16);
 

@@ -32,7 +32,8 @@ export class LabRenderer {
       antialias: true,
       preserveDrawingBuffer: true,
     });
-    this.renderer.setClearColor(0x0c0f16, 1);
+    // Transparent, so the page's themed surface under the canvas is the ground every panel shows.
+    this.renderer.setClearColor(0x000000, 0);
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.environment = buildEnvironment(this.renderer);

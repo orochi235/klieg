@@ -1,7 +1,6 @@
 import { HOME, LIMITS } from '@shared/orbit.js';
 import { defineInstrument } from '@weasel-js/labkit';
 import { Body } from './Body.js';
-import { DEFAULT_COMPOSITION } from './composition.js';
 import { type LabConfig, schema, TAIL_MS } from './config.js';
 import { SECTIONS } from './sections.js';
 
@@ -12,8 +11,7 @@ export const composer = defineInstrument<Record<string, never>, LabConfig>({
   title: 'composition',
   config: schema,
   initialState: () => ({}),
-  // The run's length follows `hold`; `Body` rewrites it when hold changes.
-  clock: { duration: DEFAULT_COMPOSITION.hold + TAIL_MS, loop: true },
+  clock: (config) => ({ duration: config.hold + TAIL_MS, loop: true }),
   orbit: {
     initialView: HOME,
     limits: LIMITS,

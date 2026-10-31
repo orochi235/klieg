@@ -1,4 +1,5 @@
 import type { PartInfo } from '@core/effects/types.js';
+import { Readout } from '@weasel-js/labkit';
 import { useMemo } from 'react';
 import { type PassSamples, PER_PATCH_PASS } from './sample.js';
 import { tenureAndJump } from './tenure.js';
@@ -23,31 +24,23 @@ export function Tenure({ samples, parts, pass, epochMs, perPatchPass }: TenurePr
   const held = r.handovers > 0 ? r.meanTenureMs : 0;
   const deferred = epochMs !== null && held > epochMs * DEFERRED;
   const coarse = perPatchPass < PER_PATCH_PASS;
+  const idle = r.handovers === 0 && r.meanTenureMs > 0;
 
   return (
     <div className="cl-section">
-      <div className="cl-row">
-        <span>tenure</span>
-        <output>{(r.meanTenureMs / 1000).toFixed(2)}s</output>
-      </div>
-      {epochMs === null ? null : (
-        <div className="cl-row">
-          <span>epoch</span>
-          <output>{(epochMs / 1000).toFixed(2)}s</output>
-        </div>
-      )}
-      <div className="cl-row">
-        <span>handovers</span>
-        <output>{r.handovers}</output>
-      </div>
-      <div className="cl-row">
-        <span>jump</span>
-        <output>{r.meanJumpParts.toFixed(1)}</output>
-      </div>
-      <div className="cl-row">
-        <span>jump em</span>
-        <output>{r.meanJumpEm.toFixed(2)}</output>
-      </div>
+      <Readout
+        rows={[
+          {
+            label: 'tenure',
+            value: `${(r.meanTenureMs / 1000).toFixed(2)}s`,
+            grade: deferred || coarse ? 'warn' : undefined,
+          },
+          { label: 'epoch', value: epochMs === null ? null : `${(epochMs / 1000).toFixed(2)}s` },
+          { label: 'handovers', value: r.handovers, grade: idle ? 'warn' : undefined },
+          { label: 'jump', value: r.meanJumpParts.toFixed(1) },
+          { label: 'jump em', value: r.meanJumpEm.toFixed(2) },
+        ]}
+      />
       {deferred && epochMs !== null ? (
         <p className="cl-note">
           {(held / epochMs).toFixed(1)}× the epoch: roving hands over only where the inner reads as
@@ -55,7 +48,7 @@ export function Tenure({ samples, parts, pass, epochMs, perPatchPass }: TenurePr
           An inner that never rests never lets go.
         </p>
       ) : null}
-      {r.handovers === 0 && r.meanTenureMs > 0 ? (
+      {idle ? (
         <p className="cl-note">
           no handovers: every holder keeps the effect for the whole pass, which is what a layer
           without a roving wrapper does

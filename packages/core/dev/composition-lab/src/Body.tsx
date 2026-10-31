@@ -1,7 +1,7 @@
 import { orbitTransform } from '@shared/orbit.js';
-import { TrialTransport, useTrialClock, useTrialOrbit } from '@weasel-js/labkit';
+import { TrialTransport, useTransportControl, useTrialOrbit } from '@weasel-js/labkit';
 import { Select } from '@weasel-js/ui';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { TAIL_MS } from './config.js';
 import { Diagram } from './Diagram.js';
 import { useFocus, useLab, useRunTime, useSampled } from './hooks.js';
@@ -14,23 +14,17 @@ import { Timeline } from './TimelinePanel.js';
 /** The trial: the running sign, then the two panels that share the transport's time axis. */
 export function Body() {
   const { composition, config, setConfig } = useLab();
-  const clock = useTrialClock();
+  const transport = useTransportControl();
   const t = useRunTime();
   const sampled = useSampled();
   const focus = useFocus();
-  const span = composition.hold + TAIL_MS;
   const orbit = useTrialOrbit();
   const camera = orbit?.camera;
   const transform = useMemo(() => (camera ? orbitTransform(camera) : undefined), [camera]);
 
-  useEffect(() => {
-    if (clock && clock.duration !== span) clock.duration = span;
-  }, [clock, span]);
-
   const seek = (to: number) => {
-    if (!clock) return;
-    clock.rate = 0;
-    clock.seek(to);
+    transport?.pause();
+    transport?.seek(to);
   };
 
   const counts = poolCounts(sampled.parts);

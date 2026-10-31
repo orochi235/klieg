@@ -17,3 +17,9 @@ that turns a fired word about its ink's face, with translation measured there, d
 image match on panels too small to trust it; a zoom reads `LOST`. Give the lab a `pointOn`-style
 readout before deciding how much of that is real.
 
+## The tube lab is not a `<Lab>`
+
+The tube lab builds its own page from labkit pieces because every panel shares one tube spec, and
+labkit 1.14.2 has no config shared across trials. weasel's main has it unreleased (`<Lab over>`,
+`f.schema(nodes, { over })`, `ctx.over`; checked 2026-10-31). Once that ships, moving the lab onto
+`<Lab>` brings Reset, Clone, add-trial and saved orbit views for free.

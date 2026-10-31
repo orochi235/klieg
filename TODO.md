@@ -2,17 +2,6 @@
 
 Work klieg owes that has no other home yet.
 
-## The composition lab typechecks only beside a weasel checkout
-
-The lab's effects diagram uses `@weasel-js/diagram` APIs weasel has not released (overlays, hover,
-row reorder, refit, `nodeStyle` returning `undefined`), so `dev/composition-lab/tsconfig.json`
-maps `@weasel-js/*` to `~/src/weasel`'s `dist` and its dev script serves from there. The root
-`tsconfig.json` references the lab, so `npm run typecheck` fails anywhere without that sibling
-checkout: CI, Pages and the release workflow, which gates publishing. 1.11.1 still lacks them
-(2026-10-21): no `DEFAULT_NODE_STYLE`, and `nodeStyle` must return a style. Once weasel releases
-them, pin every `@weasel-js` package to that release, add `@weasel-js/diagram`, and drop the
-mapping and the script's `WEASEL` default.
-
 ## A placed word does not refit when its element resizes
 
 A fire sizes the word once, from `stage.viewportBudget` when it starts. After that, the stage's

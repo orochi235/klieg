@@ -8,8 +8,7 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "paths": {
       "@core/*": ["../../src/*"],
-      "@shared/*": ["../shared/*"],
-      "@weasel-js/*": ["../../../../../weasel/packages/*/dist/index.d.ts"]
+      "@shared/*": ["../shared/*"]
     }
   },
   "include": ["src", "vite.config.ts"],

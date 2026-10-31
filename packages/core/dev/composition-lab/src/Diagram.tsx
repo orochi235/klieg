@@ -148,8 +148,8 @@ export function Diagram() {
         onHover={(id) => {
           if (id !== null) setHovered(endsOf(id) ? id : null);
         }}
-        onReorder={({ group, order }) => {
-          if (group !== 'layers') return;
+        onReorder={({ parent, order }) => {
+          if (parent !== 'layers') return;
           write(
             reorder(
               entries,

@@ -1,5 +1,6 @@
 import '@weasel-js/labkit/styles.css';
 import { KitIcons } from '@shared/KitIcons.js';
+import { labHref, labPages } from '@shared/pages.js';
 import { Lab } from '@weasel-js/labkit';
 import { createRoot } from 'react-dom/client';
 import { labFont } from './font.js';
@@ -14,6 +15,13 @@ provideFont(await labFont());
 
 createRoot(host).render(
   <KitIcons>
-    <Lab instruments={[junction]} defaultInstrument="junction" title="kliegsminister" />
+    <Lab
+      instruments={[junction]}
+      defaultInstrument="junction"
+      title="kliegsminister"
+      pages={labPages()}
+      path={labHref('kliegsminister')}
+      storageKey="klieg:kliegsminister"
+    />
   </KitIcons>,
 );

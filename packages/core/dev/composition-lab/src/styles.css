@@ -2,7 +2,6 @@
 .cl-body,
 .cl-section,
 .cl-diagram {
-  --cl-bg: var(--wzl-surface-sunken);
   --cl-edge: var(--wzl-border);
   --cl-ink: var(--wzl-fg);
   --cl-dim: var(--wzl-fg-muted);
@@ -31,17 +30,7 @@
   border: 1px solid var(--wzl-border);
   border-radius: 5px;
   background: var(--wzl-surface);
-  box-shadow: 0 2px 10px rgb(0 0 0 / 0.2);
-}
-
-.cl-link {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--wzl-accent, inherit);
-  font: inherit;
-  text-decoration: underline;
-  cursor: pointer;
+  box-shadow: 0 2px 10px var(--wzl-shadow);
 }
 
 .cl-plus {
@@ -123,46 +112,6 @@
   margin-bottom: 5px;
 }
 
-.cl-row > span:first-child {
-  flex: 0 0 62px;
-  color: var(--cl-dim);
-}
-
-.cl-row input[type="range"] {
-  flex: 1;
-  min-width: 0;
-  accent-color: var(--cl-hot);
-}
-
-.cl-row input[type="text"],
-.cl-row input[type="number"],
-.cl-row input:not([type]),
-.cl-row select {
-  flex: 1;
-  min-width: 0;
-  background: var(--cl-bg);
-  color: var(--cl-ink);
-  border: 1px solid var(--cl-edge);
-  border-radius: 3px;
-  padding: 3px 5px;
-  font: inherit;
-}
-
-.cl-row output {
-  flex: 0 0 46px;
-  text-align: right;
-}
-
-.cl-row button {
-  background: var(--cl-edge);
-  color: var(--cl-ink);
-  border: 0;
-  border-radius: 3px;
-  padding: 3px 9px;
-  font: inherit;
-  cursor: pointer;
-}
-
 .cl-section {
   font:
     12px / 1.5 ui-monospace,
@@ -227,5 +176,5 @@
 }
 
 .cl-ok {
-  color: #7ee787;
+  color: var(--wzl-success);
 }

@@ -1,4 +1,5 @@
 import type { Host, PartInfo } from '@core/effects/types.js';
+import { Button, NumberField, Select } from '@weasel-js/ui';
 import { useState } from 'react';
 import type { Composition } from './composition.js';
 import { PARAMS } from './patches.js';
@@ -42,33 +43,36 @@ export function Sweep({ composition, parts, host }: SweepPanelProps) {
   return (
     <div className="cl-section">
       <div className="cl-row">
-        <select value={layer?.id ?? ''} onChange={(e) => setLayerId(e.target.value)}>
-          {layers.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.kind}
-            </option>
-          ))}
-        </select>
-        <select value={active} onChange={(e) => setParam(e.target.value)}>
-          <option value="">param…</option>
-          {params.map((p) => (
-            <option key={p.key} value={p.key}>
-              {p.key}
-            </option>
-          ))}
-        </select>
+        <Select
+          aria-label="layer"
+          selectedKey={layer?.id ?? null}
+          onSelectionChange={setLayerId}
+          options={layers.map((l) => ({ value: l.id, label: l.kind }))}
+        />
+        <Select
+          aria-label="param"
+          placeholder="param…"
+          selectedKey={active || null}
+          onSelectionChange={setParam}
+          options={params.map((p) => ({ value: p.key, label: p.key }))}
+        />
       </div>
       <div className="cl-row">
-        <span>min</span>
-        <input type="number" value={min} onChange={(e) => setMin(Number(e.target.value))} />
-        <span>max</span>
-        <input type="number" value={max} onChange={(e) => setMax(Number(e.target.value))} />
-        <span>steps</span>
-        <input type="number" value={steps} onChange={(e) => setSteps(Number(e.target.value))} />
+        <NumberField label="min" orientation="row" hideSteppers value={min} onChange={setMin} />
+        <NumberField label="max" orientation="row" hideSteppers value={max} onChange={setMax} />
+        <NumberField
+          label="steps"
+          orientation="row"
+          hideSteppers
+          minValue={1}
+          step={1}
+          value={steps}
+          onChange={setSteps}
+        />
       </div>
       <div className="cl-row">
-        <button
-          type="button"
+        <Button
+          size="sm"
           disabled={!layer || !active}
           onClick={() =>
             layer &&
@@ -76,7 +80,7 @@ export function Sweep({ composition, parts, host }: SweepPanelProps) {
           }
         >
           run
-        </button>
+        </Button>
       </div>
       {result ? (
         <div className="cl-scroll">

@@ -1,12 +1,6 @@
-import {
-  ControlPanel,
-  f,
-  LabStoreContext,
-  resolveConfigSchema,
-  useTrialId,
-} from '@weasel-js/labkit';
+import { ControlPanel, f, resolveConfigSchema } from '@weasel-js/labkit';
 import { Button, Switch } from '@weasel-js/ui';
-import { useContext, useMemo } from 'react';
+import { useMemo } from 'react';
 import {
   asEffects,
   entriesOf,
@@ -45,10 +39,6 @@ function shapeOf(part: Part, entry: LayerEntry | undefined): { shape: Shape; at:
  * the lab schema. */
 export function NodeCard({ part }: { part: Part }) {
   const { config, setConfig } = useLab();
-  const store = useContext(LabStoreContext);
-  const trial = useTrialId();
-  // The section's own fold, kept with the trial; read once on click rather than subscribed to.
-  const openDrafts = () => store?.store.getState().setTrialSectionCollapsed(trial, 'drafts', false);
   const entries = entriesOf(config);
   const layer = 'layer' in part ? part.layer : null;
   const entry = entries.find((e) => e.id === layer);
@@ -111,13 +101,7 @@ export function NodeCard({ part }: { part: Part }) {
         ) : null}
       </div>
       {part.kind === 'patch' && entry.kind === 'draft' ? (
-        <p className="cl-note">
-          Its source is edited in the{' '}
-          <button type="button" className="cl-link" onClick={openDrafts}>
-            Drafts section
-          </button>
-          .
-        </p>
+        <p className="cl-note">Its source is edited in the Drafts section of the sidebar.</p>
       ) : (
         <ControlPanel
           schema={schema}

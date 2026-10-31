@@ -2,6 +2,7 @@ import { javascript } from '@codemirror/lang-javascript';
 import { type Diagnostic, lintGutter, setDiagnostics } from '@codemirror/lint';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
+import { Button } from '@weasel-js/ui';
 import { basicSetup } from 'codemirror';
 import { useEffect, useRef, useState } from 'react';
 import type { EffectLayer } from './composition.js';
@@ -116,9 +117,9 @@ export function DraftPane({ layer, onSource, faults }: DraftPaneProps) {
       </h3>
       <div ref={host} className="cl-editor" />
       <div className="cl-row">
-        <button type="button" onClick={() => commit.current()}>
+        <Button size="sm" onClick={() => commit.current()}>
           compile ⌘↵
-        </button>
+        </Button>
         {error ? <span className="cl-warn">{error}</span> : null}
       </div>
       {faults.throws > 0 ? (

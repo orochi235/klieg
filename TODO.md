@@ -23,3 +23,10 @@ The tube lab builds its own page from labkit pieces because every panel shares o
 labkit 1.14.2 has no config shared across trials. weasel's main has it unreleased (`<Lab over>`,
 `f.schema(nodes, { over })`, `ctx.over`; checked 2026-10-31). Once that ships, moving the lab onto
 `<Lab>` brings Reset, Clone, add-trial and saved orbit views for free.
+
+## The tube lab's detent sliders are a custom row
+
+labkit 1.14.2's schema slider is a native range input and takes no `stops`, so level, wall depth
+and the corner mix draw `rail/DetentRow.tsx` on ui's `Slider`, which does (2026-10-31). It keeps
+its own drag draft, since a custom row only gets `setValue`. Once a schema number field takes
+`stops`, delete the row and declare them in `rail/schema.ts`.

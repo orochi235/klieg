@@ -15,18 +15,19 @@ body,
   font-size: 12px;
 }
 
-/* The canvas clears to transparent, so this is the ground every panel draws on. */
 .stage {
   --panel-bar: 22px;
   position: relative;
   min-height: 0;
-  background: var(--wzl-surface-sunken);
 }
-.stage canvas {
+/* Two classes, to outrank the auto size labkit gives a lifted lightbox layer. The canvas clears to
+   transparent, so it carries the ground itself, lifted or not. */
+.stage .stage__canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  background: var(--wzl-surface-sunken);
 }
 /* The grid lays tiles out over the canvas; the canvas stays behind it, spanning the stage. */
 .stage .lk-workspace {

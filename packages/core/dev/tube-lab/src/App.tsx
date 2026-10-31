@@ -3,7 +3,7 @@ import type { LoadedFont } from '@core/text/font.js';
 import { DEFAULT_GLYPH_OPTIONS, glyphToShapes } from '@core/text/glyphs.js';
 import { LabRenderer, type PanelDraw } from '@shared/lab-renderer.js';
 import { orbitPose } from '@shared/orbit.js';
-import { SurfaceContext, useTiledSurface, Workspace } from '@weasel-js/labkit';
+import { LightboxLayers, SurfaceContext, useTiledSurface, Workspace } from '@weasel-js/labkit';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { labFont } from './font.js';
 import { initialView, PanelTile, type View } from './PanelTile.js';
@@ -22,14 +22,13 @@ export function App({ legacy }: { legacy: Parameters<typeof useLabState>[0] }) {
   const specKey = `${JSON.stringify(spec)}|${lookName}`;
   const ids = useMemo(() => panels.map((p) => p.id), [panels]);
 
-  const stageRef = useRef<HTMLDivElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const labRef = useRef<LabRenderer | null>(null);
   const cellsRef = useRef(new Map<string, Cell>());
   // Read by the frame loop, which runs outside render.
   const viewsRef = useRef(views);
   viewsRef.current = views;
-  const sized = useRef({ w: 0, h: 0, ratio: 0 });
+  const sized = useRef({ w: 0, h: 0, dpr: 0 });
   /** Set by a change to what every panel shows, so the next frame draws them all. */
   const stale = useRef(true);
   const [font, setFont] = useState<LoadedFont | null>(null);
@@ -41,22 +40,6 @@ export function App({ legacy }: { legacy: Parameters<typeof useLabState>[0] }) {
 
   useEffect(() => {
     labFont().then(setFont, (err: unknown) => console.error('tube lab: font failed', err));
-  }, []);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    // The canvas spans `.stage` and sits behind the grid rather than inside its zone, so the zone's
-    // `overflow: hidden` never reaches it. Each panel's measured rect scissors its own draw.
-    const lab = new LabRenderer(canvas);
-    labRef.current = lab;
-    const cells = cellsRef.current;
-    return () => {
-      for (const cell of cells.values()) cell.dispose();
-      cells.clear();
-      lab.dispose();
-      labRef.current = null;
-    };
   }, []);
 
   // `fit` is absolute, so the view can be re-applied any number of times without compounding.
@@ -71,22 +54,19 @@ export function App({ legacy }: { legacy: Parameters<typeof useLabState>[0] }) {
   // reading while they move. A tuning tool has no use for an idle 60fps: it calls back only on a
   // frame something was invalidated for.
   const surface = useTiledSurface({
-    onFrame: ({ dirty, rects, retiled }) => {
+    onFrame: ({ dirty, rects, retiled, size, dpr }) => {
       const lab = labRef.current;
-      const stage = stageRef.current;
-      if (!lab || !stage || !font) return;
-      const w = stage.clientWidth;
-      const h = stage.clientHeight;
-      const ratio = globalThis.devicePixelRatio ?? 1;
+      if (!lab || !font) return;
+      const { width: w, height: h } = size;
       const was = sized.current;
-      const resized = was.w !== w || was.h !== h || was.ratio !== ratio;
+      const resized = was.w !== w || was.h !== h || was.dpr !== dpr;
       // Sizing the buffer blanks it, and a re-tile strands the old panels' pixels in the gutters:
       // either owes every panel a draw. Any other frame draws its dirty panels and skips the
       // clear, because every other panel's pixels have to survive in the framebuffer.
       const all = stale.current || retiled || resized;
       stale.current = false;
       if (resized) {
-        sized.current = { w, h, ratio };
+        sized.current = { w, h, dpr };
         lab.resize(w, h);
       }
       if (all) lab.clear();
@@ -154,13 +134,24 @@ export function App({ legacy }: { legacy: Parameters<typeof useLabState>[0] }) {
   });
   const { invalidate, invalidateAll, containerRef } = surface;
 
-  const attachStage = useCallback(
-    (el: HTMLDivElement | null) => {
-      stageRef.current = el;
-      containerRef(el);
-    },
-    [containerRef],
-  );
+  // The canvas is the surface container rather than the stage: a lightbox lifts it to cover the
+  // window, and the panels then have to be measured against where it went.
+  useEffect(() => {
+    if (!canvas) return;
+    containerRef(canvas);
+    const lab = new LabRenderer(canvas);
+    labRef.current = lab;
+    sized.current = { w: 0, h: 0, dpr: 0 };
+    const cells = cellsRef.current;
+    return () => {
+      for (const cell of cells.values()) cell.dispose();
+      cells.clear();
+      lab.dispose();
+      labRef.current = null;
+      containerRef(null);
+    };
+  }, [canvas, containerRef]);
+  const below = useMemo(() => [canvas], [canvas]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: each of these changes what every panel shows; none is a value this reads
   useEffect(() => {
@@ -186,29 +177,31 @@ export function App({ legacy }: { legacy: Parameters<typeof useLabState>[0] }) {
 
   return (
     <div className="lab">
-      <div className="stage" ref={attachStage}>
-        <canvas ref={canvasRef} />
+      <div className="stage">
+        <canvas className="stage__canvas" ref={setCanvas} />
         <SurfaceContext.Provider value={surface}>
-          <Workspace
-            ids={ids}
-            resizable
-            reorderable
-            onReorder={state.reorder}
-            layout={state.layout}
-            onLayoutChange={state.setLayout}
-            gap={6}
-          >
-            {panels.map((record) => (
-              <PanelTile
-                key={record.id}
-                record={record}
-                view={views[record.id]}
-                summary={reports[record.id]}
-                onSource={setSource}
-                onView={setView}
-              />
-            ))}
-          </Workspace>
+          <LightboxLayers below={below}>
+            <Workspace
+              ids={ids}
+              resizable
+              reorderable
+              onReorder={state.reorder}
+              layout={state.layout}
+              onLayoutChange={state.setLayout}
+              gap={6}
+            >
+              {panels.map((record) => (
+                <PanelTile
+                  key={record.id}
+                  record={record}
+                  view={views[record.id]}
+                  summary={reports[record.id]}
+                  onSource={setSource}
+                  onView={setView}
+                />
+              ))}
+            </Workspace>
+          </LightboxLayers>
         </SurfaceContext.Provider>
       </div>
       <Rail

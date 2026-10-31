@@ -30,3 +30,11 @@ labkit 1.14.2's schema slider is a native range input and takes no `stops`, so l
 and the corner mix draw `rail/DetentRow.tsx` on ui's `Slider`, which does (2026-10-31). It keeps
 its own drag draft, since a custom row only gets `setValue`. Once a schema number field takes
 `stops`, delete the row and declare them in `rail/schema.ts`.
+
+## A drag on the composition lab's diagram also turns its camera
+
+labkit 1.14.2's `<Orbit>` puts the whole instrument DOM in the orbit camera's input scope, so the
+effects diagram's canvas nests under it: a drag or wheel there moves the 3D camera too, and the lab
+logs six `[weasel] route conflict` warnings on load. Fixed on weasel's `orbit-trial-gestures` branch
+(2026-10-31) with no change needed here; bump `@weasel-js` once a release carries it, and confirm
+the warnings are gone.

@@ -1,86 +1,110 @@
 import type { TubeSpec } from '@core/render/tube/index.js';
-import type { Workspace } from '@weasel-js/labkit';
-import type { ComponentProps } from 'react';
-import type { PanelRecord } from './panels.js';
+import { type TrialLayout, usePersistedState } from '@weasel-js/labkit';
+import { type Dispatch, type SetStateAction, useCallback, useState } from 'react';
+import { isPanelMode, isPose, isRampSource, type PanelRecord } from './panels.js';
 import { isTubeLook, type TubeLook } from './spec.js';
 
-/** labkit declares this type but does not export it, so it is read off the component's own props. */
-export type WorkspaceLayout = NonNullable<ComponentProps<typeof Workspace>['layout']>;
+/** What `<Persistence>` keeps the lab under. */
+export const STORAGE_KEY = 'tube-lab';
 
-const KEY = 'tube-lab/v2';
-/** Written when the layout was a serialized windease store, which v2 cannot read. */
-const LEGACY_KEY = 'tube-lab/v1';
+/** The localStorage keys the lab wrote before `<Persistence>`: v2 whole, v1 with a layout v2 cannot read. */
+const LEGACY_KEYS = ['tube-lab/v2', 'tube-lab/v1'] as const;
 
-interface Saved {
-  panels: PanelRecord[];
-  layout: WorkspaceLayout;
-  letters: string;
-  spec: TubeSpec;
-  look?: TubeLook;
+/** The lab's saved state, as each piece was last written; any piece may be missing or stale. */
+export interface Saved {
+  panels?: unknown;
+  layout?: unknown;
+  letters?: unknown;
+  spec?: unknown;
+  look?: unknown;
 }
 
-export interface Restored {
-  panels: PanelRecord[] | null;
-  layout: WorkspaceLayout;
-  letters: string;
-  spec: TubeSpec;
-  look: TubeLook | null;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function save(
-  panels: readonly PanelRecord[],
-  layout: WorkspaceLayout,
-  letters: string,
-  spec: TubeSpec,
-  look: TubeLook,
-): void {
-  const saved: Saved = { panels: [...panels], layout, letters, spec, look };
-  try {
-    localStorage.setItem(KEY, JSON.stringify(saved));
-  } catch {
-    // A full or blocked localStorage costs the arrangement, not the session.
-  }
+export function validPanels(value: unknown): PanelRecord[] | null {
+  if (!Array.isArray(value)) return null;
+  const ok = value.every(
+    (p) =>
+      isRecord(p) &&
+      typeof p.id === 'string' &&
+      typeof p.letter === 'string' &&
+      isPanelMode(p.mode) &&
+      isPose(p.pose) &&
+      isRampSource(p.source),
+  );
+  return ok ? (value as PanelRecord[]) : null;
 }
 
-export function restore(): Restored | null {
-  const raw = localStorage.getItem(KEY);
-  if (raw) {
+/** Only the fields every reader of a spec dereferences; a stale spec missing one is dropped whole. */
+export function validSpec(value: unknown): TubeSpec | null {
+  if (!isRecord(value) || value.kind !== 'tube') return null;
+  const ok =
+    Array.isArray(value.surfaces) &&
+    Array.isArray(value.colors) &&
+    isRecord(value.select) &&
+    isRecord(value.look) &&
+    typeof value.radius === 'number';
+  return ok ? (value as unknown as TubeSpec) : null;
+}
+
+export function validLayout(value: unknown): TrialLayout | null {
+  return isRecord(value) ? (value as TrialLayout) : null;
+}
+
+export function validLook(value: unknown): TubeLook | null {
+  return isTubeLook(value) ? value : null;
+}
+
+export function validLetters(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+/**
+ * `usePersistedState` for a value whose stored shape may be stale: a record `valid` rejects reads,
+ * and is overwritten, as `initial`, so an old save loads or is discarded rather than crashing a reader.
+ */
+export function useStored<T>(
+  name: string,
+  initial: () => T,
+  valid: (value: unknown) => T | null,
+): [T, Dispatch<SetStateAction<T>>] {
+  const [fallback] = useState(initial);
+  const [stored, setStored] = usePersistedState<unknown>(name, fallback);
+  const value = valid(stored) ?? fallback;
+  const set = useCallback<Dispatch<SetStateAction<T>>>(
+    (next) =>
+      setStored((prev: unknown) =>
+        typeof next === 'function' ? (next as (p: T) => T)(valid(prev) ?? fallback) : next,
+      ),
+    [setStored, valid, fallback],
+  );
+  return [value, set];
+}
+
+/** What the lab last saved to localStorage before `<Persistence>`, carried over once. A v1 save's
+ *  layout is a windease store snapshot nothing here reads, so only its tuning survives. */
+export function readLegacy(): Saved | null {
+  for (const key of LEGACY_KEYS) {
     try {
-      const saved = JSON.parse(raw) as Saved;
-      return {
-        panels: Array.isArray(saved.panels) ? saved.panels : null,
-        layout: saved.layout ?? {},
-        letters: saved.letters,
-        spec: saved.spec,
-        look: isTubeLook(saved.look) ? saved.look : null,
-      };
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed: unknown = JSON.parse(raw);
+      if (!isRecord(parsed)) continue;
+      return key === 'tube-lab/v1' ? { ...parsed, panels: null, layout: null } : parsed;
     } catch {
-      localStorage.removeItem(KEY);
-      return null;
+      // An unreadable or blocked save is skipped, and dropped with the rest once the lab carries over.
     }
   }
-  // A v1 save carries a windease store snapshot as its layout, which nothing here can read — but
-  // its tuning is the part worth keeping, so the arrangement is dropped and the rest survives.
-  const legacy = localStorage.getItem(LEGACY_KEY);
-  if (!legacy) return null;
-  try {
-    const saved = JSON.parse(legacy) as Saved;
-    // Deliberately left in place. A crash between reading it and the first v2 write would otherwise
-    // take the tuning with it, and a stale v1 costs nothing once v2 exists to outrank it.
-    return {
-      panels: null,
-      layout: {},
-      letters: saved.letters,
-      spec: saved.spec,
-      look: isTubeLook(saved.look) ? saved.look : null,
-    };
-  } catch {
-    localStorage.removeItem(LEGACY_KEY);
-    return null;
-  }
+  return null;
 }
 
-export function clear(): void {
-  localStorage.removeItem(KEY);
-  localStorage.removeItem(LEGACY_KEY);
+/** Removes the localStorage saves, once `<Persistence>` holds what they carried. */
+export function dropLegacy(): void {
+  try {
+    for (const key of LEGACY_KEYS) localStorage.removeItem(key);
+  } catch {
+    // Blocked storage has nothing to drop.
+  }
 }

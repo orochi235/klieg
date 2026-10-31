@@ -1,36 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import {
   type DrawnScene,
-  drawnLayers,
   INK,
   LEGEND,
   LEGEND_SOURCES,
-  layerDrew,
-  MEASURE_ONLY,
   shownLegend,
-  subscribeLayers,
 } from '../../../dev/kliegsminister/src/legend.js';
 
 describe('kliegsminister legend', () => {
   it('has an entry for every ink the canvas draws', () => {
-    const drawn = Object.keys(INK).filter((k) => !MEASURE_ONLY.includes(k));
-    expect(LEGEND.map((e) => e.key).sort()).toEqual(drawn.sort());
+    expect(LEGEND.map((e) => e.key).sort()).toEqual(Object.keys(INK).sort());
   });
 
-  it('never invents a colour the ink table does not hold', () => {
+  it('never invents a color the ink table does not hold', () => {
     const inks = new Set(Object.values(INK));
     for (const entry of LEGEND) expect(inks.has(entry.color)).toBe(true);
   });
 
-  it('takes each entry colour from the ink of the same name', () => {
+  it('takes each entry color from the ink of the same name', () => {
     for (const entry of LEGEND) {
       expect(entry.color).toBe(INK[entry.key as keyof typeof INK]);
     }
-  });
-
-  it('leaves out the ink that only ever colours the measures list', () => {
-    expect(LEGEND.some((e) => e.key === 'bad')).toBe(false);
-    expect(MEASURE_ONLY).toContain('bad');
   });
 
   it('gives every row a swatch no other row carries', () => {
@@ -169,33 +159,5 @@ describe('kliegsminister legend rows', () => {
     const keys = keysOf(ALL_LAYERS, fullScene({ outline: [], staged: [[]] }));
     expect(keys).not.toContain('glyph');
     expect(keys).not.toContain('staged');
-  });
-});
-
-describe('kliegsminister layer watch', () => {
-  it('publishes the whole pass, not the first layer of it', async () => {
-    layerDrew('glyph');
-    layerDrew('floor');
-    await Promise.resolve();
-    expect([...drawnLayers()].sort()).toEqual(['floor', 'glyph']);
-  });
-
-  it('notifies only when the set of painted layers changes', async () => {
-    let calls = 0;
-    const stop = subscribeLayers(() => {
-      calls++;
-    });
-    layerDrew('contour');
-    await Promise.resolve();
-    expect(calls).toBe(1);
-    layerDrew('contour');
-    await Promise.resolve();
-    expect(calls).toBe(1);
-    layerDrew('contour');
-    layerDrew('ghost');
-    await Promise.resolve();
-    expect(calls).toBe(2);
-    expect([...drawnLayers()].sort()).toEqual(['contour', 'ghost']);
-    stop();
   });
 });

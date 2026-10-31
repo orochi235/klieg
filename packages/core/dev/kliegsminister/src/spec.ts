@@ -5,10 +5,6 @@ import type { TubeSpec } from '@core/render/tube/index.js';
 export const TUBE_LOOKS = ['tubing', 'piping'] as const;
 export type TubeLook = (typeof TUBE_LOOKS)[number];
 
-export function isTubeLook(value: unknown): value is TubeLook {
-  return TUBE_LOOKS.includes(value as TubeLook);
-}
-
 export function tubeSpecOf(name: TubeLook): TubeSpec {
   const decoration = specOf(name).decoration;
   if (decoration?.kind !== 'tube')

@@ -110,7 +110,7 @@ export interface CornerScene {
   carried: CarriedRun[];
   /** The stretch a repair replaces. */
   replaced: THREE.Vector3[];
-  centre: THREE.Vector3;
+  center: THREE.Vector3;
   rhoMin: number;
   radius: number;
   cornerCount: number;
@@ -288,7 +288,7 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
       corners: [],
       carried: [],
       replaced: [],
-      centre: new THREE.Vector3(),
+      center: new THREE.Vector3(),
       rhoMin,
       radius,
       cornerCount: 0,
@@ -304,7 +304,7 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
   const points = path.points;
   const lo = corner.index - corner.groupBefore;
   const hi = corner.index + corner.groupAfter;
-  const centre =
+  const center =
     req.subject === 'letter'
       ? new THREE.Vector3((bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2, 0)
       : at(points, corner.index).clone();
@@ -351,7 +351,7 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
   );
   // A site with empty `added` and empty `removed` cannot be placed — the exit-side setback reports
   // only a cursor index — so it drops out of this filter rather than drawing a dot at the origin.
-  const near = (p: THREE.Vector3) => p.distanceTo(centre) < spacing * 40;
+  const near = (p: THREE.Vector3) => p.distanceTo(center) < spacing * 40;
   const ghosts =
     req.subject === 'letter'
       ? allGhosts
@@ -443,7 +443,7 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
     corners,
     carried,
     replaced,
-    centre,
+    center,
     rhoMin,
     radius,
     cornerCount: found.length,

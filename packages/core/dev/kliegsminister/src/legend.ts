@@ -15,12 +15,8 @@ export const INK = {
   removed: 'rgba(209, 69, 59, 0.55)',
   replaced: 'rgba(255, 107, 96, 0.28)',
   floor: '#9a9ca3',
-  bad: '#d1453b',
   frame: 'rgba(154, 156, 163, 0.9)',
 };
-
-/** Inks that colour the readout rather than the drawing, so no legend entry names them. */
-export const MEASURE_ONLY = ['bad'];
 
 export const LEGEND: LegendEntry[] = [
   { key: 'glyph', label: 'glyph outline', color: INK.glyph },
@@ -95,38 +91,4 @@ export function shownLegend(layers: ReadonlySet<string>, scene: DrawnScene): Leg
     if (!source) return false;
     return (source.layer === null || layers.has(source.layer)) && source.drawn(scene);
   });
-}
-
-const subscribers = new Set<() => void>();
-let drawing = new Set<string>();
-let shown: ReadonlySet<string> = new Set();
-
-/**
- * Records that a layer painted. labkit skips a hidden layer's `draw` and offers the instrument no
- * read of its layer list, so this is the only signal for which layers are switched on. Every dirty
- * layer paints in one synchronous pass, so a microtask queued from the first of them sees them all.
- */
-export function layerDrew(id: string): void {
-  if (drawing.size === 0) queueMicrotask(endPass);
-  drawing.add(id);
-}
-
-function endPass(): void {
-  const next = drawing;
-  drawing = new Set();
-  if (next.size === shown.size && [...next].every((id) => shown.has(id))) return;
-  shown = next;
-  for (const notify of subscribers) notify();
-}
-
-export function subscribeLayers(notify: () => void): () => void {
-  subscribers.add(notify);
-  return () => {
-    subscribers.delete(notify);
-  };
-}
-
-/** The layers that painted on the last pass. Stable between passes, for `useSyncExternalStore`. */
-export function drawnLayers(): ReadonlySet<string> {
-  return shown;
 }

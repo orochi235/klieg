@@ -52,8 +52,8 @@ export interface SceneRequest {
 export interface Measure {
   label: string;
   value: string;
-  /** Set where the value fails the invariant it is measured against. */
-  bad?: boolean;
+  /** Set where the value fails the invariant it is measured against: that failure, in words. */
+  bad?: string;
 }
 
 export interface CarriedRun {
@@ -142,7 +142,7 @@ function pointsMeasure(font: LoadedFont, req: SceneRequest, built: number): Meas
   return {
     label: 'points',
     value: `${built} against ${all} (${ratio.toFixed(1)}x)`,
-    bad: ratio > BLOWUP,
+    ...(ratio > BLOWUP ? { bad: 'blown up' } : {}),
   };
 }
 
@@ -381,7 +381,7 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
     {
       label: 'glyph bends at',
       value: `${(corner.rho / radius).toFixed(2)}r`,
-      bad: corner.rho < rhoMin * (1 - 1e-6),
+      ...(corner.rho < rhoMin * (1 - 1e-6) ? { bad: 'under the floor' } : {}),
     },
     {
       label: 'margin under floor',
@@ -391,7 +391,7 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
     ...carried.map((run) => ({
       label: run.side === 'both' ? 'run ships at' : `run ${run.side} ships at`,
       value: `${run.shipped.toFixed(2)}r`,
-      bad: run.shipped < (rhoMin / radius) * (1 - 1e-6),
+      ...(run.shipped < (rhoMin / radius) * (1 - 1e-6) ? { bad: 'under the floor' } : {}),
     })),
     pointsMeasure(font, req, built),
     {
@@ -427,12 +427,12 @@ export function buildScene(font: LoadedFont, req: SceneRequest): CornerScene {
     measures.push({
       label: 'junction chord',
       value: `${junctionStep.toFixed(1)}x spacing`,
-      bad: junctionStep > 1.5,
+      ...(junctionStep > 1.5 ? { bad: 'over 1.5x' } : {}),
     });
     measures.push({
       label: 'junction radius',
       value: Number.isFinite(junctionRho) ? `${(junctionRho / radius).toFixed(2)}r` : 'straight',
-      bad: junctionRho < rhoMin * 0.5,
+      ...(junctionRho < rhoMin * 0.5 ? { bad: 'under half the floor' } : {}),
     });
   }
 

@@ -119,7 +119,7 @@ function measureRows(state: CornerScene): ReadoutRow[] {
     (m, i): ReadoutRow => ({
       key: `measure:${i}`,
       label: m.label,
-      value: m.value,
+      value: m.bad ? `${m.value} · ${m.bad}` : m.value,
       ...(m.bad ? { grade: 'danger' as const } : {}),
     }),
   );
@@ -141,6 +141,9 @@ export const junction = defineInstrument<CornerScene, Config>({
 
   initialState: (config) => buildScene(font, requestOf(config)),
   onConfigChange: (config) => buildScene(font, requestOf(config)),
+  // The scene is derived from config alone, so a reload rebuilds it rather than trusting a stored one.
+  serialize: () => null,
+  deserialize: (_stored, config) => buildScene(font, requestOf(config)),
 
   canvas: {
     worldSpec: { origin: { x: 0.5, y: 0.5 }, yAxis: 'up' },

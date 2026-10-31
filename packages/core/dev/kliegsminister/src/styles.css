@@ -14,6 +14,16 @@
   font: 13px / 1.4 var(--wzl-font-mono);
 }
 
+/* Two columns of rows rather than labkit's one, so the readout leaves the corner it measures in view. */
+.junction .lk-readout > dl {
+  display: grid;
+  grid-template-columns: repeat(2, max-content minmax(0, 1fr));
+  column-gap: 1.6rem;
+}
+.junction .lk-readout > dl > div {
+  grid-column: span 2;
+}
+
 .junction__pipeline {
   display: flex;
   flex-wrap: wrap;

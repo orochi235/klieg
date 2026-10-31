@@ -69,7 +69,7 @@ describe('the points measure', () => {
     );
     const points = measure(scene, 'points');
     expect(points?.value).toMatch(/against \d+ \(\d+\.\d+x\)/);
-    expect(points?.bad).toBe(true);
+    expect(points?.bad).toBe('blown up');
   });
 
   it('leaves a repair that changes little unflagged', () => {

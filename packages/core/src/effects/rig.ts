@@ -1,15 +1,15 @@
-import { type Channel, color, kit, last, max, mul, oklab, sum, vec } from '@msb235/blits';
+import { type Channel, ink, kit, last, max, mul, oklab, sum, vec } from '@msb235/blits';
 import type { Vec3 } from '../pose.js';
 import type { PartDelta, PartPose } from './types.js';
 
 /**
  * The channel set behind every part offset. `dark` takes the strongest rather than compounding —
- * two layers each half-dead should not read as dead — and `color` replaces, interpolating in
- * OKLCH, and holds OKLab with coverage: a writer turns it back with `toHex`.
+ * two layers each half-dead should not read as dead — and `color` is an `ink` that replaces, traveling
+ * round the hue, and holds the OKLab it was written: a writer turns it back with `toHex`.
  */
 export const PART_KIT = kit<PartPose>({
   gain: mul(),
-  color: color(last(), { lerp: 'oklch' }),
+  color: ink(last()),
   dark: max(),
   position: vec(3, sum()) as unknown as Channel<Vec3>,
   rotation: vec(3, sum()) as unknown as Channel<Vec3>,

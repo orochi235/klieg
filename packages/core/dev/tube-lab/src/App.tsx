@@ -1,216 +1,34 @@
 import { specOf } from '@core/render/looks.js';
-import type { TubeSpec } from '@core/render/tube/index.js';
 import type { LoadedFont } from '@core/text/font.js';
 import { DEFAULT_GLYPH_OPTIONS, glyphToShapes } from '@core/text/glyphs.js';
-import { LabBar } from '@shared/LabBar.js';
 import { LabRenderer, type PanelDraw } from '@shared/lab-renderer.js';
-import { HOME, LIMITS, orbitPose } from '@shared/orbit.js';
-import {
-  Orbit,
-  type OrbitProps,
-  SurfaceContext,
-  TileGrip,
-  useSurfaceTile,
-  useTiledSurface,
-  Workspace,
-} from '@weasel-js/labkit';
+import { orbitPose } from '@shared/orbit.js';
+import { SurfaceContext, useTiledSurface, Workspace } from '@weasel-js/labkit';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { labFont } from './font.js';
-import {
-  type PanelMode,
-  type PanelRecord,
-  type Pose,
-  RAMP_SOURCES,
-  type RampSource,
-  reconcileLetters,
-} from './panels.js';
-import { clear, save, type WorkspaceLayout } from './persist.js';
+import { initialView, PanelTile, type View } from './PanelTile.js';
+import type { RampSource } from './panels.js';
 import { Rail } from './Rail.js';
 import { buildCell, type Cell } from './render/cell.js';
 import { rampOverride } from './render/ramp.js';
 import { buildSkeleton } from './render/skeleton.js';
-import { type TubeLook, tubeSpecOf } from './spec.js';
+import { type LabState, useLabState } from './state.js';
 
-let nextPanel = 0;
-
-/**
- * A fresh id, never recycled: a view is held against it, and a new panel inheriting a dead one's
- * turn and zoom is indistinguishable from a bug in the pose.
- */
-export function mintPanelId(taken: Iterable<string>): string {
-  const used = new Set(taken);
-  let id = `n${nextPanel++}`;
-  while (used.has(id)) id = `n${nextPanel++}`;
-  return id;
-}
-
-/** How a panel is being looked at: labkit's orbit camera. In memory only, unlike the layout. */
-type View = OrbitProps['view'];
-
-const HEAD_ON: View = { ...HOME, near: 0.1, far: 100 };
-
-/** The turned pose's yaw, with enough pitch to show a planar loop ring as an ellipse. */
-const TURNED: View = { ...HEAD_ON, yaw: (-30 * Math.PI) / 180, pitch: (13 * Math.PI) / 180 };
-
-function initialView(pose: Pose): View {
-  return pose === 'turned' ? TURNED : HEAD_ON;
-}
-
-interface PanelTileProps {
-  record: PanelRecord;
-  summary: string | undefined;
-  onSource: (id: string, source: RampSource) => void;
-  onView: (id: string, view: View) => void;
-}
-
-function PanelTile({ record, summary, onSource, onView }: PanelTileProps) {
-  const { id, letter, mode, pose, source } = record;
-  // The body under the bar, so the canvas is scissored to the box the orbit measures its gestures on.
-  const tile = useSurfaceTile(id);
-  const [view, setView] = useState(() => initialView(pose));
-  useEffect(() => onView(id, view), [onView, id, view]);
-  const home = useCallback(() => initialView(pose), [pose]);
-  return (
-    <div className="panel">
-      <TileGrip className="panel__bar">
-        <span className="panel__letter">{letter}</span>
-        <span className="panel__mode">{mode}</span>
-        {mode === 'ramp' ? (
-          <select value={source} onChange={(e) => onSource(id, e.target.value as RampSource)}>
-            {RAMP_SOURCES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        ) : null}
-      </TileGrip>
-      <div className="panel__body" ref={tile}>
-        <Orbit view={view} onViewChange={setView} home={home} limits={LIMITS}>
-          <button
-            type="button"
-            className="panel__reset"
-            aria-label={`reset the ${letter} ${pose} ${mode} view`}
-            onClick={() => setView(home())}
-          >
-            <svg
-              viewBox="0 0 16 16"
-              width="12"
-              height="12"
-              aria-hidden="true"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M14 8a6 6 0 1 1-1.8-4.3" />
-              <path d="M12.2 3.7 8.9 3.1M12.2 3.7 11.5 6.6" />
-            </svg>
-          </button>
-          {summary ? <p className="panel__readout">{summary}</p> : null}
-        </Orbit>
-      </div>
-    </div>
-  );
-}
-
-export interface AppProps {
-  panels: PanelRecord[];
-  layout: WorkspaceLayout;
-  letters: string;
-  spec: TubeSpec;
-  look: TubeLook;
-}
-
-export function App({
-  panels: initialPanels,
-  layout: initialLayout,
-  letters: initialLetters,
-  spec: initialSpec,
-  look: initialLook,
-}: AppProps) {
-  const [panels, setPanels] = useState(initialPanels);
-  const [layout, setLayout] = useState(initialLayout);
-  const [letters, setLetters] = useState(initialLetters);
-  const [spec, setSpec] = useState(initialSpec);
-  const [lookName, setLookName] = useState(initialLook);
-  const [bloom, setBloom] = useState(true);
+export function App({ legacy }: { legacy: Parameters<typeof useLabState>[0] }) {
+  const state: LabState = useLabState(legacy);
+  const { panels, spec, lookName, bloom, views } = state;
   const look = useMemo(() => specOf(lookName), [lookName]);
   // Bloom stays out of the key: the renderer reads it per draw, so toggling it costs a draw.
   const specKey = `${JSON.stringify(spec)}|${lookName}`;
   const ids = useMemo(() => panels.map((p) => p.id), [panels]);
 
-  /** Changing look reseeds the rail, so the controls keep reading as that look's own tuning. */
-  const changeLook = useCallback((next: TubeLook) => {
-    setLookName(next);
-    setSpec(tubeSpecOf(next));
-  }, []);
-
-  const applyLetters = useCallback((next: string) => {
-    setLetters(next);
-    setPanels((prev) => {
-      const { add, remove } = reconcileLetters(prev, next);
-      const dropped = new Set(remove);
-      const kept = prev.filter((p) => !dropped.has(p.id));
-      const taken = kept.map((p) => p.id);
-      const added = add.map((meta) => {
-        const id = mintPanelId(taken);
-        taken.push(id);
-        return { id, ...meta };
-      });
-      return [...kept, ...added];
-    });
-  }, []);
-
-  /** The rail's own add: one panel, outside the letters reconcile. */
-  const addPanel = useCallback((letter: string, mode: PanelMode) => {
-    setPanels((prev) => [
-      ...prev,
-      { id: mintPanelId(prev.map((p) => p.id)), letter, mode, pose: 'head-on', source: 'depth' },
-    ]);
-  }, []);
-
-  const setSource = useCallback((id: string, source: RampSource) => {
-    setPanels((prev) => prev.map((p) => (p.id === id ? { ...p, source } : p)));
-  }, []);
-
-  const reorder = useCallback((next: readonly string[]) => {
-    setPanels((prev) => {
-      const byId = new Map(prev.map((p) => [p.id, p]));
-      const ordered = next.flatMap((id) => byId.get(id) ?? []);
-      // A drop reports every id, but trust the panels rather than the report: anything the grid
-      // did not name would otherwise vanish from the lab entirely.
-      return ordered.length === prev.length ? ordered : prev;
-    });
-  }, []);
-
-  useEffect(() => {
-    let timer = 0;
-    const flush = () => {
-      timer = 0;
-      save(panels, layout, letters, spec, lookName);
-    };
-    // Clear before flushing, or the armed timer fires later and writes this closure's stale values.
-    const flushPending = () => {
-      if (!timer) return;
-      clearTimeout(timer);
-      flush();
-    };
-    timer = window.setTimeout(flush, 200);
-    // A reload does not unmount, so the cleanup alone would drop a drag made inside the window.
-    window.addEventListener('pagehide', flushPending);
-    return () => {
-      window.removeEventListener('pagehide', flushPending);
-      flushPending();
-    };
-  }, [panels, layout, letters, spec, lookName]);
-
   const stageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const labRef = useRef<LabRenderer | null>(null);
   const cellsRef = useRef(new Map<string, Cell>());
-  const views = useRef(new Map<string, View>());
+  // Read by the frame loop, which runs outside render.
+  const viewsRef = useRef(views);
+  viewsRef.current = views;
   const sized = useRef({ w: 0, h: 0, ratio: 0 });
   /** Set by a change to what every panel shows, so the next frame draws them all. */
   const stale = useRef(true);
@@ -242,8 +60,8 @@ export function App({
   }, []);
 
   // `fit` is absolute, so the view can be re-applied any number of times without compounding.
-  const pose = useCallback((cell: Cell, id: string, aspect: number) => {
-    const { rotation, zoom, position } = orbitPose(views.current.get(id) ?? HEAD_ON);
+  const pose = useCallback((cell: Cell, view: View, aspect: number) => {
+    const { rotation, zoom, position } = orbitPose(view);
     cell.pivot.rotation.copy(rotation);
     cell.fit(aspect, zoom);
     cell.pivot.position.copy(position);
@@ -281,9 +99,6 @@ export function App({
         const rect = rects.get(id);
         if (!rect || !(all || dirty.has(id))) continue;
         const key = `${id}|${record.mode}|${record.letter}|${record.source}|${specKey}`;
-        // Against the id, not the cell: a cell is rebuilt on every spec change, and a slider drag
-        // must not walk every panel back to head-on. Ids are never recycled, so this is safe.
-        if (!views.current.has(id)) views.current.set(id, initialView(record.pose));
         let cell = cellsRef.current.get(id);
         if (!cell || cell.key !== key) {
           cell?.dispose();
@@ -318,7 +133,9 @@ export function App({
           cell.key = key;
           cellsRef.current.set(id, cell);
         }
-        pose(cell, id, rect.w / rect.h);
+        // Against the id, not the cell: a cell is rebuilt on every spec change, and a slider drag
+        // must not walk every panel back to head-on.
+        pose(cell, viewsRef.current[id] ?? initialView(record.pose), rect.w / rect.h);
         draws.push({
           rect,
           scene: cell.scene,
@@ -330,7 +147,6 @@ export function App({
         if (live.has(id)) continue;
         cell.dispose();
         cellsRef.current.delete(id);
-        views.current.delete(id);
         setReport(id, '');
       }
       lab.draw(draws);
@@ -350,19 +166,26 @@ export function App({
   useEffect(() => {
     stale.current = true;
     invalidateAll();
-  }, [invalidateAll, font, panels, specKey, bloom]);
+  }, [invalidateAll, font, panels, specKey, bloom, state.epoch]);
 
+  const { setView: storeView, setPanels } = state;
   const setView = useCallback(
     (id: string, view: View) => {
-      views.current.set(id, view);
+      storeView(id, view);
       invalidate(id);
     },
-    [invalidate],
+    [storeView, invalidate],
+  );
+
+  const setSource = useCallback(
+    (id: string, source: RampSource) => {
+      setPanels((prev) => prev.map((p) => (p.id === id ? { ...p, source } : p)));
+    },
+    [setPanels],
   );
 
   return (
     <div className="lab">
-      <LabBar lab="tube-lab" />
       <div className="stage" ref={attachStage}>
         <canvas ref={canvasRef} />
         <SurfaceContext.Provider value={surface}>
@@ -370,15 +193,16 @@ export function App({
             ids={ids}
             resizable
             reorderable
-            onReorder={reorder}
-            layout={layout}
-            onLayoutChange={setLayout}
+            onReorder={state.reorder}
+            layout={state.layout}
+            onLayoutChange={state.setLayout}
             gap={6}
           >
             {panels.map((record) => (
               <PanelTile
                 key={record.id}
                 record={record}
+                view={views[record.id]}
                 summary={reports[record.id]}
                 onSource={setSource}
                 onView={setView}
@@ -389,18 +213,15 @@ export function App({
       </div>
       <Rail
         spec={spec}
-        onSpec={setSpec}
+        onSpec={state.setSpec}
         look={lookName}
-        onLook={changeLook}
+        onLook={state.changeLook}
         bloom={bloom}
-        onBloom={setBloom}
-        letters={letters}
-        onLetters={applyLetters}
-        onAddPanel={addPanel}
-        onReset={() => {
-          clear();
-          location.reload();
-        }}
+        onBloom={state.setBloom}
+        letters={state.letters}
+        onLetters={state.applyLetters}
+        onAddPanel={state.addPanel}
+        onReset={state.reset}
       />
     </div>
   );

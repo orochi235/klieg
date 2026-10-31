@@ -26,10 +26,13 @@ labkit 1.14.2 has no config shared across trials. weasel's main has it unrelease
 
 ## The tube lab's detent sliders are a custom row
 
-labkit 1.14.2's schema slider is a native range input and takes no `stops`, so level, wall depth
-and the corner mix draw `rail/DetentRow.tsx` on ui's `Slider`, which does (2026-10-31). It keeps
-its own drag draft, since a custom row only gets `setValue`. Once a schema number field takes
-`stops`, delete the row and declare them in `rail/schema.ts`.
+labkit 1.14.2's schema slider takes no `stops`, so level, wall depth and the corner mix draw
+`rail/DetentRow.tsx` on ui's `Slider`. weasel has built `f.number().stops([...])` (branch
+`schema-slider-stops`, 2026-10-31), stops in the stored unit like min and max. Once a release
+carries it: delete `rail/DetentRow.tsx` and its imports in `rail/schema.ts` and `rail/tube.ts`, then
+replace `.render(detent([0, 1]))` on the corner mix with `.stops([0, 1])`, `.render(detent([0]))` on
+level with `.stops([0])`, and `.render(detent([0.5]))` on wall depth with `.stops([0.5])`. The rows
+then draw the panel's standard thumb and track, and `draftConfig` still makes a drag write once.
 
 ## A drag on the composition lab's diagram also turns its camera
 

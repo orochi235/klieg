@@ -50,9 +50,6 @@ export function rowsBehind(
 ): Word {
   const text = onRows(rowText, spec.rows ?? 1);
   const look = withEffects(spec.look ?? heroLook, spec.effects);
-  const depth = DEFAULT_GLYPH_OPTIONS.depth;
-  const heroScale = hero.placement.scale;
-  const scale = heroScale * (spec.scale ?? 1);
   const word = new Word(
     text,
     loaded,
@@ -65,13 +62,20 @@ export function rowsBehind(
     caches,
     sizeOf(text),
     undefined,
-    {
-      fitScale: scale,
-      dim: spec.dim ?? 1,
-      behind: depth * scale + depth * heroScale,
-      cameraZ: cameraZOf(stage),
-    },
+    { ...sizedOff(hero, spec), dim: spec.dim ?? 1, cameraZ: cameraZOf(stage) },
   );
   if (spec.transform) word.transform = spec.transform;
   return word;
+}
+
+/** Fits the backdrop to a new box, by refitting it off the hero, which has to be refit first. */
+export function refitBehind(backdrop: Word, hero: Word, spec: BackdropSpec, budget: Budget): void {
+  backdrop.refit(budget, sizedOff(hero, spec));
+}
+
+function sizedOff(hero: Word, spec: BackdropSpec): { fitScale: number; behind: number } {
+  const depth = DEFAULT_GLYPH_OPTIONS.depth;
+  const heroScale = hero.baseScale;
+  const scale = heroScale * (spec.scale ?? 1);
+  return { fitScale: scale, behind: depth * scale + depth * heroScale };
 }

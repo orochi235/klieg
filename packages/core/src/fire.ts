@@ -1,5 +1,5 @@
 import type { FireOptions } from './api.js';
-import { rowsBehind } from './backdrop.js';
+import { refitBehind, rowsBehind } from './backdrop.js';
 import type { Clock } from './clock.js';
 import type { Host } from './effects/types.js';
 import type { SceneLayers } from './layers.js';
@@ -21,6 +21,7 @@ import {
 } from './render/stage.js';
 import { Word } from './render/word.js';
 import { DEFAULT_LOOK, describeSlot, resolveSlot, withEffects } from './resolve.js';
+import { sizeWatch } from './size-watch.js';
 import { type SelectableMode, TextLayer } from './text/dom-layer.js';
 import type { LoadedFont } from './text/font.js';
 import { measureBaselineRatio, registerFace } from './text/font-face.js';
@@ -93,12 +94,19 @@ export async function runFire(
   const chosen = opts.look ?? DEFAULT_LOOK;
   const bloom = wantsBloom(opts.bloom, chosen) ? new BloomPath(renderer) : null;
   const look = withEffects(chosen, opts.effects);
-  const budget = stage.viewportBudget(
-    inst.framing?.width,
-    inst.framing?.height,
-    inst.framing?.align,
-    opts.lineAlign,
-  );
+  const budgetNow = () =>
+    stage.viewportBudget(
+      inst.framing?.width,
+      inst.framing?.height,
+      inst.framing?.align,
+      opts.lineAlign,
+    );
+  const budget = budgetNow();
+  const refitToBox = sizeWatch(stage, () => {
+    const next = budgetNow();
+    word.refit(next);
+    if (backdrop && opts.backdrop) refitBehind(backdrop, word, opts.backdrop, next);
+  });
   let word: Word;
   try {
     word = new Word(
@@ -316,6 +324,7 @@ export async function runFire(
         const since = now - startedAt;
         const raw = Math.max(still ? enterEnd : since, 0);
         const elapsed = sequence ? raw : Math.min(raw, timeline.duration);
+        refitToBox();
         // Ahead of the pose, or the fit and the stage advance both lag it by a frame.
         sequence?.tick(elapsed);
 

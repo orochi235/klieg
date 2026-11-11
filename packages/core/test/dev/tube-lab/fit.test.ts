@@ -51,7 +51,12 @@ function minSideFill(pivot: THREE.Group, aspect: number): number {
  * The farthest any corner of the content reaches from the panel's center, as a fraction of the
  * half-side. The box's own corners, not the world AABB's: a turned box swells its AABB.
  */
-function cornerReach(pivot: THREE.Group, aspect: number, box: THREE.Box3): number {
+function cornerReach(
+  pivot: THREE.Group,
+  aspect: number,
+  box: THREE.Box3,
+  frame: THREE.Object3D = pivot,
+): number {
   const camera = labCamera();
   camera.aspect = aspect;
   camera.updateProjectionMatrix();
@@ -61,7 +66,7 @@ function cornerReach(pivot: THREE.Group, aspect: number, box: THREE.Box3): numbe
   for (const x of [box.min.x, box.max.x])
     for (const y of [box.min.y, box.max.y])
       for (const z of [box.min.z, box.max.z]) {
-        const ndc = new THREE.Vector3(x, y, z).applyMatrix4(pivot.matrixWorld).project(camera);
+        const ndc = new THREE.Vector3(x, y, z).applyMatrix4(frame.matrixWorld).project(camera);
         reach = Math.max(
           reach,
           Math.abs(ndc.x) * Math.max(1, aspect),
@@ -97,6 +102,26 @@ describe('the tube lab panel fit', () => {
     fit(1);
 
     expect(cornerReach(pivot, 1, box)).toBeCloseTo(FILL, 4);
+  });
+
+  // The tube lab turns a letter about its face, not the pivot's origin, so the face stays put and
+  // the back swings: a fit solved about the origin misplaces every corner by the face's depth.
+  it('keeps a letter turned about its face inside the panel', () => {
+    const pivot = pivotWithBox();
+    const box = localBox(pivot);
+    const turned = new THREE.Group();
+    turned.add(...pivot.children);
+    pivot.add(turned);
+    const about = new THREE.Vector3(0, 0, FRONT);
+    const rotation = new THREE.Euler((13 * Math.PI) / 180, (-30 * Math.PI) / 180, 0);
+    fitter(pivot)(1, 1, { rotation, about });
+    new THREE.Matrix4()
+      .makeTranslation(about.x, about.y, about.z)
+      .multiply(new THREE.Matrix4().makeRotationFromEuler(rotation))
+      .multiply(new THREE.Matrix4().makeTranslation(-about.x, -about.y, -about.z))
+      .decompose(turned.position, turned.quaternion, turned.scale);
+
+    expect(cornerReach(pivot, 1, box, turned)).toBeCloseTo(FILL, 4);
   });
 
   // Reach from the pivot's own axis, not the content's size: the camera sits on that axis, so an

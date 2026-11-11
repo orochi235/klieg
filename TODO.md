@@ -24,3 +24,11 @@ The tube lab builds its own page from labkit pieces because every panel shares o
 labkit 1.14.2 had no config shared across trials. labkit 1.18.2, which klieg now builds on, has it
 (`<Lab over>`, `f.schema(nodes, { over })`, `ctx.over`; 2026-11-10), so nothing blocks moving the
 lab onto `<Lab>`, which brings Reset, Clone, add-trial and saved orbit views for free.
+
+## A resize may blank the canvas for a frame
+
+The stage resizes its drawing buffer inside its `ResizeObserver` callback, which runs after the
+frame has drawn, and resizing a buffer clears it. So a canvas may show empty for one frame per
+resize until the next tick redraws it. Inferred from the order of events while building the refit
+(2026-11-10), not seen: headless capture never caught it. Watch a slow resize in a real browser
+before deciding whether to redraw inside the callback.

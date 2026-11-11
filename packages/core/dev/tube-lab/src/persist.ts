@@ -1,5 +1,5 @@
 import type { TubeSpec } from '@core/render/tube/index.js';
-import { type TrialLayout, usePersistedState } from '@weasel-js/labkit';
+import { usePersistedState } from '@weasel-js/labkit';
 import { type Dispatch, type SetStateAction, useCallback, useState } from 'react';
 import { isPanelMode, isPose, isRampSource, type PanelRecord } from './panels.js';
 import { isTubeLook, type TubeLook } from './spec.js';
@@ -13,7 +13,6 @@ const LEGACY_KEYS = ['tube-lab/v2', 'tube-lab/v1'] as const;
 /** The lab's saved state, as each piece was last written; any piece may be missing or stale. */
 export interface Saved {
   panels?: unknown;
-  layout?: unknown;
   letters?: unknown;
   spec?: unknown;
   look?: unknown;
@@ -47,10 +46,6 @@ export function validSpec(value: unknown): TubeSpec | null {
     isRecord(value.look) &&
     typeof value.radius === 'number';
   return ok ? (value as unknown as TubeSpec) : null;
-}
-
-export function validLayout(value: unknown): TrialLayout | null {
-  return isRecord(value) ? (value as TrialLayout) : null;
 }
 
 export function validLook(value: unknown): TubeLook | null {
@@ -92,7 +87,7 @@ export function readLegacy(): Saved | null {
       if (!raw) continue;
       const parsed: unknown = JSON.parse(raw);
       if (!isRecord(parsed)) continue;
-      return key === 'tube-lab/v1' ? { ...parsed, panels: null, layout: null } : parsed;
+      return key === 'tube-lab/v1' ? { ...parsed, panels: null } : parsed;
     } catch {
       // An unreadable or blocked save is skipped, and dropped with the rest once the lab carries over.
     }

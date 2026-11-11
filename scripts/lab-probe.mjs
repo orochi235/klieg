@@ -32,7 +32,7 @@ const LABS = {
   },
   'tube-lab': {
     port: 5181,
-    viewport: '.panel__body',
+    viewport: '.panel',
     async settle(page) {
       await page.waitForTimeout(1000);
     },

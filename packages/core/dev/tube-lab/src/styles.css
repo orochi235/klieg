@@ -6,66 +6,25 @@ body,
   overflow: hidden;
 }
 
-.lab {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  flex: 1;
-  min-height: 0;
-  font-family: var(--wzl-font-mono);
-  font-size: 12px;
-}
-
-.stage {
-  --panel-bar: 22px;
-  position: relative;
-  min-height: 0;
-}
-/* Two classes, to outrank the auto size labkit gives a lifted lightbox layer. The canvas clears to
-   transparent, so it carries the ground itself, lifted or not. */
-.stage .stage__canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+/* The panels draw transparent, so the buffer under the trials carries the ground they show. */
+.lk-lab__layer--under > .lk-lab__surface {
   background: var(--wzl-surface-sunken);
-}
-/* The grid lays tiles out over the canvas; the canvas stays behind it, spanning the stage. */
-.stage .lk-workspace {
-  position: absolute;
-  inset: 0;
 }
 
 .panel {
-  display: grid;
-  grid-template-rows: auto 1fr;
+  position: relative;
   height: 100%;
-  overflow: hidden;
+  font-family: var(--wzl-font-mono);
+  font-size: 12px;
+  cursor: grab;
+  user-select: none;
 }
-.panel__bar {
+.panel-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: var(--panel-bar);
-  padding: 2px 6px;
-  background: color-mix(in oklab, var(--wzl-surface-raised) 80%, transparent);
-  border-bottom: 1px solid var(--wzl-border);
-  cursor: grab;
-  user-select: none;
+  gap: 4px;
 }
-.panel__letter {
-  font-weight: 700;
-  color: var(--wzl-accent);
-}
-.panel__mode {
-  color: var(--wzl-fg-muted);
-}
-.panel__body {
-  position: relative;
-  min-height: 0;
-  cursor: grab;
-  user-select: none;
-}
-.panel__reset {
+.panel__home {
   position: absolute;
   top: 6px;
   right: 6px;
@@ -82,11 +41,11 @@ body,
   transition: opacity 120ms;
   cursor: pointer;
 }
-.panel:hover .panel__reset,
-.panel__reset:focus-visible {
+.panel:hover .panel__home,
+.panel__home:focus-visible {
   opacity: 1;
 }
-.panel__reset:hover {
+.panel__home:hover {
   background: color-mix(in oklab, var(--wzl-fg) 10%, transparent);
 }
 
@@ -101,22 +60,5 @@ body,
 }
 
 .rail {
-  min-height: 0;
-  overflow-y: auto;
-  padding: var(--wzl-space-sm) var(--wzl-space-md);
-  background: var(--wzl-surface);
-  border-left: 1px solid var(--wzl-border);
   font-family: var(--wzl-font-ui);
-}
-
-.rail__slider {
-  flex: 1;
-  min-width: 0;
-}
-/* The slider measures its own track, so it has to be given the width rather than shrink to fit. */
-.rail__slider > * {
-  width: 100%;
-}
-.rail__readout {
-  font-variant-numeric: tabular-nums;
 }

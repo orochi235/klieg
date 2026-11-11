@@ -12,6 +12,13 @@ export interface Readable {
   rects: ReadonlyMap<string, PanelRect>;
 }
 
+/** Every panel as it was last drawn, keyed by its tile: each trial's painter writes its own. */
+export const drawn: {
+  canvas: HTMLCanvasElement | null;
+  cells: Map<string, Cell>;
+  rects: Map<string, PanelRect>;
+} = { canvas: null, cells: new Map(), rects: new Map() };
+
 /**
  * Hands `scripts/lab-probe.mjs` the lab's `pointOn`: the type point under a client position in
  * whichever panel holds it. `inWord` is where the pointer's ray crosses the plane of the ink's

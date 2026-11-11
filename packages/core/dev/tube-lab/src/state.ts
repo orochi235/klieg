@@ -1,193 +1,110 @@
-import type { TubeSpec } from '@core/render/tube/index.js';
-import type { TrialLayout } from '@weasel-js/labkit';
-import { useCallback, useEffect, useState } from 'react';
-import { type View, validViews } from './PanelTile.js';
-import {
-  DEFAULT_LETTERS,
-  type PanelMode,
-  type PanelRecord,
-  reconcileLetters,
-  seedPanels,
-} from './panels.js';
+import type { LabContextValue, LabOver } from '@weasel-js/labkit';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { labHistory } from './history.js';
+import type { PanelMeta } from './panels.js';
 import {
   dropLegacy,
   type Saved,
   useStored,
-  validLayout,
   validLetters,
   validLook,
   validPanels,
   validSpec,
 } from './persist.js';
-import { type TubeLook, tubeSpecOf } from './spec.js';
-
-let nextPanel = 0;
-
-/**
- * A fresh id, never recycled: a view is held against it, and a new panel inheriting a dead one's
- * turn and zoom is indistinguishable from a bug in the pose.
- */
-export function mintPanelId(taken: Iterable<string>): string {
-  const used = new Set(taken);
-  let id = `n${nextPanel++}`;
-  while (used.has(id)) id = `n${nextPanel++}`;
-  return id;
-}
-
-function seed(letters: string, taken: string[] = []): PanelRecord[] {
-  return seedPanels(letters).map((meta) => {
-    const id = mintPanelId(taken);
-    taken.push(id);
-    return { id, ...meta };
-  });
-}
+import {
+  DEFAULT_SHARED,
+  lettersIn,
+  type Shared,
+  sharedOf,
+  validShared,
+  writeShared,
+} from './shared.js';
+import { tubeSpecOf } from './spec.js';
+import { reconcileTrials, reseedTrials } from './trials.js';
 
 const isBoolean = (value: unknown): boolean | null => (typeof value === 'boolean' ? value : null);
+const validMetas = (value: unknown): PanelMeta[] | null => validPanels(value);
 
-/** Everything the lab keeps across a reload, each piece its own persisted value. */
-export function useLabState(legacy: Saved | null) {
-  const [letters, setLetters] = useStored(
-    'letters',
-    () => validLetters(legacy?.letters) ?? DEFAULT_LETTERS,
-    validLetters,
+/** What the lab kept before the shared settings were one record: each piece under its own name. */
+function useEarlier(legacy: Saved | null): Shared {
+  const [spec] = useStored('spec', () => validSpec(legacy?.spec), validSpec);
+  const [look] = useStored('look', () => validLook(legacy?.look), validLook);
+  const [bloom] = useStored('bloom', () => null, isBoolean);
+  const [letters] = useStored('letters', () => validLetters(legacy?.letters), validLetters);
+  const name = look ?? 'tubing';
+  return sharedOf(
+    spec ?? tubeSpecOf(name),
+    name,
+    bloom ?? true,
+    letters ?? lettersIn(DEFAULT_SHARED),
   );
-  const [panels, setPanels] = useStored(
-    'panels',
-    () => validPanels(legacy?.panels) ?? seed(validLetters(legacy?.letters) ?? DEFAULT_LETTERS),
-    validPanels,
-  );
-  const [layout, setLayout] = useStored<TrialLayout>(
-    'layout',
-    () => validLayout(legacy?.layout) ?? {},
-    validLayout,
-  );
-  const [lookName, setLookName] = useStored<TubeLook>(
-    'look',
-    () => validLook(legacy?.look) ?? 'tubing',
-    validLook,
-  );
-  const [spec, setSpec] = useStored<TubeSpec>(
-    'spec',
-    () => validSpec(legacy?.spec) ?? tubeSpecOf(validLook(legacy?.look) ?? 'tubing'),
-    validSpec,
-  );
-  const [bloom, setBloom] = useStored('bloom', () => true, isBoolean);
-  const [views, setViews] = useStored<Record<string, View>>('views', () => ({}), validViews);
-  /** Bumped when every panel's pose changes at once, which no single panel reports. */
-  const [epoch, setEpoch] = useState(0);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: carries a legacy save over once, at mount
-  useEffect(() => {
-    if (!legacy) return;
-    setLetters(letters);
-    setPanels(panels);
-    setLayout(layout);
-    setLookName(lookName);
-    setSpec(spec);
-    dropLegacy();
-  }, []);
-
-  // A dead panel's view would otherwise sit in storage forever: ids are never recycled.
-  useEffect(() => {
-    const live = new Set(panels.map((p) => p.id));
-    if (Object.keys(views).every((id) => live.has(id))) return;
-    setViews((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => live.has(id))));
-  }, [panels, views, setViews]);
-
-  /** Changing look reseeds the rail, so the controls keep reading as that look's own tuning. */
-  const changeLook = useCallback(
-    (next: TubeLook) => {
-      setLookName(next);
-      setSpec(tubeSpecOf(next));
-    },
-    [setLookName, setSpec],
-  );
-
-  const applyLetters = useCallback(
-    (next: string) => {
-      setLetters(next);
-      setPanels((prev) => {
-        const { add, remove } = reconcileLetters(prev, next);
-        const dropped = new Set(remove);
-        const kept = prev.filter((p) => !dropped.has(p.id));
-        const taken = kept.map((p) => p.id);
-        const added = add.map((meta) => {
-          const id = mintPanelId(taken);
-          taken.push(id);
-          return { id, ...meta };
-        });
-        return [...kept, ...added];
-      });
-    },
-    [setLetters, setPanels],
-  );
-
-  /** The rail's own add: one panel, outside the letters reconcile. */
-  const addPanel = useCallback(
-    (letter: string, mode: PanelMode) => {
-      setPanels((prev) => [
-        ...prev,
-        { id: mintPanelId(prev.map((p) => p.id)), letter, mode, pose: 'head-on', source: 'depth' },
-      ]);
-    },
-    [setPanels],
-  );
-
-  const reorder = useCallback(
-    (next: readonly string[]) => {
-      setPanels((prev) => {
-        const byId = new Map(prev.map((p) => [p.id, p]));
-        const ordered = next.flatMap((id) => byId.get(id) ?? []);
-        // A drop reports every id, but trust the panels rather than the report: anything the grid
-        // did not name would otherwise vanish from the lab entirely.
-        return ordered.length === prev.length ? ordered : prev;
-      });
-    },
-    [setPanels],
-  );
-
-  const setView = useCallback(
-    (id: string, view: View) => setViews((prev) => ({ ...prev, [id]: view })),
-    [setViews],
-  );
-
-  /** Everything back to how a first visit opens. */
-  const reset = useCallback(() => {
-    setLetters(DEFAULT_LETTERS);
-    setPanels((prev) =>
-      seed(
-        DEFAULT_LETTERS,
-        prev.map((p) => p.id),
-      ),
-    );
-    setLayout({});
-    setLookName('tubing');
-    setSpec(tubeSpecOf('tubing'));
-    setBloom(true);
-    setViews({});
-    setEpoch((n) => n + 1);
-  }, [setLetters, setPanels, setLayout, setLookName, setSpec, setBloom, setViews]);
-
-  return {
-    letters,
-    panels,
-    setPanels,
-    layout,
-    setLayout,
-    lookName,
-    spec,
-    setSpec,
-    bloom,
-    setBloom,
-    views,
-    setView,
-    epoch,
-    changeLook,
-    applyLetters,
-    addPanel,
-    reorder,
-    reset,
-  };
 }
 
-export type LabState = ReturnType<typeof useLabState>;
+/**
+ * The shared settings, their writer, and the trial operations they drive. `lab` is the lab's context once it has
+ * mounted: a letters change opens and closes trials through it, on Undo and Redo as on the write itself.
+ */
+export function useShared(legacy: Saved | null) {
+  const earlier = useEarlier(legacy);
+  const [shared, setShared] = useStored<Shared>('shared', () => earlier, validShared);
+  const [seeded, setSeeded] = useStored('seeded', () => false, isBoolean);
+  const [panels] = useStored<PanelMeta[] | null>(
+    'panels',
+    () => validMetas(legacy?.panels),
+    validMetas,
+  );
+  const lab = useRef<LabContextValue | null>(null);
+  const current = useRef(shared);
+  current.current = shared;
+
+  useEffect(() => {
+    if (legacy) dropLegacy();
+  }, [legacy]);
+
+  const apply = useCallback(
+    (next: Shared) => {
+      const was = current.current;
+      current.current = next;
+      setShared(next);
+      const letters = lettersIn(next);
+      if (lab.current && letters !== lettersIn(was)) reconcileTrials(lab.current, letters);
+    },
+    [setShared],
+  );
+
+  const set = useCallback(
+    (path: string, value: unknown) => {
+      const before = current.current;
+      const after = writeShared(before, path, value);
+      if (JSON.stringify(after) === JSON.stringify(before)) return;
+      apply(after);
+      labHistory.push(path, before, after, apply);
+    },
+    [apply],
+  );
+
+  const over = useMemo<LabOver>(() => ({ values: shared, set }), [shared, set]);
+
+  /** Everything back to how a first visit opens. Undo puts the settings back, not the trials. */
+  const reset = useCallback(() => {
+    const before = current.current;
+    current.current = DEFAULT_SHARED;
+    setShared(DEFAULT_SHARED);
+    if (lab.current) reseedTrials(lab.current, lettersIn(DEFAULT_SHARED));
+    labHistory.push('reset', before, DEFAULT_SHARED, apply);
+  }, [setShared, apply]);
+
+  /** Called by the lab once it has loaded: a first visit replaces the lab's opening trial with the seeded set. */
+  const attach = useCallback(
+    (context: LabContextValue) => {
+      const first = lab.current === null;
+      lab.current = context;
+      if (!first || seeded) return;
+      reseedTrials(context, lettersIn(current.current), panels ?? undefined);
+      setSeeded(true);
+    },
+    [seeded, panels, setSeeded],
+  );
+
+  return { over, reset, attach };
+}

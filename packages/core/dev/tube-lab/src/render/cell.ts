@@ -9,7 +9,6 @@ import { DEFAULT_GLYPH_OPTIONS } from '@core/text/glyphs.js';
 import { fitter, labCamera, viewBudget } from '@shared/lab-view.js';
 import { type Orbit, orbitPose, orbitTransform } from '@shared/orbit.js';
 import * as THREE from 'three';
-import type { PanelMeta } from '../panels.js';
 
 /**
  * The rest pose. Word starts every material at three's default opacity of 1 until `apply` runs,
@@ -39,7 +38,7 @@ export interface Cell {
 }
 
 export interface CellInput {
-  meta: PanelMeta;
+  letter: string;
   look: LookSpec;
   font: LoadedFont;
   environment: THREE.Texture;
@@ -83,7 +82,7 @@ export function buildCell(input: CellInput): Cell {
 
   // Word adopts an override into its own material lists and disposes it; the cell must not.
   const word = new Word(
-    input.meta.letter,
+    input.letter,
     input.font,
     input.look,
     viewBudget(),

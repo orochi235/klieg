@@ -1,6 +1,6 @@
 import type { PathSource } from '@core/render/tube/index.js';
 import { f, resolveConfigSchema } from '@weasel-js/labkit';
-import { MODES } from '../panels.js';
+import { DEFAULT_LETTERS } from '../panels.js';
 import { TUBE_LOOKS } from '../spec.js';
 import { PERCENT, tubeRows } from './tube.js';
 import { GRADIENT_DOMAINS, LAYERS, STOP_COUNT } from './values.js';
@@ -198,30 +198,39 @@ function gradient() {
   };
 }
 
-function zone(letters: readonly string[], onAdd: () => void, onReset: () => void) {
+function zone() {
   return {
     preset: f.enum('tubing', TUBE_LOOKS).label('look').section('zone'),
-    letters: f.string('').section('zone'),
-    addLetter: f
-      .enum(letters[0] ?? 'M', letters.length > 0 ? letters : ['M'])
-      .label('add')
-      .section('zone'),
-    addMode: f.enum('beauty', MODES).label('as').section('zone'),
-    addPanel: f.action(onAdd).label('add panel').section('zone'),
-    reset: f.action(onReset).label('reset layout').section('zone'),
+    letters: f
+      .string(DEFAULT_LETTERS)
+      .section('zone')
+      .describe(
+        'The letters on show. A letter typed here opens its four panels, and one taken out closes every panel of it.',
+      ),
   };
 }
 
-/** The rail's schema. `letters` are the add picker's choices, so the schema follows the field. */
-export function railSchema(letters: readonly string[], onAdd: () => void, onReset: () => void) {
+/** Every setting the panels share, which the lab keeps in `over` rather than in any one trial. */
+function sharedNodes() {
+  return {
+    ...tubeRows(),
+    ...shape(),
+    ...material(),
+    ...counters(),
+    ...gradient(),
+    ...zone(),
+  };
+}
+
+/** The shared settings: the schema each trial's config is drawn over. */
+export const SHARED = resolveConfigSchema(f.schema(sharedNodes()));
+
+/** The rail: the shared settings, and a reset that puts the whole lab back to a first visit. */
+export function railSchema(onReset: () => void) {
   return resolveConfigSchema(
     f.schema({
-      ...tubeRows(),
-      ...shape(),
-      ...material(),
-      ...counters(),
-      ...gradient(),
-      ...zone(letters, onAdd, onReset),
+      ...sharedNodes(),
+      reset: f.action(onReset).label('reset lab').section('zone'),
     }),
   );
 }

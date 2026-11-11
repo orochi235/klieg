@@ -21,6 +21,13 @@ is what it opens with. Turning away from identity drops `selectable: 'layer'` to
 
 ### Fixed
 
+A running fire refits its word when the element it is placed in resizes, so a word in an
+element that narrows mid-fire no longer overflows it, and one in an element that grows no longer
+stays small. The word keeps playing from where it was: the entrance does not replay, and a
+`turn()`, a `stages` regroup in progress and a `backdrop` all carry through. A sign refits the
+same way. A word fired with `wrap: true` keeps the line breaks it chose for the first box and
+scales to the new one.
+
 A lamp, `near`, `dwell` and `kicks` follow a sign's letters through a `stages` regroup. A part
 kept the position its letter was built at, so once the survivors re-laid, a lamp lit where they
 used to stand and the cursor missed the letter under it. `PartInfo.x`, `y` and `ink` now move with

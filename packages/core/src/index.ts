@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import type { FireHandle, Klieg, KliegOptions } from './api.js';
 import { type Clock, RafClock } from './clock.js';
 import { EFFECTS } from './effects/patches.js';
@@ -14,6 +13,7 @@ import { PointerWatch } from './pointer.js';
 import { EffectQueue, type QueuePolicy } from './queue.js';
 import { wantsBloom } from './render/bloom.js';
 import { WordCaches } from './render/caches.js';
+import { hitAt } from './render/hit.js';
 import { ENV_PATCHES, type LightingName } from './render/lighting.js';
 import { LOOKS, type Look, type LookName, type LookSpec } from './render/looks.js';
 import { Stage as SceneStage, webglSupported } from './render/stage.js';
@@ -188,15 +188,6 @@ export const LOOK_NAMES: readonly LookName[] = Object.keys(LOOKS) as LookName[];
 export const LIGHTING_NAMES: readonly LightingName[] = Object.keys(ENV_PATCHES) as LightingName[];
 export const EFFECT_NAMES: readonly EffectName[] = Object.keys(EFFECTS) as EffectName[];
 
-/** Whether a mesh is on screen: every ancestor visible and some opacity left. A letter mid-exit
- * keeps its geometry at zero opacity. */
-function drawn(object: THREE.Object3D): boolean {
-  for (let o: THREE.Object3D | null = object; o; o = o.parent) if (!o.visible) return false;
-  const material = (object as THREE.Mesh).material;
-  const materials = Array.isArray(material) ? material : material ? [material] : [];
-  return materials.some((m) => m.visible && m.opacity > 0);
-}
-
 export function createKlieg(options: KliegOptions): Klieg {
   const placement = options.placement ?? { kind: 'fullscreen' };
   const anchored = placement.kind === 'element';
@@ -252,9 +243,6 @@ export function createKlieg(options: KliegOptions): Klieg {
         busy: () => inst.liveFires > 0 || layers.live(),
       })
     : null;
-  const raycaster = new THREE.Raycaster();
-  const aim = new THREE.Vector2();
-
   let counter = 0;
 
   return {
@@ -333,18 +321,13 @@ export function createKlieg(options: KliegOptions): Klieg {
       const canvas = stage.canvas;
       if (destroyed || !canvas || heroes.size === 0) return null;
       const box = canvas.getBoundingClientRect();
-      if (box.width <= 0 || box.height <= 0) return null;
-      const nx = ((clientX - box.left) / box.width) * 2 - 1;
-      const ny = ((clientY - box.top) / box.height) * 2 - 1;
-      if (Math.abs(nx) > 1 || Math.abs(ny) > 1) return null;
-
-      stage.camera.updateMatrixWorld();
-      raycaster.setFromCamera(aim.set(nx, -ny), stage.camera);
-      const groups = [...heroes].map((word) => {
-        word.group.updateWorldMatrix(true, true);
-        return word.group;
-      });
-      const hit = raycaster.intersectObjects(groups, true).find((h) => drawn(h.object));
+      const hit = hitAt(
+        clientX,
+        clientY,
+        box,
+        stage.camera,
+        [...heroes].map((word) => word.group),
+      );
       if (!hit) return null;
       let owner: Word | undefined;
       hit.object.traverseAncestors((o) => {

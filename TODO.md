@@ -19,13 +19,6 @@ that may be the reading landing on a tube wall rather than the face. The tube la
 (`dev/tube-lab/src/readout.ts`) reads where the ray crosses the face's plane and holds that lab to
 0.0 px; reading the composition lab the same way would say how much of the 3.2 px is real.
 
-## The tube lab is not a `<Lab>`
-
-The tube lab builds its own page from labkit pieces because every panel shares one tube spec, and
-labkit 1.14.2 had no config shared across trials. labkit 1.18.2, which klieg now builds on, has it
-(`<Lab over>`, `f.schema(nodes, { over })`, `ctx.over`; 2026-11-10), so nothing blocks moving the
-lab onto `<Lab>`, which brings Reset, Clone, add-trial and saved orbit views for free.
-
 ## A resize may blank the canvas for a frame
 
 The stage resizes its drawing buffer inside its `ResizeObserver` callback, which runs after the

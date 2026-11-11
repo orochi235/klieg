@@ -1,5 +1,9 @@
 # Tube lab — design
 
+> **Superseded page structure (2026-11-11):** the lab now runs on labkit's `<Lab>`, each panel a
+> trial and the shared tube spec in `<Lab over>`. What this doc says about the hand-rolled
+> workspace, `PanelTile` and the rail's add-panel row no longer matches the code.
+
 **What:** a dev-only workbench for judging and tuning the `tubing` look's geometry.
 **For:** whoever implements it. **Answers:** what gets built, where it lives, and how it draws.
 

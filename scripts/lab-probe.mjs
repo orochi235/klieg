@@ -333,6 +333,8 @@ const checks = [
     opened: true,
     why: 'a drag at the opening pose turns the ink in place',
     async run() {
+      // Hovered in both frames: a panel can draw chrome under the pointer, and ink middle reads it.
+      await page.mouse.move(center.x, center.y);
       const a = await frame('opened-before');
       await drag(center, step * 1.5, step * 0.5);
       const b = await frame('opened-after');

@@ -1,14 +1,14 @@
 import { specOf } from '@core/render/looks.js';
 import type { LoadedFont } from '@core/text/font.js';
 import { DEFAULT_GLYPH_OPTIONS, glyphToShapes } from '@core/text/glyphs.js';
-import { LabRenderer, type PanelDraw } from '@shared/lab-renderer.js';
-import { orbitPose } from '@shared/orbit.js';
+import { LabRenderer, type PanelDraw, type PanelRect } from '@shared/lab-renderer.js';
 import { LightboxLayers, SurfaceContext, useTiledSurface, Workspace } from '@weasel-js/labkit';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { labFont } from './font.js';
 import { initialView, PanelTile, type View } from './PanelTile.js';
 import type { RampSource } from './panels.js';
 import { Rail } from './Rail.js';
+import { exposeReadout } from './readout.js';
 import { buildCell, type Cell } from './render/cell.js';
 import { rampOverride } from './render/ramp.js';
 import { buildSkeleton } from './render/skeleton.js';
@@ -25,6 +25,7 @@ export function App({ legacy }: { legacy: Parameters<typeof useLabState>[0] }) {
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const labRef = useRef<LabRenderer | null>(null);
   const cellsRef = useRef(new Map<string, Cell>());
+  const rectsRef = useRef<ReadonlyMap<string, PanelRect>>(new Map());
   // Read by the frame loop, which runs outside render.
   const viewsRef = useRef(views);
   viewsRef.current = views;
@@ -42,14 +43,6 @@ export function App({ legacy }: { legacy: Parameters<typeof useLabState>[0] }) {
     labFont().then(setFont, (err: unknown) => console.error('tube lab: font failed', err));
   }, []);
 
-  // `fit` is absolute, so the view can be re-applied any number of times without compounding.
-  const pose = useCallback((cell: Cell, view: View, aspect: number) => {
-    const { rotation, zoom, position } = orbitPose(view);
-    cell.pivot.rotation.copy(rotation);
-    cell.fit(aspect, zoom);
-    cell.pivot.position.copy(position);
-  }, []);
-
   // Tiles are positioned by the grid, so the surface reads their rects from the DOM and keeps
   // reading while they move. A tuning tool has no use for an idle 60fps: it calls back only on a
   // frame something was invalidated for.
@@ -57,6 +50,7 @@ export function App({ legacy }: { legacy: Parameters<typeof useLabState>[0] }) {
     onFrame: ({ dirty, rects, retiled, size, dpr }) => {
       const lab = labRef.current;
       if (!lab || !font) return;
+      rectsRef.current = rects;
       const { width: w, height: h } = size;
       const was = sized.current;
       const resized = was.w !== w || was.h !== h || was.dpr !== dpr;
@@ -115,7 +109,8 @@ export function App({ legacy }: { legacy: Parameters<typeof useLabState>[0] }) {
         }
         // Against the id, not the cell: a cell is rebuilt on every spec change, and a slider drag
         // must not walk every panel back to head-on.
-        pose(cell, viewsRef.current[id] ?? initialView(record.pose), rect.w / rect.h);
+        const home = initialView(record.pose);
+        cell.pose(rect.w / rect.h, viewsRef.current[id] ?? home, home);
         draws.push({
           rect,
           scene: cell.scene,
@@ -152,6 +147,14 @@ export function App({ legacy }: { legacy: Parameters<typeof useLabState>[0] }) {
     };
   }, [canvas, containerRef]);
   const below = useMemo(() => [canvas], [canvas]);
+
+  useEffect(
+    () =>
+      exposeReadout(() =>
+        canvas ? { canvas, cells: cellsRef.current, rects: rectsRef.current } : null,
+      ),
+    [canvas],
+  );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: each of these changes what every panel shows; none is a value this reads
   useEffect(() => {

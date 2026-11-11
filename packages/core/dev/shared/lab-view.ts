@@ -33,6 +33,12 @@ function cornersOf(box: THREE.Box3): THREE.Vector3[] {
   return corners;
 }
 
+/** A turn for the fitter to solve under: `rotation` about `about`, a point of the pivot's space. */
+export interface FitTurn {
+  rotation: THREE.Euler;
+  about: THREE.Vector3;
+}
+
 /**
  * Sizes the letter to its panel: `fitScale`'s 2.2 cap is a page effect's fit, a third of the panel
  * and useless for reading tube geometry. Every corner is solved on the plane it sits on and the
@@ -40,21 +46,27 @@ function cornersOf(box: THREE.Box3): THREE.Vector3[] {
  * measured on the word plane overshoots by that plane's magnification and gets scissored.
  *
  * Measured once, in the pose the pivot is in when the fitter is made, then re-solved on each call
- * under the pivot's current rotation. Reach is from the pivot's own axis rather than across the
- * box because the camera is fixed on that axis: a turn hangs the letter's depth over one edge.
+ * under `turn`, or the pivot's own rotation about its origin without one. Reach is from the pivot's
+ * own axis rather than across the box because the camera is fixed on that axis: a turn hangs the
+ * letter's depth over one edge.
  *
  * `zoom` multiplies the solved scale, so the fit stays absolute and idempotent however often a
  * zoomed panel is re-fit. Above 1 the letter is meant to overrun the panel and be scissored.
  */
-export function fitter(pivot: THREE.Group): (aspect: number, zoom?: number) => void {
+export function fitter(
+  pivot: THREE.Group,
+): (aspect: number, zoom?: number, turn?: FitTurn) => void {
   const corners = cornersOf(new THREE.Box3().setFromObject(pivot));
   const turned = new THREE.Vector3();
-  return (aspect, zoom = 1) => {
+  const origin = new THREE.Vector3();
+  return (aspect, zoom = 1, turn) => {
     if (!Number.isFinite(aspect) || aspect <= 0) return;
+    const rotation = turn?.rotation ?? pivot.rotation;
+    const about = turn?.about ?? origin;
     const span = FILL * Math.min(1, aspect) * VIEW_HEIGHT;
     let scale = Number.POSITIVE_INFINITY;
     for (const corner of corners) {
-      turned.copy(corner).applyEuler(pivot.rotation);
+      turned.copy(corner).sub(about).applyEuler(rotation).add(about);
       const reach = 2 * Math.max(Math.abs(turned.x), Math.abs(turned.y));
       // A corner far enough behind shrinks faster than it reaches out, and binds nothing.
       const bound = reach + (span * turned.z) / DISTANCE;

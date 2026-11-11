@@ -10,13 +10,14 @@ wide to tall it stays on one line and shrinks, where a fresh fire would break it
 Re-wrapping mid-fire moves letters the way a `stages` regroup does, so it would need the regroup's
 part and travel handling.
 
-## The tube lab's orbit has not had the face-pivot fix
+## The composition lab drifts 3 px on a turn after a zoom
 
-The tube lab poses its own three.js groups with `orbitPose` (`dev/shared/orbit.ts`), so the change
-that turns a fired word about its ink's face, with translation measured there, did not reach it.
-`npm run probe:lab -- tube-lab` reads 4 px of pan overshoot and 2–4 px of turn drift there, by
-image match on panels too small to trust it; a zoom reads `LOST`. Give the lab a `pointOn`-style
-readout before deciding how much of that is real.
+`npm run probe:lab -- composition-lab` reads 3.2 px on its turn-after-zoom check, over the 3 px
+tolerance, on main at 019246e as well as with the tube lab's face-pivot fix (2026-11-10); every
+other check holds under 1.5 px. Core's `pointOn` answers the first surface the ray hits, so part of
+that may be the reading landing on a tube wall rather than the face. The tube lab's readout
+(`dev/tube-lab/src/readout.ts`) reads where the ray crosses the face's plane and holds that lab to
+0.0 px; reading the composition lab the same way would say how much of the 3.2 px is real.
 
 ## The tube lab is not a `<Lab>`
 

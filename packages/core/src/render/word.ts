@@ -38,6 +38,7 @@ import {
   specOf,
   tintMaterialOf,
 } from './looks.js';
+import { turnAbout } from './turn.js';
 
 /**
  * Lab-only diagnostic hooks (see debug.ts). `Word` owns per-letter layout and holds the decoration
@@ -513,20 +514,27 @@ export class Word {
    * word whose entrance holds it deep behind that plane clean out of frame.
    */
   private applyTurn(fit: Fit): void {
-    const pos = new THREE.Vector3();
-    const quat = new THREE.Quaternion();
-    const size = new THREE.Vector3();
-    this.turn.decompose(pos, quat, size);
-    const x = fit.midX + this.drift.x;
-    const y = fit.midY + this.drift.y;
-    const face = DEFAULT_GLYPH_OPTIONS.depth + this.drift.z;
-    const z = this.cameraZ?.() ?? null;
-    const atFace = z ? (z - (face * fit.scale - this.behind)) / z : 1;
-    new THREE.Matrix4()
-      .makeTranslation(x, y, face)
-      .multiply(new THREE.Matrix4().compose(pos.multiplyScalar(atFace / fit.scale), quat, size))
-      .multiply(new THREE.Matrix4().makeTranslation(-x, -y, -face))
-      .decompose(this.inner.position, this.inner.quaternion, this.inner.scale);
+    const pivot = this.pivotOf(fit);
+    turnAbout(
+      this.turn,
+      pivot,
+      fit.scale,
+      pivot.z * fit.scale - this.behind,
+      this.cameraZ?.() ?? null,
+    ).decompose(this.inner.position, this.inner.quaternion, this.inner.scale);
+  }
+
+  private pivotOf(fit: Fit): THREE.Vector3 {
+    return new THREE.Vector3(
+      fit.midX + this.drift.x,
+      fit.midY + this.drift.y,
+      DEFAULT_GLYPH_OPTIONS.depth + this.drift.z,
+    );
+  }
+
+  /** Where `transform` turns about, in `group`'s own space: what the letters stand in. */
+  get turnPivot(): THREE.Vector3 {
+    return this.pivotOf(this.fit);
   }
 
   /**
@@ -633,8 +641,13 @@ export class Word {
   /** A world point in the layout space parts are measured in, with the fit and `transform` undone.
    * Reads the world matrices as last updated. */
   layoutOf(world: THREE.Vector3): { x: number; y: number } {
-    const local = this.inner.worldToLocal(world.clone());
+    const local = this.layoutPoint(world);
     return { x: local.x, y: local.y };
+  }
+
+  /** `layoutOf` with depth: z is in em, the ink's face at `DEFAULT_GLYPH_OPTIONS.depth`. */
+  layoutPoint(world: THREE.Vector3): THREE.Vector3 {
+    return this.inner.worldToLocal(world.clone());
   }
 
   /** The live letters' layout, in em, with the fit that maps em to world units. */

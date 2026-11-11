@@ -5,11 +5,12 @@
 //   node scripts/lab-probe.mjs composition-lab [--tolerance 3] [--no-post] [--url http://…]
 //
 // Frames land in test-results/lab-probe/<lab>/, which each run empties first. Each frame is also
-// posted to the transom wall (zone klieg) unless --no-post. Exits 1 when any drift exceeds the
-// tolerance, 2 when the lab cannot be reached or measured.
-import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
-import { homedir } from 'node:os';
+// posted to the transom wall (zone klieg) unless --no-post. Every run's raw readings land as one
+// JSON record in test-results/lab-probe/runs/, which keeps the newest RUNS_KEPT. Exits 1 when any
+// drift exceeds the tolerance, 2 when the lab cannot be reached or measured.
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir, hostname, loadavg } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
@@ -56,6 +57,30 @@ const url = flag('--url') ?? `http://localhost:${lab.port}/`;
 const out = path.join(ROOT, 'test-results', 'lab-probe', args[0]);
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
+const runs = path.join(ROOT, 'test-results', 'lab-probe', 'runs');
+const RUNS_KEPT = 40;
+
+function git(...cmd) {
+  try {
+    return execFileSync('git', cmd, { cwd: ROOT, encoding: 'utf8' }).trim();
+  } catch {
+    return null;
+  }
+}
+
+/** One run's readings as one record; the oldest beyond RUNS_KEPT are deleted. */
+function keep(record) {
+  mkdirSync(runs, { recursive: true });
+  const stamp = record.at.replace(/[:.]/g, '-');
+  writeFileSync(
+    path.join(runs, `${stamp}-${args[0]}.json`),
+    `${JSON.stringify(record, null, 2)}\n`,
+  );
+  const all = readdirSync(runs)
+    .filter((f) => f.endsWith('.json'))
+    .sort();
+  for (const f of all.slice(0, Math.max(0, all.length - RUNS_KEPT))) rmSync(path.join(runs, f));
+}
 
 const transom = [path.join(homedir(), 'src/transom/bin/transom')].find(existsSync) ?? 'transom';
 function wall(file) {
@@ -202,6 +227,7 @@ const under = (at) =>
     return {
       x: a.inWord.x,
       y: a.inWord.y,
+      z: a.z,
       perPxX: Math.hypot(r.inWord.x - a.inWord.x, r.inWord.y - a.inWord.y),
       perPxY: Math.hypot(d.inWord.x - a.inWord.x, d.inWord.y - a.inWord.y),
     };
@@ -237,7 +263,8 @@ async function held(name, at, gesture, landing = at, scale = 1) {
     return { a, b, dx: s.dx, dy: s.dy, lost: s.flat, how: 'image' };
   }
   const now = was ? await under(landing) : null;
-  if (!now) return { a, b, dx: 0, dy: 0, lost: true, how: 'pointOn' };
+  const raw = { at, landing, was, now };
+  if (!now) return { a, b, dx: 0, dy: 0, lost: true, how: 'pointOn', raw };
   return {
     a,
     b,
@@ -245,6 +272,7 @@ async function held(name, at, gesture, landing = at, scale = 1) {
     dy: -(now.y - was.y) / now.perPxY,
     lost: false,
     how: 'pointOn',
+    raw,
   };
 }
 
@@ -305,6 +333,8 @@ const checks = [
     opened: true,
     why: 'a drag at the opening pose turns the ink in place',
     async run() {
+      // Hovered in both frames: a panel can draw chrome under the pointer, and ink middle reads it.
+      await page.mouse.move(center.x, center.y);
       const a = await frame('opened-before');
       await drag(center, step * 1.5, step * 0.5);
       const b = await frame('opened-after');
@@ -392,6 +422,20 @@ if (args.includes('--selftest')) {
 }
 
 let failed = 0;
+const record = {
+  at: new Date().toISOString(),
+  lab: args[0],
+  url,
+  commit: git('rev-parse', 'HEAD'),
+  dirty: Boolean(git('status', '--porcelain')),
+  host: hostname(),
+  loadavg: loadavg(),
+  renderer: 'chromium headless, swiftshader',
+  viewport: box,
+  tolerance,
+  measuredBy: exact ? 'pointOn' : 'image match',
+  checks: [],
+};
 console.log(
   `lab-probe: ${args[0]}, measured by ${exact ? 'pointOn' : 'image match'}, tolerance ${tolerance}px`,
 );
@@ -406,6 +450,15 @@ for (const [i, check] of checks.entries()) {
   const drift = Math.hypot(r.dx, r.dy);
   const verdict = r.lost ? 'LOST' : drift > tolerance ? 'FAIL' : 'ok';
   if (verdict !== 'ok') failed++;
+  record.checks.push({
+    name: check.name,
+    verdict,
+    how: r.how,
+    drift,
+    dx: r.dx,
+    dy: r.dy,
+    ...(r.raw ? { raw: r.raw } : null),
+  });
   const f = (v) => v.toFixed(1).padStart(6);
   console.log(
     `${i + 1}/${checks.length} ${verdict.padEnd(4)} ${check.name.padEnd(15)} drift ${f(drift)}px` +
@@ -414,5 +467,6 @@ for (const [i, check] of checks.entries()) {
   if (r.a.link || r.b.link) console.log(`      before ${r.a.link}\n      after  ${r.b.link}`);
 }
 await browser.close();
+keep(record);
 console.log(failed ? `lab-probe: ${failed} of ${checks.length} failed` : 'lab-probe: all held');
 process.exit(failed ? 1 : 0);

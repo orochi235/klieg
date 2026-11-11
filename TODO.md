@@ -41,12 +41,3 @@ effects diagram's canvas nests under it: a drag or wheel there moves the 3D came
 logs six `[weasel] route conflict` warnings on load. Fixed on weasel's `orbit-trial-gestures` branch
 (2026-10-31) with no change needed here; bump `@weasel-js` once a release carries it, and confirm
 the warnings are gone.
-
-## Looks set a three.js property 0.187 deprecated
-
-three 0.187 replaced `iridescenceThicknessRange` with `iridescenceThicknessMinimum` and
-`iridescenceThicknessMaximum`, and warns once per material that still sets the old one. klieg's
-looks (`packages/core/src/render/looks.ts`) and `LookSpec` still use the range, so wod's gem banner
-logs the warning on load and cannot avoid it (seen 2026-11-04, three 0.187.0). Move `LookSpec` and
-the looks to the two new fields, and check the old type still reads for a release if anything
-outside klieg sets it.

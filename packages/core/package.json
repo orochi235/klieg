@@ -70,8 +70,8 @@
     "polygon-clipping": "^0.15.7"
   },
   "peerDependencies": {
-    "@types/three": ">=0.185.0 <1.0.0",
-    "three": ">=0.185.0 <1.0.0"
+    "@types/three": ">=0.187.0 <1.0.0",
+    "three": ">=0.187.0 <1.0.0"
   },
   "devDependencies": {
     "@codemirror/lang-javascript": "^6.2.5",

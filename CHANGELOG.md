@@ -44,6 +44,15 @@ read 0.4 halfway, where they read 0.8. This is what blits' `mix.blend` does from
 `level` is built on blits' `input`, and its `set` reports each change to the mix. `dwell` and a
 `hinge`'s signal are inputs where the signal under them is.
 
+### Breaking
+
+klieg needs three 0.187 or later, up from 0.185. A look writes a thin film's thickness through
+`iridescenceThicknessMinimum` and `iridescenceThicknessMaximum`, which three 0.187 added in place
+of `iridescenceThicknessRange`, so a look with a film no longer logs three's deprecation warning.
+`LookParams` and `DEFAULTS` carry the two numbers where they carried the pair. A `LookSpec` that
+sets `iridescenceThicknessRange` still reads, onto whichever of the two it leaves unset; the field
+is deprecated and goes in a later release.
+
 ## 0.16.7
 
 ### Runs on @msb235/blits 0.7.0 and @weasel-js 1.9.1

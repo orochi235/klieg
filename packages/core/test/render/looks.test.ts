@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { FlakeSpec } from '../../src/render/flake.js';
 import {
   applyLook,
@@ -31,7 +31,8 @@ const KEY_SET: Record<keyof LookParams, true> = {
   attenuationDistance: true,
   iridescence: true,
   iridescenceIOR: true,
-  iridescenceThicknessRange: true,
+  iridescenceThicknessMinimum: true,
+  iridescenceThicknessMaximum: true,
   sheen: true,
   sheenColor: true,
   sheenRoughness: true,
@@ -74,9 +75,9 @@ function snapshot(material: THREE.MeshPhysicalMaterial): Record<string, unknown>
   return out;
 }
 
-function withLook(name: LookName): THREE.MeshPhysicalMaterial {
+function withLook(look: LookName | LookSpec): THREE.MeshPhysicalMaterial {
   const material = createMaterial();
-  applyLook(material, name);
+  applyLook(material, look);
   return material;
 }
 
@@ -192,7 +193,8 @@ describe('applyLook', () => {
     applyLook(material, 'chrome');
     expect(material.iridescence).toBe(0);
     expect(material.iridescenceIOR).toBe(1.3);
-    expect(material.iridescenceThicknessRange).toEqual([100, 400]);
+    expect(material.iridescenceThicknessMinimum).toBe(100);
+    expect(material.iridescenceThicknessMaximum).toBe(400);
     expect(material.clearcoat).toBe(1);
   });
 
@@ -208,18 +210,29 @@ describe('applyLook', () => {
     expect(material.color.getHex()).toBe(0xffc44d);
   });
 
-  it('gives each material its own thickness range instead of sharing the module constant', () => {
-    // Read off the spec rather than written out: this is about aliasing, and hardcoding the
-    // numbers made re-tuning `oil` fail a test that has no opinion about how oil should look.
-    const range = LOOKS.oil.iridescenceThicknessRange as [number, number];
-    const a = withLook('oil');
-    const b = withLook('oil');
-    expect(a.iridescenceThicknessRange).toEqual(range);
-    expect(a.iridescenceThicknessRange).not.toBe(b.iridescenceThicknessRange);
+  it('reads a deprecated thickness range onto the minimum and maximum, never through its setter', () => {
+    // three warns once per process, so a console spy goes quiet after the first look with a film.
+    const setter = vi.spyOn(
+      THREE.MeshPhysicalMaterial.prototype,
+      'iridescenceThicknessRange',
+      'set',
+    );
+    const material = withLook({ iridescence: 1, iridescenceThicknessRange: [180, 700] });
+    applyLook(material, 'oil');
+    applyLook(material, { iridescence: 1, iridescenceThicknessRange: [180, 700] });
+    expect(material.iridescenceThicknessMinimum).toBe(180);
+    expect(material.iridescenceThicknessMaximum).toBe(700);
+    expect(setter).not.toHaveBeenCalled();
+    setter.mockRestore();
+  });
 
-    a.iridescenceThicknessRange[1] = 999;
-    expect(b.iridescenceThicknessRange[1]).toBe(range[1]);
-    expect(withLook('oil').iridescenceThicknessRange[1]).toBe(range[1]);
+  it('lets the minimum and maximum win over a deprecated range', () => {
+    const material = withLook({
+      iridescenceThicknessRange: [180, 700],
+      iridescenceThicknessMaximum: 900,
+    });
+    expect(material.iridescenceThicknessMinimum).toBe(180);
+    expect(material.iridescenceThicknessMaximum).toBe(900);
   });
 
   it('marks the material for recompile, since transmission and iridescence change the program', () => {

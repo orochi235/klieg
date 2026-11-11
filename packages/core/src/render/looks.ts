@@ -51,7 +51,8 @@ type LookKey =
   | 'attenuationDistance'
   | 'iridescence'
   | 'iridescenceIOR'
-  | 'iridescenceThicknessRange'
+  | 'iridescenceThicknessMinimum'
+  | 'iridescenceThicknessMaximum'
   | 'sheen'
   | 'sheenColor'
   | 'sheenRoughness'
@@ -75,9 +76,7 @@ type MissingFromMaterial = Exclude<LookKey, keyof THREE.MeshPhysicalMaterial>;
 const _everyLookKeyIsAMaterialProperty: MissingFromMaterial extends never ? true : never = true;
 void _everyLookKeyIsAMaterialProperty;
 
-export type LookParams = {
-  [K in LookKey]: K extends 'iridescenceThicknessRange' ? [number, number] : number;
-};
+export type LookParams = Record<LookKey, number>;
 
 /**
  * Properties written every frame from base x pose x effects, on every material `applyLook`
@@ -105,7 +104,8 @@ export const DEFAULTS: LookParams = {
   attenuationDistance: Number.POSITIVE_INFINITY,
   iridescence: 0,
   iridescenceIOR: 1.3,
-  iridescenceThicknessRange: [100, 400],
+  iridescenceThicknessMinimum: 100,
+  iridescenceThicknessMaximum: 400,
   sheen: 0,
   // three defaults this to black, which mutes the lobe even at sheen: 1. White means a spec
   // that sets only `sheen` gets a visible one.
@@ -138,7 +138,8 @@ export const LOOKS: Record<LookName, LookSpec> = {
     // The film, not the room, is where oil's colour comes from now: a near-black metal shows
     // reflected light tinted by the film, so a two-toned studio used to be doing this work.
     iridescenceIOR: 1.4,
-    iridescenceThicknessRange: [100, 520],
+    iridescenceThicknessMinimum: 100,
+    iridescenceThicknessMaximum: 520,
   },
   gem: {
     color: 0xffffff,
@@ -535,6 +536,11 @@ export function tintMaterialOf(spec: LookSpec): 'body' | 'decoration' {
  * range.
  */
 export interface LookSpec extends Partial<LookParams> {
+  /**
+   * @deprecated three 0.187 split this into `iridescenceThicknessMinimum` and
+   * `iridescenceThicknessMaximum`; set those. Read onto them where they are unset.
+   */
+  iridescenceThicknessRange?: [number, number];
   tintTarget?: TintTarget;
   /**
    * Colours the specular lobe with the look's own hue instead of leaving it white. Physically
@@ -580,6 +586,8 @@ const RANGES: Partial<Record<LookKey, [number, number]>> = {
   envMapIntensity: [0, Number.POSITIVE_INFINITY],
   ior: [1, 2.333],
   iridescenceIOR: [1, 5],
+  iridescenceThicknessMinimum: [0, Number.POSITIVE_INFINITY],
+  iridescenceThicknessMaximum: [0, Number.POSITIVE_INFINITY],
   dispersion: [0, 10],
 };
 
@@ -594,12 +602,15 @@ export function specOf(look: Look): LookSpec {
 /** Out of range clamps rather than throws: a bad number should dull a material, not kill an effect. */
 function resolveParams(spec: LookSpec): LookParams {
   const params = { ...DEFAULTS };
+  const range = spec.iridescenceThicknessRange;
   for (const key of PARAM_KEYS) {
-    const value = spec[key];
+    const value =
+      spec[key] ??
+      (key === 'iridescenceThicknessMinimum' ? range?.[0] : undefined) ??
+      (key === 'iridescenceThicknessMaximum' ? range?.[1] : undefined);
     if (value === undefined) continue;
-    const range = RANGES[key];
-    (params[key] as unknown) =
-      range && typeof value === 'number' ? Math.min(Math.max(value, range[0]), range[1]) : value;
+    const bounds = RANGES[key];
+    params[key] = bounds ? Math.min(Math.max(value, bounds[0]), bounds[1]) : value;
   }
   return params;
 }
@@ -639,7 +650,6 @@ export function applyLook(material: THREE.MeshPhysicalMaterial, look: Look, tint
   for (const key of APPLIED_KEYS) {
     const value = params[key];
     if (COLOR_KEYS.has(key)) (material[key] as THREE.Color).set(value as number);
-    else if (Array.isArray(value)) target[key] = [...value];
     else target[key] = value;
   }
   writeFlakeUniforms(material.userData.flake as FlakeUniforms, spec.flake);

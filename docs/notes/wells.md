@@ -129,7 +129,7 @@ missing cap from a dark one.
   sheet avoids it by dithering.
 - **A look's `thickness` is in world units.** `gem` ships 1.4 em for a letter; a stone is a
   twentieth of that, so inheriting it renders pavé as black holes. `attenuationDistance` and
-  `iridescenceThicknessRange` carry the same hazard.
+  `iridescenceThicknessMinimum` and `-Maximum` carry the same hazard.
 - **Nothing models a socket.** The seat is emergent — a hole through the plate floored by the slab —
   so there is no contact test between a stone and its well.
 

@@ -14,9 +14,6 @@ import { Rail } from './Rail.js';
 import { drawn, exposeReadout } from './readout.js';
 import { useShared } from './state.js';
 
-/** A panel's settings are in its toolbar: a sidebar in every panel would take a third of each. */
-const SUPPRESS = ['settings'];
-
 /** Hands the lab's context to whatever outside it opens and closes trials. */
 function Attach({ attach }: { attach: (lab: LabContextValue) => void }) {
   const lab = useLabContext();
@@ -57,7 +54,6 @@ export function App({ legacy }: { legacy: Saved | null }) {
       storageKey="klieg:tube-lab"
       over={over}
       labChrome={labChrome}
-      suppress={SUPPRESS}
     >
       <Attach attach={attach} />
     </Lab>

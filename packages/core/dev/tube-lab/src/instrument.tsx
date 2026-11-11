@@ -1,7 +1,6 @@
 import { HOME, LIMITS } from '@shared/orbit.js';
 import { defineInstrument, f } from '@weasel-js/labkit';
 import { Panel } from './Panel.js';
-import { PanelBar } from './PanelBar.js';
 import {
   MODES,
   type PanelMode,
@@ -11,7 +10,6 @@ import {
   type RampSource,
 } from './panels.js';
 import { SHARED } from './rail/schema.js';
-import { DEFAULT_SHARED } from './shared.js';
 import type { PanelConfig } from './trials.js';
 
 const HEAD_ON = { ...HOME, near: 0.1, far: 100 };
@@ -46,19 +44,6 @@ function panelInstrument(pose: Pose) {
     config,
     initialState: () => ({}),
     orbit: { initialView: home, limits: LIMITS },
-    chrome: [
-      {
-        id: 'panel',
-        region: 'toolbar',
-        render: (c) => (
-          <PanelBar
-            config={c.config as PanelConfig}
-            shared={c.overValues ?? DEFAULT_SHARED}
-            setConfig={c.setConfig}
-          />
-        ),
-      },
-    ],
     render: (ctx) => <Panel {...ctx.config} over={ctx.over} home={home} />,
   });
 }

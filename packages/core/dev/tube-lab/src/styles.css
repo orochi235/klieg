@@ -11,6 +11,11 @@ body,
   background: var(--wzl-surface-sunken);
 }
 
+/* labkit's translucent trial surface would sit over that buffer and veil every panel. */
+.lk-lab .lk-trial {
+  background: transparent;
+}
+
 .panel {
   position: relative;
   height: 100%;
@@ -18,11 +23,6 @@ body,
   font-size: 12px;
   cursor: grab;
   user-select: none;
-}
-.panel-bar {
-  display: flex;
-  align-items: center;
-  gap: 4px;
 }
 .panel__home {
   position: absolute;

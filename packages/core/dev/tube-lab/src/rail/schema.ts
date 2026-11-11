@@ -2,7 +2,6 @@ import type { PathSource } from '@core/render/tube/index.js';
 import { f, resolveConfigSchema } from '@weasel-js/labkit';
 import { MODES } from '../panels.js';
 import { TUBE_LOOKS } from '../spec.js';
-import { detent } from './DetentRow.js';
 import { PERCENT, tubeRows } from './tube.js';
 import { GRADIENT_DOMAINS, LAYERS, STOP_COUNT } from './values.js';
 
@@ -31,7 +30,7 @@ function shape() {
       .unit(PERCENT)
       .label('connect ← → break')
       .section('corners')
-      .render(detent([0, 1]))
+      .stops([0, 1])
       .describe(
         'What each corner does. Only the ratio reaches the cut, which is why this is one slider and not two. 0 is ALL_CONNECT, 100 is ALL_BREAK. A hard corner drawn connect must fillet, and a fillet with no room breaks anyway.',
       ),

@@ -1,5 +1,4 @@
 import { f } from '@weasel-js/labkit';
-import { detent } from './DetentRow.js';
 
 export const PERCENT = { suffix: '%', scale: 0.01, precision: 0 };
 
@@ -46,7 +45,7 @@ export function tubeRows() {
       .step(0.001)
       .suffix('em')
       .section('tube')
-      .render(detent([0]))
+      .stops([0])
       .describe(
         'Isocontour level in em: negative insets, 0 rides the outline, positive stands off. Topological rather than a scale — contours merge, counters close and thin strokes vanish as it moves, so the contour count steps instead of sliding. 0 is the only level with a geometric meaning.',
       ),
@@ -93,7 +92,7 @@ export function tubeRows() {
       .unit(PERCENT)
       .label('wall depth')
       .section('tube')
-      .render(detent([0.5]))
+      .stops([0.5])
       .describe(
         'Where a wall run sits in the extruded side, 0 back to 100 front. Depth plus rise is clamped to the depth, so 50% is the only setting whose rise swings symmetrically — off center, half the perimeter flattens against the clamp. Needs `wall` in surfaces.',
       ),

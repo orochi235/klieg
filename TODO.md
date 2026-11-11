@@ -26,3 +26,11 @@ frame has drawn, and resizing a buffer clears it. So a canvas may show empty for
 resize until the next tick redraws it. Inferred from the order of events while building the refit
 (2026-11-10), not seen: headless capture never caught it. Watch a slow resize in a real browser
 before deciding whether to redraw inside the callback.
+
+## labkit does not re-measure a trial whose sidebar slides it
+
+In labkit 1.18.2, a trial's Settings sidebar settling after load slides the panel sideways, and the
+lab never re-measures the tile, so the tube lab drew every letter about 90 px off its tile (seen
+2026-11-11). The tube lab sidesteps it by hiding the per-trial sidebar and putting letter, mode and
+ramp source in each trial's toolbar. Report it to weasel; once fixed, decide whether the sidebar
+should come back.

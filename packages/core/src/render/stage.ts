@@ -208,9 +208,14 @@ export class Stage {
   textLayer: HTMLElement | null = null;
   renderer: THREE.WebGLRenderer | null = null;
   environment: THREE.WebGLRenderTarget | null = null;
+  /** Bumped each time `resize` finds the box has moved, so a running word knows to refit. */
+  sizeVersion = 0;
 
   /** CSS pixels the canvas reaches past the anchor on every side. Whole, so its box stays so. */
   private bleedPx = 0;
+
+  /** What the canvas was last sized for; null until the renderer's first `resize`. */
+  private sizedFor: { width: number; height: number; ratio: number } | null = null;
 
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private detachResize: (() => void) | null = null;
@@ -368,11 +373,18 @@ export class Stage {
   resize(): void {
     if (!this.renderer) return;
     const box = this.measure();
+    const ratio = pixelRatio();
+    // Sizing the drawing buffer clears it, and a window resize reaches an anchor that never moved.
+    const last = this.sizedFor;
+    if (last && last.width === box.width && last.height === box.height && last.ratio === ratio) {
+      return;
+    }
+    this.sizedFor = { width: box.width, height: box.height, ratio };
+    this.sizeVersion++;
     const w = Math.max(1, box.width);
     const h = Math.max(1, box.height);
     // Zoom and a move to another display change devicePixelRatio and fire resize; setPixelRatio
     // reallocates the framebuffer, so only pay for it when the ratio actually moved.
-    const ratio = pixelRatio();
     if (this.renderer.getPixelRatio() !== ratio) this.renderer.setPixelRatio(ratio);
 
     const bleed = this.bleedFor(h, ratio);
@@ -554,6 +566,7 @@ export class Stage {
     this.detachResize = null;
     this.detachObserver = null;
     this.restorePosition = null;
+    this.sizedFor = null;
     this.scene.environment = null;
 
     try {

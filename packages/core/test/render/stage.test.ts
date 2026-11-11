@@ -165,6 +165,32 @@ describe('resize', () => {
     expect(() => stage.resize()).not.toThrow();
     expect(stage.aspect).toBe(1);
   });
+
+  it('sizes the buffer only when the box moved, and counts each move', () => {
+    const el = { clientWidth: 400, clientHeight: 100 };
+    const stage = new Stage({
+      idleTimeoutMs: 1000,
+      placement: { kind: 'element', el: el as HTMLElement },
+    });
+    const setSize = vi.fn();
+    stage.renderer = {
+      getPixelRatio: () => 1,
+      setPixelRatio: () => {},
+      setSize,
+    } as unknown as THREE.WebGLRenderer;
+
+    stage.resize();
+    const sized = stage.sizeVersion;
+    // A window resize reaches an anchor that did not move; sizing the buffer would clear it.
+    stage.resize();
+    expect(setSize).toHaveBeenCalledTimes(1);
+    expect(stage.sizeVersion).toBe(sized);
+
+    el.clientWidth = 200;
+    stage.resize();
+    expect(setSize).toHaveBeenCalledTimes(2);
+    expect(stage.sizeVersion).toBe(sized + 1);
+  });
 });
 
 describe('webglSupported', () => {

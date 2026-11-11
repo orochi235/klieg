@@ -2,12 +2,13 @@
 
 Work klieg owes that has no other home yet.
 
-## A placed word does not refit when its element resizes
+## A wrapped word keeps its line breaks through a resize
 
-A fire sizes the word once, from `stage.viewportBudget` when it starts. After that, the stage's
-`ResizeObserver` only resizes the canvas and its lens, so a word in an element that narrows mid-fire
-overflows it, and one in an element that grows stays small. Seen in the composition lab when a
-second trial halves the first one's width; the lab works around it by firing again on resize.
+A running fire refits to its resized element by scaling the same layout (2026-11-10), so a word
+fired with `wrap: true` keeps the breaks it chose for the first box. In a box that turns from
+wide to tall it stays on one line and shrinks, where a fresh fire would break it and render larger.
+Re-wrapping mid-fire moves letters the way a `stages` regroup does, so it would need the regroup's
+part and travel handling.
 
 ## The tube lab's orbit has not had the face-pivot fix
 

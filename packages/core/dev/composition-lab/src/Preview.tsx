@@ -70,19 +70,19 @@ export function Preview({ composition, elapsed, transform, viewportRef }: Previe
     if (turn.current) mine.fire.turn(turn.current);
     mine.fire.catch(() => {});
 
-    // A fire fits the word to its box once, when it starts, so a box that changes size (a second
-    // trial narrowing this one) gets a new fire rather than a word that overflows or shrinks.
-    const fitted = { width: target.clientWidth, height: target.clientHeight };
-    let wait = 0;
+    // The fire refits to a resized box on its next tick, and a paused transport sends none. A
+    // frame later, so the stage's own observer has resized the canvas first.
+    let frame = 0;
     const observer = new ResizeObserver(() => {
-      if (target.clientWidth === fitted.width && target.clientHeight === fitted.height) return;
-      clearTimeout(wait);
-      wait = window.setTimeout(() => setEpoch((n) => n + 1), 150);
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (rig.current === mine && mine.live) mine.clock.advance(0);
+      });
     });
     observer.observe(target);
 
     return () => {
-      clearTimeout(wait);
+      cancelAnimationFrame(frame);
       observer.disconnect();
       rig.current = null;
       const probe = globalThis as { kliegLab?: typeof instance };

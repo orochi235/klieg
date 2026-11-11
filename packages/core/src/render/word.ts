@@ -13,7 +13,6 @@ import {
   type Arrangement,
   arrange,
   type Fit,
-  fitOf,
   type GlyphBounds,
   placeBlock,
 } from '../text/placement.js';
@@ -22,6 +21,7 @@ import type { Transform } from '../transform.js';
 import { WordCaches } from './caches.js';
 import type { DecorationBuilder, DecorationPart } from './decorations/registry.js';
 import { decorationBuilderFor } from './decorations/registry.js';
+import { FitTrack } from './fit-track.js';
 import { seedFlake } from './flake.js';
 import type { InflateOptions } from './inflate.js';
 import {
@@ -122,11 +122,7 @@ export class Word {
   private readonly envMap: THREE.Texture | null;
   /** Every material this word made carrying the studio, so a lighting turn can reach them all. */
   private readonly envMaterials: THREE.MeshPhysicalMaterial[] = [];
-  private readonly budget: Budget;
-  private fit: Fit;
-  /** The fit before the last regroup; `setFitProgress` interpolates between this and `fitTo`. */
-  private fitFrom: Fit;
-  private fitTo: Fit;
+  private readonly track: FitTrack;
   /** Reading position within the live group; a regroup renumbers it. */
   private readonly idxOf: number[] = [];
   /** Set on a letter a regroup dropped; its info stops tracking the live group. */
@@ -170,10 +166,8 @@ export class Word {
   private readonly bodyBase: FrameOwnedBase;
   /** Multiplier on every base this word resolves through `frameBase`. 1 leaves them untouched. */
   private readonly dim: number;
-  /** The scale this word was told to hold, if it was; undefined leaves the budget to fit it. */
-  private readonly forcedScale: number | undefined;
   /** How far back the fit places the whole group, in world units. */
-  private readonly behind: number;
+  private behind: number;
   private readonly tracking: number;
   private disposed = false;
 
@@ -192,7 +186,6 @@ export class Word {
     opts: WordOptions = {},
   ) {
     this.dim = opts.dim ?? 1;
-    this.forcedScale = opts.fitScale;
     this.behind = opts.behind ?? 0;
     this.cameraZ = opts.cameraZ;
     this.tracking = opts.tracking ?? 0;
@@ -218,7 +211,6 @@ export class Word {
       : layoutRunsForKlieg(runs, this.layoutOpts());
 
     this.metrics = font.metrics;
-    this.budget = budget;
 
     const placed = placeBlock(laid, (char) => this.drawsInk(char), budget.lineEdge);
     this.lineCount = placed.lineCount;
@@ -242,9 +234,7 @@ export class Word {
       this.geoMaxY.push(drawn ? drawn.max.y : null);
     }
     this.liveCount = placed.x.length;
-    this.fit = fitOf(placed, this.glyphBounds(), budget, this.forcedScale);
-    this.fitFrom = this.fit;
-    this.fitTo = this.fit;
+    this.track = new FitTrack({ placed, bounds: this.glyphBounds() }, budget, opts.fitScale);
     this.applyFit(this.fit);
 
     this.builder?.prime?.(this.charOf);
@@ -669,9 +659,9 @@ export class Word {
    */
   atRest(): boolean {
     if (
-      this.fit.scale !== this.fitTo.scale ||
-      this.fit.midY !== this.fitTo.midY ||
-      this.fit.offsetX !== this.fitTo.offsetX
+      this.fit.scale !== this.track.target.scale ||
+      this.fit.midY !== this.track.target.midY ||
+      this.fit.offsetX !== this.track.target.offsetX
     )
       return false;
     for (let i = 0; i < this.letters.length; i++) {
@@ -749,7 +739,7 @@ export class Word {
       styledRunsOf(arrange(chars, as), this.family, this.tracking),
       this.layoutOpts(),
     );
-    const placed = placeBlock(laid, (char) => this.drawsInk(char), this.budget.lineEdge);
+    const placed = placeBlock(laid, (char) => this.drawsInk(char), this.track.lineEdge);
 
     this.lineCount = placed.lineCount;
     this.columnCount = placed.columnCount;
@@ -779,8 +769,7 @@ export class Word {
       part.ink.maxY -= dy;
     }
 
-    this.fitFrom = this.fit;
-    this.fitTo = fitOf(placed, this.glyphBounds(kept), this.budget, this.forcedScale);
+    this.track.retarget({ placed, bounds: this.glyphBounds(kept) });
     this.setGradientBounds();
     this.layoutVersion++;
 
@@ -809,18 +798,26 @@ export class Word {
    * scale the whole group so the letters spread with it.
    */
   setFitProgress(u: number): void {
-    const w = Math.max(0, Math.min(1, u));
-    // Lerping to w = 1 lands a ULP short of fitTo, leaving the settled fit uncomparable by equality.
-    this.fit =
-      w === 1
-        ? { ...this.fitTo }
-        : {
-            scale: this.fitFrom.scale + (this.fitTo.scale - this.fitFrom.scale) * w,
-            midY: this.fitFrom.midY + (this.fitTo.midY - this.fitFrom.midY) * w,
-            midX: this.fitFrom.midX + (this.fitTo.midX - this.fitFrom.midX) * w,
-            offsetX: this.fitFrom.offsetX + (this.fitTo.offsetX - this.fitFrom.offsetX) * w,
-          };
-    this.applyFit(this.fit);
+    this.applyFit(this.track.progress(u));
+  }
+
+  /**
+   * Fits the same layout to a new box, at the same point of any regroup's move, and leaves every
+   * letter's pose and the `transform` as they are. A word sized off another one is handed the
+   * scale and depth it now holds.
+   */
+  refit(budget: Budget, sized?: { fitScale: number; behind: number }): void {
+    if (sized) this.behind = sized.behind;
+    this.applyFit(this.track.refit(budget, sized?.fitScale));
+  }
+
+  /** The scale the layout this word was built with fits at, in the box as it stands now. */
+  get baseScale(): number {
+    return this.track.baseScale;
+  }
+
+  private get fit(): Fit {
+    return this.track.fit;
   }
 
   apply(

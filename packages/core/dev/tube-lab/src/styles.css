@@ -62,3 +62,16 @@ body,
 .rail {
   font-family: var(--wzl-font-ui);
 }
+
+.panel-title {
+  display: inline-flex;
+  gap: 0.6em;
+  font-family: var(--wzl-font-mono);
+}
+.panel-title__letter {
+  font-weight: 700;
+  color: var(--wzl-accent);
+}
+.panel-title__mode {
+  color: var(--wzl-fg-muted);
+}

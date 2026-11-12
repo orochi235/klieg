@@ -1,6 +1,7 @@
 import { HOME, LIMITS } from '@shared/orbit.js';
 import { defineInstrument, f } from '@weasel-js/labkit';
 import { Panel } from './Panel.js';
+import { PanelTitle } from './PanelTitle.js';
 import {
   MODES,
   type PanelMode,
@@ -44,6 +45,7 @@ function panelInstrument(pose: Pose) {
     config,
     initialState: () => ({}),
     orbit: { initialView: home, limits: LIMITS },
+    renderTitle: (_title, trial) => <PanelTitle config={trial.config} />,
     render: (ctx) => <Panel {...ctx.config} over={ctx.over} home={home} />,
   });
 }

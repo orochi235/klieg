@@ -14,6 +14,9 @@ import { Rail } from './Rail.js';
 import { drawn, exposeReadout } from './readout.js';
 import { useShared } from './state.js';
 
+/** Keys stay bound: one lab-wide history serves every trial, so a row of buttons per trial repeats it. */
+const HIDE = ['undo', 'redo'];
+
 /** Hands the lab's context to whatever outside it opens and closes trials. */
 function Attach({ attach }: { attach: (lab: LabContextValue) => void }) {
   const lab = useLabContext();
@@ -54,6 +57,8 @@ export function App({ legacy }: { legacy: Saved | null }) {
       storageKey="klieg:tube-lab"
       over={over}
       labChrome={labChrome}
+      sidebar="float"
+      hide={HIDE}
     >
       <Attach attach={attach} />
     </Lab>

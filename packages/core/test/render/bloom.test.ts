@@ -24,11 +24,14 @@ interface Op {
   scissorTest: boolean;
 }
 
-function harness(width = 640, height = 480) {
+function harness(width = 640, height = 480, ratio = 1) {
+  let target: THREE.WebGLRenderTarget | null = null;
   const size = new THREE.Vector2(width, height);
+  // three 0.187 scales a viewport or scissor by the pixel ratio only on the canvas; on a target
+  // it takes them as device pixels. Recorded rects are device pixels, as the GPU sees them.
+  const device = (r: Rect4): Rect4 => (target ? r : (r.map((v) => v * ratio) as Rect4));
   const passes: Pass[] = [];
   const ops: Op[] = [];
-  let target: THREE.WebGLRenderTarget | null = null;
 
   // Applied is what's live for the current target; own is what the caller last asked for
   // directly. setRenderTarget(rt) overwrites applied from rt's own size; setRenderTarget(null)
@@ -41,15 +44,16 @@ function harness(width = 640, height = 480) {
   let ownScissorTest = false;
 
   const renderer = {
-    getDrawingBufferSize: (out: THREE.Vector2) => out.copy(size),
+    getDrawingBufferSize: (out: THREE.Vector2) => out.copy(size).multiplyScalar(ratio),
     getSize: (out: THREE.Vector2) => out.copy(size),
+    getPixelRatio: () => ratio,
     setViewport: vi.fn((x: number, y: number, w: number, h: number) => {
       ownViewport = [x, y, w, h];
-      viewport = ownViewport;
+      viewport = device(ownViewport);
     }),
     setScissor: vi.fn((x: number, y: number, w: number, h: number) => {
       ownScissor = [x, y, w, h];
-      scissor = ownScissor;
+      scissor = device(ownScissor);
     }),
     setScissorTest: vi.fn((on: boolean) => {
       ownScissorTest = on;
@@ -62,8 +66,8 @@ function harness(width = 640, height = 480) {
         scissor = null;
         scissorTest = false;
       } else {
-        viewport = ownViewport;
-        scissor = ownScissor;
+        viewport = device(ownViewport);
+        scissor = ownScissor && device(ownScissor);
         scissorTest = ownScissorTest;
       }
     }),
@@ -286,5 +290,16 @@ describe('BloomPath.render into a rect', () => {
     expect(composite.scissor).toEqual([100, 60, 200, 150]);
     expect(composite.scissorTest).toBe(true);
     expect(renderer.setScissorTest).toHaveBeenLastCalledWith(false);
+  });
+  it('places the rect in device pixels on a high-density screen', () => {
+    const { renderer, passes } = harness(640, 480, 2);
+    new BloomPath(renderer).render(new THREE.Scene(), new THREE.PerspectiveCamera(), RECT);
+
+    const scenePass = pass(passes, 0);
+    expect([scenePass.target?.width, scenePass.target?.height]).toEqual([1280, 960]);
+    expect(scenePass.viewport).toEqual([200, 120, 400, 300]);
+    const composite = pass(passes, 6);
+    expect(composite.viewport).toEqual([0, 0, 1280, 960]);
+    expect(composite.scissor).toEqual([200, 120, 400, 300]);
   });
 });

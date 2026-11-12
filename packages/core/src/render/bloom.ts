@@ -140,11 +140,13 @@ export class BloomPath {
     // Owned, not inherited: the composite's setRenderTarget(null) restores the renderer's own
     // viewport and scissor, so a caller who left either armed would clip or squash it.
     r.setScissorTest(false);
-    r.setViewport(0, 0, size.x, size.y);
+    // On a target three takes the viewport in device pixels; only the canvas gets the ratio applied.
+    const ratio = r.getPixelRatio();
+    r.setViewport(0, 0, this.allocated.x, this.allocated.y);
     r.clear();
     // Viewport only, never a scissor: three resolves this target's MSAA buffer with a
     // blitFramebuffer a scissor would clip, stranding a neighbour in the margins for the blur.
-    if (rect) r.setViewport(rect.x, rect.y, rect.w, rect.h);
+    if (rect) r.setViewport(rect.x * ratio, rect.y * ratio, rect.w * ratio, rect.h * ratio);
     r.render(scene, camera);
 
     this.thresholdSrc.value = this.sceneRT.texture;

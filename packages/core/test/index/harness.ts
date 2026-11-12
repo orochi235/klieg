@@ -201,6 +201,7 @@ export function setup(): void {
   renderer = {
     getDrawingBufferSize: (out: THREE.Vector2) => out.set(320, 240),
     getSize: (out: THREE.Vector2) => out.set(320, 240),
+    getPixelRatio: () => 1,
     setRenderTarget: vi.fn(),
     setViewport: vi.fn(),
     setScissorTest: vi.fn(),

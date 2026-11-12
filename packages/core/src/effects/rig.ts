@@ -1,5 +1,4 @@
-import { type Channel, ink, kit, last, max, mul, oklab, sum, vec } from '@msb235/blits';
-import type { Vec3 } from '../pose.js';
+import { ink, kit, last, max, mul, oklab, sum, vec } from '@msb235/blits';
 import type { PartDelta, PartPose } from './types.js';
 
 /**
@@ -11,11 +10,11 @@ export const PART_KIT = kit<PartPose>({
   gain: mul(),
   color: ink(last()),
   dark: max(),
-  position: vec(3, sum()) as unknown as Channel<Vec3>,
-  rotation: vec(3, sum()) as unknown as Channel<Vec3>,
+  position: vec(3, sum()),
+  rotation: vec(3, sum()),
   scale: mul(),
   crawl: sum(),
-  light: vec(3, sum()) as unknown as Channel<Vec3>,
+  light: vec(3, sum()),
 });
 
 export const PART_CHANNELS = [

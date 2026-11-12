@@ -6,9 +6,9 @@ therefore never picks up a break. When 1.0 comes is chosen deliberately, not rea
 
 ## Unreleased
 
-### Runs on @msb235/blits 1.2.0 and @weasel-js 1.18.2
+### Runs on @msb235/blits 1.3.0 and @weasel-js 1.18.2
 
-klieg pins `@msb235/blits` at exactly `1.2.0` and `@weasel-js/text` and `@weasel-js/font` at
+klieg pins `@msb235/blits` at exactly `1.3.0` and `@weasel-js/text` and `@weasel-js/font` at
 exactly `1.18.2`, and its dev labs build on the matching `core`, `ui`, `labkit`, `diagram`,
 `theme` and `animator`. An app on blits 1.x or weasel 1.18.2 now shares one copy with klieg. The
 composition lab no longer needs a weasel checkout beside klieg to typecheck or serve.

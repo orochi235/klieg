@@ -26,3 +26,13 @@ frame has drawn, and resizing a buffer clears it. So a canvas may show empty for
 resize until the next tick redraws it. Inferred from the order of events while building the refit
 (2026-11-10), not seen: headless capture never caught it. Watch a slow resize in a real browser
 before deciding whether to redraw inside the callback.
+
+## A hinge's stops never run on blits' lanes
+
+A `hinge(signal, factory)` plays as a `mix.blend` of its stops, and a blend is a role in blits. blits
+keeps a role off its lanes when it writes a channel that folds by `last`, and `EffectFrame` declares
+every voice as writing all of `PART_CHANNELS`, `color` (an `ink(last())`) among them. So every stop
+runs on blits' general path even when no stop writes `color`, whatever the signal. A hinge over a
+patch, which plays as one weighted voice, does run on a lane under `level()` (checked 2026-11-12
+on blits 1.3.0 by reading the mix's lanes per voice id from `describe()`). Getting stops onto lanes
+means declaring what an effect patch writes, which `EffectPatch` has no field for.

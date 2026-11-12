@@ -30,8 +30,8 @@ export const REST: Pose = {
  * contribution.
  */
 export const POSE_KIT = kit<Pose>({
-  position: vec(3, sum()) as unknown as Channel<Vec3>,
-  rotation: vec(3, sum()) as unknown as Channel<Vec3>,
+  position: vec(3, sum()),
+  rotation: vec(3, sum()),
   scale: mul(),
   opacity: mul(),
 });

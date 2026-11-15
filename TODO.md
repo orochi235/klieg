@@ -36,3 +36,22 @@ runs on blits' general path even when no stop writes `color`, whatever the signa
 patch, which plays as one weighted voice, does run on a lane under `level()` (checked 2026-11-12
 on blits 1.3.0 by reading the mix's lanes per voice id from `describe()`). Getting stops onto lanes
 means declaring what an effect patch writes, which `EffectPatch` has no field for.
+
+## Word caches grow without bound for the life of an instance
+
+`packages/core/src/render/caches.ts:WordCaches` keeps glyph geometries (keyed by font, character,
+depth, and inflation), contours, tube blueprints, and baked sheets until `destroy()`; nothing evicts
+an entry, and the stage idling or unmounting leaves the maps full. A long-lived instance that fires
+many distinct looks, parameters, or scripts accumulates GPU and heap assets while it looks idle.
+The fix needs a design choice: an entry or memory budget with leases protecting what live words
+hold, or a documented safe reset at an idle boundary. Inferred from the source; no memory
+measurement was taken. (filed 2026-11-15 from automated review)
+
+## Concurrent sweep effects fight over one environment rotation
+
+`packages/core/src/api.ts` (the `policy` option's doc comment) says `concurrent` is unsound for the
+`sweep` lighting: every live effect writes the shared environment rotation from its own elapsed
+time, so the highlight sawtooths between their phases. The API still accepts that combination, so a
+valid-looking call gives unstable output. Pick one contract: per-effect lighting isolation,
+instance-owned lighting that effects do not drive, or rejecting a concurrent `sweep` fire at the
+call site. (filed 2026-11-15 from automated review)

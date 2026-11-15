@@ -45,7 +45,8 @@ export interface Sign {
    * refetches the font, so driving it rapidly stacks contexts against the browser's cap.
    */
   update(patch: Partial<SignOptions>): void;
-  destroy(): void;
+  /** Resolves once the sign's instance has finished tearing down. */
+  destroy(): Promise<void>;
 }
 
 export function sign(anchor: HTMLElement, options: SignOptions): Sign {
@@ -74,7 +75,7 @@ export function sign(anchor: HTMLElement, options: SignOptions): Sign {
       ...(opts.camera ? { camera: opts.camera } : {}),
     });
     if (!klieg.supported) {
-      klieg.destroy();
+      void klieg.destroy();
       return;
     }
     instance = klieg;
@@ -111,11 +112,12 @@ export function sign(anchor: HTMLElement, options: SignOptions): Sign {
       });
   }
 
-  function stop(): void {
+  function stop(): Promise<void> {
     run++;
-    instance?.destroy();
+    const disposal = instance?.destroy() ?? Promise.resolve();
     instance = null;
     setLit(false);
+    return disposal;
   }
 
   start();
@@ -126,13 +128,13 @@ export function sign(anchor: HTMLElement, options: SignOptions): Sign {
     },
     update(patch) {
       // Before the swap: the callback that saw the sign light is the one owed its `false`.
-      stop();
+      void stop();
       opts = { ...opts, ...patch };
       start();
     },
     destroy() {
       destroyed = true;
-      stop();
+      return stop();
     },
   };
 }

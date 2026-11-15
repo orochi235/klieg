@@ -170,6 +170,15 @@ describe('sign', () => {
     expect(onLit).toHaveBeenLastCalledWith(true);
   });
 
+  it("resolves destroy with the instance's own teardown", async () => {
+    const teardown = Promise.resolve();
+    destroy.mockReturnValueOnce(teardown);
+    const it_ = sign(anchor, { font: '/f.ttf' });
+
+    expect(it_.destroy()).toBe(teardown);
+    expect(destroy).toHaveBeenCalledOnce();
+  });
+
   it('reports unlit once when destroyed, not again when its fire settles', async () => {
     const onLit = vi.fn();
     const it_ = sign(anchor, { font: '/f.ttf', onLit });

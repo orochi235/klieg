@@ -211,6 +211,7 @@ export function createKlieg(options: KliegOptions): Klieg {
   const caches = new WordCaches();
   const fonts = registryFor(options);
   let destroyed = false;
+  let disposal: Promise<void> | null = null;
   let fired = false;
   const pointer = new PointerWatch();
   const inst: Instance = {
@@ -343,16 +344,18 @@ export function createKlieg(options: KliegOptions): Klieg {
       };
     },
     destroy() {
+      if (disposal) return disposal;
       destroyed = true;
       warmer?.cancel();
       pointer.release();
       layers.detachAll();
       // A running effect only notices the abort on its next tick, and tearing down first would
       // leave it re-arming idle teardown against a stage that is already gone.
-      void queue.cancelAll().then(() => {
+      disposal = queue.cancelAll().then(() => {
         stage.unmount();
         caches.dispose();
       });
+      return disposal;
     },
   };
 }

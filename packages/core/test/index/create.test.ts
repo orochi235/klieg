@@ -166,6 +166,25 @@ describe('createKlieg', () => {
     expect(calls).toEqual(['settled', 'unmount']);
   });
 
+  it('resolves destroy once the stage is down, returning one promise to every caller', async () => {
+    const bk = create();
+    const done = bk.fire('HELLO', { hold: 5000 });
+    await flush();
+    clock.advance(16);
+
+    const first = bk.destroy();
+    const second = bk.destroy();
+    expect(second).toBe(first);
+    expect(calls).not.toContain('unmount');
+
+    await first;
+    await done;
+    expect(calls).toEqual(['mount', 'idle', 'unmount']);
+    expect(bk.destroy()).toBe(first);
+    await flush();
+    expect(calls.filter((c) => c === 'unmount')).toHaveLength(1);
+  });
+
   it('rejects the effect and comes down when a tick throws', async () => {
     const bk = create();
     setOnRender(() => {

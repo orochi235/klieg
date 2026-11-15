@@ -39,7 +39,8 @@ bk.destroy();
 It rejects if the font cannot be fetched or parsed — the next `fire()` retries the load rather
 than failing forever. A `font` naming nothing in `fonts` throws where you call it, listing what is
 registered: that is a typo in your own code, not a runtime condition to handle. `destroy()` cancels everything in flight and releases the GL context once
-the running effect has settled.
+the running effect has settled; it returns a promise that resolves when that teardown is done, and
+repeated calls return the same one.
 
 `onMark` reports the boundaries inside an effect. `{ mark: 'active' }` is the instant the word has
 landed and is at full presence — the moment to swap a page behind an established flourish rather

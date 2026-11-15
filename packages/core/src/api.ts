@@ -356,6 +356,10 @@ export interface Klieg {
    * so it follows a `transform`, the letters' pose and a moved `eye`. A backdrop is never answered.
    */
   pointOn(clientX: number, clientY: number): TypePoint | null;
-  /** Cancels everything in flight; the stage comes down once the running effect has settled. */
-  destroy(): void;
+  /**
+   * Cancels everything in flight; the stage comes down once the running effect has settled. The
+   * promise resolves once the stage is unmounted and the caches are released. Repeated calls,
+   * including calls made while disposal is under way, return the same promise.
+   */
+  destroy(): Promise<void>;
 }

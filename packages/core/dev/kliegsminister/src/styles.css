@@ -15,12 +15,12 @@
 }
 
 /* Two columns of rows rather than DetailList's one, so the readout leaves the corner it measures in view. */
-.junction__readout {
+.junction dl.junction__readout[data-values] {
   display: grid;
   grid-template-columns: repeat(2, max-content minmax(0, 1fr));
   column-gap: 1.6rem;
 }
-.junction__readout > div {
+.junction .junction__readout > div {
   grid-column: span 2;
 }
 

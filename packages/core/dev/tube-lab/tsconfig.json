@@ -4,8 +4,7 @@
     "outDir": "../.tsbuild/tube-lab",
     "paths": {
       "@core/*": ["../../src/*"],
-      "@shared/*": ["../shared/*"],
-      "@weasel-js/*": ["../../../../../weasel/packages/*/dist/index.d.ts"]
+      "@shared/*": ["../shared/*"]
     },
     "rootDir": ".",
     "jsx": "react-jsx",

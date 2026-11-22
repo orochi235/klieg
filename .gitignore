@@ -18,3 +18,4 @@ CLAUDE.local.md
 
 # Screenshots the playwright MCP server drops when driving a lab.
 .playwright-mcp/
+.alpo.local.json

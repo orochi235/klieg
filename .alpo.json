@@ -1,0 +1,11 @@
+{
+  "libs": {
+    "weasel": {
+      "packages": [
+        "@weasel-js/*"
+      ],
+      "repo": "~/src/weasel",
+      "via": "vite"
+    }
+  }
+}

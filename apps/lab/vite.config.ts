@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { alpo } from '@msb235/alpo/vite';
 import { defineConfig } from 'vite';
 
 const entry = (path: string) => fileURLToPath(new URL(path, import.meta.url));
@@ -6,6 +7,7 @@ const entry = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 // The published package resolves to built output; the lab reads the workspace source instead, so
 // `dev` needs no prior build.
 export default defineConfig({
+  plugins: [alpo()],
   resolve: {
     alias: [
       {

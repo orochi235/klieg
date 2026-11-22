@@ -17,6 +17,7 @@
       "!**/dist",
       "!**/.tsbuild",
       "!**/node_modules",
+      "!.alpo*.json",
       "!.claude/worktrees",
       "!.superpowers",
       "!**/spikes",

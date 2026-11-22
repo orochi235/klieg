@@ -109,14 +109,7 @@ lab itself; unit tests of the transform have passed while the lab visibly drifte
 - **Plain `chromium.launch()` gets `chrome-headless-shell`, which rasterizes WebGL in software** and
   gets transmission wrong. The render spikes pass `channel: 'chromium'` and `--use-angle=metal`.
 - **A push to `main` touching `apps/lab/**` deploys the lab** through `pages.yml`.
-- **`WEASEL=<checkout>` serves every `@weasel-js` import from a weasel checkout's built
-  packages** (`dev/shared/weasel.ts`), for trying an unreleased labkit. It takes all of them at
-  once, because a labkit is built against its own core, and keeps klieg's React and three.
-- **The tube lab runs against `~/src/weasel` the same way** (`dev:tube-lab`, and its tsconfig's
-  `@weasel-js/*` path), for labkit's floating trial settings, `hide` and `renderTitle`'s config
-  (2026-11-11). Drop both once a weasel release carries them.
-- **The composition lab always runs against `~/src/weasel`** (its `dev:composition-lab` script
-  defaults `WEASEL` to the sibling checkout, and its tsconfig maps `@weasel-js/*` to that
-  checkout's `dist`), because its effects diagram uses `@weasel-js/diagram` APIs weasel has not
-  released. Build the checkout before serving; until a weasel release carries those APIs, the
-  repo's `typecheck` needs the checkout beside it.
+- **alpo serves `@weasel-js` from `~/src/weasel` when a lab needs an unreleased weasel change**
+  (`.alpo.json`; see `~/src/alpo/README.md`). `alpo link weasel --for "<why>"` switches every lab to
+  the checkout's built `dist`, `alpo unlink weasel` goes back to npm, and `alpo sweep` moves the pins
+  once a release carries the change. Unlinked, everything resolves the published packages.

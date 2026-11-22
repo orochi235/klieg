@@ -1,4 +1,4 @@
-import { ControlPanel, type LabOver, withValueAtPath } from '@weasel-js/labkit';
+import { ControlPanel, type LabOver, withConfigValueAt } from '@weasel-js/labkit';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { railSchema } from './rail/schema.js';
 import { isSpecPath } from './shared.js';
@@ -19,7 +19,7 @@ export const Rail = memo(function Rail({ over, onReset }: RailProps) {
   reset.current = onReset;
   const schema = useMemo(() => railSchema(() => reset.current()), []);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const config = draft ? withValueAtPath(over.values, draft.path, draft.value) : over.values;
+  const config = draft ? withConfigValueAt(over.values, draft.path, draft.value) : over.values;
 
   const { set } = over;
   const setConfig = useCallback(

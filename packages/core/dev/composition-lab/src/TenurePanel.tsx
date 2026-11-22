@@ -1,5 +1,5 @@
 import type { PartInfo } from '@core/effects/types.js';
-import { Readout } from '@weasel-js/labkit';
+import { DetailList, DetailRow } from '@weasel-js/ui/components/DetailList';
 import { useMemo } from 'react';
 import { type PassSamples, PER_PATCH_PASS } from './sample.js';
 import { tenureAndJump } from './tenure.js';
@@ -28,19 +28,19 @@ export function Tenure({ samples, parts, pass, epochMs, perPatchPass }: TenurePr
 
   return (
     <div className="cl-section">
-      <Readout
-        rows={[
-          {
-            label: 'tenure',
-            value: `${(r.meanTenureMs / 1000).toFixed(2)}s`,
-            grade: deferred || coarse ? 'warn' : undefined,
-          },
-          { label: 'epoch', value: epochMs === null ? null : `${(epochMs / 1000).toFixed(2)}s` },
-          { label: 'handovers', value: r.handovers, grade: idle ? 'warn' : undefined },
-          { label: 'jump', value: r.meanJumpParts.toFixed(1) },
-          { label: 'jump em', value: r.meanJumpEm.toFixed(2) },
-        ]}
-      />
+      <DetailList values="figures">
+        <DetailRow label="tenure" grade={deferred || coarse ? 'warn' : undefined}>
+          {`${(r.meanTenureMs / 1000).toFixed(2)}s`}
+        </DetailRow>
+        <DetailRow label="epoch">
+          {epochMs === null ? null : `${(epochMs / 1000).toFixed(2)}s`}
+        </DetailRow>
+        <DetailRow label="handovers" grade={idle ? 'warn' : undefined}>
+          {r.handovers}
+        </DetailRow>
+        <DetailRow label="jump">{r.meanJumpParts.toFixed(1)}</DetailRow>
+        <DetailRow label="jump em">{r.meanJumpEm.toFixed(2)}</DetailRow>
+      </DetailList>
       {deferred && epochMs !== null ? (
         <p className="cl-note">
           {(held / epochMs).toFixed(1)}× the epoch: roving hands over only where the inner reads as

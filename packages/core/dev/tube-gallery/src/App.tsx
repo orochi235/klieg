@@ -63,9 +63,9 @@ export function App() {
       for (const id of IDS) {
         const cell = cells.current.get(id);
         const rect = rects.get(id);
-        if (!cell || !rect || rect.w < 2 || rect.h < 2) continue;
+        if (!cell || !rect || rect.width < 2 || rect.height < 2) continue;
         cell.advance(elapsed.current);
-        cell.fit(rect.w / rect.h);
+        cell.fit(rect.width / rect.height);
         panels.push({ rect, scene: cell.scene, camera: cell.camera, bloom: bloomRef.current });
       }
       lab.draw(panels);

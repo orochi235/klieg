@@ -5,8 +5,8 @@ import * as THREE from 'three';
 export interface PanelRect {
   x: number;
   y: number;
-  w: number;
-  h: number;
+  width: number;
+  height: number;
 }
 
 export interface PanelDraw {
@@ -70,9 +70,9 @@ export class LabRenderer {
     const snap = (v: number) => Math.round(v * dpr) / dpr;
     for (const panel of panels) {
       const x = snap(panel.rect.x);
-      const w = snap(panel.rect.x + panel.rect.w) - x;
+      const w = snap(panel.rect.x + panel.rect.width) - x;
       // three measures a viewport from the bottom; a windease rect comes from the DOM's top.
-      const y = snap(this.height - panel.rect.y - panel.rect.h);
+      const y = snap(this.height - panel.rect.y - panel.rect.height);
       const h = snap(this.height - panel.rect.y) - y;
       if (w < 2 || h < 2) continue;
       panel.camera.aspect = w / h;

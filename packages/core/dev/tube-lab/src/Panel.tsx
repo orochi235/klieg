@@ -107,7 +107,7 @@ export function Panel({ letter: typed, mode, source, over, home: opening }: Pane
         }
         cell.key = now.key;
       }
-      cell.pose(rect.w / rect.h, now.orbit.camera ?? now.opening, now.opening);
+      cell.pose(rect.width / rect.height, now.orbit.camera ?? now.opening, now.opening);
       drawn.canvas = canvas;
       drawn.cells.set(tileId, cell);
       drawn.rects.set(tileId, rect);

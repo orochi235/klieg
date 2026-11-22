@@ -142,8 +142,8 @@ export function Diagram() {
       <DiagramView
         ref={view}
         specs={specs}
-        selected={picked}
-        onSelect={(id) => setPicked(id && partOf(id) ? id : null)}
+        selection={picked}
+        onSelectionChange={(id) => setPicked(id && partOf(id) ? id : null)}
         pickEdges
         onHover={(id) => {
           if (id !== null) setHovered(endsOf(id) ? id : null);

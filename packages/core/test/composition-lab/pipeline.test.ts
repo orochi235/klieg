@@ -103,7 +103,7 @@ describe('the pipeline diagram', () => {
       'motion:active→motion:exit',
       'motion:exit→word',
     ]);
-    expect(data.groups?.find((g) => g.id === 'layers')?.members).toEqual([]);
+    expect(data.clusters?.find((g) => g.id === 'layers')?.members).toEqual([]);
   });
 
   it('labels each motion node with its stage and choice', () => {
@@ -170,7 +170,7 @@ describe('the pipeline diagram', () => {
   it('puts each layer in its own group, in order, inside a group that reorders along y', () => {
     const a = flicker();
     const b = newEntry('hue');
-    const layers = diagramOf(withLayers(a, b), none).groups?.find((g) => g.id === 'layers');
+    const layers = diagramOf(withLayers(a, b), none).clusters?.find((g) => g.id === 'layers');
     expect(layers?.reorder).toBe('y');
     expect(layers?.members.map(layerOfGroup)).toEqual([a.id, b.id]);
   });

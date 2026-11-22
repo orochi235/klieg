@@ -1,5 +1,5 @@
 import {
-  type LayoutRunsOpts,
+  type LayoutRunsOptions,
   layoutRuns,
   resolveRuns,
   resolveTextStyle,
@@ -84,7 +84,7 @@ export interface LaidOut {
  * Every fire routes through here, so a string and a one-run list take the same path. Slot `i` is
  * `cells[i]`: weasel gives every code point a cell, and klieg reconstructs nothing.
  */
-export function layoutRunsForKlieg(runs: StyledRun[], opts: LayoutRunsOpts): LaidOut {
+export function layoutRunsForKlieg(runs: StyledRun[], opts: LayoutRunsOptions): LaidOut {
   const laid = layoutRuns(resolveRuns(runs, resolveTextStyle()), opts);
   const slots: Slot[] = [];
   laid.lines.forEach((line, index) => {
@@ -131,7 +131,7 @@ export const UNBOUNDED = 1e9;
  * advances: kerning makes width non-additive, so a run of words is measured whole. Every
  * contiguous run of words on a line contributes the width it would occupy alone.
  */
-function candidateWidths(runs: StyledRun[], opts: LayoutRunsOpts): number[] {
+function candidateWidths(runs: StyledRun[], opts: LayoutRunsOptions): number[] {
   const flat = layoutRunsForKlieg(runs, { ...opts, maxWidth: UNBOUNDED });
   const widths = new Set<number>();
 
@@ -167,7 +167,7 @@ function candidateWidths(runs: StyledRun[], opts: LayoutRunsOpts): number[] {
  * allows, which is the whole point of a sign, and is not the greedy break weasel would pick alone.
  * Only the measuring changed: each candidate is laid out and scored on the bounds that come back.
  */
-export function wrapRuns(runs: StyledRun[], budget: Budget, opts: LayoutRunsOpts): LaidOut {
+export function wrapRuns(runs: StyledRun[], budget: Budget, opts: LayoutRunsOptions): LaidOut {
   let best: LaidOut | null = null;
   let bestScale = -1;
 

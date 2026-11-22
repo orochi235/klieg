@@ -1,4 +1,4 @@
-import type { LegendEntry } from '@weasel-js/labkit';
+import type { LegendEntry } from '@weasel-js/ui/components/Legend';
 
 /** The lab's ink table, and the key that names it. */
 export type { LegendEntry };

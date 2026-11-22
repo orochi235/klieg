@@ -38,8 +38,8 @@ export function exposeReadout(read: () => Readable | null): () => void {
       const box = {
         left: canvas.left + rect.x,
         top: canvas.top + rect.y,
-        width: rect.w,
-        height: rect.h,
+        width: rect.width,
+        height: rect.height,
       };
       const hit = hitAt(clientX, clientY, box, cell.camera, [cell.pivot]);
       if (!hit) continue;
@@ -49,7 +49,7 @@ export function exposeReadout(read: () => Readable | null): () => void {
       const b = cell.inkOf(along.subVectors(hit.point, cell.camera.position).add(hit.point));
       const t = b.z === a.z ? 0 : (DEFAULT_GLYPH_OPTIONS.depth - a.z) / (b.z - a.z);
       const face = a.lerp(b, t);
-      return { x, y, z, unitsPerPx: reach / rect.h, inWord: { x: face.x, y: face.y } };
+      return { x, y, z, unitsPerPx: reach / rect.height, inWord: { x: face.x, y: face.y } };
     }
     return null;
   };

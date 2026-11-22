@@ -1,4 +1,4 @@
-import type { DataEdge, DataGroup, DataNode, DiagramData, Row } from '@weasel-js/diagram';
+import type { DataCluster, DataEdge, DataNode, DiagramData, Row } from '@weasel-js/diagram';
 import { layerPatch } from './composition.js';
 import { entriesOf, type LabConfig, type LayerEntry, toLayer } from './config.js';
 import { PARAMS } from './patches.js';
@@ -156,7 +156,7 @@ export function diagramOf(
 ): DiagramData {
   const nodes: DataNode[] = [{ id: 'word', lines: [config.text, config.look] }];
   const edges: DataEdge[] = [];
-  const groups: DataGroup[] = [];
+  const clusters: DataCluster[] = [];
   const join = (from: string, to: string) => edges.push({ id: `${from}→${to}`, from, to });
 
   for (const entry of entriesOf(config)) {
@@ -176,9 +176,9 @@ export function diagramOf(
       join(from, to);
       from = to;
     }
-    groups.push({ id: `${GROUP}${layer}`, members: ids });
+    clusters.push({ id: `${GROUP}${layer}`, members: ids });
   }
-  groups.push({ id: 'layers', members: groups.map((g) => g.id), reorder: 'y' });
+  clusters.push({ id: 'layers', members: clusters.map((g) => g.id), reorder: 'y' });
 
   for (const stage of STAGES)
     nodes.push({ id: idOf({ kind: 'motion', stage }), lines: [stage, config[stage]] });
@@ -186,7 +186,7 @@ export function diagramOf(
   join('motion:active', 'motion:exit');
   join('motion:exit', 'word');
 
-  return { nodes, edges, groups };
+  return { nodes, edges, clusters };
 }
 
 /** Every node of a layer that is switched off, to draw dimmed. */

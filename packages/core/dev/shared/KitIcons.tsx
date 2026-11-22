@@ -1,5 +1,5 @@
-import { IconRegistryProvider } from '@weasel-js/core';
-import { kitIcons } from '@weasel-js/ui/kit-icons';
+import { IconRegistryProvider } from '@weasel-js/icons/react';
+import { kitIcons } from '@weasel-js/ui-canvas/kit-icons';
 import type { ReactNode } from 'react';
 
 /** weasel's own icons. A lab mounts them itself: labkit's chrome draws them but registers none. */

@@ -19,7 +19,7 @@ createRoot(host).render(
   <KitIcons>
     <Lab
       instruments={[composer]}
-      defaultInstrument="composer"
+      opening={['composer']}
       title="composition lab"
       pages={labPages()}
       path={labHref('composition-lab')}

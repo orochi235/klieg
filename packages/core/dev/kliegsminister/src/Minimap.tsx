@@ -1,4 +1,4 @@
-import { CanvasStackContext, screenToWorld } from '@weasel-js/labkit';
+import { CanvasStackContext, labScreenToWorld } from '@weasel-js/labkit';
 import { useContext, useEffect, useRef } from 'react';
 import { INK } from './legend.js';
 import type { CornerMark, CornerScene, GlyphBounds } from './scene.js';
@@ -113,7 +113,11 @@ export function Minimap({
 
   let framed: Framed | null = null;
   if (stack && size && size.width > 0) {
-    const mid = screenToWorld({ x: size.width / 2, y: size.height / 2 }, stack.view, stack.frame);
+    const mid = labScreenToWorld(
+      { x: size.width / 2, y: size.height / 2 },
+      stack.view,
+      stack.frame,
+    );
     const halfW = size.width / 2 / stack.view.zoom;
     const halfH = size.height / 2 / stack.view.zoom;
     framed = { cx: scene.center.x + mid.x, cy: scene.center.y + mid.y, halfW, halfH };

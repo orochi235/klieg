@@ -17,7 +17,7 @@ createRoot(host).render(
   <KitIcons>
     <Lab
       instruments={[junction]}
-      defaultInstrument="junction"
+      opening={['junction']}
       title="kliegsminister"
       pages={labPages()}
       path={labHref('kliegsminister')}

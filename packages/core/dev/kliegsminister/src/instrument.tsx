@@ -1,11 +1,7 @@
 import type { LoadedFont } from '@core/text/font.js';
-import {
-  CanvasStackContext,
-  defineInstrument,
-  Legend,
-  Readout,
-  type ReadoutRow,
-} from '@weasel-js/labkit';
+import { CanvasStackContext, defineInstrument } from '@weasel-js/labkit';
+import { DetailList, DetailRow, type DetailRowProps } from '@weasel-js/ui/components/DetailList';
+import { Legend } from '@weasel-js/ui/components/Legend';
 import { type CSSProperties, useContext, useEffect, useRef } from 'react';
 import type * as THREE from 'three';
 import { type Config, config, requestOf } from './config.js';
@@ -111,6 +107,13 @@ function SubjectZoom({
     setView({ zoom: zoomFor(subject, bounds, size), pan: { x: 0, y: 0 } });
   }, [subject, bounds, size, setView]);
   return null;
+}
+
+interface ReadoutRow {
+  key: string;
+  label: string;
+  value: string;
+  grade?: DetailRowProps['grade'];
 }
 
 function measureRows(state: CornerScene): ReadoutRow[] {
@@ -254,7 +257,13 @@ export const junction = defineInstrument<CornerScene, Config>({
               );
             })}
           </ol>
-          <Readout rows={measureRows(state)} />
+          <DetailList className="junction__readout" values="figures">
+            {measureRows(state).map((row) => (
+              <DetailRow key={row.key} label={row.label} grade={row.grade}>
+                {row.value}
+              </DetailRow>
+            ))}
+          </DetailList>
           <ul className="junction__profile">
             {state.profile.map((p) => (
               <li

@@ -49,7 +49,7 @@ export function App({ legacy }: { legacy: Saved | null }) {
   return (
     <Lab
       instruments={INSTRUMENTS}
-      defaultInstrument="head-on"
+      opening={['head-on']}
       title={LABS['tube-lab'].label}
       pages={labPages()}
       path={labHref('tube-lab')}

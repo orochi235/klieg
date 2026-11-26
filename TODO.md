@@ -67,3 +67,32 @@ sums in `tube/legs.ts` and `tube/wander.ts`. `text/sfnt.ts` copies `@weasel-js/f
 `outline/sfnt.ts` and `dataFork.ts`, which the font package doesn't export. Weasel has no signed
 distance field, isocontour or rotation-minimizing-frame code, so `tube/field.ts` and
 `tube/frames.ts` would be new to it.
+
+## The logo lab needs a public tube API
+
+`~/src/pw/logo` can't tube the logo until klieg exports what its spike deep-imports from `dist`
+(`spikes/svg-tube/main.js:16–20`): `buildTubeBlueprint`, `tintByRunColor`, `tintChannelOf`,
+`createMaterial`, `applyLook`, `Stage`, `BloomPath`, `glyphToShapes`. The public index exports only
+`specOf`, the tube types and the break presets (`index.ts:151–166`). Read 2026-11-25. Closes when
+the logo lab builds on public imports only.
+
+## Crossfades on blits' `mix.arc`
+
+The motion compositor works out its enter/active/exit crossfade weights itself
+(`packages/core/src/motion/compositor.ts`, `weightAt`), although blits' `mix.arc` took its ramp from
+here. This comes before klieg moves onto blits' show schema, which compiles slots to `mix.arc`.
+Closes when the compositor cues arcs and keeps no weights of its own.
+
+## One glyph pipeline with weasel
+
+klieg parses fonts with opentype.js (`src/text/font.ts:77`) and hands weasel the parsed font through
+a custom parser (`outline-face.ts:57`), which skips weasel's GPOS kerning. It kerns with
+`getKerningValue` instead, and keeps a drifted copy of weasel's `sfnt.ts`. Waits on weasel's font
+package accepting a parsed font with its kerning and exporting the sfnt helpers (weasel TODO,
+"Fonts & type"). Closes when klieg reads glyphs and kerning through weasel and `sfnt.ts` is gone.
+
+## The fullscreen overlay is written twice
+
+klieg's stage (`packages/core/src/render/stage.ts`) and magicsmoke's `src/canvas.ts` each build the
+same fixed, transparent, z 2147483000 overlay canvas with DPR capped at 2 and window resize. Closes
+when one owns it and the other uses it.

@@ -55,3 +55,15 @@ time, so the highlight sawtooths between their phases. The API still accepts tha
 valid-looking call gives unstable output. Pick one contract: per-effect lighting isolation,
 instance-owned lighting that effects do not drive, or rejecting a concurrent `sweep` fire at the
 call site. (filed 2026-11-15 from automated review)
+
+## Geometry that weasel's `geom` could own
+
+Found while sizing up what to share with weasel (2026-11-25); read from names and docstrings, not
+diffed. klieg has more than one copy of some ring helpers: `render/tube/resample.ts` and
+`render/wells/rings.ts` each have `resample` and `smooth`, and `tube/offset.ts` `orientRings`
+repeats `wells/rings.ts` `orient`. `@weasel-js/geom` already has `ringSignedArea`,
+`polygonContainsPoint` and an exact arc-length query (`along`) that would replace the hand-rolled
+sums in `tube/legs.ts` and `tube/wander.ts`. `text/sfnt.ts` copies `@weasel-js/font`'s internal
+`outline/sfnt.ts` and `dataFork.ts`, which the font package doesn't export. Weasel has no signed
+distance field, isocontour or rotation-minimizing-frame code, so `tube/field.ts` and
+`tube/frames.ts` would be new to it.

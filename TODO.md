@@ -87,12 +87,40 @@ Closes when the compositor cues arcs and keeps no weights of its own.
 
 klieg parses fonts with opentype.js (`src/text/font.ts:77`) and hands weasel the parsed font through
 a custom parser (`outline-face.ts:57`), which skips weasel's GPOS kerning. It kerns with
-`getKerningValue` instead, and keeps a drifted copy of weasel's `sfnt.ts`. Waits on weasel's font
-package accepting a parsed font with its kerning and exporting the sfnt helpers (weasel TODO,
-"Fonts & type"). Closes when klieg reads glyphs and kerning through weasel and `sfnt.ts` is gone.
+`getKerningValue` instead, and keeps a drifted copy of weasel's `sfnt.ts`.
+
+**klieg doesn't kern at all today.** On Inter, `getKerningValue` gives 0 for AV, To, AT, LT, Yo, ov
+and rn. weasel's GPOS reader gives AV −140, To −160, AT −174, LT −197, Yo −157, ov −40, rn +32 font
+units (measured 2026-11-26).
+
+weasel's side is built and unreleased (weasel batch 2026-11-26): `registerFontOutlines(…, { parsed })`
+plus exported `isFontCollection`, `isDataForkFont`, `sfntFromCollection`, `collectionNamesOf` and
+`openTypeModuleOf`. weasel's `sfnt.ts` already has every fix klieg's copy has. Once a weasel release
+carries it:
+1. Delete `packages/core/src/text/sfnt.ts` and import the collection helpers from `@weasel-js/font`.
+2. In `font.ts`, replace lines 7–11 with `const { parse } = openTypeModuleOf(opentype);`.
+3. In `resolveFace`:
+   - Use `collectionNamesOf` in place of `collectionFaces`. It returns `null` for an unnamed member.
+   - Note that weasel's `sfntFromCollection` returns `bytes: null` on an unknown name, rather than the
+     first member.
+   - Decide whether to keep refusing `.dfont`, which weasel now opens.
+4. In `outline-face.ts`, call `registerFontOutlines(family, {}, loaded.bytes, { parsed: loaded.font })`
+   and delete `faceOf` and its unused `glyphD`.
+5. Kern from weasel's face (`kernOf`/`advanceOf` on `outlineFace(family, 400, 'normal')`) instead of
+   `getKerningValue`. This step is the one that brings in kerning.
+
+Closes when klieg reads glyphs and kerning through weasel and `sfnt.ts` is gone.
 
 ## The fullscreen overlay is written twice
 
 klieg's stage (`packages/core/src/render/stage.ts`) and magicsmoke's `src/canvas.ts` each build the
 same fixed, transparent, z 2147483000 overlay canvas with DPR capped at 2 and window resize. Closes
 when one owns it and the other uses it.
+
+## Move onto blits' show schema
+
+blits `main` has `@msb235/blits/show` (merged 2026-11-26, unreleased): a plain-data `Show` of `Cue`s,
+and `play(mix, show, kinds)`, which cues each one on a mix. Slot cues compile to `mix.arc`. The
+planned order across repos is x-xstitch and x-pcb, then beamos, then blinken, then klieg. blits'
+`docs/show.md` rewrites this repo's schema as a `Show` and lists what doesn't fit. Its crossfades move onto `mix.arc` first ("Crossfades on blits' mix.arc" above). Custom `MotionPatch`es, looks, lighting, tint and transform aren't data, so they stay registered kinds. Closes when this
+repo schedules through `play`.

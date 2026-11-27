@@ -6,9 +6,9 @@ therefore never picks up a break. When 1.0 comes is chosen deliberately, not rea
 
 ## Unreleased
 
-### Runs on @msb235/blits 1.4.0 and @weasel-js 2.0.0
+### Runs on @msb235/blits 1.6.0 and @weasel-js 2.0.0
 
-klieg pins `@msb235/blits` at exactly `1.4.0` and `@weasel-js/text` and `@weasel-js/font` at
+klieg pins `@msb235/blits` at exactly `1.6.0` and `@weasel-js/text` and `@weasel-js/font` at
 exactly `2.0.0`, and its dev labs build on the matching `core`, `ui`, `labkit`, `diagram`,
 `theme` and `animator`. Nothing klieg exports changes. An app on blits 1.x or weasel 2.0.0 shares
 one copy with klieg; an app still on weasel 1.x gets a second copy of `text` and `font`. The

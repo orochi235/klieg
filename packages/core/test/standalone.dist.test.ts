@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { init, parse } from 'es-module-lexer';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -10,18 +11,19 @@ import { describe, expect, it } from 'vitest';
  */
 const DIR = join(import.meta.dirname, '..', 'dist', 'standalone');
 
-/** `import 'x'`, `import('x')` and `… from 'x'`, however the bundle is minified. */
-const SPECIFIER = /(?:\bfrom|\bimport\s*\(?)\s*(['"])([^'"\s]+)\1/g;
-
 describe('the standalone bundle', () => {
   it('is the one file the subpath names', () => {
     expect(readdirSync(DIR)).toEqual(['klieg-sign.js']);
   });
 
-  it('leaves no specifier a script tag would have to resolve', () => {
+  it('leaves no specifier a script tag would have to resolve', async () => {
     const src = readFileSync(join(DIR, 'klieg-sign.js'), 'utf8');
-    const bare = [...src.matchAll(SPECIFIER)]
-      .map((match) => match[2] as string)
+    // A lexer, not a regex: bundled libraries name packages in their error messages.
+    await init;
+    const [imports] = parse(src);
+    const bare = imports
+      .filter((entry) => entry.d !== -2) // `import.meta`, which names no module
+      .map((entry) => entry.n ?? src.slice(entry.s, entry.e))
       .filter((spec) => !/^[./]|^[a-z][a-z0-9+.-]*:/i.test(spec));
 
     // The import below would still pass with `three` externalized, since a resolver finds it in

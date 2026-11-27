@@ -1,6 +1,6 @@
 import type { Setting as BlitsSetting, Signal as BlitsSignal } from '@msb235/blits';
 import type { LetterInfo, StaggerSpec } from '../motion/types.js';
-import type { Vec3 } from '../pose.js';
+import type { Transform, Vec3 } from '../pose.js';
 import type { SelectSpec } from '../select.js';
 
 /**
@@ -48,16 +48,13 @@ export interface PartInfo {
 }
 
 /** A relative contribution. Omitted fields mean "no contribution", as `PoseDelta` does. */
-export interface PartDelta {
+export interface PartDelta extends Partial<Transform> {
   /** Multiplies the part's emissive. */
   gain?: number;
   color?: number;
   /** 0..1 toward a tube decoration's `dark` material. Composited but not yet written: the swap
    * between the lit and dark materials a tube decoration already builds is its own step. */
   dark?: number;
-  position?: Vec3;
-  rotation?: Vec3;
-  scale?: number;
   /** Shifts the colour ramp along the part. Needs a look with a `gradient`; without a
    * ramp there is nothing to shift. */
   crawl?: number;
@@ -73,14 +70,11 @@ export interface LightDelta {
 }
 
 /** Everything a merge resolved. Multiplicative channels rest at 1, additive at 0. */
-export interface PartPose {
+export interface PartPose extends Transform {
   gain: number;
   /** OKLab `[L, a, b, coverage]`, as blits' `color` channel holds it; `toHex` writes it back. */
   color?: number[];
   dark: number;
-  position: Vec3;
-  rotation: Vec3;
-  scale: number;
   crawl: number;
   /** Accumulated lamp colour, premultiplied by amount. sRGB-encoded 0..1 per channel, matching
    * the hex the authoring form takes — not linear radiance. */

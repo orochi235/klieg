@@ -1,4 +1,5 @@
 import { ink, kit, last, max, mul, oklab, sum, vec } from '@msb235/blits';
+import { TRANSFORM_KIT } from '../pose.js';
 import type { PartDelta, PartPose } from './types.js';
 
 /**
@@ -10,9 +11,7 @@ export const PART_KIT = kit<PartPose>({
   gain: mul(),
   color: ink(last()),
   dark: max(),
-  position: vec(3, sum()),
-  rotation: vec(3, sum()),
-  scale: mul(),
+  ...TRANSFORM_KIT,
   crawl: sum(),
   light: vec(3, sum()),
 });

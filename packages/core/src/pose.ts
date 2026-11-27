@@ -2,10 +2,14 @@ import { type Channel, kit, mul, sum, vec } from '@msb235/blits';
 
 export type Vec3 = [number, number, number];
 
-export interface Pose {
+/** Where a thing is, how it is turned, and how big: what a letter's pose and a part's share. */
+export interface Transform {
   position: Vec3;
   rotation: Vec3;
   scale: number;
+}
+
+export interface Pose extends Transform {
   opacity: number;
 }
 
@@ -29,12 +33,13 @@ export const REST: Pose = {
  * at 1: scaling `scale` or `opacity` toward 0 would collapse the word rather than remove the
  * contribution.
  */
-export const POSE_KIT = kit<Pose>({
+export const TRANSFORM_KIT = kit<Transform>({
   position: vec(3, sum()),
   rotation: vec(3, sum()),
   scale: mul(),
-  opacity: mul(),
 });
+
+export const POSE_KIT = kit<Pose>({ ...TRANSFORM_KIT, opacity: mul() });
 
 export const POSE_CHANNELS = ['position', 'rotation', 'scale', 'opacity'] as const;
 
